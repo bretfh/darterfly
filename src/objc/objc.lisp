@@ -2,7 +2,7 @@
   (:use #:cl)
   (:shadow #:class-name)
   (:export
-   #:image-objc #:objc-error
+   #:image-objc #:objc-error #:inventory #:write-inventory
    #:objc-image #:objc-image-path #:objc-image-classes #:objc-image-categories
    #:objc-image-protocols
    #:objc-class #:class-name #:class-superclass #:class-address #:class-instance-size
@@ -304,3 +304,55 @@
                           (section-pointers memory image "__objc_catlist"))
       :protocols (mapcar (lambda (p) (read-protocol memory p))
                          (section-pointers memory image "__objc_protolist")))))
+
+(defun method-form (m)
+  (list (method-selector m) (method-types m)))
+
+(defgeneric form (thing))
+
+(defmethod form ((c objc-class))
+  `(:class ,(class-name c) :superclass ,(class-superclass c)
+    ,@(when (class-swift-p c) '(:swift t))
+    :instance-size ,(class-instance-size c)
+    :protocols ,(class-protocols c)
+    :ivars ,(mapcar (lambda (i) (list (ivar-name i) (ivar-type i) (ivar-offset i))) (class-ivars c))
+    :properties ,(mapcar (lambda (p) (list (property-name p) (property-attributes p))) (class-properties c))
+    :class-methods ,(mapcar #'method-form (class-class-methods c))
+    :instance-methods ,(mapcar #'method-form (class-instance-methods c))))
+
+(defmethod form ((c category))
+  `(:category ,(category-name c) :class ,(category-class c)
+    :protocols ,(category-protocols c)
+    :properties ,(mapcar (lambda (p) (list (property-name p) (property-attributes p))) (category-properties c))
+    :class-methods ,(mapcar #'method-form (category-class-methods c))
+    :instance-methods ,(mapcar #'method-form (category-instance-methods c))))
+
+(defmethod form ((p protocol))
+  `(:protocol ,(protocol-name p) :protocols ,(protocol-protocols p)
+    :properties ,(mapcar (lambda (p) (list (property-name p) (property-attributes p))) (protocol-properties p))
+    :class-methods ,(mapcar #'method-form (protocol-class-methods p))
+    :instance-methods ,(mapcar #'method-form (protocol-instance-methods p))
+    :optional-class-methods ,(mapcar #'method-form (protocol-optional-class-methods p))
+    :optional-instance-methods ,(mapcar #'method-form (protocol-optional-instance-methods p))))
+
+(defun write-inventory (image destination)
+  (ensure-directories-exist destination)
+  (with-open-file (s destination :direction :output :if-exists :supersede :external-format :utf-8)
+    (with-standard-io-syntax
+      (let ((*print-readably* nil) (*print-right-margin* 110) (*print-pretty* t))
+        (format s ";; ~a~%" (objc-image-path image))
+        (dolist (thing (append (objc-image-protocols image) (objc-image-classes image)
+                               (objc-image-categories image)))
+          (prin1 (form thing) s)
+          (terpri s))))))
+
+(defun inventory (cache directory)
+  (loop :for image :in (finch/dyld:cache-images cache)
+        :for path := (finch/dyld:image-path image)
+        :for objc := (handler-case (image-objc cache path)
+                       (error (e) (warn "~a: ~a" path e) nil))
+        :when (and objc (or (objc-image-classes objc) (objc-image-categories objc)
+                            (objc-image-protocols objc)))
+          :do (write-inventory objc (merge-pathnames (concatenate 'string (subseq path 1) ".lisp")
+                                                     directory))
+          :and :collect objc))
