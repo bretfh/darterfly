@@ -139,6 +139,13 @@
   (list (max (first a) (first b)) (max (second a) (second b))
         (min (third a) (third b)) (min (fourth a) (fourth b))))
 
+(defun corner-radius (window)
+  (case (window-level window)
+    (0 12) (101 8) (20 18) (t 0)))
+
+(defun shadowed-p (window)
+  (member (window-level window) '(0 101)))
+
 (defun render ()
   (let* ((fb *framebuffer*)
          (screen (list 0 0 (io:framebuffer-width fb) (io:framebuffer-height fb))))
@@ -147,8 +154,14 @@
     (dolist (window (reverse (by-level *windows*)))
       (let ((client (and (visible-p window) (context-client (window-context window)))))
         (when (and client (root client))
-          (draw-layer fb (layers client) (root client) (window-x window) (window-y window)
-                      (intersect screen (window-frame window)) 1.0))))
+          (let* ((radius (corner-radius window))
+                 (x (window-x window)) (y (window-y window))
+                 (w (window-width window)) (h (window-height window))
+                 (saved (and (plusp radius)
+                             (progn (when (shadowed-p window) (io:shadow-under fb x y w h))
+                                    (io:save-corners fb x y w h radius)))))
+            (draw-layer fb (layers client) (root client) x y (intersect screen (window-frame window)) 1.0)
+            (when saved (io:restore-corners fb x y w h radius saved))))))
     (draw-cursor fb)
     (io:flush fb)))
 
