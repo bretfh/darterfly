@@ -9,7 +9,7 @@
 
 (defvar *home*
   (uiop:ensure-directory-pathname
-   (or (uiop:getenv "FINCH_TAHOE") (merge-pathnames "vm/tahoe/guest/" (user-homedir-pathname)))))
+   (or (uiop:getenv "FINCH_TAHOE") (asdf:system-relative-pathname :finch/tahoe "tahoe/guest/"))))
 
 (defparameter *boot-args* "-v keepsyms=1 debug=0x100 serial=3")
 (defparameter *csr-active-config* #xfef)

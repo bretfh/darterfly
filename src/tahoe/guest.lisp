@@ -36,9 +36,10 @@
     (unless (probe-file disk)
       (sh "qemu-img" "create" "-f" "qcow2" disk *disk-size*))
     (let ((esp (esp)))
-      (apply #'sh "qemu-system-x86_64"
+      (uiop:delete-file-if-exists (qmp-socket))
+      (uiop:launch-program
              (append
-              (list "-name" "tahoe" "-daemonize" "-pidfile" (home "qemu.pid")
+              (list "setsid" "qemu-system-x86_64" "-name" "tahoe" "-pidfile" (uiop:native-namestring (home "qemu.pid"))
                     "-enable-kvm" "-m" (princ-to-string *memory*) "-cpu" *cpu*
                     "-machine" "q35" "-smp" (format nil "~d,cores=~d,sockets=1" *cpus* (/ *cpus* 2))
                     "-device" "qemu-xhci,id=xhci"
@@ -59,7 +60,10 @@
                     "-netdev" "user,id=net0,hostfwd=tcp:127.0.0.1:2222-:22"
                     "-device" "virtio-net-pci,netdev=net0,mac=52:54:00:c9:18:27"
                     "-device" "vmware-svga"
-                    "-display" "none" "-vnc" "127.0.0.1:31"
+                    "-display" "gtk,zoom-to-fit=on"
                     "-qmp" (format nil "unix:~a,server=on,wait=off" (uiop:native-namestring (qmp-socket)))
-                    "-serial" (format nil "file:~a" (uiop:native-namestring (serial-log))))))
+                    "-serial" (format nil "file:~a" (uiop:native-namestring (serial-log)))))
+             :output (uiop:native-namestring (home "qemu.log")) :if-output-exists :supersede
+             :error-output :output)
+      (loop :repeat 100 :until (probe-file (qmp-socket)) :do (sleep 0.1))
       (query-status))))

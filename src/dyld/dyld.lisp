@@ -8,7 +8,7 @@
    #:mapping #:mapping-address #:mapping-size #:mapping-file-offset
    #:mapping-max-prot #:mapping-init-prot
    #:cache-image #:image-path #:image-address
-   #:find-image #:address-file #:cache-read #:image-macho))
+   #:find-image #:address-file #:cache-read #:image-macho #:extract-image))
 (in-package #:finch/dyld)
 
 (define-condition dyld-error (error)

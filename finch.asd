@@ -22,7 +22,7 @@
   :depends-on (#:finch/macho #:uiop)
   :serial t
   :pathname "src/dyld/"
-  :components ((:file "dyld")))
+  :components ((:file "dyld") (:file "extract")))
 
 (asdf:defsystem #:finch/tahoe
   :description "The Tahoe reference guest"

@@ -17,7 +17,7 @@ its reference. The design record is =~/org/finch.org=.
   make repl
   make check   # loads with no warnings from finch's own code
   make test    # Mach semantics; plists against plistlib; Mach-O against llvm-objdump;
-             # Tahoe's cache against Apple's own .map (skipped without ~/vm/tahoe)
+             # Tahoe's cache against Apple's own .map (skipped without tahoe/)
 #+end_src
 
 #+begin_src lisp

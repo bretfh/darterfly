@@ -5,7 +5,7 @@
 
 (defparameter *tahoe*
   (or (uiop:getenv "FINCH_TAHOE_DYLD")
-      (uiop:native-namestring "~/vm/tahoe/dyld/dyld_shared_cache_x86_64h")))
+      (uiop:native-namestring (asdf:system-relative-pathname :finch "tahoe/dyld/dyld_shared_cache_x86_64h"))))
 
 (defvar *cache* nil)
 
@@ -84,3 +84,31 @@
                    (macho:install-name appkit)))
       (is (member "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation"
                   (macho:dylibs appkit) :test #'string=)))))
+
+(test tahoe-extract-appkit
+  (with-tahoe
+    (let* ((path "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit")
+           (out (merge-pathnames "AppKit" (scratch)))
+           (cached (dyld:image-macho (cache) path))
+           (file (namestring (dyld:extract-image (cache) path out)))
+           (image (macho:read-macho out))
+           (symtab (macho:find-command cached :lc-symtab))
+           (headers (sh "llvm-objdump" "--macho" "--private-headers" file)))
+      (is (equal (mapcar #'macho:segment-vmaddr (macho:segments cached))
+                 (mapcar #'macho:segment-vmaddr (macho:segments image))))
+      (is (equal (loop :for line :in (uiop:split-string headers :separator '(#\Newline))
+                       :for words := (remove "" (uiop:split-string line :separator '(#\Space)) :test #'string=)
+                       :when (and words (string= "vmaddr" (first words)))
+                         :collect (hex (second words)))
+                 (mapcar #'macho:segment-vmaddr (macho:segments cached))))
+      (is (= (macho:symtab-nsyms symtab)
+             (count #\Newline (sh "llvm-nm" "-a" "--no-dyldinfo" file))))
+      (is (zerop (logand #x80000000 (macho:image-flags image))))
+      (let* ((list (find "__objc_classlist" (macho:sections image) :key #'macho:section-name :test #'string=))
+             (o (finch/macho::file-octets out))
+             (low #x7ff800000000)
+             (high (+ low (dyld::field (dyld::main-file (cache)) :shared-region-size))))
+        (is (plusp (macho:section-size list)))
+        (is (loop :for at :from (macho:section-offset list)
+                    :below (+ (macho:section-offset list) (macho:section-size list)) :by 8
+                  :always (< low (dyld::le o at 8) high)))))))
