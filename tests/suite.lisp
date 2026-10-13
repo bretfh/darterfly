@@ -1,6 +1,7 @@
 (defpackage #:finch/test
   (:use #:cl #:fiveam)
-  (:local-nicknames (#:mach #:finch/mach) (#:plist #:finch/plist) (#:macho #:finch/macho))
+  (:local-nicknames (#:mach #:finch/mach) (#:plist #:finch/plist) (#:macho #:finch/macho)
+                    (#:dyld #:finch/dyld))
   (:export #:run-them #:all))
 (in-package #:finch/test)
 

@@ -1,6 +1,6 @@
 (require :asdf)
 
-(defparameter +mine+ '(:finch/mach :finch/plist :finch/macho :finch))
+(defparameter +mine+ '(:finch/mach :finch/plist :finch/macho :finch/dyld :finch))
 
 (defvar *warnings* nil)
 

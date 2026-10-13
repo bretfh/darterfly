@@ -63,6 +63,8 @@
                       internal-time-units-per-second))))
     (unless (and left (<= left 0))
       (sb-thread:condition-wait queue *ipc* :timeout left)
+      (unless (sb-thread:holding-mutex-p *ipc*)
+        (sb-thread:grab-mutex *ipc*))
       t)))
 
 (defun enqueue (port kmsg)

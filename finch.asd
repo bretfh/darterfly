@@ -17,15 +17,22 @@
   :pathname "src/macho/"
   :components ((:file "macho")))
 
+(asdf:defsystem #:finch/dyld
+  :description "The dyld shared cache and its subcaches"
+  :depends-on (#:finch/macho #:uiop)
+  :serial t
+  :pathname "src/dyld/"
+  :components ((:file "dyld")))
+
 (asdf:defsystem #:finch
   :description "A Darwin in Common Lisp"
-  :depends-on (#:finch/mach #:finch/plist #:finch/macho)
+  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld)
   :in-order-to ((asdf:test-op (asdf:test-op #:finch/test))))
 
 (asdf:defsystem #:finch/test
   :depends-on (#:finch #:fiveam (:require #:sb-posix))
   :serial t
   :pathname "tests/"
-  :components ((:file "suite") (:file "mach") (:file "plist") (:file "macho"))
+  :components ((:file "suite") (:file "mach") (:file "plist") (:file "macho") (:file "dyld"))
   :perform (asdf:test-op (o c)
              (uiop:symbol-call :finch/test :run-them)))
