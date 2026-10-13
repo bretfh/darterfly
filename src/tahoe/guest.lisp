@@ -121,7 +121,11 @@
                  (list (uiop:native-namestring file)
                        (format nil "~a@127.0.0.1:~a" *user* destination)))))
 
+(defun sudo (command)
+  (guest (format nil "echo ~a | sudo -S sh -c '~a' 2>&1" *password* command)))
+
 (defun install-rea ()
+  (sudo "DevToolsSecurity -enable; dscl . append /Groups/_developer GroupMembership finch")
   (let ((rea (home "rea.tar.gz")))
     (sh "tar" "-C" (rea-root) "-czf" rea "rea")
     (scp (node-tarball) "node.tar.gz")
