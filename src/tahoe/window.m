@@ -19,6 +19,26 @@ int main(void) {
   @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+    NSMenu *bar = [[NSMenu alloc] initWithTitle:@""];
+    NSMenuItem *appItem = [[NSMenuItem alloc] initWithTitle:@"" action:nil keyEquivalent:@""];
+    NSMenu *appMenu = [[NSMenu alloc] initWithTitle:@"probe"];
+    [appMenu addItemWithTitle:@"About finch probe" action:nil keyEquivalent:@""];
+    [appMenu addItem:[NSMenuItem separatorItem]];
+    [appMenu addItemWithTitle:@"Quit finch probe" action:@selector(terminate:) keyEquivalent:@"q"];
+    appItem.submenu = appMenu;
+    [bar addItem:appItem];
+    NSMenuItem *fileItem = [[NSMenuItem alloc] initWithTitle:@"File" action:nil keyEquivalent:@""];
+    NSMenu *fileMenu = [[NSMenu alloc] initWithTitle:@"File"];
+    [fileMenu addItemWithTitle:@"New Probe" action:nil keyEquivalent:@"n"];
+    [fileMenu addItemWithTitle:@"Open..." action:nil keyEquivalent:@"o"];
+    fileItem.submenu = fileMenu;
+    [bar addItem:fileItem];
+    NSMenuItem *editItem = [[NSMenuItem alloc] initWithTitle:@"Edit" action:nil keyEquivalent:@""];
+    NSMenu *editMenu = [[NSMenu alloc] initWithTitle:@"Edit"];
+    [editMenu addItemWithTitle:@"Copy" action:nil keyEquivalent:@"c"];
+    editItem.submenu = editMenu;
+    [bar addItem:editItem];
+    NSApp.mainMenu = bar;
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(200, 200, 400, 300)
                                                    styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable
                                                      backing:NSBackingStoreBuffered defer:NO];

@@ -5,7 +5,7 @@
            #:view-frame #:subviews #:add-subview #:needs-display #:draw #:mouse-down #:key-down
            #:content-view #:window-title #:first-responder #:show #:close-window #:run
            #:string-value #:font-size #:text-color #:title #:action #:background
-           #:view-width #:view-height #:windows #:perform-on-main))
+           #:view-width #:view-height #:windows #:perform-on-main #:menu-bar #:*menus*))
 (in-package #:finch/kit)
 
 (defclass responder () ())
@@ -136,6 +136,7 @@
 (defclass application ()
   ((windows :initform nil :accessor app-windows)
    (main :initform nil :accessor app-main)
+   (menu :initform nil :accessor app-menu)
    (lock :initform (sb-thread:make-mutex :name "application") :reader app-lock)))
 
 (bsd:define-process-variable *application* (make-instance 'application))
@@ -159,7 +160,30 @@
   (display (frame-view window))
   (ca:commit (window-context window)))
 
+(bsd:define-process-variable *menus* nil)
+
+(defun menu-bar (titles)
+  (let* ((font (text:font "SFNS" 14))
+         (positions (loop :with x := 14
+                          :for title :in titles
+                          :collect (prog1 x (incf x (+ 20 (round (text:string-width font title)))))))
+         (width (+ (car (last positions)) 20 (round (text:string-width font (car (last titles))))))
+         (bitmap (text:make-bitmap width 24))
+         (context (ca:context-create))
+         (layer (ca:make-layer)))
+    (loop :for title :in titles :for x :in positions
+          :do (text:draw-string bitmap font title x 17 0.0 0.0 0.0))
+    (setf (ca:layer-frame layer) (vector 0 0 width 24)
+          (ca:layer-contents layer) (ca:image width 24 (text:bitmap-pixels bitmap))
+          (ca:context-layer context) layer)
+    (ca:commit context)
+    (ca:window-create context 0 0 width 24 :level :main-menu)
+    context))
+
 (defun show (window)
+  (unless (app-menu *application*)
+    (setf (app-menu *application*)
+          (menu-bar (or *menus* (list (bsd:proc-comm bsd:*proc*) "File" "Edit" "View" "Window" "Help")))))
   (unless (window-context window)
     (setf (window-context window) (ca:context-create))
     (setf (ca:context-layer (window-context window)) (view-layer (frame-view window))))

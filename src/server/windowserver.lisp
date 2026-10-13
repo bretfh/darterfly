@@ -83,7 +83,7 @@
 
 (defun window-at (x y)
   (find-if (lambda (window)
-             (and (ordered window)
+             (and (visible-p window)
                   (destructuring-bind (x0 y0 x1 y1) (window-frame window)
                     (and (<= x0 x x1) (<= y0 y y1)))))
            (by-level *windows*)))
@@ -91,9 +91,22 @@
 (defun context-client (context)
   (find context *clients* :key #'context))
 
+(defconstant +main-menu-level+ 24)
+
+(defun key-window ()
+  (find-if (lambda (w) (and (ordered w) (<= (window-level w) 0))) *windows*))
+
 (defun key-client ()
-  (let ((window (find-if (lambda (w) (and (ordered w) (zerop (window-level w)))) *windows*)))
+  (let ((window (key-window)))
     (and window (find (owner window) *clients* :key #'pid))))
+
+(defun visible-p (window)
+  (and (ordered window)
+       (or (/= (window-level window) +main-menu-level+)
+           (let ((key (key-window)))
+             (or (and key (eql (owner key) (owner window)))
+                 (notany (lambda (w) (and (eql (owner w) (owner window)) (<= (window-level w) 0)))
+                         *windows*))))))
 
 (defun draw-layer (fb layers id ox oy clip alpha)
   (let ((layer (gethash id layers)))
@@ -132,7 +145,7 @@
     (destructuring-bind (r g b) (coerce +desktop+ 'list)
       (io:blend-rect fb 0 0 (third screen) (fourth screen) r g b 1.0))
     (dolist (window (reverse (by-level *windows*)))
-      (let ((client (and (ordered window) (context-client (window-context window)))))
+      (let ((client (and (visible-p window) (context-client (window-context window)))))
         (when (and client (root client))
           (draw-layer fb (layers client) (root client) (window-x window) (window-y window)
                       (intersect screen (window-frame window)) 1.0))))

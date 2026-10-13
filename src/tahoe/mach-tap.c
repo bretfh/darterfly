@@ -48,7 +48,7 @@ static mach_msg_return_t tap_msg2(void *data, uint64_t option64, uint64_t bits_a
                                   uint64_t remote_and_local, uint64_t voucher_and_id,
                                   uint64_t desc_count_and_rcv_name, uint64_t rcv_size_and_priority,
                                   uint64_t timeout) {
-  if (option64 & MACH_SEND_MSG) { dump("send2", data, (uint32_t)(bits_and_send_size >> 32)); dump_ool(data); }
+  if (option64 & MACH_SEND_MSG) { dump("send2", data, (uint32_t)(bits_and_send_size >> 32)); if (!(option64 & 0x100000000ULL)) dump_ool(data); }
   mach_msg_return_t r = mach_msg2_internal(data, option64, bits_and_send_size, remote_and_local, voucher_and_id,
                                            desc_count_and_rcv_name, rcv_size_and_priority, timeout);
   if ((option64 & MACH_RCV_MSG) && r == 0) dump("recv2", data, ((mach_msg_header_t *)data)->msgh_size);
