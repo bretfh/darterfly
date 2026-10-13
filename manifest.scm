@@ -1,0 +1,15 @@
+(specifications->manifest
+ (list "sbcl"
+       "sbcl-fiveam"
+       "sbcl-alexandria"
+       "sbcl-net.didierverna.asdf-flv"
+       "sbcl-trivial-backtrace"
+       "sbcl-plump"
+       "sbcl-array-utils"
+       "sbcl-documentation-utils"
+       "sbcl-trivial-indent"
+       "coreutils"
+       "clang"
+       "lld"
+       "llvm"
+       "python"))

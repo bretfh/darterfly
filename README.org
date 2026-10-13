@@ -1,0 +1,27 @@
+#+TITLE: finch
+
+A Darwin in Common Lisp: Mach underneath, BSD on top, the macOS shape all the
+way up. Forked from macOS 26 Tahoe, the last macOS for Intel, which is also
+its reference. The design record is =~/org/finch.org=.
+
+* Systems
+
+| =finch/mach=  | ports, rights, names, messages, port sets, dead names |
+| =finch/plist= | property lists, XML and =bplist00=                    |
+| =finch/macho= | Mach-O images, thin and fat                           |
+
+* Running it
+
+#+begin_src sh
+  make repl
+  make check   # loads with no warnings from finch's own code
+  make test    # Mach semantics; plists against plistlib; Mach-O against llvm-objdump
+#+end_src
+
+#+begin_src lisp
+  (let* ((task (finch/mach:mach-task-self))
+         (port (finch/mach:mach-port-allocate task :receive)))
+    (finch/mach:mach-port-insert-right task port port :make-send)
+    (finch/mach:mach-msg-send (finch/mach:make-message :remote-port port :id 1 :body "hello"))
+    (finch/mach:msgh-body (finch/mach:mach-msg-receive port :timeout 100)))
+#+end_src

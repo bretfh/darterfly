@@ -1,0 +1,29 @@
+(require :asdf)
+
+(defparameter +mine+ '(:finch/mach :finch/plist :finch/macho :finch))
+
+(defvar *warnings* nil)
+
+(defun minep (condition)
+  (let ((*package* (find-package :cl-user))
+        (*print-pretty* nil))
+    (and (not (typep condition 'sb-kernel:redefinition-warning))
+         (search "FINCH" (princ-to-string condition))
+         t)))
+
+(handler-bind ((warning (lambda (c)
+                          (when (minep c)
+                            (push (list (type-of c) (princ-to-string c)) *warnings*)))))
+  (asdf:load-system :finch :force +mine+))
+
+(let ((warnings (reverse *warnings*)))
+  (cond ((null warnings)
+         (princ :loaded)
+         (terpri)
+         (sb-ext:exit :code 0))
+        (t
+         (format t "~&~d warning~:p from finch's own code:~%" (length warnings))
+         (loop :for (kind text) :in warnings
+               :do (format t "  ~(~a~): ~a~%" kind text))
+         (finish-output)
+         (sb-ext:exit :code 1))))
