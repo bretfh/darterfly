@@ -3,6 +3,7 @@
   (:export
    #:region-bands #:bands-octets #:rect-region #:region-bounds
    #:decode-event #:encode-event #:event-value #:event-type #:event-character #:key-event
+   #:mouse-event #:event-location #:event-window-location
    #:transaction-error #:encode-transaction #:decode-transaction
    #:op-code #:op-name #:op-arguments #:*ops*))
 (in-package #:finch/server)

@@ -93,7 +93,12 @@
   '(("sbin/launchd" "launchd") ("bin/launchctl" "launchctl") ("bin/sh" "sh")
     ("System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer" "WindowServer")
     ("Applications/Hello.app/Contents/MacOS/Hello" "Hello")
-    ("System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal" "Terminal")))
+    ("System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal" "Terminal")
+    ("System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow" "loginwindow")
+    ("System/Library/CoreServices/Dock.app/Contents/MacOS/Dock" "Dock")
+    ("System/Library/CoreServices/SystemUIServer.app/Contents/MacOS/SystemUIServer" "SystemUIServer")
+    ("System/Library/CoreServices/Finder.app/Contents/MacOS/Finder" "Finder")
+    ("usr/libexec/finch-gui" "finch-gui")))
 
 (defun console-job ()
   (let ((job (make-hash-table :test 'equal)))
@@ -112,10 +117,18 @@
                          (octets file)))))
 
 (defun tahoe-daemons ()
-  (let ((dir (asdf:system-relative-pathname :finch "tahoe/system/System/Library/LaunchDaemons/")))
-    (loop :for file :in (directory (merge-pathnames "*.plist" dir))
-          :collect (list :file (format nil "System/Library/LaunchDaemons/~a.plist" (pathname-name file))
-                         (octets file)))))
+  (loop :for kind :in '("LaunchDaemons" "LaunchAgents")
+        :append (let ((dir (asdf:system-relative-pathname :finch (format nil "tahoe/system/System/Library/~a/" kind))))
+                  (loop :for file :in (directory (merge-pathnames "*.plist" dir))
+                        :collect (list :file (format nil "System/Library/~a/~a.plist" kind (pathname-name file))
+                                       (octets file))))))
+
+(defun gui-job ()
+  (let ((job (make-hash-table :test 'equal)))
+    (setf (gethash "Label" job) "finch.gui"
+          (gethash "ProgramArguments" job) (vector "/usr/libexec/finch-gui")
+          (gethash "RunAtLoad" job) t)
+    (text (with-output-to-string (s) (finch/plist:write-plist job s)))))
 
 (defun kexts ()
   (let ((dir (format nil "~a/lib/modules/" (uiop:getenv "GUIX_ENVIRONMENT"))))
@@ -133,7 +146,8 @@
          (list :char "dev/null" 1 3)
          (list :dir "proc") (list :dir "sys") (list :dir "tmp")
          (list :dir "System/Library/LaunchDaemons")
-         (list :file "Library/LaunchDaemons/finch.console.plist" (console-job)))
+         (list :file "Library/LaunchDaemons/finch.console.plist" (console-job))
+         (list :file "Library/LaunchDaemons/finch.gui.plist" (gui-job)))
    (loop :for (path program) :in *programs*
          :collect (list :file path (text (format nil "#!finch ~a~%" program)) #o100755))
    (tahoe-daemons)

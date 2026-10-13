@@ -73,3 +73,20 @@
         :keyboard-event-keyboard-type '(1 3) 76 '(1 252)
         77 (list 1 (char-code character)) 78 (list 1 (char-code character))
         79 '(1 0) 80 '(1 26) 81 '(1 0) 127 '(1 0) 128 '(1 0) 82 (list 1 (char-code character))))
+
+(defun mouse-event (type x y &key (timestamp 0) (window 0) (wx 0.0) (wy 0.0) (clicks 1))
+  (list :header 2
+        53 '(1 0) 54 '(1 0) :type (list 1 (car (rassoc type *event-types*)))
+        :location (list 3 (float x 1.0) (float y 1.0)) 57 (list 3 (float wx 1.0) (float wy 1.0))
+        :timestamp (list 0 timestamp) :flags '(1 256) 51 '(1 0) 52 '(1 0) 169 (list 0 timestamp)
+        106 '(1 0) 107 '(1 0) :mouse-event-sub-type '(1 0) :mouse-event-number '(1 0)
+        :mouse-event-click-state (list 1 clicks) :mouse-event-pressure (list 1 (if (member type '(:left-mouse-down)) 255 0))
+        :mouse-event-button-number '(1 0) :mouse-event-delta-x '(1 0) :mouse-event-delta-y '(1 0)
+        :mouse-event-instant-mouser '(1 0) 89 '(1 0) 90 '(1 0) 91 (list 1 window) 92 '(1 0)
+        108 '(1 1) 60 '(1 0) 61 '(0 0) 62 '(0 0) 63 '(1 0)))
+
+(defun event-location (event)
+  (cdr (getf (cddr event) :location)))
+
+(defun event-window-location (event)
+  (cdr (getf (cddr event) 57)))

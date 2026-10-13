@@ -143,13 +143,17 @@
     (mig +transaction-commit-async+ body
          :descriptors (list (make-array 0 :element-type '(unsigned-byte 8))))))
 
-(defun window-create (context x y width height)
+(defparameter +window-levels+
+  '((:desktop . -2147483623) (:normal . 0) (:dock . 20) (:main-menu . 24) (:status . 25)))
+
+(defun window-create (context x y width height &key (level :normal))
   (let* ((reply (mig +create-window+ (octets 0 1 5 12 #x10000 0 1 0)
                      :descriptors (list (finch/server:rect-region 0 0 0 0)) :reply t))
          (body (finch/mach:msgh-body reply))
          (window (logior (aref body 8) (ash (aref body 9) 8) (ash (aref body 10) 16) (ash (aref body 11) 24))))
     (mig +set-window-layer-context+ (octets 0 1 window (context-id context)))
     (transaction-commit (list (list "SetWindowShape" window (finch/server:rect-region 0 0 width height))
+                              (list "SetWindowLevel" window (cdr (assoc level +window-levels+)))
                               (list "MoveWindowWithGroup" window (float x 1d0) (float y 1d0))
                               (list "OrderWindow" window 1 0)))
     window))

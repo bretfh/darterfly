@@ -30,7 +30,11 @@
    (y :initform 0 :accessor window-y)
    (width :initform 0 :accessor window-width)
    (height :initform 0 :accessor window-height)
-   (ordered :initform nil :accessor ordered)))
+   (ordered :initform nil :accessor ordered)
+   (level :initform 0 :accessor window-level)))
+
+(defun by-level (windows)
+  (stable-sort (copy-list windows) #'> :key #'window-level))
 
 (defvar *windows* nil)
 (defvar *next-window* #x20)
@@ -82,13 +86,13 @@
              (and (ordered window)
                   (destructuring-bind (x0 y0 x1 y1) (window-frame window)
                     (and (<= x0 x x1) (<= y0 y y1)))))
-           *windows*))
+           (by-level *windows*)))
 
 (defun context-client (context)
   (find context *clients* :key #'context))
 
 (defun key-client ()
-  (let ((window (find-if #'ordered *windows*)))
+  (let ((window (find-if (lambda (w) (and (ordered w) (zerop (window-level w)))) *windows*)))
     (and window (find (owner window) *clients* :key #'pid))))
 
 (defun draw-layer (fb layers id ox oy clip alpha)
@@ -127,7 +131,7 @@
          (screen (list 0 0 (io:framebuffer-width fb) (io:framebuffer-height fb))))
     (destructuring-bind (r g b) (coerce +desktop+ 'list)
       (io:blend-rect fb 0 0 (third screen) (fourth screen) r g b 1.0))
-    (dolist (window (reverse *windows*))
+    (dolist (window (reverse (by-level *windows*)))
       (let ((client (and (ordered window) (context-client (window-context window)))))
         (when (and client (root client))
           (draw-layer fb (layers client) (root client) (window-x window) (window-y window)
@@ -175,9 +179,21 @@
                  (let ((window (window-at x y)))
                    (when window
                      (setf *windows* (cons window (remove window *windows*)))
-                     (when (< y (+ (window-y window) +title-height+))
-                       (setf *drag* (list window))))))
-               (setf *drag* nil))))))
+                     (if (and (zerop (window-level window)) (< y (+ (window-y window) +title-height+)))
+                         (setf *drag* (list window))
+                         (click window :left-mouse-down x y)))))
+               (destructuring-bind (x y) *cursor*
+                 (let ((window (window-at x y)))
+                   (when (and window (not *drag*))
+                     (click window :left-mouse-up x y)))
+                 (setf *drag* nil)))))))
+
+(defun click (window type x y)
+  (let ((client (find (owner window) *clients* :key #'pid)))
+    (post-event client (server:encode-event
+                        (server:mouse-event type x y :timestamp (get-internal-real-time)
+                                                     :window (window-id window)
+                                                     :wx (- x (window-x window)) :wy (- y (window-y window)))))))
 
 (defvar *shift* nil)
 
@@ -295,6 +311,8 @@
                    (setf (window-width window) w (window-height window) h)))
                 ((string= name "MoveWindowWithGroup")
                  (setf (window-x window) (round (second args)) (window-y window) (round (third args))))
+                ((string= name "SetWindowLevel")
+                 (setf (window-level window) (second args)))
                 ((string= name "OrderWindow")
                  (let ((order (second args)))
                    (setf (ordered window) (/= order 0))
@@ -350,6 +368,7 @@
       (let ((port (launchd:bootstrap-check-in name)))
         (when port (mach:mach-port-move-member mach:*task* port set))))
     (mach:mach-port-move-member mach:*task* render-server set)
+    (finch/launchd:bootstrap-look-up "com.apple.loginwindow")
     (format t "WindowServer: ~dx~d, CARenderServer #x~x~%"
             (io:framebuffer-width *framebuffer*) (io:framebuffer-height *framebuffer*) render-server)
     (finish-output)

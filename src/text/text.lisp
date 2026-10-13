@@ -8,6 +8,9 @@
 (defvar *loaders* (make-hash-table :test 'equal))
 (defvar *lock* (sb-thread:make-mutex :name "fonts"))
 
+(defmacro with-fonts (&body body)
+  `(sb-thread:with-recursive-lock (*lock*) ,@body))
+
 (defclass font ()
   ((loader :initarg :loader :reader loader)
    (size :initarg :size :reader font-size)))
@@ -22,8 +25,8 @@
 (defun scale (font)
   (/ (font-size font) (zpb-ttf:units/em (loader font))))
 
-(defun font-ascent (font) (* (scale font) (zpb-ttf:ascender (loader font))))
-(defun font-descent (font) (* (scale font) (- (zpb-ttf:descender (loader font)))))
+(defun font-ascent (font) (with-fonts (* (scale font) (zpb-ttf:ascender (loader font)))))
+(defun font-descent (font) (with-fonts (* (scale font) (- (zpb-ttf:descender (loader font))))))
 
 (defun glyphs (font string)
   (let ((loader (loader font)))
@@ -31,6 +34,9 @@
           :collect (zpb-ttf:find-glyph char loader))))
 
 (defun string-width (font string)
+  (with-fonts (%string-width font string)))
+
+(defun %string-width (font string)
   (let ((loader (loader font)))
     (* (scale font)
        (loop :for (glyph next) :on (glyphs font string)
@@ -52,6 +58,9 @@
     bitmap))
 
 (defun draw-string (bitmap font string x baseline r g b &optional (a 1.0))
+  (with-fonts (%draw-string bitmap font string x baseline r g b a)))
+
+(defun %draw-string (bitmap font string x baseline r g b a)
   (let ((state (net.tuxee.aa:make-state))
         (s (scale font))
         (loader (loader font))

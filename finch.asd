@@ -57,7 +57,7 @@
   :depends-on (#:finch/ca #:finch/server #:finch/bsd #:finch/text)
   :serial t
   :pathname "src/apps/"
-  :components ((:file "hello") (:file "terminal")))
+  :components ((:file "hello") (:file "terminal") (:file "session")))
 
 (asdf:defsystem #:finch/kernel
   :description "The kernel, run as pid 1"

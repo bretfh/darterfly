@@ -1,7 +1,7 @@
 (defpackage #:finch/launchd
   (:use #:cl)
   (:local-nicknames (#:bsd #:finch/bsd) (#:mach #:finch/mach) (#:plist #:finch/plist) (#:xpc #:finch/xpc))
-  (:export #:bootstrap-check-in #:bootstrap-look-up #:bootstrap-port #:launchd-call
+  (:export #:bootstrap-check-in #:bootstrap-look-up #:bootstrap-port #:launchd-call #:kickstart
            #:+bootstrap-unknown-service+ #:+bootstrap-not-privileged+ #:+bootstrap-service-active+))
 (in-package #:finch/launchd)
 
@@ -12,9 +12,11 @@
 (defconstant +routine-check-in+ #x400000ce)
 (defconstant +routine-look-up+ #x400000cf)
 (defconstant +routine-list+ #x40000fff)
+(defconstant +routine-kickstart+ #x40000ffe)
 (defconstant +reply+ #x20000000)
 
-(defparameter *daemons* '("/System/Library/LaunchDaemons" "/Library/LaunchDaemons"))
+(defparameter *daemons* '("/System/Library/LaunchDaemons" "/Library/LaunchDaemons"
+                          "/System/Library/LaunchAgents" "/Library/LaunchAgents"))
 
 (defclass job ()
   ((label :initarg :label :reader label)
@@ -81,6 +83,11 @@
 (defun keep-alive-p (job)
   (let ((keep (key (job-plist job) "KeepAlive")))
     (and keep (not (eq keep :false)))))
+
+(defun start-at-load-p (job)
+  (let ((keep (key (job-plist job) "KeepAlive")))
+    (or (key (job-plist job) "RunAtLoad")
+        (and keep (not (and (hash-table-p keep) (key keep "AfterInitialDemand")))))))
 
 (defun environment (job)
   (let ((env (key (job-plist job) "EnvironmentVariables")))
@@ -212,6 +219,13 @@
                      (check-in message name (bsd:task-pid (mach:msgh-audit message))))
                     ((= (mach:msgh-id message) +routine-look-up+) (look-up message name))
                     ((= (mach:msgh-id message) +routine-list+) (list-jobs message))
+                    ((= (mach:msgh-id message) +routine-kickstart+)
+                     (let ((job (find (xpc:value request "label") *jobs* :key #'label :test #'string=)))
+                       (cond ((null job) (fail-reply message +bootstrap-unknown-service+))
+                             (t (start job)
+                                (if (unavailable job)
+                                    (fail-reply message 2)
+                                    (reply message (list "pid" (list :int64 (or (pid job) 0)))))))))
                     (t (fail-reply message 78)))))))
     bootstrap))
 
@@ -232,7 +246,7 @@
     (bsd:bsdthread-create #'reaper "reaper")
     (sb-thread:with-mutex (*lock*)
       (dolist (job *jobs*)
-        (when (or (key (job-plist job) "RunAtLoad") (keep-alive-p job))
+        (when (start-at-load-p job)
           (start job))))
     (serve bootstrap set)))
 
@@ -263,6 +277,12 @@
                         (list "handle" (list :uint64 0) "flags" (list :uint64 0) "name" name
                               "type" (list :uint64 7)))))
 
+(defun kickstart (label)
+  (let ((reply (launchd-call +routine-kickstart+ (list "label" label))))
+    (if (xpc:value reply "error")
+        (values nil (second (xpc:value reply "error")))
+        (values (second (xpc:value reply "pid")) 0))))
+
 (defun bootstrap-look-up (name)
   (result (launchd-call +routine-look-up+
                         (list "handle" (list :uint64 0) "instance" (list :uuid (make-array 16 :element-type '(unsigned-byte 8) :initial-element 0))
@@ -279,4 +299,7 @@
                  (format t "~a~c~d~c~a~%" (if (zerop pid) "-" pid) #\Tab
                          (second (xpc:value job "status")) #\Tab (xpc:value job "label")))))
            0)
-          (t (format *error-output* "usage: launchctl list~%") 64))))
+          ((equal command "kickstart")
+           (multiple-value-bind (pid code) (kickstart (third argv))
+             (if pid (progn (format t "~a~%" pid) 0) (progn (format *error-output* "~a: ~a~%" (third argv) code) 1))))
+          (t (format *error-output* "usage: launchctl list | kickstart label~%") 64))))
