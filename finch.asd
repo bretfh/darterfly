@@ -4,9 +4,16 @@
   :pathname "src/mach/"
   :components ((:file "kern") (:file "port") (:file "msg") (:file "task")))
 
+(asdf:defsystem #:finch/bsd
+  :description "Processes, signals and files"
+  :depends-on (#:finch/mach)
+  :serial t
+  :pathname "src/bsd/"
+  :components ((:file "errno") (:file "proc") (:file "file")))
+
 (asdf:defsystem #:finch/kernel
   :description "The kernel, run as pid 1"
-  :depends-on (#:finch/mach #:uiop)
+  :depends-on (#:finch/mach #:finch/bsd #:uiop)
   :serial t
   :pathname "src/kernel/"
   :components ((:file "kernel")))
@@ -69,17 +76,17 @@
   :depends-on (#:finch/plist #:com.inuoe.jzon #:uiop (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/tahoe/"
-  :components ((:static-file "SSDT-EC-USBX.dsl") (:static-file "transactions.c") (:static-file "commit-tap.c") (:static-file "commits.m") (:static-file "ports.c") (:static-file "ports.script") (:file "opencore") (:file "qmp") (:file "guest")))
+  :components ((:static-file "SSDT-EC-USBX.dsl") (:static-file "transactions.c") (:static-file "commit-tap.c") (:static-file "commits.m") (:static-file "ports.c") (:static-file "ports.script") (:static-file "bsd.c") (:static-file "bsd.script") (:file "opencore") (:file "qmp") (:file "guest")))
 
 (asdf:defsystem #:finch
   :description "A Darwin in Common Lisp"
-  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/kernel #:finch/image)
+  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/kernel #:finch/image)
   :in-order-to ((asdf:test-op (asdf:test-op #:finch/test))))
 
 (asdf:defsystem #:finch/test
   :depends-on (#:finch #:finch/tahoe #:fiveam (:require #:sb-posix))
   :serial t
   :pathname "tests/"
-  :components ((:file "suite") (:file "mach") (:file "plist") (:file "macho") (:file "dyld") (:file "objc") (:file "mig") (:file "server") (:file "ca") (:file "kernel") (:file "tahoe"))
+  :components ((:file "suite") (:file "mach") (:file "plist") (:file "macho") (:file "dyld") (:file "objc") (:file "mig") (:file "server") (:file "ca") (:file "bsd") (:file "kernel") (:file "tahoe"))
   :perform (asdf:test-op (o c)
              (uiop:symbol-call :finch/test :run-them)))

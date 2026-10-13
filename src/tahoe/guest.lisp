@@ -151,3 +151,6 @@
 
 (defun ports ()
   (oracle "ports" "clang -w -o ports ports.c && ./ports ports.script" "ports.c" "ports.script"))
+
+(defun bsd ()
+  (oracle "bsd" "clang -w -o bsd bsd.c && ./bsd bsd.script" "bsd.c" "bsd.script"))

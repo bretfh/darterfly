@@ -1,0 +1,123 @@
+self me
+fork a
+ppid-is me
+exit 3
+end
+wait a
+wait a
+wait any
+fork b
+hold
+end
+kill b term
+wait b
+fork c
+signal usr1 catch
+hold
+end
+kill c usr1
+wait c
+fork d
+signal term ignore
+hold
+end
+kill d term
+wait d nohang
+kill d kill
+wait d
+fork e
+hold
+end
+kill e stop
+wait e
+kill e cont
+wait e
+kill e int
+wait e
+fork f
+signal usr2 catch
+mask usr2
+hold
+end
+kill f usr2
+wait f nohang
+kill f hup
+wait f
+fork g
+exit 0
+end
+fork h
+exit 7
+end
+wait h
+wait g
+wait any
+kill 99999 term
+kill me 0
+pipe r w
+write w hello
+read r 3
+read r 10
+fill w
+drain r
+close w
+read r 4
+close r
+close r
+pipe r2 w2
+close r2
+signal pipe ignore
+write w2 x
+signal pipe default
+dup w2 w3
+same w2 w3
+close w2
+close w3
+close w3
+pipe r4 w4
+write w4 bye
+close w4
+fork k
+read r4 5
+read r4 5
+exit 0
+end
+wait k
+fork m
+write w4 x
+exit 0
+end
+wait m
+pipe r5 w5
+fork p
+close r5
+write w5 x
+exit 0
+end
+close r5
+fork q
+write w5 x
+exit 0
+end
+wait q
+close w5
+wait p
+fork s
+fork t
+exit 2
+end
+wait t
+exit 4
+end
+wait s
+fork u
+self uu
+fork v
+ppid-is uu
+hold
+end
+kill v kill
+wait v
+exit 0
+end
+wait u
