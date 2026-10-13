@@ -179,7 +179,8 @@
                  (let ((window (window-at x y)))
                    (when window
                      (setf *windows* (cons window (remove window *windows*)))
-                     (if (and (zerop (window-level window)) (< y (+ (window-y window) +title-height+)))
+                     (if (and (zerop (window-level window)) (< y (+ (window-y window) +title-height+))
+                              (> (- x (window-x window)) 76))
                          (setf *drag* (list window))
                          (click window :left-mouse-down x y)))))
                (destructuring-bind (x y) *cursor*

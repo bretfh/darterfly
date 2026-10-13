@@ -1,6 +1,6 @@
 (defpackage #:finch/text
   (:use #:cl)
-  (:export #:font #:font-size #:string-width #:draw-string #:bitmap #:make-bitmap
+  (:export #:font #:font-size #:string-width #:draw-string #:bitmap #:make-bitmap #:fill-ellipse #:fill-round-rect #:fill-rect
            #:bitmap-width #:bitmap-height #:bitmap-pixels #:fill-bitmap #:font-ascent #:font-descent))
 (in-package #:finch/text)
 
@@ -87,3 +87,44 @@
                             (min 255 (round (+ (* 255 v cover) (* keep (aref pixels (+ at i)))))))))
                (mix 0 r) (mix 1 g) (mix 2 b) (mix 3 1.0)))))))
     pen))
+
+(defun cover (bitmap state r g b a)
+  (let ((pixels (bitmap-pixels bitmap))
+        (w (bitmap-width bitmap))
+        (h (bitmap-height bitmap)))
+    (net.tuxee.aa:cells-sweep
+     state
+     (lambda (px py alpha)
+       (when (and (< -1 px w) (< -1 py h))
+         (let* ((c (* a (/ (min 256 (abs alpha)) 256.0)))
+                (at (* 4 (+ px (* py w))))
+                (keep (- 1.0 c)))
+           (flet ((mix (i v)
+                    (setf (aref pixels (+ at i)) (min 255 (round (+ (* 255 v c) (* keep (aref pixels (+ at i)))))))))
+             (mix 0 r) (mix 1 g) (mix 2 b) (mix 3 1.0))))))
+    bitmap))
+
+(defun fill-ellipse (bitmap cx cy rx ry r g b &optional (a 1.0))
+  (let ((state (net.tuxee.aa:make-state)))
+    (net.tuxee.vectors:update-state state (net.tuxee.paths:make-circle-path cx cy rx ry))
+    (cover bitmap state r g b a)))
+
+(defun fill-round-rect (bitmap x y width height radius r g b &optional (a 1.0))
+  (let ((state (net.tuxee.aa:make-state))
+        (path (net.tuxee.paths:make-rectangle-path/center (+ x (/ width 2)) (+ y (/ height 2)) (/ width 2) (/ height 2)
+                                                          :round radius)))
+    (net.tuxee.vectors:update-state state path)
+    (cover bitmap state r g b a)))
+
+(defun fill-rect (bitmap x y width height r g b &optional (a 1.0))
+  (let ((pixels (bitmap-pixels bitmap))
+        (w (bitmap-width bitmap)))
+    (loop :for row :from (max 0 y) :below (min (bitmap-height bitmap) (+ y height))
+          :do (loop :for col :from (max 0 x) :below (min w (+ x width))
+                    :for at := (* 4 (+ col (* row w)))
+                    :do (let ((keep (- 1.0 a)))
+                          (setf (aref pixels at) (round (+ (* 255 r a) (* keep (aref pixels at))))
+                                (aref pixels (+ at 1)) (round (+ (* 255 g a) (* keep (aref pixels (+ at 1)))))
+                                (aref pixels (+ at 2)) (round (+ (* 255 b a) (* keep (aref pixels (+ at 2)))))
+                                (aref pixels (+ at 3)) (round (+ (* 255 a) (* keep (aref pixels (+ at 3)))))))))
+    bitmap))

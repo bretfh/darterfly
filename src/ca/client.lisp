@@ -112,11 +112,18 @@
 (defconstant +set-window-layer-context+ 30264)
 (defconstant +transaction-commit-async+ 30429)
 
-(defvar *window-server* nil)
-(defvar *transaction* 0)
+(defclass connection ()
+  ((window-server :initform nil :accessor connection-window-server)
+   (transaction :initform 0 :accessor connection-transaction)
+   (lock :initform (sb-thread:make-mutex :name "connection") :reader connection-lock)))
+
+(finch/bsd:define-process-variable *connection* (make-instance 'connection))
 
 (defun window-server ()
-  (or *window-server* (setf *window-server* (finch/launchd:bootstrap-look-up "com.apple.windowserver"))))
+  (sb-thread:with-mutex ((connection-lock *connection*))
+    (or (connection-window-server *connection*)
+        (setf (connection-window-server *connection*)
+              (finch/launchd:bootstrap-look-up "com.apple.windowserver")))))
 
 (defun octets (&rest words)
   (let ((w (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0)))
@@ -136,7 +143,7 @@
 
 (defun transaction-commit (forms)
   (let* ((stream (finch/server:encode-transaction forms))
-         (body (octets 0 1 (incf *transaction*) '(8 . 0) (length stream))))
+         (body (octets 0 1 (incf (connection-transaction *connection*)) '(8 . 0) (length stream))))
     (loop :for b :across stream :do (vector-push-extend b body))
     (loop :until (zerop (mod (length body) 4)) :do (vector-push-extend 0 body))
     (loop :for b :across (octets 0) :do (vector-push-extend b body))

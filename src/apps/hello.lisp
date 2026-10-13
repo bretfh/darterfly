@@ -1,6 +1,6 @@
 (defpackage #:finch/apps
   (:use #:cl)
-  (:local-nicknames (#:ca #:finch/ca) (#:bsd #:finch/bsd) (#:text #:finch/text)))
+  (:local-nicknames (#:ca #:finch/ca) (#:bsd #:finch/bsd) (#:text #:finch/text) (#:kit #:finch/kit)))
 (in-package #:finch/apps)
 
 (defun label (string font r g b)
@@ -33,10 +33,14 @@
     window))
 
 (bsd:define-program "Hello" (argv envp)
-  (let ((context (ca:context-create)))
-    (setf (ca:context-layer context)
-          (window 0 0 600 400 #(0.85 0.85 0.85 1.0) #(1.0 1.0 1.0 1.0) "Hello"
-                  (label "Hello from finch." (text:font "SFNS" 28) 0.0 0.0 0.0)))
-    (ca:commit context)
-    (ca:window-create context 212 134 600 400)
-    (loop (bsd:pause))))
+  (let* ((window (kit:make-window :title "Hello" :x 212 :y 134 :width 600 :height 400))
+         (label (make-instance 'kit:text-field :string "Hello from finch." :font-size 28
+                                               :frame (vector 20 20 400 40)))
+         (button (make-instance 'kit:button :title "Click me" :frame (vector 20 80 120 32)
+                                            :action (lambda (button)
+                                                      (declare (ignore button))
+                                                      (setf (kit:string-value label) "You clicked.")))))
+    (kit:add-subview (kit:content-view window) label)
+    (kit:add-subview (kit:content-view window) button)
+    (kit:show window)
+    (kit:run)))

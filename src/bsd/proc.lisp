@@ -27,7 +27,8 @@
    (root :initform "/" :accessor proc-root)
    (exec-tag :initform (list :exec) :reader exec-tag)
    (comm :initform "kernel_task" :accessor proc-comm)
-   (threads :initform nil :accessor proc-threads)))
+   (threads :initform nil :accessor proc-threads)
+   (bindings :initform nil :accessor proc-bindings)))
 
 (defmethod print-object ((proc proc) stream)
   (print-unreadable-object (proc stream :type t)
@@ -138,13 +139,16 @@
 (defun proc-main (proc fn)
   (let ((*proc* proc)
         (finch/mach:*task* (proc-task proc)))
-    (let ((status (catch proc
-                    (loop
-                      (setf fn (catch (exec-tag proc)
-                                 (let ((code (handler-case (funcall fn)
-                                               (error (e) (crash e)))))
-                                   (return (w-exitcode (if (integerp code) (logand code 255) 0) 0)))))))))
-      (proc-exit proc status))))
+    (call-with-bindings (proc-bindings proc) (lambda () (proc-body proc fn)))))
+
+(defun proc-body (proc fn)
+  (let ((status (catch proc
+                  (loop
+                    (setf fn (catch (exec-tag proc)
+                               (let ((code (handler-case (funcall fn)
+                                             (error (e) (crash e)))))
+                                 (return (w-exitcode (if (integerp code) (logand code 255) 0) 0)))))))))
+    (proc-exit proc status)))
 
 (defun crash (e)
   (ignore-errors (format *error-output* "~&~a[~d]: ~a~%" (proc-comm *proc*) (proc-pid *proc*) e)
@@ -165,7 +169,8 @@
       (setf (proc-mask child) (proc-mask parent)
             (proc-cwd child) (proc-cwd parent)
             (proc-root child) (proc-root parent)
-            (proc-comm child) (proc-comm parent))
+            (proc-comm child) (proc-comm parent)
+            (proc-bindings child) (proc-bindings parent))
       (setf (proc-thread child)
             (sb-thread:make-thread (lambda () (proc-main child fn))
                                    :name (format nil "pid ~d" (proc-pid child))))
@@ -177,9 +182,10 @@
 (defun bsdthread-create (fn &optional (name "thread"))
   (let* ((proc *proc*)
          (task finch/mach:*task*)
+         (bindings (proc-bindings proc))
          (thread (sb-thread:make-thread (lambda ()
                                           (let ((*proc* proc) (finch/mach:*task* task))
-                                            (catch proc (funcall fn))))
+                                            (catch proc (call-with-bindings bindings fn))))
                                         :name name)))
     (with-bsd (push thread (proc-threads proc)))
     thread))

@@ -1,6 +1,24 @@
 (in-package #:finch/bsd)
 
 (defvar *programs* (make-hash-table :test 'equal))
+(defvar *process-variables* nil)
+
+(defmacro define-process-variable (name init)
+  `(progn
+     (defvar ,name nil)
+     (setf *process-variables*
+           (append (remove ',name *process-variables* :key #'car)
+                   (list (cons ',name (lambda () ,init)))))
+     ',name))
+
+(defun fresh-bindings ()
+  (cons (mapcar #'car *process-variables*)
+        (mapcar (lambda (v) (funcall (cdr v))) *process-variables*)))
+
+(defun call-with-bindings (bindings function)
+  (if bindings
+      (progv (car bindings) (cdr bindings) (funcall function))
+      (funcall function)))
 
 (defmacro define-program (name (argv envp) &body body)
   `(setf (gethash ,name *programs*) (lambda (,argv ,envp) (declare (ignorable ,argv ,envp)) ,@body)))
@@ -31,8 +49,10 @@
             :when (functionp (aref (proc-actions proc) signo))
               :do (setf (aref (proc-actions proc) signo) :default))
       (setf (proc-comm proc) (basename name))
-      (throw (exec-tag proc)
-        (lambda () (with-stdio (funcall program argv envp)))))))
+      (let ((bindings (fresh-bindings)))
+        (setf (proc-bindings proc) bindings)
+        (throw (exec-tag proc)
+          (lambda () (call-with-bindings bindings (lambda () (with-stdio (funcall program argv envp))))))))))
 
 (defun posix-spawn (name argv envp &key file-actions)
   (with-bsd
