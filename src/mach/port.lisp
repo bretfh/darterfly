@@ -1,7 +1,9 @@
 (in-package #:finch/mach)
 
 (defconstant +mach-port-qlimit-default+ 5)
+(defconstant +mach-port-qlimit-max+ 1024)
 (defconstant +mach-notify-port-deleted+ #o101)
+(defconstant +mach-notify-send-possible+ #o102)
 (defconstant +mach-notify-port-destroyed+ #o105)
 (defconstant +mach-notify-no-senders+ #o106)
 (defconstant +mach-notify-send-once+ #o107)
@@ -27,6 +29,8 @@
    (nsrequest :initform nil :accessor nsrequest)
    (pdrequest :initform nil :accessor pdrequest)
    (requests :initform nil :accessor requests)
+   (seqno :initform 0 :accessor seqno)
+   (context :initform 0 :accessor context)
    (arrived :initform (sb-thread:make-waitqueue) :reader arrived)
    (drained :initform (sb-thread:make-waitqueue) :reader drained)))
 
@@ -38,7 +42,8 @@
   ((object :initarg :object :reader object)
    (rights :initarg :rights :accessor rights)
    (urefs :initarg :urefs :accessor urefs)
-   (request :initform nil :accessor request)))
+   (request :initform nil :accessor request)
+   (armed :initform nil :accessor armed)))
 
 (defclass task ()
   ((name :initarg :name :initform nil :reader task-name)
@@ -93,6 +98,7 @@
     (let ((notify (request e)))
       (when (consp notify)
         (setf (request e) nil
+              (armed e) nil
               (requests (object e)) (remove e (requests (object e)) :key #'car))
         (notify notify +mach-notify-port-deleted+ name)))
     (remhash name (entries task))
@@ -126,7 +132,8 @@
            (loop :for (e . name) :in (shiftf (requests port) nil)
                  :for notify := (request e)
                  :when (consp notify)
-                   :do (setf (request e) t)
+                   :do (setf (request e) t
+                             (armed e) nil)
                        (notify notify +mach-notify-dead-name+ name))
            (broadcast (arrived port))
            (broadcast (drained port))))))
@@ -134,7 +141,7 @@
 (defun notify (carried id &optional body rights)
   (let ((port (car carried)))
     (if (deadp port)
-        (progn (decf (sorights port)) (mapc #'release rights))
+        (progn (decf (sorights port)) (mapc #'release-descriptor rights))
         (enqueue port (make-kmsg :dest carried :id id :body body :rights rights)))))
 
 (defun lose-send (port)
@@ -143,10 +150,25 @@
 
 (defun release (carried)
   (destructuring-bind (port . type) carried
-    (ecase type
-      (:receive (kill port))
-      (:send (lose-send port))
-      (:send-once (notify carried +mach-notify-send-once+)))))
+    (when port
+      (ecase type
+        (:receive (kill port))
+        (:send (lose-send port))
+        (:send-once (notify carried +mach-notify-send-once+))))))
+
+(defun release-descriptor (d)
+  (typecase d
+    ((cons simple-vector) (loop :for c :across (car d) :when c :do (release c)))
+    (cons (release d))))
+
+(defun send-possible (port)
+  (when (< (length (messages port)) (qlimit port))
+    (loop :for r :in (requests port)
+          :for (e . name) := r
+          :when (armed e)
+            :do (setf (requests port) (remove r (requests port))
+                      (armed e) nil)
+                (notify (shiftf (request e) nil) +mach-notify-send-possible+ name))))
 
 (defun consume (carried)
   (destructuring-bind (port . type) carried
@@ -232,6 +254,18 @@
        (let ((port (make-instance 'port)))
          (setf (deadp port) t)
          (enter task port (list :dead-name) 1))))))
+
+(defun mach-port-allocate-name (task right name)
+  (with-ipc
+    (unless (and (integerp name) (< 0 name #xffffffff)) (fail :kern-invalid-value))
+    (case right
+      (:receive
+       (let ((port (make-instance 'port)))
+         (prog1 (enter task port (list :receive) 0 name)
+           (setf (receiver port) task))))
+      (:port-set (enter task (make-instance 'port-set) (list :port-set) 0 name))
+      (:dead-name name)
+      (t (fail :kern-invalid-value)))))
 
 (defun mach-port-insert-right (task name poly disposition)
   (with-ipc
@@ -340,6 +374,22 @@
     (unless (member :receive (rights e)) (fail :kern-invalid-right))
     (object e)))
 
+(defun set-request (e name kind sync notify)
+  (let* ((port (object e))
+         (previous (and (consp (request e)) (request e))))
+    (setf (requests port) (remove e (requests port) :key #'car)
+          (request e) nil
+          (armed e) nil)
+    (cond ((null notify))
+          ((and (eq kind :send-possible) (plusp sync)
+                (or (member :send-once (rights e))
+                    (< (length (messages port)) (qlimit port))))
+           (notify notify +mach-notify-send-possible+ name))
+          (t (setf (request e) notify
+                   (armed e) (and (eq kind :send-possible) (plusp sync)))
+             (push (cons e name) (requests port))))
+    previous))
+
 (defun request-notification (task name kind sync notify)
   (ecase kind
     (:port-destroyed
@@ -354,15 +404,14 @@
                   (notify notify +mach-notify-no-senders+ (mscount port)))
            (setf (nsrequest port) notify))
        previous))
-    (:dead-name
+    ((:dead-name :send-possible)
      (let ((e (entry task name)))
        (cond ((intersection '(:send :send-once :receive) (rights e))
-              (let* ((port (object e))
-                     (previous (and (consp (request e)) (request e))))
-                (setf (requests port) (remove e (requests port) :key #'car)
-                      (request e) notify)
-                (when notify (push (cons e name) (requests port)))
-                previous))
+              (set-request e name kind sync notify))
+             ((and (member :dead-name (rights e)) (eq kind :send-possible) notify)
+              (incf (urefs e))
+              (notify notify +mach-notify-dead-name+ name)
+              nil)
              ((member :dead-name (rights e)) (fail :kern-invalid-argument))
              (t (fail :kern-invalid-right)))))))
 
@@ -374,7 +423,57 @@
       (let ((previous (handler-bind ((kern-return (lambda (c)
                                                     (declare (ignore c))
                                                     (when carried (release carried)))))
-                        (unless (member kind '(:port-destroyed :no-senders :dead-name))
+                        (unless (member kind '(:port-destroyed :no-senders :dead-name :send-possible))
                           (fail :kern-invalid-value))
                         (request-notification task name kind sync carried))))
         (and previous (copyout task previous))))))
+
+(defun mach-port-get-attributes (task name flavor)
+  (with-ipc
+    (ecase flavor
+      (:receive-status
+       (let ((port (receive-port task name)))
+         (list :seqno (seqno port) :mscount (mscount port) :qlimit (qlimit port)
+               :msgcount (length (messages port)) :sorights (sorights port)
+               :srights (if (plusp (srights port)) 1 0) :pdrequest (if (pdrequest port) 1 0)
+               :nsrequest (if (nsrequest port) 1 0) :flags 0))))))
+
+(defun mach-port-set-attributes (task name flavor value)
+  (with-ipc
+    (ecase flavor
+      (:limits-info
+       (let ((port (receive-port task name)))
+         (unless (<= 0 value +mach-port-qlimit-max+) (fail :kern-invalid-value))
+         (setf (qlimit port) value)
+         (broadcast (drained port)))))
+    (values)))
+
+(defun mach-port-set-mscount (task name mscount)
+  (with-ipc
+    (setf (mscount (receive-port task name)) mscount)
+    (values)))
+
+(defun mach-port-set-seqno (task name seqno)
+  (with-ipc
+    (setf (seqno (receive-port task name)) seqno)
+    (values)))
+
+(defun mach-port-set-context (task name context)
+  (with-ipc
+    (setf (context (receive-port task name)) context)
+    (values)))
+
+(defun mach-port-get-context (task name)
+  (with-ipc
+    (context (receive-port task name))))
+
+(defun mach-port-get-set-status (task name)
+  (with-ipc
+    (let ((e (entry task name)))
+      (unless (member :port-set (rights e)) (fail :kern-invalid-right))
+      (mapcar (lambda (port) (gethash port (names task))) (members (object e))))))
+
+(defun mach-port-extract-right (task name disposition)
+  (with-ipc
+    (let ((carried (copyin task name disposition)))
+      (values (copyout *task* carried) (moved (cdr carried))))))

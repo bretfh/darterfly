@@ -9,7 +9,8 @@
                       :accessor msgh-local-disposition)
    (id :initarg :id :initform 0 :accessor msgh-id)
    (body :initarg :body :initform nil :accessor msgh-body)
-   (ports :initarg :ports :initform nil :accessor msgh-ports)))
+   (descriptors :initarg :descriptors :initform nil :accessor msgh-descriptors)
+   (seqno :initarg :seqno :initform 0 :accessor msgh-seqno)))
 
 (defmethod print-object ((m message) stream)
   (print-unreadable-object (m stream :type t)
@@ -24,7 +25,32 @@
 (defun discard (kmsg)
   (release (kmsg-dest kmsg))
   (when (kmsg-reply kmsg) (release (kmsg-reply kmsg)))
-  (mapc #'release (kmsg-rights kmsg)))
+  (mapc #'release-descriptor (kmsg-rights kmsg)))
+
+(defun carried-type (disposition)
+  (ecase disposition
+    ((:make-send :copy-send :move-send) :send)
+    ((:make-send-once :move-send-once) :send-once)
+    (:move-receive :receive)))
+
+(defun copyin-descriptor (task d dry)
+  (flet ((one (name disposition)
+           (if name
+               (copyin task name disposition :absent :mach-send-invalid-right
+                                             :wrong :mach-send-invalid-right :dry dry)
+               (cons nil (carried-type disposition)))))
+    (typecase d
+      ((cons vector) (cons (map 'simple-vector (lambda (name) (and name (one name (cdr d)))) (car d))
+                           (carried-type (cdr d))))
+      (cons (one (car d) (cdr d)))
+      (t (copy-seq d)))))
+
+(defun copyout-descriptor (task d)
+  (typecase d
+    ((cons simple-vector) (cons (map 'simple-vector (lambda (c) (and c (copyout task c))) (car d))
+                                (moved (cdr d))))
+    (cons (cons (and (car d) (copyout task d)) (moved (cdr d))))
+    (t d)))
 
 (defun moved (type)
   (ecase type
@@ -47,10 +73,7 @@
                        :dry dry))
    :id (msgh-id m)
    :body (msgh-body m)
-   :rights (loop :for (name . disposition) :in (msgh-ports m)
-                 :collect (copyin task name disposition
-                                  :absent :mach-send-invalid-right
-                                  :wrong :mach-send-invalid-right :dry dry))))
+   :rights (loop :for d :in (msgh-descriptors m) :collect (copyin-descriptor task d dry))))
 
 (defun deadline (timeout)
   (and timeout
@@ -76,7 +99,7 @@
 (defun pseudo-receive (task k)
   (copyout task (kmsg-dest k))
   (when (kmsg-reply k) (copyout task (kmsg-reply k)))
-  (mapc (lambda (carried) (copyout task carried)) (kmsg-rights k)))
+  (mapc (lambda (d) (copyout-descriptor task d)) (kmsg-rights k)))
 
 (defun mach-msg-send (message &key timeout)
   (with-ipc
@@ -96,6 +119,7 @@
 (defun deliver (task port)
   (let ((k (pop (messages port))))
     (broadcast (drained port))
+    (send-possible port)
     (consume (kmsg-dest k))
     (let ((reply (kmsg-reply k)))
       (make-message
@@ -105,8 +129,8 @@
        :remote-disposition (and reply (moved (cdr reply)))
        :id (kmsg-id k)
        :body (kmsg-body k)
-       :ports (loop :for carried :in (kmsg-rights k)
-                    :collect (cons (copyout task carried) (moved (cdr carried))))))))
+       :seqno (prog1 (seqno port) (incf (seqno port)))
+       :descriptors (loop :for d :in (kmsg-rights k) :collect (copyout-descriptor task d))))))
 
 (defun mach-msg-receive (name &key timeout)
   (with-ipc

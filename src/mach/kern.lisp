@@ -6,10 +6,13 @@
    #:mach-port-allocate #:mach-port-insert-right #:mach-port-deallocate
    #:mach-port-mod-refs #:mach-port-destroy #:mach-port-type
    #:mach-port-get-refs #:mach-port-move-member #:mach-port-names
-   #:mach-port-request-notification
+   #:mach-port-request-notification #:mach-port-allocate-name
+   #:mach-port-get-attributes #:mach-port-set-attributes #:mach-port-set-mscount
+   #:mach-port-set-seqno #:mach-port-set-context #:mach-port-get-context
+   #:mach-port-get-set-status #:mach-port-extract-right #:msgh-seqno
    #:message #:make-message #:msgh-remote-port #:msgh-local-port
    #:msgh-remote-disposition #:msgh-local-disposition #:msgh-id
-   #:msgh-body #:msgh-ports
+   #:msgh-body #:msgh-descriptors
    #:mach-msg-send #:mach-msg-receive
    #:+mach-port-qlimit-default+))
 (in-package #:finch/mach)

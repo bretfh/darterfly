@@ -174,3 +174,103 @@ receive w - z
 type z
 receive w x
 receive w x
+allocate q receive
+attributes q
+insert q q make-send
+attributes q
+mscount q 7
+seqno q 5
+attributes q
+send q copy-send none - 1
+send q make-send-once none - 2
+attributes q
+receive q x
+attributes q
+receive q x
+attributes q
+qlimit q 1
+attributes q
+send q copy-send none - 3
+send q copy-send none - 4
+send q make-send-once none - 5
+attributes q
+qlimit q 0
+qlimit q 2000
+qlimit q 1024
+qlimit q 1025
+attributes q
+receive q x
+receive q x
+request q no-senders 0 q make-send-once p
+attributes q
+request q port-destroyed 0 w make-send-once p
+attributes q
+allocate-name m receive 0x70003
+type m
+allocate-name m2 receive 0x70003
+allocate-name m3 receive 0x70103
+allocate-name m4 send 0x80003
+allocate-name m5 port-set 0x90003
+type m5
+allocate-name m6 dead-name 0xa0003
+type m6
+allocate-name m7 receive 0
+extract q e make-send
+type e
+refs q send
+extract q e copy-send
+refs q send
+extract q e move-send
+refs q send
+extract q e make-send-once
+type e
+send e move-send-once none - 9
+receive q x
+extract n e move-receive
+type n
+type e
+allocate s2 port-set
+allocate k1 receive
+allocate k2 receive
+move-member k1 s2
+move-member k2 s2
+members s2
+move-member k1 none
+members s2
+members k2
+members q
+context k1 99
+get-context k1
+get-context k2
+context s2 5
+get-context s2
+allocate sp receive
+insert sp sp make-send
+qlimit sp 1
+allocate w2 receive
+request sp send-possible 1 w2 make-send-once p
+receive w2 x
+send sp copy-send none - 1
+request sp send-possible 1 w2 make-send-once p
+receive w2 x
+receive sp x
+receive w2 x
+request sp send-possible 0 w2 make-send-once p
+receive w2 x
+send sp copy-send none - 2
+request sp send-possible 1 w2 make-send-once p
+mod-refs sp receive -1
+receive w2 x
+receive w2 x
+type sp
+refs sp dead-name
+allocate o receive
+insert o o make-send
+send o copy-send none - 7000 ool 16 ool 4096
+receive o x
+send o copy-send none - 7001 ports copy-send o+o o copy-send ool 0
+receive o - y z
+refs o send
+send o copy-send none - 7002 ports make-send-once o+o
+receive o - y
+type y
