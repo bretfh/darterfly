@@ -14,6 +14,13 @@
     (unless (results-status results)
       (uiop:quit 1))))
 
+(defvar *finch-root* nil)
+
+(defun finch-file (name)
+  (if *finch-root*
+      (merge-pathnames name *finch-root*)
+      (asdf:system-relative-pathname :finch name)))
+
 (defun scratch ()
   (let ((dir (uiop:ensure-directory-pathname
               (format nil "~a/finch-test-~d" (string-right-trim "/" (uiop:native-namestring (uiop:temporary-directory)))

@@ -168,13 +168,6 @@ void abort(void) {
   _exit(134);
 }
 
-char *realpath(const char *path, char *out) {
-  if (!out) return strdup(path);
-  strcpy(out, path);
-  return out;
-}
-
-int mkstemp(char *t) { (void)t; errno = ENOSYS; return -1; }
 
 static unsigned long long seed = 1;
 int rand(void) { seed = seed * 6364136223846793005ull + 1; return (int)(seed >> 33); }

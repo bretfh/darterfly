@@ -40,3 +40,6 @@ int *__errno_location(void);
 #define ENOTEMPTY 39
 #define ELOOP 40
 #define ETIMEDOUT 110
+#define EAFNOSUPPORT 97
+#define ENOTSUP 95
+#define EOPNOTSUPP 95

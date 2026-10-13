@@ -38,7 +38,7 @@
 
 (defparameter *libsa-sources*
   '("syscall.c" "signal.c" "string.c" "stdio.c" "stdlib.c" "unistd.c" "time.c" "math.c" "misc.c"
-    "setjmp.s" "start.c" "pthread.c"))
+    "setjmp.s" "start.c" "pthread.c" "mfs.c"))
 
 (defun compile-objects (sources dir flags)
   (loop :for name :in sources
@@ -65,8 +65,24 @@
   (compile-objects (mapcar (lambda (f) (source (concatenate 'string "src/libsa/" f))) *libsa-sources*) "libsa"
                    (append (runtime-flags) (list "-fno-builtin" "-fno-math-errno" "-I" (source "src/libsa")))))
 
+(defun finch-sources ()
+  (mapcar #'source '("src/mach/" "src/bsd/" "src/plist/" "src/macho/" "src/dyld/" "src/objc/" "src/mig/"
+                     "src/server/" "src/ca/" "src/xpc/" "src/launchd/" "src/shell/" "src/io/" "src/text/"
+                     "src/imageio/" "src/kit/" "src/apps/" "src/kernel/" "src/tahoe/" "tests/" "src/image/")))
+
+(defun finch-core ()
+  (let ((core (build-path "finch.core")))
+    (unless (and (probe-file core) (> (file-write-date core) (newest (finch-sources))))
+      (run "sh" "-c"
+           (format nil "CL_SOURCE_REGISTRY=\"~a//:$GUIX_ENVIRONMENT/share/common-lisp//\" ASDF_OUTPUT_TRANSLATIONS=\"/:$HOME/.cache/common-lisp/finch-mt/\" ~a --non-interactive --no-userinit --load ~a ~a"
+                   (string-right-trim "/" (source ""))
+                   (uiop:native-namestring (merge-pathnames "run-sbcl.sh" (sbcl-tree)))
+                   (source "src/image/finch-core.lisp")
+                   (uiop:native-namestring core))))
+    core))
+
 (defun split-core ()
-  (let* ((core (merge-pathnames "output/sbcl.core" (sbcl-tree)))
+  (let* ((core (finch-core))
          (asm (build-path "core/lisp.s"))
          (object (build-path "core/lisp.o"))
          (data (build-path "core/lisp-core.o")))
@@ -95,7 +111,8 @@
 
 (defun kernel-inputs ()
   (append (mapcar #'source '("src/osfmk/" "src/bsd/dev/" "src/bsd/kern/" "src/pexpert/" "src/libsa/" "src/sbcl/" "src/image/"))
-          (list (merge-pathnames "output/" (sbcl-tree)))))
+          (list (merge-pathnames "output/" (sbcl-tree)))
+          (finch-sources)))
 
 (defun mach-kernel ()
   (let ((out (build-path "kernel/kernel")))
@@ -108,8 +125,18 @@
 
 (defun boot-plist (boot-args)
   (let ((d (make-hash-table :test 'equal)))
-    (setf (gethash "Kernel Flags" d) boot-args)
+    (setf (gethash "Kernel Flags" d) boot-args
+          (gethash "RAMDisk" d) "/System/Library/RAMDisk/root.cpio")
     d))
+
+(defparameter *ramdisk-files*
+  '("tests/ports.txt" "tests/bsd.txt" "tests/bootstrap.txt" "src/tahoe/ports.script" "src/tahoe/bsd.script"))
+
+(defun ramdisk ()
+  (write-cpio (build-path "root.cpio")
+              (append (list '(:dir "tmp") '(:dir "Users/finch"))
+                      (loop :for f :in *ramdisk-files*
+                            :collect (list :file (concatenate 'string "finch/" f) (octets (source f)))))))
 
 (defun esp (&key (boot-args ""))
   (let ((root (build-path "esp/")))
@@ -121,7 +148,8 @@
       (let ((efi (boot-efi)))
         (put efi "EFI/BOOT/BOOTX64.EFI")
         (put efi "System/Library/CoreServices/boot.efi"))
-      (put (mach-kernel) "System/Library/Kernels/kernel"))
+      (put (mach-kernel) "System/Library/Kernels/kernel")
+      (put (ramdisk) "System/Library/RAMDisk/root.cpio"))
     (let ((plist (merge-pathnames "Library/Preferences/SystemConfiguration/com.apple.Boot.plist" root)))
       (ensure-directories-exist plist)
       (finch/plist:write-plist (boot-plist boot-args) plist))

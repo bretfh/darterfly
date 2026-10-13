@@ -172,7 +172,7 @@
           (bsd:errno (e) (done " ~d" (bsd:errno-code e))))))))
 
 (test bsd-matches-xnu
-  (let* ((lines (coerce (remove "" (uiop:read-file-lines (asdf:system-relative-pathname :finch "src/tahoe/bsd.script"))
+  (let* ((lines (coerce (remove "" (uiop:read-file-lines (finch-file "src/tahoe/bsd.script"))
                                 :test #'string=)
                         'vector))
          (out (make-string-output-stream))
@@ -181,7 +181,7 @@
       (is (= pid reaped))
       (is (bsd:wifexited status)))
     (let ((finch (uiop:split-string (get-output-stream-string out) :separator '(#\Newline)))
-          (xnu (uiop:read-file-lines (asdf:system-relative-pathname :finch "tests/bsd.txt"))))
+          (xnu (uiop:read-file-lines (finch-file "tests/bsd.txt"))))
       (loop :for x :in xnu
             :for f :in finch
             :do (is (string= x f) "xnu ~s, finch ~s" x f))

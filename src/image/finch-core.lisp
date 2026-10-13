@@ -1,0 +1,5 @@
+(require :asdf)
+(asdf:load-system :finch/test)
+(setf (symbol-value (find-symbol "*FINCH-ROOT*" "FINCH/TEST")) #p"/finch/")
+(sb-ext:enable-debugger)
+(sb-ext:save-lisp-and-die (second sb-ext:*posix-argv*))

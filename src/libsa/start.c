@@ -39,6 +39,7 @@ static char line[1024];
 
 void _libsa_start(const char *cmdline) {
   tls_init();
+  __libsa_mfs_init();
   int argc = 0;
   argv_storage[argc++] = "/System/Library/Kernels/kernel";
   const char *rest = strstr(cmdline, "-- ");

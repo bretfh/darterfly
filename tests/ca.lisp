@@ -4,7 +4,7 @@
 (in-suite ca)
 
 (defun oracle-commits ()
-  (with-open-file (s (asdf:system-relative-pathname :finch "tests/commits.txt"))
+  (with-open-file (s (finch-file "tests/commits.txt"))
     (loop :for line := (read-line s nil)
           :while line
           :for words := (uiop:split-string line :separator " ")
@@ -79,7 +79,7 @@
             (coerce (loop :for i :from 0 :below (length line) :by 2
                           :collect (parse-integer line :start i :end (+ i 2) :radix 16))
                     '(simple-array (unsigned-byte 8) (*))))
-          (uiop:read-file-lines (asdf:system-relative-pathname :finch "tests/appkit-commits.txt"))))
+          (uiop:read-file-lines (finch-file "tests/appkit-commits.txt"))))
 
 (test appkit-commits-round-trip
   (let ((streams (appkit-commits))

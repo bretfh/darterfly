@@ -4,7 +4,7 @@
 (in-suite xpc)
 
 (defun oracle-bootstrap ()
-  (loop :for line :in (uiop:read-file-lines (asdf:system-relative-pathname :finch "tests/bootstrap.txt"))
+  (loop :for line :in (uiop:read-file-lines (finch-file "tests/bootstrap.txt"))
         :for words := (uiop:split-string line :separator " ")
         :when (member (first words) '("send" "recv") :test #'string=)
           :collect (let* ((octets (hex-octets (cddr words)))

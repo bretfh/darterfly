@@ -7,7 +7,7 @@
   (map '(simple-array (unsigned-byte 8) (*)) (lambda (w) (parse-integer w :radix 16)) words))
 
 (defun oracle-transactions ()
-  (with-open-file (s (asdf:system-relative-pathname :finch "tests/transactions.txt"))
+  (with-open-file (s (finch-file "tests/transactions.txt"))
     (loop :for line := (read-line s nil)
           :while line
           :for words := (uiop:split-string line :separator " ")
@@ -55,7 +55,7 @@
   (signals server:transaction-error (server:encode-transaction '(("ResetWindow")))))
 
 (test events-match-skylight
-  (let ((events (loop :for line :in (uiop:read-file-lines (asdf:system-relative-pathname :finch "tests/events.txt"))
+  (let ((events (loop :for line :in (uiop:read-file-lines (finch-file "tests/events.txt"))
                       :for words := (uiop:split-string line :separator " ")
                       :collect (cons (first words) (hex-octets (rest words))))))
     (is (= 5 (length events)))

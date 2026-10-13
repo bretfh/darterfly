@@ -16,135 +16,31 @@
 #include <spawn.h>
 #include <dlfcn.h>
 #include <poll.h>
+#include <sys/time.h>
 #include <elf.h>
 #include "libsa.h"
 
-static int console(int fd) { return fd >= 0 && fd <= 2; }
 
 #define KERNEL_PATH "/System/Library/Kernels/kernel"
-#define FIRST_FILE 3
-#define MAX_FILES 8
 
-static struct { int open; uint64_t pos; } kfiles[MAX_FILES];
-static uint64_t kimage[2];
 
-static int kfile(int fd) { return fd >= FIRST_FILE && fd < FIRST_FILE + MAX_FILES && kfiles[fd - FIRST_FILE].open; }
 
-static const char *kernel_bytes(void) {
-  if (!kimage[0]) __machdep(MACHDEP_kernel_file, (long)kimage);
-  return (const char *)kimage[0];
-}
 
-ssize_t read(int fd, void *buf, size_t n) {
-  if (kfile(fd)) {
-    const char *k = kernel_bytes();
-    uint64_t pos = kfiles[fd - FIRST_FILE].pos;
-    if (pos >= kimage[1]) return 0;
-    if (n > kimage[1] - pos) n = kimage[1] - pos;
-    memcpy(buf, k + pos, n);
-    kfiles[fd - FIRST_FILE].pos += n;
-    return (ssize_t)n;
-  }
-  if (!console(fd)) { errno = EBADF; return -1; }
-  return __syscall(SYS_read, 0, (long)buf, (long)n, 0, 0, 0);
-}
 
-ssize_t write(int fd, const void *buf, size_t n) {
-  if (!console(fd)) { errno = EBADF; return -1; }
-  return __syscall(SYS_write, fd == 0 ? 1 : fd, (long)buf, (long)n, 0, 0, 0);
-}
 
-ssize_t pread(int fd, void *b, size_t n, off_t o) { (void)fd; (void)b; (void)n; (void)o; errno = ESPIPE; return -1; }
-ssize_t pwrite(int fd, const void *b, size_t n, off_t o) { (void)fd; (void)b; (void)n; (void)o; errno = ESPIPE; return -1; }
-int close(int fd) {
-  if (kfile(fd)) { kfiles[fd - FIRST_FILE].open = 0; return 0; }
-  if (console(fd)) return 0;
-  errno = EBADF;
-  return -1;
-}
-
-off_t lseek(int fd, off_t o, int w) {
-  if (kfile(fd)) {
-    kernel_bytes();
-    int64_t base = w == SEEK_SET ? 0 : w == SEEK_CUR ? (int64_t)kfiles[fd - FIRST_FILE].pos : (int64_t)kimage[1];
-    if (base + o < 0) { errno = EINVAL; return -1; }
-    kfiles[fd - FIRST_FILE].pos = (uint64_t)(base + o);
-    return (off_t)(base + o);
-  }
-  errno = console(fd) ? ESPIPE : EBADF;
-  return -1;
-}
 
 void _exit(int code) {
   __syscall(SYS_exit, code, 0, 0, 0, 0, 0);
   for (;;) {}
 }
 
-int open(const char *path, int flags, ...) {
-  (void)flags;
-  if (!strcmp(path, "/dev/tty") || !strcmp(path, "/dev/console")) return 0;
-  if (!strcmp(path, KERNEL_PATH))
-    for (int i = 0; i < MAX_FILES; i++)
-      if (!kfiles[i].open) {
-        kfiles[i].open = 1;
-        kfiles[i].pos = 0;
-        return FIRST_FILE + i;
-      }
-  errno = ENOENT;
-  return -1;
-}
 
-int openat(int dir, const char *path, int flags, ...) { (void)dir; return open(path, flags); }
-int creat(const char *path, mode_t mode) { (void)path; (void)mode; errno = EROFS; return -1; }
 
-int fcntl(int fd, int cmd, ...) {
-  if (!console(fd)) { errno = EBADF; return -1; }
-  if (cmd == F_GETFL) return O_RDWR;
-  if (cmd == F_GETFD) return 0;
-  return 0;
-}
 
-static void console_stat(struct stat *st, int fd) {
-  memset(st, 0, sizeof *st);
-  st->st_mode = S_IFCHR | 0620;
-  st->st_rdev = 0x500 + fd;
-  st->st_ino = 3 + fd;
-  st->st_nlink = 1;
-  st->st_blksize = 1024;
-}
 
-static void kernel_stat(struct stat *st) {
-  kernel_bytes();
-  memset(st, 0, sizeof *st);
-  st->st_mode = S_IFREG | 0555;
-  st->st_size = (off_t)kimage[1];
-  st->st_nlink = 1;
-  st->st_ino = 100;
-  st->st_blksize = 4096;
-}
 
-int fstat(int fd, struct stat *st) {
-  if (kfile(fd)) { kernel_stat(st); return 0; }
-  if (!console(fd)) { errno = EBADF; return -1; }
-  console_stat(st, fd);
-  return 0;
-}
 
-static int root_stat(const char *path, struct stat *st) {
-  if (!strcmp(path, KERNEL_PATH)) { kernel_stat(st); return 0; }
-  if (strcmp(path, "/") && strcmp(path, ".")) { errno = ENOENT; return -1; }
-  memset(st, 0, sizeof *st);
-  st->st_mode = S_IFDIR | 0755;
-  st->st_nlink = 2;
-  st->st_ino = 2;
-  return 0;
-}
 
-int stat(const char *path, struct stat *st) { return root_stat(path, st); }
-int lstat(const char *path, struct stat *st) { return root_stat(path, st); }
-int isatty(int fd) { return console(fd); }
-int dup(int fd) { (void)fd; errno = EMFILE; return -1; }
-int dup2(int a, int b) { return a == b ? b : (errno = EBADF, -1); }
 int pipe(int fds[2]) { (void)fds; errno = ENOSYS; return -1; }
 pid_t getpid(void) { return 1; }
 pid_t getppid(void) { return 0; }
@@ -170,31 +66,10 @@ long sysconf(int name) {
 
 int getpagesize(void) { return 4096; }
 int getdtablesize(void) { return 64; }
-int access(const char *path, int mode) { struct stat st; (void)mode; return stat(path, &st); }
-int unlink(const char *p) { (void)p; errno = ENOENT; return -1; }
-int rmdir(const char *p) { (void)p; errno = ENOENT; return -1; }
-int chdir(const char *p) { struct stat st; return stat(p, &st); }
-int fchdir(int fd) { (void)fd; errno = EBADF; return -1; }
-int mkdir(const char *p, mode_t m) { (void)p; (void)m; errno = EROFS; return -1; }
-int chmod(const char *p, mode_t m) { (void)p; (void)m; errno = EROFS; return -1; }
-int fchmod(int fd, mode_t m) { (void)fd; (void)m; errno = EROFS; return -1; }
-int chown(const char *p, uid_t u, gid_t g) { (void)p; (void)u; (void)g; errno = EROFS; return -1; }
 mode_t umask(mode_t m) { (void)m; return 022; }
 int mkfifo(const char *p, mode_t m) { (void)p; (void)m; errno = EROFS; return -1; }
-ssize_t readlink(const char *p, char *b, size_t n) { (void)p; (void)b; (void)n; errno = EINVAL; return -1; }
-int symlink(const char *a, const char *b) { (void)a; (void)b; errno = EROFS; return -1; }
-int link(const char *a, const char *b) { (void)a; (void)b; errno = EROFS; return -1; }
-int truncate(const char *p, off_t n) { (void)p; (void)n; errno = EROFS; return -1; }
-int ftruncate(int fd, off_t n) { (void)fd; (void)n; errno = EINVAL; return -1; }
-int fsync(int fd) { (void)fd; return 0; }
 int flock(int fd, int op) { (void)fd; (void)op; return 0; }
 
-char *getcwd(char *buf, size_t n) {
-  if (!buf) return strdup("/");
-  if (n < 2) { errno = ERANGE; return 0; }
-  strcpy(buf, "/");
-  return buf;
-}
 
 pid_t fork(void) { errno = ENOSYS; return -1; }
 int execv(const char *p, char *const a[]) { (void)p; (void)a; errno = ENOSYS; return -1; }
@@ -202,7 +77,6 @@ int execve(const char *p, char *const a[], char *const e[]) { (void)p; (void)a; 
 int execvp(const char *p, char *const a[]) { (void)p; (void)a; errno = ENOSYS; return -1; }
 pid_t wait(int *s) { (void)s; errno = ECHILD; return -1; }
 pid_t waitpid(pid_t p, int *s, int o) { (void)p; (void)s; (void)o; errno = ECHILD; return -1; }
-char *ttyname(int fd) { return console(fd) ? "/dev/console" : 0; }
 
 int gethostname(char *b, size_t n) {
   strncpy(b, "finch", n);
@@ -230,21 +104,6 @@ int setrlimit(int res, const struct rlimit *r) { (void)res; (void)r; return 0; }
 int getpriority(int w, id_t i) { (void)w; (void)i; return 0; }
 int setpriority(int w, id_t i, int p) { (void)w; (void)i; (void)p; return 0; }
 
-int ioctl(int fd, unsigned long req, ...) {
-  if (!console(fd)) { errno = EBADF; return -1; }
-  if (req == TIOCGWINSZ) {
-    va_list ap;
-    va_start(ap, req);
-    struct winsize *w = va_arg(ap, struct winsize *);
-    va_end(ap);
-    w->ws_row = 25;
-    w->ws_col = 80;
-    w->ws_xpixel = w->ws_ypixel = 0;
-    return 0;
-  }
-  errno = ENOTTY;
-  return -1;
-}
 
 int tcgetattr(int fd, struct termios *t) { (void)fd; memset(t, 0, sizeof *t); return 0; }
 int tcsetattr(int fd, int a, const struct termios *t) { (void)fd; (void)a; (void)t; return 0; }
@@ -253,12 +112,6 @@ char *ptsname(int fd) { (void)fd; errno = ENOSYS; return 0; }
 int grantpt(int fd) { (void)fd; errno = ENOSYS; return -1; }
 int unlockpt(int fd) { (void)fd; errno = ENOSYS; return -1; }
 
-DIR *opendir(const char *p) { (void)p; errno = ENOENT; return 0; }
-DIR *fdopendir(int fd) { (void)fd; errno = EBADF; return 0; }
-struct dirent *readdir(DIR *d) { (void)d; return 0; }
-struct dirent *readdir64(DIR *d) { return readdir(d); }
-int closedir(DIR *d) { (void)d; return 0; }
-int dirfd(DIR *d) { (void)d; return -1; }
 
 static struct passwd root = {"root", "", 0, 0, "root", "/", "/bin/sh"};
 struct passwd *getpwuid(uid_t u) { return u == 0 ? &root : 0; }
@@ -305,8 +158,11 @@ static const Elf64_Sym *symbols;
 static const char *symbol_names;
 static size_t nsymbols;
 
+static uint64_t kimage[2];
+
 static void load_symbols(void) {
-  const char *k = kernel_bytes();
+  if (!kimage[0]) __machdep(MACHDEP_kernel_file, (long)kimage);
+  const char *k = (const char *)kimage[0];
   const Elf64_Ehdr *eh = (const Elf64_Ehdr *)k;
   const Elf64_Shdr *sh = (const Elf64_Shdr *)(k + eh->e_shoff);
   for (int i = 0; i < eh->e_shnum; i++)
@@ -344,13 +200,17 @@ int dladdr(const void *a, Dl_info *info) {
 
 int h_errno;
 
+int __libsa_fd_data(int fd, const char **data, size_t *size);
+int __libsa_fd_console(int fd);
+
 void *mmap(void *addr, size_t len, int prot, int flags, int fd, off_t off) {
   if (!(flags & MAP_ANONYMOUS)) {
-    if (!kfile(fd)) { errno = ENODEV; return MAP_FAILED; }
+    const char *k;
+    size_t ksize;
+    if (!__libsa_fd_data(fd, &k, &ksize)) { errno = ENODEV; return MAP_FAILED; }
     void *at = mmap(addr, len, PROT_READ | PROT_WRITE, (flags & MAP_FIXED) | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (at == MAP_FAILED) return at;
-    const char *k = kernel_bytes();
-    size_t n = (uint64_t)off >= kimage[1] ? 0 : len < kimage[1] - off ? len : kimage[1] - off;
+    size_t n = (uint64_t)off >= ksize ? 0 : len < ksize - off ? len : ksize - off;
     memcpy(at, k + off, n);
     if (prot != (PROT_READ | PROT_WRITE)) mprotect(at, len, prot);
     return at;
@@ -381,11 +241,120 @@ long syscall(long n, ...) {
   }
 }
 
+
 int poll(struct pollfd *fds, nfds_t n, int timeout) {
-  for (nfds_t i = 0; i < n; i++)
-    if (kfile(fds[i].fd)) {
-      fds[i].revents = fds[i].events & (POLLIN | POLLOUT);
-      return 1;
+  struct pollfd console[2];
+  int ready = 0, nconsole = 0, want_in = 0, want_out = 0;
+  for (nfds_t i = 0; i < n; i++) {
+    fds[i].revents = 0;
+    int c = __libsa_fd_console(fds[i].fd);
+    if (c < 0) fds[i].revents = POLLNVAL;
+    else if (!c) fds[i].revents = fds[i].events & (POLLIN | POLLOUT);
+    else {
+      want_in |= fds[i].events & POLLIN;
+      want_out |= fds[i].events & POLLOUT;
     }
-  return (int)__syscall(SYS_poll, (long)fds, (long)n, timeout, 0, 0, 0);
+    if (fds[i].revents) ready++;
+  }
+  if (want_in) console[nconsole++] = (struct pollfd){0, POLLIN, 0};
+  if (want_out) console[nconsole++] = (struct pollfd){1, POLLOUT, 0};
+  if (!nconsole) return ready;
+  long r = __syscall(SYS_poll, (long)console, nconsole, ready ? 0 : timeout, 0, 0, 0);
+  if (r < 0) return ready ? ready : -1;
+  for (nfds_t i = 0; i < n; i++)
+    if (__libsa_fd_console(fds[i].fd) == 1) {
+      for (int j = 0; j < nconsole; j++) fds[i].revents |= console[j].revents & fds[i].events;
+      if (fds[i].revents) ready++;
+    }
+  return ready;
+}
+
+#define ENOSYS_STUB(type, name, args) \
+  type name args {                    \
+    errno = ENOSYS;                   \
+    return (type)-1;                  \
+  }
+
+int mount(const char *a, const char *b, const char *c, unsigned long d, const void *e) {
+  (void)a; (void)b; (void)c; (void)d; (void)e;
+  errno = EPERM;
+  return -1;
+}
+int reboot(int how) { __syscall(SYS_exit, how, 0, 0, 0, 0, 0); return 0; }
+int tcdrain(int fd) { (void)fd; return 0; }
+int tcflow(int fd, int a) { (void)fd; (void)a; return 0; }
+int tcflush(int fd, int a) { (void)fd; (void)a; return 0; }
+int tcsendbreak(int fd, int a) { (void)fd; (void)a; return 0; }
+pid_t tcgetsid(int fd) { (void)fd; return 1; }
+speed_t cfgetispeed(const struct termios *t) { return t->c_ispeed; }
+speed_t cfgetospeed(const struct termios *t) { return t->c_ospeed; }
+int cfsetispeed(struct termios *t, speed_t s) { t->c_ispeed = s; return 0; }
+int cfsetospeed(struct termios *t, speed_t s) { t->c_ospeed = s; return 0; }
+int chroot(const char *p) { (void)p; errno = EPERM; return -1; }
+int lockf(int fd, int cmd, off_t len) { (void)fd; (void)cmd; (void)len; return 0; }
+int seteuid(uid_t u) { return u == 0 ? 0 : (errno = EPERM, -1); }
+int setuid(uid_t u) { return seteuid(u); }
+int setreuid(uid_t a, uid_t b) { (void)a; return seteuid(b == (uid_t)-1 ? 0 : b); }
+int setresuid(uid_t a, uid_t b, uid_t c) { (void)a; (void)c; return seteuid(b == (uid_t)-1 ? 0 : b); }
+int setfsuid(uid_t u) { (void)u; return 0; }
+int setegid(gid_t g) { return g == 0 ? 0 : (errno = EPERM, -1); }
+int setgid(gid_t g) { return setegid(g); }
+int setregid(gid_t a, gid_t b) { (void)a; return setegid(b == (gid_t)-1 ? 0 : b); }
+int setresgid(gid_t a, gid_t b, gid_t c) { (void)a; (void)c; return setegid(b == (gid_t)-1 ? 0 : b); }
+int setfsgid(gid_t g) { (void)g; return 0; }
+int getresuid(uid_t *a, uid_t *b, uid_t *c) { *a = *b = *c = 0; return 0; }
+int getresgid(gid_t *a, gid_t *b, gid_t *c) { *a = *b = *c = 0; return 0; }
+unsigned alarm(unsigned s) {
+  struct itimerval v = {{0, 0}, {s, 0}}, old;
+  setitimer(ITIMER_REAL, &v, &old);
+  return (unsigned)old.it_value.tv_sec;
+}
+pid_t getpgid(pid_t p) { (void)p; return 1; }
+pid_t getsid(pid_t p) { (void)p; return 1; }
+int pause(void) {
+  for (;;) {
+    struct timespec t = {1000000, 0};
+    if (nanosleep(&t, 0) < 0) return -1;
+  }
+}
+int mlockall(int f) { (void)f; return 0; }
+int munlockall(void) { return 0; }
+struct passwd *getpwent(void) { return 0; }
+void setpwent(void) {}
+void endpwent(void) {}
+struct group;
+struct group *getgrnam(const char *n) { (void)n; return 0; }
+struct group *getgrgid(gid_t g) { (void)g; return 0; }
+struct group *getgrent(void) { return 0; }
+void setgrent(void) {}
+void endgrent(void) {}
+int utime(const char *p, const void *t) { (void)t; struct stat st; return stat(p, &st); }
+void openlog(const char *i, int o, int f) { (void)i; (void)o; (void)f; }
+void syslog(int p, const char *f, ...) { (void)p; (void)f; }
+void closelog(void) {}
+void *getprotobyname(const char *n) { (void)n; return 0; }
+void *getprotobynumber(int n) { (void)n; return 0; }
+int getprotobyname_r(const char *n, void *a, char *b, size_t l, void **r) { (void)n; (void)a; (void)b; (void)l; *r = 0; return ENOENT; }
+int getprotobynumber_r(int n, void *a, char *b, size_t l, void **r) { (void)n; (void)a; (void)b; (void)l; *r = 0; return ENOENT; }
+const char *inet_ntop(int af, const void *s, char *d, unsigned n) { (void)af; (void)s; (void)d; (void)n; errno = EAFNOSUPPORT; return 0; }
+int inet_pton(int af, const char *s, void *d) { (void)af; (void)s; (void)d; errno = EAFNOSUPPORT; return -1; }
+ENOSYS_STUB(int, socket, (int a, int b, int c))
+ENOSYS_STUB(int, bind, (int a, const void *b, unsigned c))
+ENOSYS_STUB(int, listen, (int a, int b))
+ENOSYS_STUB(int, accept, (int a, void *b, unsigned *c))
+ENOSYS_STUB(int, getpeername, (int a, void *b, unsigned *c))
+ENOSYS_STUB(int, getsockname, (int a, void *b, unsigned *c))
+ENOSYS_STUB(int, connect, (int a, const void *b, unsigned c))
+ENOSYS_STUB(int, shutdown, (int a, int b))
+ENOSYS_STUB(long, recvfrom, (int a, void *b, size_t c, int d, void *e, unsigned *f))
+ENOSYS_STUB(long, send, (int a, const void *b, size_t c, int d))
+ENOSYS_STUB(long, sendto, (int a, const void *b, size_t c, int d, const void *e, unsigned f))
+ENOSYS_STUB(int, setsockopt, (int a, int b, int c, const void *d, unsigned e))
+ENOSYS_STUB(int, getsockopt, (int a, int b, int c, void *d, unsigned *e))
+int getaddrinfo(const char *a, const char *b, const void *c, void **d) { (void)a; (void)b; (void)c; (void)d; return -2; }
+void freeaddrinfo(void *a) { (void)a; }
+const char *gai_strerror(int e) { (void)e; return "no networking on finch yet"; }
+int getnameinfo(const void *a, unsigned b, char *c, unsigned d, char *e, unsigned f, int g) {
+  (void)a; (void)b; (void)c; (void)d; (void)e; (void)f; (void)g;
+  return -2;
 }

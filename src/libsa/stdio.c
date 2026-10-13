@@ -392,5 +392,4 @@ void perror(const char *s) {
   else fprintf(stderr, "%s\n", strerror(errno));
 }
 
-int remove(const char *path) { return unlink(path); }
-int rename(const char *a, const char *b) { (void)a; (void)b; errno = ENOSYS; return -1; }
+

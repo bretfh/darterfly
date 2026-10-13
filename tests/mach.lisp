@@ -345,7 +345,7 @@
 (test ports-match-xnu
   (let ((vars (make-hash-table :test 'equal))
         (parents nil)
-        (lines (uiop:read-file-lines (asdf:system-relative-pathname :finch "tests/ports.txt"))))
+        (lines (uiop:read-file-lines (finch-file "tests/ports.txt"))))
     (is (< 100 (length lines)))
     (in-task ()
       (dolist (line lines)

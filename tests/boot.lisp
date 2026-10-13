@@ -97,3 +97,14 @@
              (is (search "(30000000 30000000 30000000)"
                          (ask "(let ((ts (loop repeat 3 collect (sb-thread:make-thread (lambda () (let ((n 0)) (dotimes (i 300) (incf n (length (make-array 100000)))) n)))))) (mapcar #'sb-thread:join-thread ts))"))))
         (image:finish c 5)))))
+
+(test xnu-checked-suites-pass-on-finch
+  (let ((c (image:bare-console)))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 300)))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 60)
+             (is (search "334" (ask "(length (uiop:read-file-lines \"/finch/tests/ports.txt\"))")))
+             (is (search "(T T)"
+                         (ask "(list (fiveam:results-status (fiveam:run 'finch/test::mach)) (fiveam:results-status (fiveam:run 'finch/test::bsd)))"))))
+        (image:finish c 5)))))

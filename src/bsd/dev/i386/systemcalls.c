@@ -185,6 +185,12 @@ void machdep_syscall(x86_saved_state64_t *regs) {
     out[1] = PE_boot_args->kernelFileSize;
     return ok(regs, 0);
   }
+  case 7: {
+    uint64_t *out = (uint64_t *)regs->rdi;
+    out[0] = PE_boot_args->ramdiskStart ? (uint64_t)PHYSMAP_PTOV(PE_boot_args->ramdiskStart) : 0;
+    out[1] = PE_boot_args->ramdiskSize;
+    return ok(regs, 0);
+  }
   case 3: {
     uint64_t base = regs->rdi;
     current_thread()->fs_base = base;
