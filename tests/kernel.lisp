@@ -14,7 +14,19 @@
     (is (find "bsd_init: boot-args console=ttyS0 quiet halt" lines :test #'string=))
     (is (find "load_init_program: halt" lines :test #'string=))))
 
-(test finch-boots-to-launchd
+(defun screen-until (predicate &optional (seconds 30))
+  (loop :with deadline := (+ (get-internal-real-time) (* seconds internal-time-units-per-second))
+        :for screen := (image:screendump)
+        :until (or (funcall predicate screen) (> (get-internal-real-time) deadline))
+        :do (sleep 0.1)
+        :finally (return screen)))
+
+(defun dark-pixels (screen x0 y0 x1 y1 level)
+  (loop :for y :from y0 :below y1
+        :sum (loop :for x :from x0 :below x1
+                   :count (< (ldb (byte 8 0) (image:pixel screen x y)) level))))
+
+(test finch-session
   (let ((c (image:console)))
     (unwind-protect
          (progn
@@ -25,83 +37,49 @@
            (is (search "finch.console" (image:expect c "# ")))
            (image:send c "(+ 1 2)")
            (is (search (format nil "~%3~%") (image:expect c "# ")))
-           (image:send c "(halt)"))
-      (image:finish c))))
-
-(test finch-draws
-  (let ((c (image:console)))
-    (unwind-protect
-         (progn
-           (image:expect c "# ")
            (image:send c "(finch/io:test-pattern (finch/io:open-framebuffer))")
            (image:expect c "# ")
-           (let ((screen (image:screendump)))
+           (let ((screen (screen-until (lambda (s) (= #xffff0000 (image:pixel s 10 10))))))
              (is (= #xffff0000 (image:pixel screen 10 10)))
              (is (= #xff00ff00 (image:pixel screen 1000 10)))
              (is (= #xff0000ff (image:pixel screen 10 700)))
              (is (= #xff202020 (image:pixel screen 1000 700))))
-           (image:send c "(halt)"))
-      (image:finish c))))
-
-(test finch-opens-a-window
-  (let ((c (image:console)))
-    (unwind-protect
-         (progn
-           (image:expect c "# ")
            (image:send c "(spawn \"/Applications/Hello.app/Contents/MacOS/Hello\")")
            (image:expect c "# ")
-           (let ((screen (loop :repeat 30
-                               :for screen := (image:screendump)
-                               :until (= #xffffffff (image:pixel screen 500 300))
-                               :finally (return screen))))
+           (let ((screen (screen-until (lambda (s) (and (= #xffd9d9d9 (image:pixel s 300 140))
+                                                        (= #xffededed (image:pixel s 215 520))
+                                                        (< 50 (dark-pixels s 244 194 480 230 100)))))))
              (is (= #xff2e5c8f (image:pixel screen 5 5)) "desktop ~x" (image:pixel screen 5 5))
              (is (= #xffd9d9d9 (image:pixel screen 300 140)) "title ~x" (image:pixel screen 300 140))
              (is (= #xffededed (image:pixel screen 215 300)) "frame ~x" (image:pixel screen 215 300))
              (is (= #xffffffff (image:pixel screen 500 300)) "content ~x" (image:pixel screen 500 300))
-             (is (< 50 (loop :for y :from 194 :below 230
-                             :sum (loop :for x :from 244 :below 480
-                                        :count (< (ldb (byte 8 0) (image:pixel screen x y)) 100))))
-                 "the words")
-             (is (< 5 (loop :for y :from 136 :below 160
-                            :sum (loop :for x :from 470 :below 560
-                                       :count (< (ldb (byte 8 0) (image:pixel screen x y)) 120))))
-                 "the title"))
+             (is (< 50 (dark-pixels screen 244 194 480 230 100)) "the words")
+             (is (< 5 (dark-pixels screen 470 136 560 160 120)) "the title"))
            (image:pointer 100 600)
-           (let ((screen (loop :repeat 20
-                               :for screen := (image:screendump)
-                               :until (= #xff000000 (image:pixel screen 100 600))
-                               :finally (return screen))))
+           (let ((screen (screen-until (lambda (s) (= #xff000000 (image:pixel s 100 600))))))
              (is (= #xff000000 (image:pixel screen 100 600)) "cursor tip ~x" (image:pixel screen 100 600)))
            (image:pointer 300 145)
            (image:pointer 300 145 t)
            (image:pointer 350 245)
            (image:pointer 350 245 nil)
-           (let ((screen (loop :repeat 20
-                               :for screen := (image:screendump)
-                               :until (= #xff2e5c8f (image:pixel screen 230 300))
-                               :do (sleep 0.05)
-                               :finally (return screen))))
+           (let ((screen (screen-until (lambda (s) (= #xff2e5c8f (image:pixel s 230 300))))))
              (is (= #xff2e5c8f (image:pixel screen 230 300)) "old place ~x" (image:pixel screen 230 300))
              (is (= #xffffffff (image:pixel screen 550 400)) "moved content ~x" (image:pixel screen 550 400)))
            (image:send c "(run \"/bin/launchctl\" \"list\")")
            (is (search "com.apple.WindowServer" (image:expect c "# ")))
-           (image:send c "(halt)"))
-      (image:finish c))))
-
-(test finch-has-a-terminal
-  (let ((c (image:console)))
-    (unwind-protect
-         (progn
-           (image:expect c "# ")
            (image:send c "(spawn \"/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal\")")
            (image:expect c "# ")
            (flet ((screen-text (until)
-                    (loop :repeat 60
-                          :do (image:send c "(progn (cat \"/tmp/Terminal.txt\") :done)")
+                    (loop :with deadline := (+ (get-internal-real-time) (* 30 internal-time-units-per-second))
+                          :do (image:send c "(progn (ignore-errors (cat \"/tmp/Terminal.txt\")) :done)")
                               (let ((text (image:expect c ":DONE")))
-                                (when (search until text) (return text)))
-                              (sleep 0.05))))
-             (is (screen-text "# "))
+                                (when (or (search until text) (> (get-internal-real-time) deadline))
+                                  (return text)))
+                              (sleep 0.1))))
+             (is (search "# " (screen-text "# ")))
+             (image:pointer 300 110)
+             (image:pointer 300 110 t)
+             (image:pointer 300 110 nil)
              (image:send-keys (format nil "(+ 1 2)~%"))
              (let ((text (screen-text (format nil "(+ 1 2)~%3"))))
                (is (search (format nil "(+ 1 2)~%3") text) "~s" text)))

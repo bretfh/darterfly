@@ -246,10 +246,14 @@
 (defun transcript (console)
   (get-output-stream-string (console-seen console)))
 
-(defun finish (console)
+(defun finish (console &optional (seconds 5))
   (let ((process (console-process console)))
-    (unwind-protect (uiop:wait-process process)
-      (when (uiop:process-alive-p process) (uiop:terminate-process process :urgent t)))))
+    (loop :repeat (* seconds 20)
+          :while (uiop:process-alive-p process)
+          :do (sleep 0.05))
+    (when (uiop:process-alive-p process)
+      (uiop:terminate-process process :urgent t))
+    (uiop:wait-process process)))
 
 (defun monitor (command)
   (let ((socket (make-instance 'sb-bsd-sockets:local-socket :type :stream)))
