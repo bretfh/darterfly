@@ -75,3 +75,14 @@
       (is (= 1234567 (server:event-value down :timestamp)))
       (is (equalp (cdr (assoc "key-down-a" events :test #'string=))
                   (server:encode-event (server:key-event t 0 #\a :timestamp 1234567 :location '(10.0 10.0))))))))
+
+(test regions-match-skylight
+  (let ((empty (hex-octets '("00" "00" "00" "80" "02" "00" "00" "00" "ff" "ff" "ff" "7f")))
+        (rect (hex-octets '("00" "00" "00" "80" "02" "00" "00" "00" "00" "00" "00" "00" "04" "00" "00" "00"
+                            "00" "00" "00" "00" "80" "02" "00" "00" "e0" "01" "00" "00" "02" "00" "00" "00"
+                            "ff" "ff" "ff" "7f"))))
+    (is (equalp empty (server:rect-region 0 0 0 0)))
+    (is (equalp rect (server:rect-region 0 0 640 480)))
+    (is (equal '(0 0 640 480) (server:region-bounds rect)))
+    (is (equal '(100 50 300 200) (server:region-bounds (server:rect-region 100 50 300 200))))
+    (is (equalp rect (server:bands-octets (server:region-bands rect))))))

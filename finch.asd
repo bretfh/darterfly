@@ -111,7 +111,7 @@
   :description "The window server"
   :serial t
   :pathname "src/server/"
-  :components ((:file "transaction") (:file "event")))
+  :components ((:file "transaction") (:file "event") (:file "region")))
 
 (asdf:defsystem #:finch/ca
   :description "CoreAnimation's render protocol"

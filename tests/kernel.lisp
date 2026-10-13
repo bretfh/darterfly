@@ -76,7 +76,7 @@
                                 (when (or (search until text) (> (get-internal-real-time) deadline))
                                   (return text)))
                               (sleep 0.1))))
-             (is (search "# " (screen-text "# ")))
+             (is (search (format nil "~%# ~%:DONE") (screen-text (format nil "~%# ~%:DONE"))))
              (image:pointer 300 110)
              (image:pointer 300 110 t)
              (image:pointer 300 110 nil)

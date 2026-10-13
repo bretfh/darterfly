@@ -201,6 +201,7 @@
                 "-monitor" (format nil "unix:~a,server=on,wait=off" (monitor-path))
                 "-qmp" (format nil "unix:~a,server=on,wait=off" (qmp-path))
                 "-device" "virtio-tablet-pci"
+                "-device" "virtio-keyboard-pci"
                 "-kernel" (kernel)
                 "-initrd" (uiop:native-namestring (build-path "finch.cpio"))
                 "-no-reboot")

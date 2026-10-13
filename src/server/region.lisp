@@ -1,0 +1,38 @@
+(in-package #:finch/server)
+
+(defconstant +region-min+ (- (ash 1 31)))
+(defconstant +region-max+ (1- (ash 1 31)))
+
+(defun region-bands (octets)
+  (let ((words (loop :for i :from 0 :below (length octets) :by 4
+                     :collect (let ((v (logior (aref octets i) (ash (aref octets (+ i 1)) 8)
+                                               (ash (aref octets (+ i 2)) 16) (ash (aref octets (+ i 3)) 24))))
+                                (if (logbitp 31 v) (- v (ash 1 32)) v)))))
+    (loop :while (and words (/= (first words) +region-max+))
+          :collect (let* ((y (pop words)) (k (pop words)))
+                     (cons y (loop :repeat (- k 2) :collect (pop words)))))))
+
+(defun bands-octets (bands)
+  (let ((w (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0)))
+    (flet ((put (v) (dotimes (i 4) (vector-push-extend (ldb (byte 8 (* 8 i)) v) w))))
+      (dolist (band bands)
+        (put (car band))
+        (put (+ 2 (length (cdr band))))
+        (mapc #'put (cdr band)))
+      (put +region-max+))
+    (coerce w '(simple-array (unsigned-byte 8) (*)))))
+
+(defun rect-region (x y width height)
+  (if (or (<= width 0) (<= height 0))
+      (bands-octets (list (list +region-min+)))
+      (bands-octets (list (list +region-min+) (list y x (+ x width)) (list (+ y height))))))
+
+(defun region-bounds (octets)
+  (let ((xs nil) (ys nil))
+    (dolist (band (region-bands octets))
+      (when (/= (car band) +region-min+) (push (car band) ys))
+      (setf xs (append (cdr band) xs)))
+    (if (and xs ys)
+        (list (reduce #'min xs) (reduce #'min ys)
+              (- (reduce #'max xs) (reduce #'min xs)) (- (reduce #'max ys) (reduce #'min ys)))
+        (list 0 0 0 0))))

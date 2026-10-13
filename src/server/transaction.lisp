@@ -1,6 +1,7 @@
 (defpackage #:finch/server
   (:use #:cl)
   (:export
+   #:region-bands #:bands-octets #:rect-region #:region-bounds
    #:decode-event #:encode-event #:event-value #:event-type #:event-character #:key-event
    #:transaction-error #:encode-transaction #:decode-transaction
    #:op-code #:op-name #:op-arguments #:*ops*))

@@ -185,16 +185,23 @@
         :when (uiop:string-prefix-p "event" name)
           :collect (io:open-hid (format nil "/dev/input/~a" name))))
 
+(defun drain (devices)
+  (loop :for batch := (loop :for fd :in devices :append (io:read-events fd))
+        :while batch
+        :append batch))
+
 (defun hid-loop ()
   (let ((devices (hid-devices)))
     (loop
-      (let ((events (loop :for fd :in devices :append (io:read-events fd))))
+      (let ((events (drain devices)))
         (if events
             (sb-thread:with-mutex (*lock*)
-              (mapc #'pointer events)
-              (mapc #'keyboard events)
-              (render))
-            (sleep 0.01))))))
+              (let ((before (list *cursor* (first *clients*) (and *drag* (dx (first *drag*))) (and *drag* (dy (first *drag*))))))
+                (mapc #'keyboard events)
+                (mapc #'pointer events)
+                (unless (equal before (list *cursor* (first *clients*) (and *drag* (dx (first *drag*))) (and *drag* (dy (first *drag*)))))
+                  (render))))
+            (sleep 0.005))))))
 
 (defun apply-commit (client octets)
   (dolist (command (getf (ca:decode-commit octets) :commands))
