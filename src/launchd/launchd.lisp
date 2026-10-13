@@ -28,7 +28,8 @@
    (job :initarg :job :reader job)
    (port :initarg :port :accessor port)
    (send :initform nil :accessor send)
-   (active :initform nil :accessor active)))
+   (active :initform nil :accessor active)
+   (hidden :initarg :hidden :initform nil :accessor hidden)))
 
 (defvar *jobs* nil)
 (defvar *services* (make-hash-table :test 'equal))
@@ -55,8 +56,11 @@
         (let ((machservices (key plist "MachServices")))
           (when (hash-table-p machservices)
             (loop :for name :being :the :hash-keys :of machservices
-                  :do (let ((service (make-instance 'service :name name :job job
-                                                             :port (mach:mach-port-allocate mach:*task* :receive))))
+                  :do (let* ((options (gethash name machservices))
+                             (service (make-instance 'service :name name :job job
+                                                              :hidden (and (hash-table-p options)
+                                                                           (key options "HideUntilCheckIn"))
+                                                              :port (mach:mach-port-allocate mach:*task* :receive))))
                         (push service (services job))
                         (setf (gethash name *services*) service)))))
         job))))
@@ -144,12 +148,13 @@
                (mach:mach-port-insert-right mach:*task* port port :make-send)
                (setf (send service) port))
              (mach:mach-port-request-notification mach:*task* port :port-destroyed 0 *notify* :make-send-once)
-             (setf (active service) t)
+             (setf (active service) t
+                   (hidden service) nil)
              (reply message (list :kr 0) (list (cons port :move-receive))))))))
 
 (defun look-up (message name)
   (let ((service (gethash name *services*)))
-    (if (null service)
+    (if (or (null service) (hidden service))
         (reply message (list :kr +bootstrap-unknown-service+))
         (progn
           (start (job service))

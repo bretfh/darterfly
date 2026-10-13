@@ -17,7 +17,7 @@
     (uiop:run-program
      (list "sbcl" "--noinform" "--no-userinit" "--non-interactive"
            "--eval" "(require :asdf)"
-           "--eval" "(mapc #'asdf:load-system '(:finch/kernel :finch/launchd :finch/shell :finch/io))"
+           "--eval" "(mapc #'asdf:load-system '(:finch/kernel :finch/launchd :finch/shell :finch/io :finch/windowserver :finch/apps))"
            "--eval" (format nil "(setf finch/kernel::*build-date* ~s)" (date))
            "--eval" (format nil "(sb-ext:save-lisp-and-die ~s :executable t :save-runtime-options t :toplevel (lambda () (finch/kernel:start)))"
                             (uiop:native-namestring path)))
@@ -90,7 +90,9 @@
   (map '(vector (unsigned-byte 8)) #'char-code string))
 
 (defparameter *programs*
-  '(("sbin/launchd" "launchd") ("bin/launchctl" "launchctl") ("bin/sh" "sh")))
+  '(("sbin/launchd" "launchd") ("bin/launchctl" "launchctl") ("bin/sh" "sh")
+    ("System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer" "WindowServer")
+    ("Applications/Hello.app/Contents/MacOS/Hello" "Hello")))
 
 (defun console-job ()
   (let ((job (make-hash-table :test 'equal)))
@@ -144,8 +146,8 @@
                 "-no-reboot")
           args))
 
-(defun boot (&optional (boot-args ""))
-  (uiop:run-program (qemu "-nographic" "-append" (format nil "console=ttyS0 quiet ~a" boot-args))
+(defun boot (&optional (boot-args "vga=0x318"))
+  (uiop:run-program (qemu "-serial" "mon:stdio" "-append" (format nil "console=ttyS0 quiet ~a" boot-args))
                     :input :interactive :output :interactive :error-output :interactive))
 
 (defun check-boot (&key (boot-args "halt") input)

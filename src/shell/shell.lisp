@@ -1,7 +1,7 @@
 (defpackage #:finch/shell
   (:use #:cl)
   (:local-nicknames (#:bsd #:finch/bsd))
-  (:export #:run #:ps #:ls #:cat #:halt #:pwd #:cd))
+  (:export #:run #:spawn #:ps #:ls #:cat #:halt #:pwd #:cd #:kill))
 (in-package #:finch/shell)
 
 (defun run (program &rest arguments)
@@ -10,6 +10,13 @@
     (multiple-value-bind (reaped status) (bsd:wait4 pid)
       (declare (ignore reaped))
       (if (bsd:wifexited status) (bsd:wexitstatus status) (- (bsd:wtermsig status))))))
+
+(defun spawn (program &rest arguments)
+  (finish-output *standard-output*)
+  (bsd:posix-spawn program (cons program arguments) nil))
+
+(defun kill (pid &optional (signal :sigterm))
+  (bsd:kill pid signal))
 
 (defun ps ()
   (let ((procs (loop :for proc :being :the :hash-values :of finch/bsd::*procs*

@@ -1,0 +1,32 @@
+(in-package #:finch/io)
+
+(defun blend-rect (fb x0 y0 x1 y1 red green blue alpha)
+  (declare (optimize (speed 3) (safety 0))
+           (type fixnum x0 y0 x1 y1) (type single-float red green blue alpha))
+  (let* ((pixels (framebuffer-pixels fb))
+         (w (framebuffer-width fb))
+         (x0 (max 0 x0)) (y0 (max 0 y0))
+         (x1 (min w x1)) (y1 (min (the fixnum (framebuffer-height fb)) y1)))
+    (declare (type (simple-array (unsigned-byte 32) (*)) pixels) (type fixnum w x0 y0 x1 y1))
+    (when (and (< x0 x1) (< y0 y1) (> alpha 0.0))
+      (if (>= alpha 1.0)
+          (let ((argb (logior #xff000000
+                              (ash (the fixnum (round (* 255 red))) 16)
+                              (ash (the fixnum (round (* 255 green))) 8)
+                              (the fixnum (round (* 255 blue))))))
+            (loop :for row fixnum :from y0 :below y1
+                  :do (fill pixels argb :start (+ (* row w) x0) :end (+ (* row w) x1))))
+          (let ((sr (round (* 255 red alpha)))
+                (sg (round (* 255 green alpha)))
+                (sb (round (* 255 blue alpha)))
+                (keep (- 256 (the fixnum (round (* 256 alpha))))))
+            (declare (type fixnum sr sg sb keep))
+            (loop :for row fixnum :from y0 :below y1
+                  :do (loop :for at fixnum :from (+ (* row w) x0) :below (+ (* row w) x1)
+                            :for p :of-type (unsigned-byte 32) := (aref pixels at)
+                            :do (setf (aref pixels at)
+                                      (logior #xff000000
+                                              (ash (min 255 (+ sr (ash (* keep (ldb (byte 8 16) p)) -8))) 16)
+                                              (ash (min 255 (+ sg (ash (* keep (ldb (byte 8 8) p)) -8))) 8)
+                                              (min 255 (+ sb (ash (* keep (ldb (byte 8 0) p)) -8))))))))))
+    fb))

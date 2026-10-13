@@ -30,7 +30,21 @@
   :depends-on (#:uiop (:require #:sb-posix))
   :serial t
   :pathname "src/io/"
-  :components ((:file "framebuffer") (:file "hid")))
+  :components ((:file "framebuffer") (:file "hid") (:file "blend")))
+
+(asdf:defsystem #:finch/windowserver
+  :description "WindowServer"
+  :depends-on (#:finch/ca #:finch/bsd #:finch/mach #:finch/launchd #:finch/io)
+  :serial t
+  :pathname "src/server/"
+  :components ((:file "windowserver")))
+
+(asdf:defsystem #:finch/apps
+  :description "Applications"
+  :depends-on (#:finch/ca #:finch/bsd)
+  :serial t
+  :pathname "src/apps/"
+  :components ((:file "hello")))
 
 (asdf:defsystem #:finch/kernel
   :description "The kernel, run as pid 1"
@@ -88,9 +102,10 @@
 
 (asdf:defsystem #:finch/ca
   :description "CoreAnimation's render protocol"
+  :depends-on (#:finch/mach #:finch/bsd #:finch/launchd)
   :serial t
   :pathname "src/ca/"
-  :components ((:file "render")))
+  :components ((:file "render") (:file "client")))
 
 (asdf:defsystem #:finch/tahoe
   :description "The Tahoe reference guest"
@@ -101,7 +116,7 @@
 
 (asdf:defsystem #:finch
   :description "A Darwin in Common Lisp"
-  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/launchd #:finch/shell #:finch/io #:finch/kernel #:finch/image)
+  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/launchd #:finch/shell #:finch/io #:finch/windowserver #:finch/apps #:finch/kernel #:finch/image)
   :in-order-to ((asdf:test-op (asdf:test-op #:finch/test))))
 
 (asdf:defsystem #:finch/test

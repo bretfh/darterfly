@@ -42,3 +42,23 @@
              (is (= #xff202020 (image:pixel screen 1000 700))))
            (image:send c "(halt)"))
       (image:finish c))))
+
+(test finch-opens-a-window
+  (let ((c (image:console)))
+    (unwind-protect
+         (progn
+           (image:expect c "# ")
+           (image:send c "(spawn \"/Applications/Hello.app/Contents/MacOS/Hello\")")
+           (image:expect c "# ")
+           (let ((screen (loop :repeat 30
+                               :for screen := (image:screendump)
+                               :until (= #xffffffff (image:pixel screen 500 300))
+                               :finally (return screen))))
+             (is (= #xff2e5c8f (image:pixel screen 5 5)) "desktop ~x" (image:pixel screen 5 5))
+             (is (= #xffd9d9d9 (image:pixel screen 300 140)) "title ~x" (image:pixel screen 300 140))
+             (is (= #xffededed (image:pixel screen 215 300)) "frame ~x" (image:pixel screen 215 300))
+             (is (= #xffffffff (image:pixel screen 500 300)) "content ~x" (image:pixel screen 500 300)))
+           (image:send c "(run \"/bin/launchctl\" \"list\")")
+           (is (search "com.apple.WindowServer" (image:expect c "# ")))
+           (image:send c "(halt)"))
+      (image:finish c))))

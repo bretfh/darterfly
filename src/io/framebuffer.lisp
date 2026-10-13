@@ -2,7 +2,7 @@
   (:use #:cl)
   (:export #:framebuffer #:open-framebuffer #:framebuffer-width #:framebuffer-height
            #:framebuffer-pixels #:flush #:fill-rect #:test-pattern
-           #:read-events #:open-hid #:hid-event #:event-type #:event-code #:event-value))
+           #:read-events #:open-hid #:hid-event #:event-type #:event-code #:event-value #:blend-rect))
 (in-package #:finch/io)
 
 (defclass framebuffer ()
@@ -17,7 +17,17 @@
   (string-trim '(#\Newline #\Space)
                (uiop:read-file-string (format nil "/sys/class/graphics/fb0/~a" name))))
 
+(defconstant +kdsetmode+ #x4b3a)
+(defconstant +kd-graphics+ 1)
+
+(defun graphics-mode ()
+  (ignore-errors
+   (let ((fd (sb-posix:open "/dev/tty0" sb-posix:o-rdwr)))
+     (sb-posix:ioctl fd +kdsetmode+ +kd-graphics+)
+     fd)))
+
 (defun open-framebuffer (&optional (device "/dev/fb0"))
+  (graphics-mode)
   (destructuring-bind (width height)
       (mapcar #'parse-integer (uiop:split-string (sysfs "virtual_size") :separator ","))
     (let* ((depth (parse-integer (sysfs "bits_per_pixel")))
