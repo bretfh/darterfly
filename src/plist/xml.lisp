@@ -76,3 +76,89 @@
          (top (and plist (elements plist))))
     (unless top (bad "no <plist> element"))
     (value (first top))))
+
+(defun base64-text (octets)
+  (with-output-to-string (s)
+    (loop :for i :from 0 :below (length octets) :by 3
+          :for n := (min 3 (- (length octets) i))
+          :for bits := (loop :for j :below 3
+                             :for b := (if (< j n) (aref octets (+ i j)) 0)
+                             :sum (ash b (* 8 (- 2 j))))
+          :do (loop :for j :below 4
+                    :do (write-char (if (<= j n)
+                                        (char +base64+ (ldb (byte 6 (* 6 (- 3 j))) bits))
+                                        #\=)
+                                    s)))))
+
+(defun escaped (text s)
+  (loop :for c :across text
+        :do (case c
+              (#\& (write-string "&amp;" s))
+              (#\< (write-string "&lt;" s))
+              (#\> (write-string "&gt;" s))
+              (t (write-char c s)))))
+
+(defun real-text (x)
+  (let ((x (coerce x 'double-float)))
+    (cond ((sb-ext:float-nan-p x) "nan")
+          ((sb-ext:float-infinity-p x) (if (plusp x) "inf" "-inf"))
+          ((= x (ffloor x)) (format nil "~,1f" x))
+          (t (let ((*read-default-float-format* 'double-float))
+               (prin1-to-string x))))))
+
+(defun iso-text (date)
+  (multiple-value-bind (sec min hour day month year)
+      (decode-universal-time (date-universal-time date) 0)
+    (format nil "~4,'0d-~2,'0d-~2,'0dT~2,'0d:~2,'0d:~2,'0dZ" year month day hour min sec)))
+
+(defun emit (value depth s)
+  (flet ((line (fmt &rest args)
+           (loop :repeat depth :do (write-char #\Tab s))
+           (apply #'format s fmt args)
+           (terpri s))
+         (leaf (tag text)
+           (loop :repeat depth :do (write-char #\Tab s))
+           (format s "<~a>" tag)
+           (escaped text s)
+           (format s "</~a>~%" tag)))
+    (typecase value
+      (hash-table
+       (if (zerop (hash-table-count value))
+           (line "<dict/>")
+           (progn
+             (line "<dict>")
+             (maphash (lambda (k v)
+                        (incf depth)
+                        (leaf "key" k)
+                        (emit v depth s)
+                        (decf depth))
+                      value)
+             (line "</dict>"))))
+      (string (leaf "string" value))
+      ((eql t) (line "<true/>"))
+      (null (line "<false/>"))
+      (integer (line "<integer>~d</integer>" value))
+      (real (line "<real>~a</real>" (real-text value)))
+      (date (line "<date>~a</date>" (iso-text value)))
+      ((vector (unsigned-byte 8)) (line "<data>~a</data>" (base64-text value)))
+      (vector
+       (if (zerop (length value))
+           (line "<array/>")
+           (progn
+             (line "<array>")
+             (loop :for v :across value :do (emit v (1+ depth) s))
+             (line "</array>"))))
+      (t (bad "no XML form for ~s" value)))))
+
+(defun write-plist (value destination)
+  (if (streamp destination)
+      (progn
+        (format destination "<?xml version=\"1.0\" encoding=\"UTF-8\"?>~%~
+<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">~%~
+<plist version=\"1.0\">~%")
+        (emit value 0 destination)
+        (format destination "</plist>~%")
+        nil)
+      (with-open-file (s destination :direction :output :if-exists :supersede
+                                     :external-format :utf-8)
+        (write-plist value s))))

@@ -1,7 +1,7 @@
 (defpackage #:finch/plist
   (:use #:cl)
   (:export
-   #:read-plist #:read-xml-plist #:read-binary-plist #:plist-error
+   #:read-plist #:read-xml-plist #:read-binary-plist #:write-plist #:plist-error
    #:date #:make-date #:date-absolute-time #:date-universal-time
    #:uid #:make-uid #:uid-value #:+null+))
 (in-package #:finch/plist)

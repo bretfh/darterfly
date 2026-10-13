@@ -1,7 +1,7 @@
 (defpackage #:finch/test
   (:use #:cl #:fiveam)
   (:local-nicknames (#:mach #:finch/mach) (#:plist #:finch/plist) (#:macho #:finch/macho)
-                    (#:dyld #:finch/dyld))
+                    (#:dyld #:finch/dyld) (#:tahoe #:finch/tahoe))
   (:export #:run-them #:all))
 (in-package #:finch/test)
 

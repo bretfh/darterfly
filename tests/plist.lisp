@@ -81,3 +81,28 @@ with open(os.path.join(out, 'uid.bin'), 'wb') as f:
 (test not-a-plist
   (signals plist:plist-error
     (plist:read-plist (map '(vector (unsigned-byte 8)) #'char-code "<html></html>"))))
+
+(defparameter +same+ "
+import plistlib, sys
+a, b = (plistlib.load(open(p, 'rb')) for p in sys.argv[1:3])
+print('same' if a == b else 'differ')
+")
+
+(defun same-as-plistlib (original)
+  (let* ((dir (plists))
+         (script (merge-pathnames "same.py" dir))
+         (written (merge-pathnames (format nil "~a.written" (file-namestring original)) dir)))
+    (with-open-file (s script :direction :output :if-exists :supersede)
+      (write-string +same+ s))
+    (plist:write-plist (plist:read-plist original) written)
+    (string-trim '(#\Newline)
+                 (sh "python3" "-I" (uiop:native-namestring script)
+                     (uiop:native-namestring original) (uiop:native-namestring written)))))
+
+(test write-xml
+  (is (string= "same" (same-as-plistlib (fixture "v.xml"))))
+  (is (string= "same" (same-as-plistlib (fixture "v.bin"))))
+  (is (eq t (plist:read-plist
+             (let ((s (make-string-output-stream)))
+               (plist:write-plist t s)
+               (sb-ext:string-to-octets (get-output-stream-string s) :external-format :utf-8))))))

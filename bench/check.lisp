@@ -1,6 +1,6 @@
 (require :asdf)
 
-(defparameter +mine+ '(:finch/mach :finch/plist :finch/macho :finch/dyld :finch))
+(defparameter +mine+ '(:finch/mach :finch/plist :finch/macho :finch/dyld :finch/tahoe :finch))
 
 (defvar *warnings* nil)
 
@@ -14,7 +14,8 @@
 (handler-bind ((warning (lambda (c)
                           (when (minep c)
                             (push (list (type-of c) (princ-to-string c)) *warnings*)))))
-  (asdf:load-system :finch :force +mine+))
+  (asdf:load-system :finch :force +mine+)
+  (asdf:load-system :finch/tahoe :force +mine+))
 
 (let ((warnings (reverse *warnings*)))
   (cond ((null warnings)

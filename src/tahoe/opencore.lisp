@@ -1,0 +1,111 @@
+(defpackage #:finch/tahoe
+  (:use #:cl)
+  (:export
+   #:*home* #:*boot-args* #:*csr-active-config* #:*product*
+   #:config #:esp
+   #:boot #:screendump #:send-key #:send-text #:query-status #:quit #:system-powerdown
+   #:serial-log))
+(in-package #:finch/tahoe)
+
+(defvar *home*
+  (uiop:ensure-directory-pathname
+   (or (uiop:getenv "FINCH_TAHOE") (merge-pathnames "vm/tahoe/guest/" (user-homedir-pathname)))))
+
+(defparameter *boot-args* "-v keepsyms=1 debug=0x100 serial=3")
+(defparameter *csr-active-config* #xfef)
+(defparameter *product* "iMac20,1")
+(defparameter *drivers* '("OpenRuntime.efi" "OpenHfsPlus.efi" "ResetNvramEntry.efi"))
+(defparameter +nvram+ "7C436110-AB2A-4BBB-A880-FE41995C9F82")
+
+(defun share (path)
+  (let ((env (or (uiop:getenv "GUIX_ENVIRONMENT")
+                 (error "finch/tahoe runs inside guix shell -m manifest.scm"))))
+    (uiop:parse-native-namestring (format nil "~a/share/~a" env path))))
+
+(defun source (name)
+  (asdf:system-relative-pathname :finch/tahoe (format nil "src/tahoe/~a" name)))
+
+(defun octets (string)
+  (map '(vector (unsigned-byte 8)) #'char-code string))
+
+(defun dict (&rest kv)
+  (let ((h (make-hash-table :test 'equal)))
+    (loop :for (k v) :on kv :by #'cddr :do (setf (gethash k h) v))
+    h))
+
+(defun at (h &rest path)
+  (reduce (lambda (h k) (gethash k h)) path :initial-value h))
+
+(defun put (h path value)
+  (setf (gethash (car (last path)) (apply #'at h (butlast path))) value))
+
+(defun kexts ()
+  (mapcar (lambda (d) (car (last (pathname-directory d))))
+          (uiop:subdirectories (share "opencore/Kexts/"))))
+
+(defun driver (path)
+  (dict "Arguments" "" "Comment" "" "Enabled" t "HideVerbose" nil "LoadEarly" nil "Path" path))
+
+(defun le32 (n)
+  (coerce (loop :for i :below 4 :collect (ldb (byte 8 (* 8 i)) n)) '(vector (unsigned-byte 8))))
+
+(defun config ()
+  (let ((c (finch/plist:read-plist (share "opencore/Sample.plist")))
+        (kexts (kexts)))
+    (put c '("ACPI" "Add")
+         (vector (dict "Comment" "EC and USBX" "Enabled" t "Path" "SSDT-EC-USBX.aml")))
+    (put c '("DeviceProperties" "Add") (dict))
+    (put c '("Booter" "Quirks" "SetupVirtualMap") nil)
+    (put c '("Kernel" "Add")
+         (map 'vector (lambda (k) (setf (gethash "Enabled" k) t) k)
+              (remove-if-not (lambda (k) (member (gethash "BundlePath" k) kexts :test #'string=))
+                             (at c "Kernel" "Add"))))
+    (put c '("Kernel" "Quirks" "ProvideCurrentCpuInfo") t)
+    (put c '("Kernel" "Emulate" "DummyPowerManagement") t)
+    (put c '("Misc" "Boot" "Timeout") 0)
+    (put c '("Misc" "Boot" "PollAppleHotKeys") t)
+    (put c '("Misc" "Debug" "Target") 9)
+    (put c '("Misc" "Serial" "Init") t)
+    (put c '("Misc" "Entries") #())
+    (put c '("Misc" "Tools") #())
+    (put c '("Misc" "Security" "SecureBootModel") "Disabled")
+    (put c '("Misc" "Security" "Vault") "Optional")
+    (put c '("Misc" "Security" "ScanPolicy") 0)
+    (put c '("Misc" "Security" "AllowSetDefault") t)
+    (put c (list "NVRAM" "Add" +nvram+ "boot-args") *boot-args*)
+    (put c (list "NVRAM" "Add" +nvram+ "csr-active-config") (le32 *csr-active-config*))
+    (put c (list "NVRAM" "Add" +nvram+ "prev-lang:kbd") (octets "en-US:0"))
+    (put c (list "NVRAM" "Delete" +nvram+)
+         (vector "boot-args" "csr-active-config" "prev-lang:kbd" "ForceDisplayRotationInEFI"))
+    (put c '("PlatformInfo" "Generic" "SystemProductName") *product*)
+    (put c '("UEFI" "Drivers") (map 'vector #'driver *drivers*))
+    c))
+
+(defun sh (&rest args)
+  (multiple-value-bind (out err code)
+      (uiop:run-program (mapcar (lambda (a) (if (pathnamep a) (uiop:native-namestring a) a)) args)
+                        :output :string :error-output :output :ignore-error-status t)
+    (declare (ignore err))
+    (unless (zerop code)
+      (error "~a exited ~d:~%~a" (first args) code out))
+    out))
+
+(defun esp (&optional (dir (merge-pathnames "esp/" *home*)))
+  (let ((oc (merge-pathnames "EFI/OC/" dir))
+        (efi (share "opencore/EFI/")))
+    (when (probe-file dir)
+      (sh "chmod" "-R" "u+w" dir)
+      (uiop:delete-directory-tree dir :validate t))
+    (ensure-directories-exist (merge-pathnames "EFI/BOOT/" dir))
+    (dolist (d '("ACPI/" "Drivers/" "Kexts/"))
+      (ensure-directories-exist (merge-pathnames d oc)))
+    (sh "cp" (merge-pathnames "BOOT/BOOTx64.efi" efi) (merge-pathnames "EFI/BOOT/" dir))
+    (sh "cp" (merge-pathnames "OC/OpenCore.efi" efi) oc)
+    (dolist (d *drivers*)
+      (sh "cp" (merge-pathnames (format nil "OC/Drivers/~a" d) efi) (merge-pathnames "Drivers/" oc)))
+    (dolist (k (kexts))
+      (sh "cp" "-r" (share (format nil "opencore/Kexts/~a" k)) (merge-pathnames "Kexts/" oc)))
+    (sh "iasl" "-p" (merge-pathnames "ACPI/SSDT-EC-USBX" oc) (source "SSDT-EC-USBX.dsl"))
+    (finch/plist:write-plist (config) (merge-pathnames "config.plist" oc))
+    (sh "chmod" "-R" "u+w" dir)
+    dir))
