@@ -94,7 +94,9 @@
     (values nlists table)))
 
 (defun extract-image (cache image destination)
-  (let* ((image (if (stringp image) (find-image cache image) image))
+  (let* ((image (if (stringp image)
+                    (or (find-image cache image) (bad "no image ~a in the cache" image))
+                    image))
          (address (image-address image))
          (head (cache-read cache address 32))
          (o (cache-read cache address (+ 32 (le head 20 4))))
