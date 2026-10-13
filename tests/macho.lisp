@@ -40,15 +40,14 @@ int finch_twice(int a) { return finch_add(a, a); }
   (uiop:native-namestring (merge-pathnames name (images))))
 
 (defun objdump-lines (name pattern)
-  (let ((scanner (format nil "^\\s*(~a) (\\S+)" pattern)))
-    (loop :for line :in (uiop:split-string (sh "llvm-objdump" "--macho" "--private-headers"
-                                               (image-path name))
-                                           :separator '(#\Newline))
-          :for words := (remove "" (uiop:split-string (string-trim " " line)) :test #'string=)
-          :when (and (= 2 (min 2 (length words)))
-                     (member (first words) (uiop:split-string pattern :separator "|")
-                             :test #'string=))
-            :collect (list (first words) (second words)))))
+  (loop :for line :in (uiop:split-string (sh "llvm-objdump" "--macho" "--private-headers"
+                                             (image-path name))
+                                         :separator '(#\Newline))
+        :for words := (remove "" (uiop:split-string (string-trim " " line)) :test #'string=)
+        :when (and (= 2 (min 2 (length words)))
+                   (member (first words) (uiop:split-string pattern :separator "|")
+                           :test #'string=))
+          :collect (list (first words) (second words))))
 
 (defun lc-name (kind)
   (substitute #\_ #\- (symbol-name kind)))
