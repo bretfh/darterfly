@@ -16,7 +16,7 @@
 
 (test commits-round-trip
   (let ((streams (oracle-commits)))
-    (is (= 3 (length streams)))
+    (is (= 5 (length streams)))
     (dolist (stream streams)
       (let* ((commit (ca:decode-commit stream))
              (octets (ca:encode-commit commit)))
@@ -25,7 +25,8 @@
         (is (< (- (length stream) (length octets)) 4))))))
 
 (test commits-carry-the-layers
-  (destructuring-bind (bare child teardown) (mapcar #'ca:decode-commit (oracle-commits))
+  (destructuring-bind (bare child contents large teardown) (mapcar #'ca:decode-commit (oracle-commits))
+    (declare (ignore contents large))
     (is (= 1 (logand 1 (getf bare :flags))))
     (is (equal (getf bare :context) (getf child :context)))
     (let* ((root-id (second (first (commands bare :set-layer-id))))
@@ -50,3 +51,25 @@
           (is (equalp (vector (second child-set)) (getf r :sublayers)))))
       (is (equal (list (second (first (commands child :set-object))) root-id)
                  (mapcar #'second (commands teardown :delete-object)))))))
+
+(defun contents-of (commit)
+  (let ((contents (getf (fourth (first (commands commit :set-object))) :contents)))
+    (if (eq (getf contents :type) :cached) (getf contents :object) contents)))
+
+(test commits-carry-images
+  (destructuring-bind (bare child contents large teardown) (mapcar #'ca:decode-commit (oracle-commits))
+    (declare (ignore bare child teardown))
+    (let ((image (contents-of contents)))
+      (is (= #x17 (getf image :type)))
+      (is (= 4 (getf image :width)))
+      (is (= 2 (getf image :height)))
+      (is (equal '(16) (getf image :rowbytes)))
+      (is (equalp (coerce (loop :for i :below 8 :append (list (* i 30) (- 255 (* i 30)) (* i 10) 255))
+                          '(vector (unsigned-byte 8)))
+                  (getf image :pixels))))
+    (let* ((root (find-if (lambda (c) (getf (fourth c) :contents)) (commands large :set-object)))
+           (image (let ((c (getf (fourth root) :contents))) (if (eq (getf c :type) :cached) (getf c :object) c))))
+      (is (= 128 (getf image :width)))
+      (is (equal '(512) (getf image :rowbytes)))
+      (is (= #x34 (getf (getf image :shmem) :type)))
+      (is (eq :port (getf (getf image :shmem) :port))))))
