@@ -28,24 +28,80 @@
 
 (defparameter *kernel-sources*
   '("src/osfmk/x86_64/start.s" "src/osfmk/x86_64/idt64.s" "src/osfmk/i386/i386_init.c"
-    "src/osfmk/i386/mp_desc.c" "src/osfmk/i386/pmap.c" "src/osfmk/i386/trap.c"
+    "src/osfmk/i386/mp_desc.c" "src/osfmk/i386/pmap.c" "src/osfmk/i386/trap.c" "src/osfmk/i386/rtclock.c"
     "src/osfmk/kern/printf.c" "src/osfmk/kern/debug.c" "src/osfmk/kern/kalloc.c"
-    "src/osfmk/vm/vm_resident.c" "src/osfmk/vm/vm_fault.c"
-    "src/pexpert/i386/pe_serial.c" "src/pexpert/i386/pe_init.c"))
+    "src/osfmk/vm/vm_resident.c" "src/osfmk/vm/vm_map.c"
+    "src/bsd/dev/i386/systemcalls.c" "src/bsd/dev/i386/unix_signal.c"
+    "src/pexpert/i386/pe_serial.c" "src/pexpert/i386/pe_init.c" "src/osfmk/x86_64/loose_ends.c"))
+
+(defparameter *libsa-sources*
+  '("syscall.c" "signal.c" "string.c" "stdio.c" "stdlib.c" "unistd.c" "time.c" "math.c" "misc.c"
+    "setjmp.s" "start.c"))
+
+(defun compile-objects (sources dir flags)
+  (loop :for name :in sources
+        :for object := (build-path (format nil "~a/~a.o" dir (pathname-name name)))
+        :do (ensure-directories-exist object)
+            (apply #'run "clang" (append flags (list "-c" name "-o" (uiop:native-namestring object))))
+        :collect (uiop:native-namestring object)))
+
+(defun kernel-object ()
+  (let ((out (uiop:native-namestring (build-path "kernel.o"))))
+    (apply #'run "ld.lld" "-r" "-o" out (kernel-objects))
+    (run "llvm-objcopy" "--keep-global-symbol=_start" out)
+    out))
+
+(defun kernel-objects ()
+  (compile-objects (mapcar #'source *kernel-sources*) "kernel"
+                   (append (list "-target" "x86_64-unknown-none-elf" "-ffreestanding" "-mno-red-zone"
+                                 "-mcmodel=kernel" "-fno-pie" "-fno-stack-protector" "-fno-builtin"
+                                 "-mno-sse" "-mno-sse2" "-mno-mmx" "-mno-80387" "-nostdlib" "-O2" "-Wall"
+                                 (format nil "-DBUILD_DATE=~s" (date)))
+                           (freestanding))))
+
+(defun libsa-objects ()
+  (compile-objects (mapcar (lambda (f) (source (concatenate 'string "src/libsa/" f))) *libsa-sources*) "libsa"
+                   (append (runtime-flags) (list "-fno-builtin" "-fno-math-errno" "-I" (source "src/libsa")))))
+
+(defun split-core ()
+  (let* ((core (merge-pathnames "output/sbcl.core" (sbcl-tree)))
+         (asm (build-path "core/lisp.s"))
+         (object (build-path "core/lisp.o"))
+         (data (build-path "core/lisp-core.o")))
+    (ensure-directories-exist asm)
+    (unless (and (probe-file object) (> (file-write-date object) (file-write-date core)))
+      (run (uiop:native-namestring (merge-pathnames "run-sbcl.sh" (sbcl-tree)))
+           "--script" (uiop:native-namestring (merge-pathnames "tools-for-build/elftool.lisp" (sbcl-tree)))
+           "split" (uiop:native-namestring core) (uiop:native-namestring asm))
+      (run "clang" "-target" "x86_64-unknown-none-elf" "-c" (uiop:native-namestring asm)
+           "-o" (uiop:native-namestring object)))
+    (list (uiop:native-namestring object) (uiop:native-namestring data))))
+
+(defun runtime-objects ()
+  (let ((failures (compile-runtime)))
+    (when failures
+      (error "runtime: ~{~a~^, ~} failed:~%~a" (mapcar #'car failures) (cdr (first failures)))))
+  (mapcar (lambda (name) (uiop:native-namestring (merge-pathnames (format nil "~a.o" (pathname-name name)) (runtime-dir))))
+          *runtime-sources*))
+
+(defun newest (dirs)
+  (loop :for dir :in dirs
+        :maximize (loop :for f :in (uiop:directory-files (uiop:ensure-directory-pathname dir))
+                        :maximize (file-write-date f))
+        :maximize (loop :for sub :in (uiop:subdirectories (uiop:ensure-directory-pathname dir))
+                        :maximize (newest (list sub)))))
+
+(defun kernel-inputs ()
+  (append (mapcar #'source '("src/osfmk/" "src/bsd/dev/" "src/pexpert/" "src/libsa/" "src/sbcl/" "src/image/"))
+          (list (merge-pathnames "output/" (sbcl-tree)))))
 
 (defun mach-kernel ()
-  (let ((objects
-          (loop :for name :in *kernel-sources*
-                :for object := (build-path (format nil "kernel/~a.o" (pathname-name name)))
-                :do (ensure-directories-exist object)
-                    (apply #'run "clang" "-target" "x86_64-unknown-none-elf" "-ffreestanding" "-mno-red-zone"
-                         "-mcmodel=kernel" "-fno-pie" "-fno-stack-protector" "-fno-builtin" "-nostdlib" "-O2" "-Wall"
-                         (format nil "-DBUILD_DATE=~s" (date))
-                         "-c" (source name) "-o" (uiop:native-namestring object) (freestanding))
-                :collect (uiop:native-namestring object)))
-        (out (build-path "kernel/kernel")))
-    (apply #'run "ld.lld" "-T" (source "src/osfmk/x86_64/kernel.ld") "-nostdlib" "-static"
-           "-o" (uiop:native-namestring out) objects)
+  (let ((out (build-path "kernel/kernel")))
+    (when (and (probe-file out) (> (file-write-date out) (newest (kernel-inputs))))
+      (return-from mach-kernel out))
+    (apply #'run "ld.lld" "-T" (source "src/osfmk/x86_64/kernel.ld") "-nostdlib" "-static" "--error-limit=0"
+           "-o" (uiop:native-namestring out)
+           (append (list (kernel-object)) (libsa-objects) (runtime-objects) (split-core)))
     out))
 
 (defun boot-plist (boot-args)

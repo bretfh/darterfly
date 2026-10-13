@@ -46,6 +46,9 @@ trap_\vector:
 	TRAP_ERR 29
 	TRAP_ERR 30
 	TRAP 31
+	TRAP 0x80
+	TRAP 0x81
+	TRAP 0x82
 
 trap_common:
 	pushq	%r15
@@ -90,6 +93,9 @@ idt64_stubs:
 	.irp	v, 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
 	.quad	trap_\v
 	.endr
+	.globl	idt64_syscall_stubs
+idt64_syscall_stubs:
+	.quad	trap_0x80, trap_0x81, trap_0x82
 
 	.text
 	.globl	gdt_load
@@ -106,3 +112,30 @@ gdt_load:
 	pushq	$0x08
 	pushq	%rax
 	lretq
+
+	.globl	thread_bootstrap_return
+thread_bootstrap_return:
+	movw	$0x2b, %ax
+	movw	%ax, %ds
+	movw	%ax, %es
+	pushq	$0x2b
+	pushq	%rsi
+	pushq	$0x002
+	pushq	$0x33
+	pushq	%rdi
+	movq	%rdx, %rdi
+	xorl	%esi, %esi
+	xorl	%edx, %edx
+	xorl	%eax, %eax
+	xorl	%ebx, %ebx
+	xorl	%ecx, %ecx
+	xorl	%ebp, %ebp
+	xorl	%r8d, %r8d
+	xorl	%r9d, %r9d
+	xorl	%r10d, %r10d
+	xorl	%r11d, %r11d
+	xorl	%r12d, %r12d
+	xorl	%r13d, %r13d
+	xorl	%r14d, %r14d
+	xorl	%r15d, %r15d
+	iretq

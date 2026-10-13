@@ -16,7 +16,9 @@
     /* KLUDGE" "#if defined __finch__
 #   define CONTEXT_FLAGS(c) c->rflags
 #elif defined __linux__
-    /* KLUDGE")))
+    /* KLUDGE")
+    ("x86-64-assem.S" "#if defined __linux__  || defined LISP_FEATURE_HAIKU"
+     "#if defined __finch__ || defined __linux__  || defined LISP_FEATURE_HAIKU")))
 
 (defun runtime-dir () (build-path "runtime/src/runtime/"))
 
@@ -52,8 +54,8 @@
     to))
 
 (defun runtime-flags ()
-  (append (list "-target" "x86_64-unknown-none-elf" "-ffreestanding" "-mcmodel=kernel" "-mno-red-zone"
-                "-fno-pie" "-fno-stack-protector" "-fno-omit-frame-pointer" "-O2" "-g0"
+  (append (list "-target" "x86_64-unknown-none-elf" "-ffreestanding" "-fPIE" "-mno-red-zone"
+                "-fno-stack-protector" "-fno-omit-frame-pointer" "-O2" "-g0"
                 "-Wno-everything" "-D__finch__")
           (list "-isystem" (source "src/libsa/include"))
           (freestanding)))

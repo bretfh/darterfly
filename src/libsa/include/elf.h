@@ -79,3 +79,4 @@ typedef struct {
 #define EI_VERSION 6
 #define EI_OSABI 7
 #define ELFOSABI_NONE 0
+#define ELF64_R_INFO(s, t) (((uint64_t)(s) << 32) + (t))

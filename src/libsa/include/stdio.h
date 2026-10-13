@@ -6,9 +6,11 @@ typedef struct __FILE FILE;
 extern FILE *stdin, *stdout, *stderr;
 #define EOF (-1)
 #define BUFSIZ 8192
+#ifndef SEEK_SET
 #define SEEK_SET 0
 #define SEEK_CUR 1
 #define SEEK_END 2
+#endif
 #define _IONBF 2
 #define _IOLBF 1
 #define _IOFBF 0

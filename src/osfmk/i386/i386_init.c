@@ -31,6 +31,20 @@ static void vm_test(void) {
   kprintf("vmtest: kalloc %s\n", a == c && b ? "reuses freed blocks" : "is wrong");
 }
 
+#define USER_STACK_TOP 0x00007ff000000000ull
+#define USER_STACK_SIZE (8ull << 20)
+
+void rtclock_init(void);
+extern void _libsa_start(const char *cmdline);
+
+static void load_init_program(void) {
+  vm_map_enter(USER_STACK_TOP - USER_STACK_SIZE, USER_STACK_SIZE, VM_PROT_READ | VM_PROT_WRITE);
+  kprintf("load_init_program: sbcl\n");
+  uint64_t entry;
+  __asm__("movabs $_libsa_start, %0" : "=r"(entry));
+  thread_bootstrap_return(entry, USER_STACK_TOP - 72, (uint64_t)PE_boot_args->CommandLine);
+}
+
 void i386_init(boot_args *args) {
   PE_boot_args = args;
   serial_init();
@@ -56,10 +70,11 @@ void i386_init(boot_args *args) {
   kalloc_init();
   kprintf("vm: %lu MB free\n", vm_page_free_count() * PAGE_SIZE / (1024 * 1024));
   if (PE_parse_boot_arg("vmtest")) vm_test();
+  rtclock_init();
   if (PE_parse_boot_arg("trap")) __asm__ volatile("int3");
   if (PE_parse_boot_arg("halt")) {
     kprintf("halt\n");
     PE_halt();
   }
-  for (;;) __asm__ volatile("hlt");
+  load_init_program();
 }

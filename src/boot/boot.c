@@ -172,18 +172,37 @@ static uint64_t load_kernel(EFI_FILE_PROTOCOL *root, boot_args *args) {
   Elf64_Ehdr *eh = (Elf64_Ehdr *)image;
   if (eh->e_ident[0] != 0x7f || eh->e_ident[1] != 'E' || eh->e_machine != 62) fail("kernel is not x86_64 ELF", 0);
   Elf64_Phdr *ph = (Elf64_Phdr *)(image + eh->e_phoff);
-  uint64_t end = 0;
-  for (int i = 0; i < eh->e_phnum; i++)
-    if (ph[i].p_type == 1 && ph[i].p_vaddr + ph[i].p_memsz > end) end = ph[i].p_vaddr + ph[i].p_memsz;
-  uint64_t span = (end - KERNEL_BASE + 4095) & ~4095ull;
-  uint8_t *base = allocate_low(span);
-  for (int i = 0; i < eh->e_phnum; i++)
-    if (ph[i].p_type == 1) memcpy(base + (ph[i].p_vaddr - KERNEL_BASE), image + ph[i].p_offset, ph[i].p_filesz);
   page_tables();
-  map_kernel(KERNEL_BASE, (uint64_t)base, span);
-  args->kaddr = (uint32_t)(uintptr_t)base;
-  args->ksize = (uint32_t)span;
+  int n = 0;
+  for (int i = 0; i < eh->e_phnum;) {
+    if (ph[i].p_type != 1) { i++; continue; }
+    uint64_t start = ph[i].p_vaddr & ~4095ull, end = ph[i].p_vaddr + ph[i].p_memsz;
+    int j = i + 1;
+    for (; j < eh->e_phnum; j++) {
+      if (ph[j].p_type != 1) continue;
+      if (ph[j].p_vaddr - end > (1ull << 30)) break;
+      end = ph[j].p_vaddr + ph[j].p_memsz;
+    }
+    end = (end + 4095) & ~4095ull;
+    uint8_t *base = allocate_low(end - start);
+    for (int k = i; k < j; k++)
+      if (ph[k].p_type == 1) memcpy(base + (ph[k].p_vaddr - start), image + ph[k].p_offset, ph[k].p_filesz);
+    map_kernel(start, (uint64_t)base, end - start);
+    if (n == 8) fail("too many kernel regions", 0);
+    args->kernelRegions[n].va = start;
+    args->kernelRegions[n].pa = (uint64_t)base;
+    args->kernelRegions[n].size = end - start;
+    if (start == KERNEL_BASE) {
+      args->kaddr = (uint32_t)(uintptr_t)base;
+      args->ksize = (uint32_t)(end - start);
+    }
+    n++;
+    i = j;
+  }
+  args->kernelRegionCount = n;
   args->kslide = 0;
+  args->kernelFileStart = (uint64_t)image;
+  args->kernelFileSize = size;
   return eh->e_entry;
 }
 

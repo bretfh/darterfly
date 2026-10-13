@@ -37,3 +37,25 @@
            (is (image:expect c "vmtest: 512 demand-zero pages, 512 read back"))
            (is (image:expect c "vmtest: kalloc reuses freed blocks")))
       (image:finish c 5))))
+
+(test sbcl-runs-on-finch
+  (let ((c (image:bare-console)))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
+      (unwind-protect
+           (progn
+             (is (image:expect c "load_init_program: sbcl"))
+             (is (image:expect c "* " :timeout 60))
+             (is (search "\"2.6.4.finch\"" (ask "(lisp-implementation-version)")))
+             (is (search "200000000" (ask "(let ((n 0)) (dotimes (i 200) (incf n (length (make-array 1000000)))) n)")))
+             (ask "(gc :full t)")
+             (is (search "3000000" (ask "(length (loop repeat 3000000 collect (cons 1 2)))")))
+             (image:send c "(car 1)")
+             (is (search "is not of type" (image:expect c "0] " :timeout 30)))
+             (image:send c ":abort")
+             (image:expect c "* " :timeout 30)
+             (ask "(defun fib (n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))")
+             (is (search "832040" (ask "(fib 30)")))
+             (is (search "T" (ask "(> (get-universal-time) 3960000000)")))
+             (image:send c "(sb-ext:exit :code 7)")
+             (is (image:expect c "exit(7)" :timeout 30)))
+        (image:finish c 5)))))

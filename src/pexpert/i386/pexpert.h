@@ -15,3 +15,4 @@ void serial_putc(char c);
 int PE_parse_boot_arg(const char *name);
 void PE_halt(void) __attribute__((noreturn));
 void kprintf(const char *format, ...);
+void panic(const char *format, ...) __attribute__((noreturn));

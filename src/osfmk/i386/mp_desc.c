@@ -23,12 +23,14 @@ struct __attribute__((packed)) pseudo_descriptor {
   uint64_t base;
 };
 
-static uint64_t master_gdt[5] __attribute__((aligned(16)));
+static uint64_t master_gdt[7] __attribute__((aligned(16)));
+static uint8_t kernel_stack[65536] __attribute__((aligned(16)));
 static struct x86_64_tss master_ktss __attribute__((aligned(16)));
 static struct real_gate64 master_idt64[256] __attribute__((aligned(16)));
 static uint8_t df_stack[16384] __attribute__((aligned(16)));
 
 extern uint64_t idt64_stubs[32];
+extern uint64_t idt64_syscall_stubs[3];
 extern void gdt_load(struct pseudo_descriptor *);
 
 void mp_desc_init(void) {
@@ -39,6 +41,9 @@ void mp_desc_init(void) {
   uint64_t limit = sizeof master_ktss - 1;
   master_gdt[3] = (limit & 0xffff) | ((tss & 0xffffff) << 16) | (0x89ull << 40) | (((tss >> 24) & 0xff) << 56);
   master_gdt[4] = tss >> 32;
+  master_gdt[5] = 0x0000f20000000000ull;
+  master_gdt[6] = 0x0020fa0000000000ull;
+  master_ktss.rsp0 = (uint64_t)(kernel_stack + sizeof kernel_stack);
   master_ktss.ist1 = (uint64_t)(df_stack + sizeof df_stack);
   master_ktss.io_bit_map_offset = sizeof master_ktss;
 
@@ -52,7 +57,17 @@ void mp_desc_init(void) {
         .offset_low16 = (uint16_t)at,
         .selector16 = KERNEL64_CS,
         .ist = v == 8 ? 1 : 0,
-        .access = 0x8e,
+        .access = (v == 3 || v == 4) ? 0xee : 0x8e,
+        .offset_high16 = (uint16_t)(at >> 16),
+        .offset_top32 = (uint32_t)(at >> 32),
+    };
+  }
+  for (int i = 0; i < 3; i++) {
+    uint64_t at = idt64_syscall_stubs[i];
+    master_idt64[0x80 + i] = (struct real_gate64){
+        .offset_low16 = (uint16_t)at,
+        .selector16 = KERNEL64_CS,
+        .access = 0xee,
         .offset_high16 = (uint16_t)(at >> 16),
         .offset_top32 = (uint32_t)(at >> 32),
     };

@@ -5,6 +5,8 @@
 #define INTEL_PTE_VALID 0x1ull
 #define INTEL_PTE_WRITE 0x2ull
 #define INTEL_PTE_PS 0x80ull
+#define INTEL_PTE_USER 0x4ull
+#define PTE_FRAME 0x200ull
 #define INTEL_PTE_NX (1ull << 63)
 #define PTE_PFN 0x000ffffffffff000ull
 
@@ -40,7 +42,7 @@ static uint64_t *pte(uint64_t va, int create) {
     uint64_t *e = &table[(va >> shift) & 511];
     if (!(*e & INTEL_PTE_VALID)) {
       if (!create) return 0;
-      *e = table_page() | INTEL_PTE_VALID | INTEL_PTE_WRITE;
+      *e = table_page() | INTEL_PTE_VALID | INTEL_PTE_WRITE | INTEL_PTE_USER;
     }
     if (*e & INTEL_PTE_PS) panic("pmap: 0x%lx is inside a large page", va);
     table = ptov(*e & PTE_PFN);
@@ -49,21 +51,24 @@ static uint64_t *pte(uint64_t va, int create) {
 }
 
 static uint64_t prot_bits(int prot) {
-  return INTEL_PTE_VALID | (prot & VM_PROT_WRITE ? INTEL_PTE_WRITE : 0) | (prot & VM_PROT_EXECUTE ? 0 : INTEL_PTE_NX);
+  if (!prot) return 0;
+  return INTEL_PTE_VALID | INTEL_PTE_USER | (prot & VM_PROT_WRITE ? INTEL_PTE_WRITE : 0) | (prot & VM_PROT_EXECUTE ? 0 : INTEL_PTE_NX);
 }
 
 static inline void invlpg(uint64_t va) { __asm__ volatile("invlpg (%0)" ::"r"(va) : "memory"); }
 
 void pmap_enter(uint64_t va, uint64_t pa, int prot) {
-  *pte(va, 1) = (pa & PTE_PFN) | prot_bits(prot);
+  *pte(va, 1) = (pa & PTE_PFN) | prot_bits(prot) | PTE_FRAME;
   invlpg(va);
 }
+
+
 
 void pmap_protect(uint64_t va, uint64_t len, int prot) {
   for (uint64_t a = va & ~(PAGE_SIZE - 1); a < va + len; a += PAGE_SIZE) {
     uint64_t *e = pte(a, 0);
-    if (e && (*e & INTEL_PTE_VALID)) {
-      *e = (*e & PTE_PFN) | prot_bits(prot);
+    if (e && (*e & PTE_FRAME)) {
+      *e = (*e & PTE_PFN) | prot_bits(prot) | PTE_FRAME;
       invlpg(a);
     }
   }
@@ -72,7 +77,7 @@ void pmap_protect(uint64_t va, uint64_t len, int prot) {
 void pmap_remove(uint64_t va, uint64_t len) {
   for (uint64_t a = va & ~(PAGE_SIZE - 1); a < va + len; a += PAGE_SIZE) {
     uint64_t *e = pte(a, 0);
-    if (e && (*e & INTEL_PTE_VALID)) {
+    if (e && (*e & PTE_FRAME)) {
       vm_page_free(*e & PTE_PFN);
       *e = 0;
       invlpg(a);
@@ -82,7 +87,7 @@ void pmap_remove(uint64_t va, uint64_t len) {
 
 uint64_t pmap_find_phys(uint64_t va) {
   uint64_t *e = pte(va, 0);
-  return e && (*e & INTEL_PTE_VALID) ? (*e & PTE_PFN) | (va & (PAGE_SIZE - 1)) : 0;
+  return e && (*e & PTE_FRAME) ? (*e & PTE_PFN) | (va & (PAGE_SIZE - 1)) : 0;
 }
 
 static int cpu_has_1g_pages(void) {
@@ -104,19 +109,21 @@ void pmap_bootstrap(boot_args *args) {
   if (cpu_has_1g_pages()) {
     gigs = 512;
     for (uint64_t i = 0; i < 512; i++)
-      IdlePhysPDPT[i] = (i << 30) | INTEL_PTE_VALID | INTEL_PTE_WRITE | INTEL_PTE_PS | INTEL_PTE_NX;
+      IdlePhysPDPT[i] = (i << 30) | INTEL_PTE_VALID | INTEL_PTE_WRITE | INTEL_PTE_USER | INTEL_PTE_PS | INTEL_PTE_NX;
   } else {
     gigs = 64;
     for (uint64_t g = 0; g < 64; g++) {
       for (uint64_t i = 0; i < 512; i++)
-        IdlePhysPD[g][i] = (g << 30) | (i << 21) | INTEL_PTE_VALID | INTEL_PTE_WRITE | INTEL_PTE_PS | INTEL_PTE_NX;
-      IdlePhysPDPT[g] = kvtophys(IdlePhysPD[g]) | INTEL_PTE_VALID | INTEL_PTE_WRITE;
+        IdlePhysPD[g][i] = (g << 30) | (i << 21) | INTEL_PTE_VALID | INTEL_PTE_WRITE | INTEL_PTE_USER | INTEL_PTE_PS | INTEL_PTE_NX;
+      IdlePhysPDPT[g] = kvtophys(IdlePhysPD[g]) | INTEL_PTE_VALID | INTEL_PTE_WRITE | INTEL_PTE_USER;
     }
   }
   enable_nx();
-  IdlePML4[256] = kvtophys(IdlePhysPDPT) | INTEL_PTE_VALID | INTEL_PTE_WRITE;
-  for (uint64_t off = 0; off < args->ksize; off += PAGE_SIZE)
-    pmap_enter(KERNEL_BASE + off, kernel_phys + off, VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE);
+  IdlePML4[256] = kvtophys(IdlePhysPDPT) | INTEL_PTE_VALID | INTEL_PTE_WRITE | INTEL_PTE_USER;
+  for (uint32_t r = 0; r < args->kernelRegionCount; r++)
+    for (uint64_t off = 0; off < args->kernelRegions[r].size; off += PAGE_SIZE)
+      pmap_enter(args->kernelRegions[r].va + off, args->kernelRegions[r].pa + off,
+                 VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE);
   uint32_t kaddr = args->kaddr;
   __asm__ volatile("mov %0, %%cr3" ::"r"(kvtophys(IdlePML4)) : "memory");
   physmap_ready = 1;

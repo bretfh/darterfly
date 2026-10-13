@@ -66,5 +66,8 @@ typedef struct boot_args {
   uint64_t arvManifestStart, arvManifestSize;
   uint64_t bsARVRootHashStart, bsARVRootHashSize;
   uint64_t bsARVManifestStart, bsARVManifestSize;
-  uint32_t __reserved4[692];
+  uint64_t kernelFileStart, kernelFileSize;
+  uint32_t kernelRegionCount, __pad;
+  struct { uint64_t va, pa, size; } kernelRegions[8];
+  uint32_t __reserved4[638];
 } boot_args;

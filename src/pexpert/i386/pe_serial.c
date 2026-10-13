@@ -18,3 +18,8 @@ void serial_putc(char c) {
   while (!(inb(COM1 + 5) & 0x20)) {}
   outb(COM1, (uint8_t)c);
 }
+
+int serial_getc(void) {
+  while (!(inb(COM1 + 5) & 1)) __asm__ volatile("pause");
+  return inb(COM1);
+}
