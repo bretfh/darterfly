@@ -27,3 +27,18 @@
            (is (search (format nil "~%3~%") (image:expect c "# ")))
            (image:send c "(halt)"))
       (image:finish c))))
+
+(test finch-draws
+  (let ((c (image:console)))
+    (unwind-protect
+         (progn
+           (image:expect c "# ")
+           (image:send c "(finch/io:test-pattern (finch/io:open-framebuffer))")
+           (image:expect c "# ")
+           (let ((screen (image:screendump)))
+             (is (= #xffff0000 (image:pixel screen 10 10)))
+             (is (= #xff00ff00 (image:pixel screen 1000 10)))
+             (is (= #xff0000ff (image:pixel screen 10 700)))
+             (is (= #xff202020 (image:pixel screen 1000 700))))
+           (image:send c "(halt)"))
+      (image:finish c))))

@@ -1,7 +1,7 @@
 (defpackage #:finch/image
   (:use #:cl)
   (:export #:core #:image #:boot #:check-boot #:write-cpio #:*build*
-   #:console #:expect #:send #:transcript #:finish))
+   #:console #:expect #:send #:transcript #:finish #:screendump #:pixel))
 (in-package #:finch/image)
 
 (defvar *build* (asdf:system-relative-pathname :finch "build/"))
@@ -17,7 +17,7 @@
     (uiop:run-program
      (list "sbcl" "--noinform" "--no-userinit" "--non-interactive"
            "--eval" "(require :asdf)"
-           "--eval" "(mapc #'asdf:load-system '(:finch/kernel :finch/launchd :finch/shell))"
+           "--eval" "(mapc #'asdf:load-system '(:finch/kernel :finch/launchd :finch/shell :finch/io))"
            "--eval" (format nil "(setf finch/kernel::*build-date* ~s)" (date))
            "--eval" (format nil "(sb-ext:save-lisp-and-die ~s :executable t :save-runtime-options t :toplevel (lambda () (finch/kernel:start)))"
                             (uiop:native-namestring path)))
@@ -133,8 +133,12 @@
 (defun kernel ()
   (format nil "~a/bzImage" (uiop:getenv "GUIX_ENVIRONMENT")))
 
+(defun monitor-path ()
+  (uiop:native-namestring (build-path "monitor.sock")))
+
 (defun qemu (&rest args)
   (append (list "qemu-system-x86_64" "-enable-kvm" "-cpu" "host" "-m" "4096" "-smp" "4"
+                "-monitor" (format nil "unix:~a,server=on,wait=off" (monitor-path))
                 "-kernel" (kernel)
                 "-initrd" (uiop:native-namestring (build-path "finch.cpio"))
                 "-no-reboot")
@@ -152,7 +156,7 @@
 
 (defstruct (console (:constructor %console (process))) process (seen (make-string-output-stream)) (text ""))
 
-(defun console (&key (boot-args ""))
+(defun console (&key (boot-args "vga=0x318"))
   (%console (uiop:launch-program (qemu "-display" "none" "-serial" "stdio"
                                        "-append" (format nil "console=ttyS0 quiet ~a" boot-args))
                                  :input :stream :output :stream :error-output :output)))
@@ -191,3 +195,42 @@
   (let ((process (console-process console)))
     (unwind-protect (uiop:wait-process process)
       (when (uiop:process-alive-p process) (uiop:terminate-process process :urgent t)))))
+
+(defun monitor (command)
+  (let ((socket (make-instance 'sb-bsd-sockets:local-socket :type :stream)))
+    (sb-bsd-sockets:socket-connect socket (monitor-path))
+    (let ((stream (sb-bsd-sockets:socket-make-stream socket :input t :output t :external-format :latin-1)))
+      (unwind-protect
+           (progn
+             (format stream "~a~%" command)
+             (finish-output stream)
+             (sleep 1)
+             (loop :while (listen stream) :do (read-char stream)))
+        (close stream)))))
+
+(defun read-ppm (path)
+  (with-open-file (s path :element-type '(unsigned-byte 8))
+    (flet ((token ()
+             (let ((chars (loop :for b := (read-byte s)
+                                :until (member b '(32 10 13 9))
+                                :collect (code-char b))))
+               (coerce chars 'string))))
+      (token)
+      (let* ((width (parse-integer (token)))
+             (height (parse-integer (token)))
+             (pixels (make-array (list height width) :element-type '(unsigned-byte 32))))
+        (token)
+        (dotimes (y height)
+          (dotimes (x width)
+            (setf (aref pixels y x)
+                  (logior #xff000000 (ash (read-byte s) 16) (ash (read-byte s) 8) (read-byte s)))))
+        pixels))))
+
+(defun screendump ()
+  (let ((path (uiop:native-namestring (build-path "screen.ppm"))))
+    (uiop:delete-file-if-exists path)
+    (monitor (format nil "screendump ~a" path))
+    (read-ppm path)))
+
+(defun pixel (screen x y)
+  (aref screen y x))

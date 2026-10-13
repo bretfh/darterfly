@@ -25,6 +25,13 @@
   :pathname "src/shell/"
   :components ((:file "shell")))
 
+(asdf:defsystem #:finch/io
+  :description "Frame buffers and input devices"
+  :depends-on (#:uiop (:require #:sb-posix))
+  :serial t
+  :pathname "src/io/"
+  :components ((:file "framebuffer") (:file "hid")))
+
 (asdf:defsystem #:finch/kernel
   :description "The kernel, run as pid 1"
   :depends-on (#:finch/mach #:finch/bsd #:uiop)
@@ -34,7 +41,7 @@
 
 (asdf:defsystem #:finch/image
   :description "The bootable image"
-  :depends-on (#:uiop #:finch/plist)
+  :depends-on (#:uiop #:finch/plist (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/image/"
   :components ((:file "image")))
@@ -94,7 +101,7 @@
 
 (asdf:defsystem #:finch
   :description "A Darwin in Common Lisp"
-  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/launchd #:finch/shell #:finch/kernel #:finch/image)
+  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/launchd #:finch/shell #:finch/io #:finch/kernel #:finch/image)
   :in-order-to ((asdf:test-op (asdf:test-op #:finch/test))))
 
 (asdf:defsystem #:finch/test
