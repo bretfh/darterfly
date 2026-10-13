@@ -116,3 +116,61 @@ receive i x
 receive i x
 destroy i
 type i
+allocate n receive
+insert n n make-send
+request n no-senders 0 n make-send-once p
+deallocate n
+receive n x
+allocate n2 receive
+request n2 no-senders 0 n2 make-send-once p
+receive n2 x
+request n2 no-senders 1 n2 make-send-once p
+request n2 no-senders 0 none make-send-once p
+type p
+allocate n3 receive
+insert n3 n3 make-send
+request n3 no-senders 0 n3 make-send-once p
+request n3 no-senders 0 n3 make-send-once p
+type p
+send g copy-send none - 5000 n3 make-send
+mod-refs n3 send -1
+receive n3 x
+receive g - y
+deallocate y
+receive n3 x
+allocate t receive
+insert t t make-send
+allocate w receive
+request t dead-name 0 w make-send-once p
+request t dead-name 0 w make-send-once p
+type p
+mod-refs t receive -1
+receive w x
+receive w x
+type t
+refs t dead-name
+request t dead-name 0 w make-send-once p
+receive w x
+allocate u receive
+insert u u make-send
+request u dead-name 0 w make-send-once p
+deallocate u
+receive w x
+type u
+allocate v receive
+request v dead-name 0 w make-send-once p
+mod-refs v receive -1
+receive w x
+type v
+allocate pd receive
+request pd port-destroyed 1 w make-send-once p
+request pd port-destroyed 0 w make-send-once p
+mod-refs pd receive -1
+receive w - y
+type y
+request n no-senders 0 w copy-send p
+request n send-once 0 w make-send-once p
+receive w - z
+type z
+receive w x
+receive w x

@@ -116,3 +116,61 @@ receive i x | 0 71 move-send-once none
 receive i x | 0 4000 move-send none
 destroy i | 0
 type i | f
+allocate n receive | 0
+insert n n make-send | 0
+request n no-senders 0 n make-send-once p | 0
+deallocate n | 0
+receive n x | 0 70 move-send-once none 1
+allocate n2 receive | 0
+request n2 no-senders 0 n2 make-send-once p | 0
+receive n2 x | 0 70 move-send-once none 0
+request n2 no-senders 1 n2 make-send-once p | 0
+request n2 no-senders 0 none make-send-once p | 0 previous
+type p | 0 send-once
+allocate n3 receive | 0
+insert n3 n3 make-send | 0
+request n3 no-senders 0 n3 make-send-once p | 0
+request n3 no-senders 0 n3 make-send-once p | 0 previous
+type p | 0 send-once
+send g copy-send none - 5000 n3 make-send | 0
+mod-refs n3 send -1 | 0
+receive n3 x | 10004003
+receive g - y | 0 5000 move-send none move-send
+deallocate y | 0
+receive n3 x | 0 70 move-send-once none 2
+allocate t receive | 0
+insert t t make-send | 0
+allocate w receive | 0
+request t dead-name 0 w make-send-once p | 0
+request t dead-name 0 w make-send-once p | 0 previous
+type p | 0 send-once
+mod-refs t receive -1 | 0
+receive w x | 0 72 move-send-once none t
+receive w x | 10004003
+type t | 0 dead-name
+refs t dead-name | 0 2
+request t dead-name 0 w make-send-once p | 4
+receive w x | 0 71 move-send-once none
+allocate u receive | 0
+insert u u make-send | 0
+request u dead-name 0 w make-send-once p | 0
+deallocate u | 0
+receive w x | 10004003
+type u | 0 receive
+allocate v receive | 0
+request v dead-name 0 w make-send-once p | 0
+mod-refs v receive -1 | 0
+receive w x | 0 65 move-send-once none v
+type v | f
+allocate pd receive | 0
+request pd port-destroyed 1 w make-send-once p | 12
+request pd port-destroyed 0 w make-send-once p | 0
+mod-refs pd receive -1 | 0
+receive w - y | 0 71 move-send-once none
+type y | 0 receive
+request n no-senders 0 w copy-send p | 1000000a
+request n send-once 0 w make-send-once p | 12
+receive w - z | 0 69 move-send-once none move-receive
+type z | 0 receive
+receive w x | 0 71 move-send-once none
+receive w x | 10004003

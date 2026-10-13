@@ -6,6 +6,7 @@
    #:mach-port-allocate #:mach-port-insert-right #:mach-port-deallocate
    #:mach-port-mod-refs #:mach-port-destroy #:mach-port-type
    #:mach-port-get-refs #:mach-port-move-member #:mach-port-names
+   #:mach-port-request-notification
    #:message #:make-message #:msgh-remote-port #:msgh-local-port
    #:msgh-remote-disposition #:msgh-local-disposition #:msgh-id
    #:msgh-body #:msgh-ports

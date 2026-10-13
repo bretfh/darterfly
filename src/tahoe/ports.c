@@ -34,6 +34,22 @@ static const struct { const char *name; mach_port_right_t right; mach_port_type_
   {"dead-name", MACH_PORT_RIGHT_DEAD_NAME, MACH_PORT_TYPE_DEAD_NAME},
 };
 
+static const struct { const char *name; mach_msg_id_t id; } notifications[] = {
+  {"port-deleted", MACH_NOTIFY_PORT_DELETED}, {"send-possible", MACH_NOTIFY_SEND_POSSIBLE},
+  {"port-destroyed", MACH_NOTIFY_PORT_DESTROYED}, {"no-senders", MACH_NOTIFY_NO_SENDERS},
+  {"send-once", MACH_NOTIFY_SEND_ONCE}, {"dead-name", MACH_NOTIFY_DEAD_NAME},
+};
+
+static mach_msg_id_t notification(const char *s) {
+  for (int i = 0; i < 6; i++) if (!strcmp(s, notifications[i].name)) return notifications[i].id;
+  return 0;
+}
+
+static const char *key(mach_port_name_t name) {
+  for (int i = nvars - 1; i >= 0; i--) if (vars[i].name == name && strcmp(vars[i].key, "x")) return vars[i].key;
+  return "?";
+}
+
 static mach_port_right_t right(const char *s) {
   for (int i = 0; i < 5; i++) if (!strcmp(s, rights[i].name)) return rights[i].right;
   return MACH_PORT_RIGHT_NUMBER;
@@ -75,6 +91,11 @@ int main(int argc, char **argv) {
       printf(" %x", mach_port_destroy(self, get(w[1])));
     } else if (!strcmp(w[0], "move-member")) {
       printf(" %x", mach_port_move_member(self, get(w[1]), get(w[2])));
+    } else if (!strcmp(w[0], "request")) {
+      mach_port_t previous = MACH_PORT_NULL;
+      kr = mach_port_request_notification(self, get(w[1]), notification(w[2]), atoi(w[3]), get(w[4]), disposition(w[5]), &previous);
+      printf(" %x", kr);
+      if (!kr && previous) { *var(w[6]) = previous; printf(" previous"); }
     } else if (!strcmp(w[0], "type")) {
       mach_port_type_t type;
       kr = mach_port_type(self, get(w[1]), &type);
@@ -108,6 +129,9 @@ int main(int argc, char **argv) {
         printf(" %d %s %s", m.header.msgh_id,
                disposition_name(MACH_MSGH_BITS_LOCAL(m.header.msgh_bits)),
                disposition_name(MACH_MSGH_BITS_REMOTE(m.header.msgh_bits)));
+        uint32_t word = *(uint32_t *)((char *)&m.header + sizeof m.header + 8);
+        if (m.header.msgh_id == MACH_NOTIFY_NO_SENDERS) printf(" %u", word);
+        if (m.header.msgh_id == MACH_NOTIFY_DEAD_NAME || m.header.msgh_id == MACH_NOTIFY_PORT_DELETED) printf(" %s", key(word));
         *var(w[2]) = m.header.msgh_remote_port;
         if (m.header.msgh_bits & MACH_MSGH_BITS_COMPLEX)
           for (unsigned i = 0; i < m.body.msgh_descriptor_count; i++) {
