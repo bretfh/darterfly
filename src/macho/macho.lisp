@@ -23,7 +23,7 @@
    #:linkedit-data #:linkedit-dataoff #:linkedit-datasize
    #:source-version #:source-version-string
    #:fileset-entry #:fileset-entry-id #:fileset-entry-vmaddr #:fileset-entry-fileoff
-   #:segments #:sections #:symbols #:dylibs #:install-name #:find-command
+   #:segments #:sections #:symbols #:dylibs #:install-name #:find-command #:read-address
    #:version-string))
 (in-package #:finch/macho)
 
@@ -376,3 +376,11 @@
                                    :sect (aref o (+ at 5))
                                    :desc (le o (+ at 6) 2)
                                    :value (le o (+ at 8) (if wide 8 4))))))))
+
+(defun read-address (image address count)
+  (let ((s (find-if (lambda (s) (<= (segment-vmaddr s) address
+                                    (+ (segment-vmaddr s) (segment-filesize s) (- count))))
+                    (segments image))))
+    (unless s (bad "no segment holds #x~x" address))
+    (let ((at (+ (start image) (segment-fileoff s) (- address (segment-vmaddr s)))))
+      (subseq (octets image) at (+ at count)))))
