@@ -1,11 +1,13 @@
 (defpackage #:finch/kit
   (:use #:cl)
-  (:local-nicknames (#:ca #:finch/ca) (#:text #:finch/text) (#:mach #:finch/mach) (#:server #:finch/server) (#:bsd #:finch/bsd))
+  (:local-nicknames (#:ca #:finch/ca) (#:text #:finch/text) (#:mach #:finch/mach) (#:server #:finch/server) (#:bsd #:finch/bsd)
+                    (#:imageio #:finch/imageio))
   (:export #:responder #:view #:text-field #:button #:window #:make-window
            #:view-frame #:subviews #:add-subview #:needs-display #:draw #:mouse-down #:key-down
            #:content-view #:window-title #:first-responder #:show #:close-window #:run
            #:string-value #:font-size #:text-color #:title #:action #:background
-           #:view-width #:view-height #:windows #:perform-on-main #:menu-bar #:*menus*))
+           #:view-width #:view-height #:windows #:perform-on-main #:menu-bar #:*menus* #:*click-count* #:icon-view #:icon-path #:label #:remove-subviews
+           #:window-level #:style #:set-window-title))
 (in-package #:finch/kit)
 
 (defclass responder () ())
@@ -108,6 +110,45 @@
 (defparameter +traffic-lights+
   '((:close 20 #(1.0 0.373 0.341)) (:minimize 40 #(0.996 0.737 0.18)) (:zoom 60 #(0.157 0.784 0.251))))
 
+(defvar *click-count* 1)
+
+(defclass icon-view (view)
+  ((icon-path :initarg :icon-path :initform nil :accessor icon-path)
+   (label :initarg :label :initform "" :accessor label)
+   (label-color :initarg :label-color :initform #(0.0 0.0 0.0) :accessor label-color)))
+
+(defvar *icons* (make-hash-table :test 'equal))
+(defvar *icons-lock* (sb-thread:make-mutex :name "icons"))
+
+(defun icon-pixels (path size)
+  (sb-thread:with-mutex (*icons-lock*)
+    (let ((key (cons path size)))
+      (multiple-value-bind (pixels found) (gethash key *icons*)
+        (if found pixels (setf (gethash key *icons*) (ignore-errors (imageio:icon path size))))))))
+
+(defmethod draw ((view icon-view) bitmap)
+  (let* ((w (view-width view))
+         (size (min 64 (- w 8)))
+         (x0 (round (- w size) 2))
+         (pixels (and (icon-path view) (icon-pixels (icon-path view) size)))
+         (out (text:bitmap-pixels bitmap))
+         (bw (text:bitmap-width bitmap)))
+    (when pixels
+      (dotimes (y size)
+        (dotimes (x size)
+          (let ((at (* 4 (+ x (* y size)))) (to (* 4 (+ x0 x (* y bw)))))
+            (when (< (+ to 3) (length out))
+              (dotimes (c 4) (setf (aref out (+ to c)) (aref pixels (+ at c)))))))))
+    (let* ((font (text:font "SFNS" 12))
+           (label (label view))
+           (c (label-color view)))
+      (text:draw-string bitmap font label (max 0 (round (- w (text:string-width font label)) 2))
+                        (+ size 16) (aref c 0) (aref c 1) (aref c 2)))))
+
+(defun remove-subviews (view)
+  (setf (subviews view) nil)
+  (needs-display view))
+
 (defclass theme-frame (view)
   ((title :initarg :title :initform "" :accessor title)))
 
@@ -131,7 +172,9 @@
    (id :initform nil :accessor window-id)
    (frame-view :accessor frame-view)
    (content :accessor content-view)
-   (first-responder :initform nil :accessor first-responder)))
+   (first-responder :initform nil :accessor first-responder)
+   (style :initarg :style :initform :titled :reader style)
+   (level :initarg :level :initform :normal :reader window-level)))
 
 (defclass application ()
   ((windows :initform nil :accessor app-windows)
@@ -143,22 +186,39 @@
 
 (defun windows () (app-windows *application*))
 
-(defun make-window (&rest initargs)
-  (let* ((window (apply #'make-instance 'window initargs))
-         (frame (make-instance 'theme-frame :title (window-title window)
-                                            :frame (vector 0 0 (window-width window) (window-height window))))
-         (content (make-instance 'view :background #(1.0 1.0 1.0 1.0)
-                                       :frame (vector 12 40 (- (window-width window) 24)
-                                                      (- (window-height window) 52)))))
+(defun make-window (&rest initargs &key background &allow-other-keys)
+  (let* ((window (apply #'make-instance 'window :allow-other-keys t initargs))
+         (borderless (eq (style window) :borderless))
+         (frame (if borderless
+                    (make-instance 'view :frame (vector 0 0 (window-width window) (window-height window)))
+                    (make-instance 'theme-frame :title (window-title window)
+                                                :frame (vector 0 0 (window-width window) (window-height window)))))
+         (content (make-instance 'view :background (or background #(1.0 1.0 1.0 1.0))
+                                       :frame (if borderless
+                                                  (vector 0 0 (window-width window) (window-height window))
+                                                  (vector 12 40 (- (window-width window) 24)
+                                                          (- (window-height window) 52))))))
     (setf (view-window frame) window
           (frame-view window) frame
           (content-view window) content)
     (add-subview frame content)
     window))
 
+(defun set-window-title (window title)
+  (setf (window-title window) title)
+  (when (typep (frame-view window) 'theme-frame)
+    (setf (title (frame-view window)) title)
+    (needs-display (frame-view window))))
+
 (defun commit (window)
   (display (frame-view window))
   (ca:commit (window-context window)))
+
+(bsd:define-process-variable *run-set* nil)
+
+(defun listen-to (window)
+  (when *run-set*
+    (mach:mach-port-move-member mach:*task* (ca:context-events (window-context window)) *run-set*)))
 
 (bsd:define-process-variable *menus* nil)
 
@@ -191,8 +251,10 @@
   (unless (window-id window)
     (setf (window-id window)
           (ca:window-create (window-context window) (window-x window) (window-y window)
-                            (window-width window) (window-height window))))
-  (pushnew window (app-windows *application*))
+                            (window-width window) (window-height window) :level (window-level window))))
+  (unless (member window (app-windows *application*))
+    (push window (app-windows *application*))
+    (listen-to window))
   window)
 
 (defun close-window (window)
@@ -204,7 +266,7 @@
   (or (dirty view) (some #'any-dirty (subviews view))))
 
 (defun window-mouse-down (window x y)
-  (if (< y +title-height+)
+  (if (and (eq (style window) :titled) (< y +title-height+))
       (loop :for (name cx) :in +traffic-lights+
             :when (and (eq name :close) (<= (abs (- x cx)) 7) (<= (abs (- y 14)) 7))
               :do (close-window window))
@@ -235,6 +297,7 @@
 
 (defun run ()
   (let ((set (mach:mach-port-allocate mach:*task* :port-set)))
+    (setf *run-set* set)
     (mach:mach-port-move-member mach:*task* (main-port) set)
     (dolist (window (windows))
       (mach:mach-port-move-member mach:*task* (ca:context-events (window-context window)) set))
@@ -252,7 +315,8 @@
       (case (server:event-type event)
         (:left-mouse-down
          (destructuring-bind (x y) (server:event-window-location event)
-           (window-mouse-down window (round x) (round y))))
+           (let ((*click-count* (or (server:event-value event :mouse-event-click-state) 1)))
+             (window-mouse-down window (round x) (round y)))))
         (:key-down
          (let ((char (server:event-character event)))
            (when char

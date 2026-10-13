@@ -38,7 +38,7 @@
                (setf (ca:layer-sublayers bar) (list time))
                (ca:commit context))))
       (draw)
-      (ca:window-create context 0 0 width 24 :level :main-menu)
+      (ca:window-create context 0 0 width 24 :level :main-menu :order :below)
       (loop (sleep 30) (draw)))))
 
 (defparameter *dock-items*
@@ -84,21 +84,79 @@
                   (bsd:posix-spawn (second (nth index *dock-items*))
                                    (list (second (nth index *dock-items*))) nil))))))))))
 
+(defparameter +core-types+ "/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/")
+
+(defun file-icon (path)
+  (let ((mode (getf (ignore-errors (bsd:stat path)) :mode 0)))
+    (format nil "~a~a" +core-types+
+            (cond ((string= path "/Applications") "ApplicationsFolderIcon.icns")
+                  ((string= path "/Library") "LibraryFolderIcon.icns")
+                  ((string= path "/System") "SystemFolderIcon.icns")
+                  ((uiop:string-suffix-p path ".app") "GenericApplicationIcon.icns")
+                  ((= (logand mode bsd:+s-ifmt+) bsd:+s-ifdir+) "GenericFolderIcon.icns")
+                  (t "GenericDocumentIcon.icns")))))
+
+(defun child-path (dir name)
+  (if (string= dir "/") (format nil "/~a" name) (format nil "~a/~a" dir name)))
+
+(defun directory-p (path)
+  (let ((mode (getf (ignore-errors (bsd:stat path)) :mode 0)))
+    (= (logand mode bsd:+s-ifmt+) bsd:+s-ifdir+)))
+
+(defclass file-icon-view (kit:icon-view)
+  ((path :initarg :path :reader path)
+   (browser :initarg :browser :reader browser)))
+
+(defmethod kit:mouse-down ((view file-icon-view) x y)
+  (declare (ignore x y))
+  (when (>= kit:*click-count* 2)
+    (if (directory-p (path view))
+        (browse (browser view) (path view))
+        (when (uiop:string-suffix-p (path view) ".app")
+          (let ((program (format nil "~a/Contents/MacOS/~a" (path view)
+                                 (subseq (pathname-name (path view)) 0))))
+            (ignore-errors (bsd:posix-spawn program (list program) nil))))))
+  t)
+
+(defun browse (window path)
+  (let* ((content (kit:content-view window))
+         (names (sort (remove-if (lambda (n) (char= (char n 0) #\.))
+                                 (or (ignore-errors (bsd:readdir path)) nil))
+                      #'string-lessp))
+         (columns 6) (cell 92) (row 96))
+    (kit:remove-subviews content)
+    (kit:set-window-title window (if (string= path "/") "Macintosh HD" (subseq path (1+ (position #\/ path :from-end t)))))
+    (loop :for name :in names
+          :for i :from 0
+          :do (let ((child (child-path path name)))
+                (kit:add-subview content (make-instance 'file-icon-view
+                                                        :path child :browser window
+                                                        :icon-path (file-icon child) :label name
+                                                        :frame (vector (+ 8 (* cell (mod i columns)))
+                                                                       (+ 8 (* row (floor i columns)))
+                                                                       cell row)))))))
+
+(defclass disk-view (kit:icon-view) ())
+
+(defmethod kit:mouse-down ((view disk-view) x y)
+  (declare (ignore x y))
+  (when (>= kit:*click-count* 2)
+    (let ((window (kit:make-window :title "Macintosh HD" :x 120 :y 80 :width 600 :height 420)))
+      (browse window "/")
+      (kit:show window)))
+  t)
+
 (bsd:define-program "Finder" (argv envp)
+  (setf kit:*menus* '("Finder" "File" "Edit" "View" "Go" "Window" "Help"))
   (multiple-value-bind (width height) (screen-size)
-    (let* ((context (ca:context-create))
-           (desktop (ca:make-layer :background-color #(0.18 0.36 0.56 1.0)))
-           (disk (ca:make-layer :background-color #(0.75 0.78 0.82 1.0)))
-           (label (text-layer "Macintosh HD" (text:font "SFNS" 12) 1.0 1.0 1.0)))
-      (setf (ca:layer-frame desktop) (vector 0 0 width height)
-            (ca:layer-frame disk) (vector (- width 88) 40 48 40))
-      (place label (- width 64 (round (aref (ca:layer-frame label) 2) 2)) 84)
-      (setf (ca:layer-sublayers desktop) (list disk label)
-            (ca:context-layer context) desktop)
-      (ca:commit context)
-      (ca:window-create context 0 0 width height :level :desktop)
-      (kit:menu-bar '("Finder" "File" "Edit" "View" "Go" "Window" "Help"))
-      (loop (bsd:pause)))))
+    (let ((desktop (kit:make-window :style :borderless :level :desktop :x 0 :y 0 :width width :height height
+                                    :background #(0.18 0.36 0.56 1.0))))
+      (kit:add-subview (kit:content-view desktop)
+                       (make-instance 'disk-view :icon-path "/System/Library/Extensions/IOStorageFamily.kext/Contents/Resources/Internal.icns"
+                                                 :label "Macintosh HD" :label-color #(1.0 1.0 1.0)
+                                                 :frame (vector (- width 112) 36 100 90)))
+      (kit:show desktop)
+      (kit:run))))
 
 (bsd:define-program "finch-gui" (argv envp)
   (finch/launchd:bootstrap-look-up "com.apple.windowserver")

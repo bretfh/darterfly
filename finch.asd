@@ -54,7 +54,7 @@
 
 (asdf:defsystem #:finch/kit
   :description "AppKit's shape"
-  :depends-on (#:finch/ca #:finch/text #:finch/mach #:finch/server #:finch/bsd)
+  :depends-on (#:finch/ca #:finch/text #:finch/mach #:finch/server #:finch/bsd #:finch/imageio)
   :serial t
   :pathname "src/kit/"
   :components ((:file "kit")))

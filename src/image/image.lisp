@@ -119,7 +119,14 @@
 (defparameter *tahoe-resources*
   '("System/Applications/Utilities/Terminal.app/Contents/Resources/Terminal.icns"
     "System/Library/CoreServices/Finder.app/Contents/Resources/Finder.icns"
-    "System/Applications/TextEdit.app/Contents/Resources/AppIcon.icns"))
+    "System/Applications/TextEdit.app/Contents/Resources/AppIcon.icns"
+    "System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/ApplicationsFolderIcon.icns"
+    "System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericApplicationIcon.icns"
+    "System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericDocumentIcon.icns"
+    "System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericFolderIcon.icns"
+    "System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/LibraryFolderIcon.icns"
+    "System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/SystemFolderIcon.icns"
+    "System/Library/Extensions/IOStorageFamily.kext/Contents/Resources/Internal.icns"))
 
 (defun tahoe-resources ()
   (loop :for path :in *tahoe-resources*

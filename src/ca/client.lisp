@@ -153,7 +153,7 @@
 (defparameter +window-levels+
   '((:desktop . -2147483623) (:normal . 0) (:dock . 20) (:main-menu . 24) (:status . 25)))
 
-(defun window-create (context x y width height &key (level :normal))
+(defun window-create (context x y width height &key (level :normal) (order :above))
   (let* ((reply (mig +create-window+ (octets 0 1 5 12 #x10000 0 1 0)
                      :descriptors (list (finch/server:rect-region 0 0 0 0)) :reply t))
          (body (finch/mach:msgh-body reply))
@@ -162,5 +162,5 @@
     (transaction-commit (list (list "SetWindowShape" window (finch/server:rect-region 0 0 width height))
                               (list "SetWindowLevel" window (cdr (assoc level +window-levels+)))
                               (list "MoveWindowWithGroup" window (float x 1d0) (float y 1d0))
-                              (list "OrderWindow" window 1 0)))
+                              (list "OrderWindow" window (ecase order (:above 1) (:below -1)) 0)))
     window))

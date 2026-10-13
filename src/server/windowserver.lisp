@@ -202,11 +202,25 @@
                      (click window :left-mouse-up x y)))
                  (setf *drag* nil)))))))
 
+(defvar *last-click* (list 0 -100 -100 0))
+
+(defun click-count (type x y)
+  (if (eq type :left-mouse-down)
+      (destructuring-bind (time lx ly count) *last-click*
+        (let* ((now (get-internal-real-time))
+               (count (if (and (< (- now time) (* 0.4 internal-time-units-per-second))
+                               (< (abs (- x lx)) 5) (< (abs (- y ly)) 5))
+                          (1+ count) 1)))
+          (setf *last-click* (list now x y count))
+          count))
+      (fourth *last-click*)))
+
 (defun click (window type x y)
   (let ((client (find (owner window) *clients* :key #'pid)))
     (post-event client (server:encode-event
                         (server:mouse-event type x y :timestamp (get-internal-real-time)
                                                      :window (window-id window)
+                                                     :clicks (click-count type x y)
                                                      :wx (- x (window-x window)) :wy (- y (window-y window)))))))
 
 (defvar *shift* nil)
@@ -330,7 +344,9 @@
                 ((string= name "OrderWindow")
                  (let ((order (second args)))
                    (setf (ordered window) (/= order 0))
-                   (when (= order 1) (setf *windows* (cons window (remove window *windows*))))))))))))
+                   (case order
+                     (1 (setf *windows* (cons window (remove window *windows*))))
+                     (-1 (setf *windows* (append (remove window *windows*) (list window)))))))))))))
 
 (defun transaction-commit (message)
   (let* ((body (mach:msgh-body message))
