@@ -160,7 +160,7 @@
          (mcfg (acpi-table "MCFG"))
          (pci0 (attach (make-instance 'io-acpi-platform-device :name "PCI0") expert))
          (bridge (attach (make-instance 'apple-acpi-pci :ecam (ml-phys-read-64 (+ mcfg 44))) pci0)))
-    (setf *registry-root* root)
+    (setf *registry-root* root *bsd-units* 0)
     (probe-bus bridge (ml-phys-read-8 (+ mcfg 54)) bridge)
     (dolist (d (find-entries 'io-pci-device root))
       (register-service d))

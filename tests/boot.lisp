@@ -162,6 +162,71 @@
       (is (equal "written by finch" (disk-sector disk 7)))
       (is (equal "finch sector 8" (disk-sector disk 8))))))
 
+(defun gunzip-fixture (name to)
+  (let ((path (merge-pathnames to (finch-file "build/"))))
+    (with-open-file (in (finch-file (format nil "tests/~a" name)) :element-type '(unsigned-byte 8))
+      (with-open-file (out path :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
+        (chipz:decompress out 'chipz:gzip in)))
+    path))
+
+(defparameter *media-keys*
+  '("Content" "Content Hint" "Whole" "Leaf" "Writable" "Preferred Block Size" "Size" "Base" "UUID" "Partition ID" "BSD Name"))
+
+(defun ioreg-value (text)
+  (cond ((string= text "Yes") t)
+        ((string= text "No") nil)
+        ((char= (char text 0) #\") (subseq text 1 (1- (length text))))
+        (t (parse-integer text))))
+
+(defun ioreg-media (file)
+  (let ((entries nil) (current nil))
+    (dolist (line (uiop:read-file-lines file))
+      (let ((o (search "+-o " line)))
+        (cond (o (let* ((head (subseq line (+ o 4) (search "  <class " line)))
+                        (at (position #\@ head :from-end t)))
+                   (setf current (and (search "<class IOMedia," line)
+                                      (list (if at (subseq head 0 at) head) (and at (subseq head (1+ at))) nil)))
+                   (when current (push current entries))))
+              (current
+               (let ((q (search "\" = " line)))
+                 (when q
+                   (let ((key (subseq line (1+ (position #\" line)) q)))
+                     (when (member key *media-keys* :test #'string=)
+                       (push (cons key (ioreg-value (subseq line (+ q 4)))) (third current))))))))))
+    (nreverse entries)))
+
+(defun bsd-suffix (name) (subseq name (or (position #\s name :start 4) (length name))))
+
+(test media-matches-tahoe
+  (let* ((disk (gunzip-fixture "apfs-disk.img.gz" "apfs-disk.img"))
+         (want (ioreg-media (finch-file "tests/media.txt")))
+         (c (image:bare-console :disks (list disk))))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 60)
+             (ask "(iokit:start-iokit)")
+             (let* ((answer (ask (format nil "(let ((whole (find ~d (iokit:find-entries 'iokit:io-media) :key #'iokit:media-size))) (format t \"~~&@@~~s@@~~%\" (mapcar (lambda (m) (list (iokit:entry-name m) (iokit:entry-location m) (loop for k in '~s collect (cons k (iokit:get-property m k))))) (iokit:find-entries 'iokit:io-media whole))))"
+                                         (cdr (assoc "Size" (third (first want)) :test #'string=)) *media-keys*)))
+                    (got (read-from-string (subseq answer (+ 2 (search "@@" answer)) (search "@@" answer :from-end t)))))
+               (is (= (length want) (length got)))
+               (loop for (wname wloc wprops) in want
+                     for (gname gloc gprops) in got
+                     for whole = (cdr (assoc "Whole" wprops :test #'string=))
+                     do (unless whole
+                          (is (equal wname gname))
+                          (is (equal wloc gloc)))
+                        (loop for (key . value) in wprops
+                              for mine = (cdr (assoc key gprops :test #'string=))
+                              do (cond ((string= key "BSD Name") (is (equal (bsd-suffix value) (bsd-suffix mine))))
+                                       ((and (string= key "Leaf") (equal (cdr (assoc "Content" wprops :test #'string=)) "7C3457EF-0000-11AA-AA11-00306543ECAC")))
+                                       (t (is (equal value mine) "~a ~a: Tahoe ~s, finch ~s" wname key value mine))))))
+             (is (search (let ((line (find "UUID" (uiop:read-file-lines (finch-file "tests/media.txt"))
+                                           :test (lambda (k l) (and (search k l) (search "|   \"UUID\"" l))))))
+                           (subseq line (- (length line) 37) (1- (length line))))
+                         (ask "(iokit:get-property (first (iokit:find-entries 'iokit:io-guid-partition-scheme)) \"UUID\")"))))
+        (image:finish c 5)))))
+
 (test xnu-checked-suites-pass-on-finch
   (let ((c (image:bare-console)))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 300)))

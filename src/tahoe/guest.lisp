@@ -159,5 +159,14 @@
   (oracle "bootstrap" "clang -w -dynamiclib -o mach-tap.dylib mach-tap.c && clang -w -o lookup lookup.c && DYLD_INSERT_LIBRARIES=$PWD/mach-tap.dylib ./lookup com.apple.windowserver com.apple.finch.nothing check-in:com.apple.finch.nothing check-in:com.apple.windowserver 2>&1"
           "mach-tap.c" "lookup.c"))
 
+(defun fetch (source file)
+  (apply #'sh "scp" "-i" (ssh-key) "-o" "BatchMode=yes"
+         (append (substitute "-P" "-p" (ssh-options) :test #'string=)
+                 (list (format nil "~a@127.0.0.1:~a" *user* source) (uiop:native-namestring file)))))
+
+(defun media ()
+  (prog1 (oracle "media" "sh media.sh" "media.sh")
+    (fetch "/tmp/finch.img.gz" (asdf:system-relative-pathname :finch "tests/apfs-disk.img.gz"))))
+
 (defun events ()
   (oracle "events" "clang -w -o events events.c -framework ApplicationServices && ./events" "events.c"))

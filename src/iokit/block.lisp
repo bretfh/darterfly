@@ -3,7 +3,7 @@
 (defconstant +virtio-f-version-1+ (ash 1 32))
 (defconstant +request-pages+ 8)
 
-(define-io-class apple-virtio-block-storage-device "AppleVirtIOBlockStorageDevice" (io-service)
+(define-io-class apple-virtio-block-storage-device "AppleVirtIOBlockStorageDevice" (io-block-storage-device)
   ((transport :accessor transport)
    (queue :accessor queue)
    (block-count :accessor block-count)
@@ -25,7 +25,7 @@
           (data-pages b) (loop repeat +request-pages+ collect (vm-page-grab)))
     (driver-ok tr)
     (setf (block-count b) (device-config-read-64 tr 0))
-    (set-property b "Size" (* (block-count b) 512))
+    (register-service b)
     t))
 
 (defun copy-from-phys (pa vector start count)

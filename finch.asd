@@ -78,7 +78,7 @@
   :depends-on (#:uiop)
   :serial t
   :pathname "src/iokit/"
-  :components ((:file "machine") (:file "registry") (:file "acpi") (:file "pci") (:file "virtio") (:file "block")))
+  :components ((:file "machine") (:file "registry") (:file "acpi") (:file "pci") (:file "virtio") (:file "storage") (:file "block")))
 
 (asdf:defsystem #:finch/kernel
   :description "The kernel, run as pid 1"
@@ -153,7 +153,7 @@
   :depends-on (#:finch/plist #:finch/qmp #:com.inuoe.jzon #:uiop (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/tahoe/"
-  :components ((:static-file "SSDT-EC-USBX.dsl") (:static-file "transactions.c") (:static-file "commit-tap.c") (:static-file "commits.m") (:static-file "ports.c") (:static-file "ports.script") (:static-file "bsd.c") (:static-file "bsd.script") (:static-file "mach-tap.c") (:static-file "lookup.c") (:static-file "events.c") (:static-file "windows.c") (:file "opencore") (:file "qmp") (:file "guest")))
+  :components ((:static-file "SSDT-EC-USBX.dsl") (:static-file "transactions.c") (:static-file "commit-tap.c") (:static-file "commits.m") (:static-file "ports.c") (:static-file "ports.script") (:static-file "bsd.c") (:static-file "bsd.script") (:static-file "mach-tap.c") (:static-file "lookup.c") (:static-file "events.c") (:static-file "windows.c") (:static-file "media.sh") (:file "opencore") (:file "qmp") (:file "guest")))
 
 (asdf:defsystem #:finch
   :description "A Darwin in Common Lisp"
