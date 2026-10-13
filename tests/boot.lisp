@@ -15,3 +15,16 @@
            (is (search "MB usable" (image:expect c "video: 1280x800x32")))
            (is (image:expect c (format nil "~%halt"))))
       (image:finish c 5))))
+
+(test the-kernel-owns-the-machine
+  (let ((c (image:bare-console :boot-args "trap halt")))
+    (unwind-protect
+         (progn
+           (is (image:expect c "mp_desc: gdt, idt and ktss loaded"))
+           (is (image:expect c "pmap: direct map"))
+           (let ((panic (image:expect c "Error code")))
+             (is (search "panic(cpu 0 caller 0x" panic))
+             (is (search "Kernel trap at 0x" panic))
+             (is (search "type 3=breakpoint" panic))
+             (is (search "CS:  0x0000000000000008, SS:  0x0000000000000010" panic))))
+      (image:finish c 5))))

@@ -1,0 +1,108 @@
+	.macro	TRAP vector
+	.align	16
+trap_\vector:
+	pushq	$0
+	pushq	$\vector
+	jmp	trap_common
+	.endm
+
+	.macro	TRAP_ERR vector
+	.align	16
+trap_\vector:
+	pushq	$\vector
+	jmp	trap_common
+	.endm
+
+	.text
+	TRAP 0
+	TRAP 1
+	TRAP 2
+	TRAP 3
+	TRAP 4
+	TRAP 5
+	TRAP 6
+	TRAP 7
+	TRAP_ERR 8
+	TRAP 9
+	TRAP_ERR 10
+	TRAP_ERR 11
+	TRAP_ERR 12
+	TRAP_ERR 13
+	TRAP_ERR 14
+	TRAP 15
+	TRAP 16
+	TRAP_ERR 17
+	TRAP 18
+	TRAP 19
+	TRAP 20
+	TRAP_ERR 21
+	TRAP 22
+	TRAP 23
+	TRAP 24
+	TRAP 25
+	TRAP 26
+	TRAP 27
+	TRAP 28
+	TRAP_ERR 29
+	TRAP_ERR 30
+	TRAP 31
+
+trap_common:
+	pushq	%r15
+	pushq	%r14
+	pushq	%r13
+	pushq	%r12
+	pushq	%r11
+	pushq	%r10
+	pushq	%r9
+	pushq	%r8
+	pushq	%rbp
+	pushq	%rdi
+	pushq	%rsi
+	pushq	%rdx
+	pushq	%rcx
+	pushq	%rbx
+	pushq	%rax
+	movq	%rsp, %rdi
+	call	kernel_trap
+	popq	%rax
+	popq	%rbx
+	popq	%rcx
+	popq	%rdx
+	popq	%rsi
+	popq	%rdi
+	popq	%rbp
+	popq	%r8
+	popq	%r9
+	popq	%r10
+	popq	%r11
+	popq	%r12
+	popq	%r13
+	popq	%r14
+	popq	%r15
+	addq	$16, %rsp
+	iretq
+
+	.globl	idt64_stubs
+	.data
+	.align	8
+idt64_stubs:
+	.irp	v, 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
+	.quad	trap_\v
+	.endr
+
+	.text
+	.globl	gdt_load
+gdt_load:
+	lgdt	(%rdi)
+	movw	$0x10, %ax
+	movw	%ax, %ds
+	movw	%ax, %es
+	movw	%ax, %ss
+	xorw	%ax, %ax
+	movw	%ax, %fs
+	movw	%ax, %gs
+	popq	%rax
+	pushq	$0x08
+	pushq	%rax
+	lretq

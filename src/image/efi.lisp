@@ -23,7 +23,9 @@
     out))
 
 (defparameter *kernel-sources*
-  '("src/osfmk/x86_64/start.s" "src/osfmk/i386/i386_init.c" "src/osfmk/kern/printf.c"
+  '("src/osfmk/x86_64/start.s" "src/osfmk/x86_64/idt64.s" "src/osfmk/i386/i386_init.c"
+    "src/osfmk/i386/mp_desc.c" "src/osfmk/i386/pmap.c" "src/osfmk/i386/trap.c"
+    "src/osfmk/kern/printf.c" "src/osfmk/kern/debug.c"
     "src/pexpert/i386/pe_serial.c" "src/pexpert/i386/pe_init.c"))
 
 (defun mach-kernel ()
