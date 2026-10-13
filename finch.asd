@@ -44,22 +44,28 @@
   :pathname "src/server/"
   :components ((:file "transaction")))
 
+(asdf:defsystem #:finch/ca
+  :description "CoreAnimation's render protocol"
+  :serial t
+  :pathname "src/ca/"
+  :components ((:file "render")))
+
 (asdf:defsystem #:finch/tahoe
   :description "The Tahoe reference guest"
   :depends-on (#:finch/plist #:com.inuoe.jzon #:uiop (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/tahoe/"
-  :components ((:static-file "SSDT-EC-USBX.dsl") (:static-file "transactions.c") (:file "opencore") (:file "qmp") (:file "guest")))
+  :components ((:static-file "SSDT-EC-USBX.dsl") (:static-file "transactions.c") (:static-file "commit-tap.c") (:static-file "commits.m") (:file "opencore") (:file "qmp") (:file "guest")))
 
 (asdf:defsystem #:finch
   :description "A Darwin in Common Lisp"
-  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server)
+  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca)
   :in-order-to ((asdf:test-op (asdf:test-op #:finch/test))))
 
 (asdf:defsystem #:finch/test
   :depends-on (#:finch #:finch/tahoe #:fiveam (:require #:sb-posix))
   :serial t
   :pathname "tests/"
-  :components ((:file "suite") (:file "mach") (:file "plist") (:file "macho") (:file "dyld") (:file "objc") (:file "mig") (:file "server") (:file "tahoe"))
+  :components ((:file "suite") (:file "mach") (:file "plist") (:file "macho") (:file "dyld") (:file "objc") (:file "mig") (:file "server") (:file "ca") (:file "tahoe"))
   :perform (asdf:test-op (o c)
              (uiop:symbol-call :finch/test :run-them)))

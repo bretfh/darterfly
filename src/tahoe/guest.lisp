@@ -132,10 +132,19 @@
     (scp rea "rea.tar.gz")
     (guest (format nil "rm -rf node rea && mkdir node && tar -xzf node.tar.gz -C node --strip-components 1 && tar -xzf rea.tar.gz && rm node.tar.gz rea.tar.gz && mkdir -p bin && printf '#!/bin/sh~%exec ~~/node/bin/node ~~/rea/node_modules/rea-agents/scripts/rea.mjs \"$@\"~%' > bin/rea && chmod +x bin/rea && bin/rea --version"))))
 
-(defun transactions ()
-  (scp (asdf:system-relative-pathname :finch/tahoe "src/tahoe/transactions.c") "transactions.c")
-  (let ((out (guest "clang -w -o transactions transactions.c -F/System/Library/PrivateFrameworks -framework SkyLight -framework CoreFoundation -framework CoreGraphics && ./transactions")))
-    (with-open-file (s (asdf:system-relative-pathname :finch "tests/transactions.txt")
+(defun oracle (name build &rest sources)
+  (dolist (source sources)
+    (scp (asdf:system-relative-pathname :finch/tahoe (format nil "src/tahoe/~a" source)) source))
+  (let ((out (guest build)))
+    (with-open-file (s (asdf:system-relative-pathname :finch (format nil "tests/~a.txt" name))
                        :direction :output :if-exists :supersede)
       (write-string out s))
     out))
+
+(defun transactions ()
+  (oracle "transactions" "clang -w -o transactions transactions.c -F/System/Library/PrivateFrameworks -framework SkyLight -framework CoreFoundation -framework CoreGraphics && ./transactions"
+          "transactions.c"))
+
+(defun commits ()
+  (oracle "commits" "clang -w -dynamiclib -o commit-tap.dylib commit-tap.c && clang -w -fobjc-arc -o commits commits.m -framework Foundation -framework QuartzCore -framework CoreGraphics && DYLD_INSERT_LIBRARIES=$PWD/commit-tap.dylib ./commits"
+          "commit-tap.c" "commits.m"))
