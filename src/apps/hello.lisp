@@ -35,7 +35,8 @@
 (bsd:define-program "Hello" (argv envp)
   (let ((context (ca:context-create)))
     (setf (ca:context-layer context)
-          (window 212 134 600 400 #(0.85 0.85 0.85 1.0) #(1.0 1.0 1.0 1.0) "Hello"
+          (window 0 0 600 400 #(0.85 0.85 0.85 1.0) #(1.0 1.0 1.0 1.0) "Hello"
                   (label "Hello from finch." (text:font "SFNS" 28) 0.0 0.0 0.0)))
     (ca:commit context)
+    (ca:window-create context 212 134 600 400)
     (loop (bsd:pause))))

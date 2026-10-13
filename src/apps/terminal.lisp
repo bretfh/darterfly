@@ -73,11 +73,12 @@
       (bsd:close shell-out)
       (let* ((context (ca:context-create))
              (screen (ca:make-layer :background-color #(1.0 1.0 1.0 1.0)))
-             (window (window 160 100 700 460 #(0.85 0.85 0.85 1.0) #(1.0 1.0 1.0 1.0) "Terminal — sh")))
+             (window (window 0 0 700 460 #(0.85 0.85 0.85 1.0) #(1.0 1.0 1.0 1.0) "Terminal — sh")))
         (setf (ca:layer-frame screen) (vector 0 0 676 408)
               (ca:layer-sublayers (second (ca:layer-sublayers window))) (list screen)
               (ca:context-layer context) window)
         (let ((terminal (make-instance 'terminal :context context :screen screen :to-shell to-shell)))
+          (ca:window-create context 160 100 700 460)
           (redraw terminal)
           (bsd:bsdthread-create (shell-output terminal from-shell) "shell output")
           (loop

@@ -107,3 +107,49 @@
      (finch/mach:make-message :remote-port (context-port context) :id +commit+
                               :body (encode-commit (list :flags 1 :context (context-id context)
                                                          :time time :commands commands))))))
+
+(defconstant +create-window+ 30263)
+(defconstant +set-window-layer-context+ 30264)
+(defconstant +transaction-commit-async+ 30429)
+
+(defvar *window-server* nil)
+(defvar *transaction* 0)
+
+(defun window-server ()
+  (or *window-server* (setf *window-server* (finch/launchd:bootstrap-look-up "com.apple.windowserver"))))
+
+(defun octets (&rest words)
+  (let ((w (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0)))
+    (dolist (word words)
+      (destructuring-bind (size . value) (if (consp word) word (cons 4 word))
+        (dotimes (i size) (vector-push-extend (ldb (byte 8 (* 8 i)) value) w))))
+    w))
+
+(defun mig (id body &key descriptors reply)
+  (let ((port (and reply (finch/mach:mach-reply-port))))
+    (finch/mach:mach-msg-send (finch/mach:make-message :remote-port (window-server) :local-port port
+                                                       :id id :body (coerce body '(simple-array (unsigned-byte 8) (*)))
+                                                       :descriptors descriptors))
+    (when port
+      (prog1 (finch/mach:mach-msg-receive port :timeout 5000)
+        (finch/mach:mach-port-mod-refs finch/mach:*task* port :receive -1)))))
+
+(defun transaction-commit (forms)
+  (let* ((stream (finch/server:encode-transaction forms))
+         (body (octets 0 1 (incf *transaction*) '(8 . 0) (length stream))))
+    (loop :for b :across stream :do (vector-push-extend b body))
+    (loop :until (zerop (mod (length body) 4)) :do (vector-push-extend 0 body))
+    (loop :for b :across (octets 0) :do (vector-push-extend b body))
+    (mig +transaction-commit-async+ body
+         :descriptors (list (make-array 0 :element-type '(unsigned-byte 8))))))
+
+(defun window-create (context x y width height)
+  (let* ((reply (mig +create-window+ (octets 0 1 5 12 #x10000 0 1 0)
+                     :descriptors (list (finch/server:rect-region 0 0 0 0)) :reply t))
+         (body (finch/mach:msgh-body reply))
+         (window (logior (aref body 8) (ash (aref body 9) 8) (ash (aref body 10) 16) (ash (aref body 11) 24))))
+    (mig +set-window-layer-context+ (octets 0 1 window (context-id context)))
+    (transaction-commit (list (list "SetWindowShape" window (finch/server:rect-region 0 0 width height))
+                              (list "MoveWindowWithGroup" window (float x 1d0) (float y 1d0))
+                              (list "OrderWindow" window 1 0)))
+    window))
