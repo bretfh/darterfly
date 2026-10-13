@@ -9,7 +9,21 @@
   :depends-on (#:finch/mach (:require #:sb-posix))
   :serial t
   :pathname "src/bsd/"
-  :components ((:file "errno") (:file "proc") (:file "file") (:file "vfs")))
+  :components ((:file "errno") (:file "proc") (:file "file") (:file "vfs") (:file "stdio") (:file "exec")))
+
+(asdf:defsystem #:finch/launchd
+  :description "launchd and launchctl"
+  :depends-on (#:finch/bsd #:finch/mach #:finch/plist)
+  :serial t
+  :pathname "src/launchd/"
+  :components ((:file "launchd")))
+
+(asdf:defsystem #:finch/shell
+  :description "The shell"
+  :depends-on (#:finch/bsd)
+  :serial t
+  :pathname "src/shell/"
+  :components ((:file "shell")))
 
 (asdf:defsystem #:finch/kernel
   :description "The kernel, run as pid 1"
@@ -20,7 +34,7 @@
 
 (asdf:defsystem #:finch/image
   :description "The bootable image"
-  :depends-on (#:uiop)
+  :depends-on (#:uiop #:finch/plist)
   :serial t
   :pathname "src/image/"
   :components ((:file "image")))
@@ -80,13 +94,13 @@
 
 (asdf:defsystem #:finch
   :description "A Darwin in Common Lisp"
-  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/kernel #:finch/image)
+  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/launchd #:finch/shell #:finch/kernel #:finch/image)
   :in-order-to ((asdf:test-op (asdf:test-op #:finch/test))))
 
 (asdf:defsystem #:finch/test
   :depends-on (#:finch #:finch/tahoe #:fiveam (:require #:sb-posix))
   :serial t
   :pathname "tests/"
-  :components ((:file "suite") (:file "mach") (:file "plist") (:file "macho") (:file "dyld") (:file "objc") (:file "mig") (:file "server") (:file "ca") (:file "bsd") (:file "kernel") (:file "tahoe"))
+  :components ((:file "suite") (:file "mach") (:file "plist") (:file "macho") (:file "dyld") (:file "objc") (:file "mig") (:file "server") (:file "ca") (:file "bsd") (:file "launchd") (:file "kernel") (:file "tahoe"))
   :perform (asdf:test-op (o c)
              (uiop:symbol-call :finch/test :run-them)))

@@ -1,0 +1,61 @@
+(in-package #:finch/bsd)
+
+(defclass fd-stream (sb-gray:fundamental-character-input-stream sb-gray:fundamental-character-output-stream)
+  ((fd :initarg :fd :reader stream-fd)
+   (pushed :initform nil :accessor pushed)
+   (column :initform 0 :accessor column)
+   (out :initform (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0) :reader out)))
+
+(defun read-octet (stream)
+  (let ((octets (read (stream-fd stream) 1)))
+    (and (plusp (length octets)) (aref octets 0))))
+
+(defmethod sb-gray:stream-read-char ((stream fd-stream))
+  (or (shiftf (pushed stream) nil)
+      (progn
+        (sb-gray:stream-finish-output stream)
+        (let ((lead (read-octet stream)))
+          (cond ((null lead) :eof)
+                ((< lead #x80) (code-char lead))
+                (t (let* ((more (cond ((>= lead #xf0) 3) ((>= lead #xe0) 2) (t 1)))
+                          (octets (cons lead (loop :repeat more :collect (or (read-octet stream) 0)))))
+                     (char (sb-ext:octets-to-string (coerce octets '(vector (unsigned-byte 8)))
+                                                    :external-format :utf-8)
+                           0))))))))
+
+(defmethod sb-gray:stream-unread-char ((stream fd-stream) char)
+  (setf (pushed stream) char))
+
+(defmethod sb-gray:stream-listen ((stream fd-stream))
+  (and (pushed stream) t))
+
+(defmethod sb-gray:stream-write-char ((stream fd-stream) char)
+  (loop :for o :across (sb-ext:string-to-octets (string char) :external-format :utf-8)
+        :do (vector-push-extend o (out stream)))
+  (setf (column stream) (if (char= char #\Newline) 0 (1+ (column stream))))
+  (when (char= char #\Newline) (sb-gray:stream-finish-output stream))
+  char)
+
+(defmethod sb-gray:stream-line-column ((stream fd-stream))
+  (column stream))
+
+(defmethod sb-gray:stream-finish-output ((stream fd-stream))
+  (when (plusp (length (out stream)))
+    (let ((octets (copy-seq (out stream))))
+      (setf (fill-pointer (out stream)) 0)
+      (write (stream-fd stream) octets)))
+  nil)
+
+(defmethod sb-gray:stream-force-output ((stream fd-stream))
+  (sb-gray:stream-finish-output stream))
+
+(defmacro with-stdio (&body body)
+  `(let* ((*standard-input* (make-instance 'fd-stream :fd 0))
+          (*standard-output* (make-instance 'fd-stream :fd 1))
+          (*error-output* (make-instance 'fd-stream :fd 2))
+          (*terminal-io* (make-two-way-stream *standard-input* *standard-output*))
+          (*query-io* *terminal-io*)
+          (*debug-io* *terminal-io*))
+     (unwind-protect (progn ,@body)
+       (ignore-errors (finish-output *standard-output*))
+       (ignore-errors (finish-output *error-output*)))))

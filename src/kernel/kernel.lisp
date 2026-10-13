@@ -58,16 +58,28 @@
   (mount "sysfs" "/sys" "sysfs")
   (mount "devtmpfs" "/dev" "devtmpfs")
   (mount "tmpfs" "/tmp" "tmpfs")
+  (dotimes (i 3)
+    (finch/bsd:open "/dev/console" finch/bsd:+o-rdwr+))
+  (setf finch/bsd:*reboot* (lambda (how) (declare (ignore how)) (halt)))
   (format t "bsd_init: boot-args ~{~a~^ ~}~%" (boot-args)))
 
 (defun load-init-program ()
   (cond ((boot-arg-p "halt")
          (format t "load_init_program: halt~%")
          (halt))
-        (t
-         (format t "load_init_program: console~%")
+        ((boot-arg-p "-s")
+         (format t "load_init_program: single user~%")
          (finish-output)
-         (sb-impl::toplevel-repl nil))))
+         (sb-impl::toplevel-repl nil))
+        (t
+         (finish-output)
+         (let ((init (finch/bsd:fork (lambda ()
+                                       (finch/bsd:execve "/sbin/launchd" (list "/sbin/launchd") nil)))))
+           (format t "load_init_program: /sbin/launchd pid ~d~%" init)
+           (finish-output)
+           (multiple-value-bind (pid status) (finch/bsd:wait4 init)
+             (declare (ignore pid))
+             (error "init died, status #x~x" status))))))
 
 (defun start ()
   (handler-case

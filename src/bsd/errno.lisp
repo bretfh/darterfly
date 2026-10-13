@@ -8,6 +8,7 @@
    #:+o-nonblock+ #:+f-getfl+ #:+f-setfl+
    #:open #:lseek #:stat #:lstat #:fstat #:mkdir #:rmdir #:unlink #:rename #:symlink #:readdir
    #:chdir #:getcwd #:+o-rdonly+ #:+o-wronly+ #:+o-rdwr+ #:+o-append+ #:+o-creat+ #:+o-trunc+
+   #:chroot #:execve #:posix-spawn #:define-program #:reboot #:*reboot* #:with-stdio #:proc-comm #:bsdthread-create
    #:+o-excl+ #:+o-directory+ #:+s-ifmt+ #:+s-ifdir+ #:+s-ifreg+ #:+s-ififo+ #:+s-iflnk+
    #:wifexited #:wexitstatus #:wifsignaled #:wtermsig #:wifstopped #:wstopsig #:wifcontinued)
   (:shadow #:read #:write #:close #:open))

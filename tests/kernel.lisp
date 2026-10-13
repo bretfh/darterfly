@@ -14,15 +14,16 @@
     (is (find "bsd_init: boot-args console=ttyS0 quiet halt" lines :test #'string=))
     (is (find "load_init_program: halt" lines :test #'string=))))
 
-(test console-answers
+(test finch-boots-to-launchd
   (let ((c (image:console)))
     (unwind-protect
          (progn
-           (is (image:expect c "load_init_program: console"))
-           (image:expect c "* ")
+           (is (image:expect c "load_init_program: /sbin/launchd pid 1"))
+           (is (image:expect c "launchd: pid 1"))
+           (image:expect c "# ")
+           (image:send c "(run \"/bin/launchctl\" \"list\")")
+           (is (search "finch.console" (image:expect c "# ")))
            (image:send c "(+ 1 2)")
-           (is (search (format nil "~%3~%") (image:expect c "* ")))
-           (image:send c "(software-type)")
-           (is (search "\"Linux\"" (image:expect c "* ")))
-           (image:send c "(finch/kernel:halt)"))
+           (is (search (format nil "~%3~%") (image:expect c "# ")))
+           (image:send c "(halt)"))
       (image:finish c))))

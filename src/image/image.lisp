@@ -17,7 +17,7 @@
     (uiop:run-program
      (list "sbcl" "--noinform" "--no-userinit" "--non-interactive"
            "--eval" "(require :asdf)"
-           "--eval" "(asdf:load-system :finch/kernel)"
+           "--eval" "(mapc #'asdf:load-system '(:finch/kernel :finch/launchd :finch/shell))"
            "--eval" (format nil "(setf finch/kernel::*build-date* ~s)" (date))
            "--eval" (format nil "(sb-ext:save-lisp-and-die ~s :executable t :save-runtime-options t :toplevel (lambda () (finch/kernel:start)))"
                             (uiop:native-namestring path)))
@@ -86,16 +86,47 @@
         (put-entry s (incf ino) "TRAILER!!!" 0)))
     path))
 
+(defun text (string)
+  (map '(vector (unsigned-byte 8)) #'char-code string))
+
+(defparameter *programs*
+  '(("sbin/launchd" "launchd") ("bin/launchctl" "launchctl") ("bin/sh" "sh")))
+
+(defun console-job ()
+  (let ((job (make-hash-table :test 'equal)))
+    (setf (gethash "Label" job) "finch.console"
+          (gethash "ProgramArguments" job) (vector "/bin/sh")
+          (gethash "StandardInPath" job) "/dev/console"
+          (gethash "StandardOutPath" job) "/dev/console"
+          (gethash "StandardErrorPath" job) "/dev/console"
+          (gethash "KeepAlive" job) t)
+    (text (with-output-to-string (s) (finch/plist:write-plist job s)))))
+
+(defun tahoe-daemons ()
+  (let ((dir (asdf:system-relative-pathname :finch "tahoe/system/System/Library/LaunchDaemons/")))
+    (loop :for file :in (directory (merge-pathnames "*.plist" dir))
+          :collect (list :file (format nil "System/Library/LaunchDaemons/~a.plist" (pathname-name file))
+                         (octets file)))))
+
+(defun root ()
+  (append
+   (list (list :dir "dev")
+         (list :char "dev/console" 5 1)
+         (list :char "dev/null" 1 3)
+         (list :dir "proc") (list :dir "sys") (list :dir "tmp")
+         (list :dir "System/Library/LaunchDaemons")
+         (list :file "Library/LaunchDaemons/finch.console.plist" (console-job)))
+   (loop :for (path program) :in *programs*
+         :collect (list :file path (text (format nil "#!finch ~a~%" program)) #o100755))
+   (tahoe-daemons)))
+
 (defun image ()
   (let* ((core (core))
          (libraries (libraries core)))
     (write-cpio (build-path "finch.cpio")
                 (append
-                 (list (list :file "init" (octets core) #o100755)
-                       (list :dir "dev")
-                       (list :char "dev/console" 5 1)
-                       (list :char "dev/null" 1 3)
-                       (list :dir "proc") (list :dir "sys") (list :dir "tmp"))
+                 (list (list :file "init" (octets core) #o100755))
+                 (root)
                  (loop :for library :in libraries
                        :collect (list :file (subseq library 1) (octets library) #o100755))))))
 

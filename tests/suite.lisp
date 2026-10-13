@@ -1,7 +1,7 @@
 (defpackage #:finch/test
   (:use #:cl #:fiveam)
   (:local-nicknames (#:mach #:finch/mach) (#:plist #:finch/plist) (#:macho #:finch/macho)
-                    (#:dyld #:finch/dyld) (#:objc #:finch/objc) (#:mig #:finch/mig) (#:server #:finch/server) (#:ca #:finch/ca) (#:tahoe #:finch/tahoe) (#:image #:finch/image) (#:bsd #:finch/bsd))
+                    (#:dyld #:finch/dyld) (#:objc #:finch/objc) (#:mig #:finch/mig) (#:server #:finch/server) (#:ca #:finch/ca) (#:tahoe #:finch/tahoe) (#:image #:finch/image) (#:bsd #:finch/bsd) (#:launchd #:finch/launchd))
   (:export #:run-them #:all))
 (in-package #:finch/test)
 

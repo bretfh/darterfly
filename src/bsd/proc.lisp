@@ -23,7 +23,11 @@
    (mask :initform 0 :accessor proc-mask)
    (pending :initform 0 :accessor proc-pending)
    (in-syscall :initform 0 :accessor in-syscall)
-   (cwd :initform "/" :accessor proc-cwd)))
+   (cwd :initform "/" :accessor proc-cwd)
+   (root :initform "/" :accessor proc-root)
+   (exec-tag :initform (list :exec) :reader exec-tag)
+   (comm :initform "kernel_task" :accessor proc-comm)
+   (threads :initform nil :accessor proc-threads)))
 
 (defmethod print-object ((proc proc) stream)
   (print-unreadable-object (proc stream :type t)
@@ -135,9 +139,17 @@
   (let ((*proc* proc)
         (finch/mach:*task* (proc-task proc)))
     (let ((status (catch proc
-                    (handler-case (progn (funcall fn) (w-exitcode 0 0))
-                      (error () (w-exitcode 0 (signo :sigabrt)))))))
+                    (loop
+                      (setf fn (catch (exec-tag proc)
+                                 (let ((code (handler-case (funcall fn)
+                                               (error (e) (crash e)))))
+                                   (return (w-exitcode (if (integerp code) (logand code 255) 0) 0)))))))))
       (proc-exit proc status))))
+
+(defun crash (e)
+  (ignore-errors (format *error-output* "~&~a[~d]: ~a~%" (proc-comm *proc*) (proc-pid *proc*) e)
+                 (finish-output *error-output*))
+  (throw *proc* (w-exitcode 0 (signo :sigabrt))))
 
 (defun fork (fn)
   (with-bsd
@@ -151,7 +163,9 @@
                 (vector-push-extend (and slot (cons (car slot) (cdr slot))) (proc-fds child)))
       (replace (proc-actions child) (proc-actions parent))
       (setf (proc-mask child) (proc-mask parent)
-            (proc-cwd child) (proc-cwd parent))
+            (proc-cwd child) (proc-cwd parent)
+            (proc-root child) (proc-root parent)
+            (proc-comm child) (proc-comm parent))
       (setf (proc-thread child)
             (sb-thread:make-thread (lambda () (proc-main child fn))
                                    :name (format nil "pid ~d" (proc-pid child))))
@@ -160,7 +174,21 @@
 (defun exit (code)
   (throw *proc* (w-exitcode (logand code 255) 0)))
 
+(defun bsdthread-create (fn &optional (name "thread"))
+  (let* ((proc *proc*)
+         (task finch/mach:*task*)
+         (thread (sb-thread:make-thread (lambda ()
+                                          (let ((*proc* proc) (finch/mach:*task* task))
+                                            (catch proc (funcall fn))))
+                                        :name name)))
+    (with-bsd (push thread (proc-threads proc)))
+    thread))
+
 (defun proc-exit (proc status)
+  (dolist (thread (with-bsd (shiftf (proc-threads proc) nil)))
+    (unless (eq thread sb-thread:*current-thread*)
+      (ignore-errors (sb-thread:terminate-thread thread))
+      (ignore-errors (sb-thread:join-thread thread :default nil :timeout 1))))
   (with-bsd
     (loop :for fd :below (length (proc-fds proc))
           :when (aref (proc-fds proc) fd)

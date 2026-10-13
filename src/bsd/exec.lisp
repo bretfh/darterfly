@@ -1,0 +1,54 @@
+(in-package #:finch/bsd)
+
+(defvar *programs* (make-hash-table :test 'equal))
+
+(defmacro define-program (name (argv envp) &body body)
+  `(setf (gethash ,name *programs*) (lambda (,argv ,envp) (declare (ignorable ,argv ,envp)) ,@body)))
+
+(defconstant +s-ixall+ #o111)
+
+(defun program-of (name)
+  (let* ((full (path name))
+         (mode (sb-posix:stat-mode (host (sb-posix:stat full)))))
+    (unless (and (= (logand mode +s-ifmt+) +s-ifreg+) (logtest mode +s-ixall+))
+      (fail :eacces))
+    (let ((line (with-open-file (s full :external-format :latin-1) (read-line s nil ""))))
+      (or (and (uiop:string-prefix-p "#!finch " line)
+               (gethash (string-trim " " (subseq line 8)) *programs*))
+          (fail :enoexec)))))
+
+(defun basename (name)
+  (subseq name (1+ (or (position #\/ name :from-end t) -1))))
+
+(defun execve (name argv envp)
+  (with-bsd
+    (let ((program (program-of name))
+          (proc *proc*))
+      (loop :for fd :below (length (proc-fds proc))
+            :for slot := (aref (proc-fds proc) fd)
+            :when (and slot (cdr slot)) :do (release-fd proc fd))
+      (loop :for signo :from 1 :below 32
+            :when (functionp (aref (proc-actions proc) signo))
+              :do (setf (aref (proc-actions proc) signo) :default))
+      (setf (proc-comm proc) (basename name))
+      (throw (exec-tag proc)
+        (lambda () (with-stdio (funcall program argv envp)))))))
+
+(defun posix-spawn (name argv envp &key file-actions)
+  (with-bsd
+    (program-of name)
+    (fork (lambda ()
+            (loop :for (action . args) :in file-actions
+                  :do (ecase action
+                        (:open (destructuring-bind (fd path flags &optional (mode #o644)) args
+                                 (let ((new (open path flags mode)))
+                                   (unless (= new fd) (dup2 new fd) (close new)))))
+                        (:dup2 (apply #'dup2 args))
+                        (:close (apply #'close args))))
+            (execve name argv envp)))))
+
+(defvar *reboot* nil)
+
+(defun reboot (how)
+  (when *reboot* (funcall *reboot* how))
+  (fail :eperm))

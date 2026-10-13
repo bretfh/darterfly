@@ -37,9 +37,20 @@
                 :when (logtest flags darwin) :sum linux)))
 
 (defclass vnode (file)
-  ((fd :initarg :fd :reader host-fd)))
+  ((fd :initarg :fd :reader host-fd)
+   (device :initarg :device :initform nil :reader device-p)))
+
+(defun wait-readable (fd)
+  (loop
+    (let ((ready (progn (sb-thread:release-mutex *bsd*)
+                        (unwind-protect (sb-sys:wait-until-fd-usable fd :input 0.2)
+                          (sb-thread:grab-mutex *bsd*)))))
+      (when ready (return))
+      (when (and (plusp (deliverable *proc*)) (deliver *proc*))
+        (fail :eintr)))))
 
 (defmethod file-read ((file vnode) count)
+  (when (device-p file) (wait-readable (host-fd file)))
   (let ((buffer (make-array count :element-type '(unsigned-byte 8))))
     (let ((n (host (sb-sys:with-pinned-objects (buffer)
                      (sb-posix:read (host-fd file) (sb-sys:vector-sap buffer) count)))))
@@ -53,15 +64,29 @@
 (defmethod file-close ((file vnode))
   (host (sb-posix:close (host-fd file))))
 
-(defun path (name)
+(defun absolute (name)
   (if (and (plusp (length name)) (char= (char name 0) #\/))
       name
       (format nil "~a/~a" (string-right-trim "/" (proc-cwd *proc*)) name)))
 
+(defun path (name)
+  (format nil "~a~a" (string-right-trim "/" (proc-root *proc*)) (absolute name)))
+
+(defun unroot (host)
+  (let ((root (string-right-trim "/" (proc-root *proc*))))
+    (if (and (plusp (length root)) (uiop:string-prefix-p root host))
+        (let ((rest (subseq host (length root)))) (if (string= rest "") "/" rest))
+        host)))
+
+(defconstant +s-ifchr+ #o020000)
+
 (defun open (name flags &optional (mode #o644))
   (syscall
-    (fd-alloc (make-instance 'vnode :fd (host (sb-posix:open (path name) (host-flags flags) mode))
-                                    :flags (logand flags +o-nonblock+)))))
+    (let ((fd (host (sb-posix:open (path name) (host-flags flags) mode))))
+      (fd-alloc (make-instance 'vnode :fd fd
+                                      :device (= (logand (sb-posix:stat-mode (sb-posix:fstat fd)) +s-ifmt+)
+                                                 +s-ifchr+)
+                                      :flags (logand flags +o-nonblock+))))))
 
 (defun lseek (fd offset whence)
   (syscall
@@ -121,10 +146,17 @@
     (let* ((full (path name))
            (mode (sb-posix:stat-mode (host (sb-posix:stat full)))))
       (unless (= (logand mode +s-ifmt+) +s-ifdir+) (fail :enotdir))
-      (setf (proc-cwd *proc*)
-            (string-right-trim "/" (sb-ext:native-namestring
-                                    (truename (sb-ext:parse-native-namestring (format nil "~a/" full))))))
-      (when (string= (proc-cwd *proc*) "") (setf (proc-cwd *proc*) "/"))
+      (let ((true (string-right-trim "/" (sb-ext:native-namestring
+                                         (truename (sb-ext:parse-native-namestring (format nil "~a/" full)))))))
+        (setf (proc-cwd *proc*) (unroot (if (string= true "") "/" true))))
+      0)))
+
+(defun chroot (name)
+  (syscall
+    (let ((full (string-right-trim "/" (sb-ext:native-namestring
+                                        (truename (sb-ext:parse-native-namestring (format nil "~a/" (path name))))))))
+      (setf (proc-root *proc*) (if (string= full "") "/" full)
+            (proc-cwd *proc*) "/")
       0)))
 
 (defun getcwd ()
