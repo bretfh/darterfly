@@ -17,7 +17,7 @@
     (uiop:run-program
      (list "sbcl" "--noinform" "--no-userinit" "--non-interactive"
            "--eval" "(require :asdf)"
-           "--eval" "(mapc #'asdf:load-system '(:finch/kernel :finch/launchd :finch/shell :finch/io :finch/windowserver :finch/apps))"
+           "--eval" "(mapc #'asdf:load-system '(:finch/kernel :finch/launchd :finch/shell :finch/io :finch/text :finch/windowserver :finch/apps))"
            "--eval" (format nil "(setf finch/kernel::*build-date* ~s)" (date))
            "--eval" (format nil "(sb-ext:save-lisp-and-die ~s :executable t :save-runtime-options t :toplevel (lambda () (finch/kernel:start)))"
                             (uiop:native-namestring path)))
@@ -104,6 +104,12 @@
           (gethash "KeepAlive" job) t)
     (text (with-output-to-string (s) (finch/plist:write-plist job s)))))
 
+(defun tahoe-fonts ()
+  (let ((dir (asdf:system-relative-pathname :finch "tahoe/system/System/Library/Fonts/")))
+    (loop :for file :in (directory (merge-pathnames "*.ttf" dir))
+          :collect (list :file (format nil "System/Library/Fonts/~a.ttf" (pathname-name file))
+                         (octets file)))))
+
 (defun tahoe-daemons ()
   (let ((dir (asdf:system-relative-pathname :finch "tahoe/system/System/Library/LaunchDaemons/")))
     (loop :for file :in (directory (merge-pathnames "*.plist" dir))
@@ -129,7 +135,8 @@
          (list :file "Library/LaunchDaemons/finch.console.plist" (console-job)))
    (loop :for (path program) :in *programs*
          :collect (list :file path (text (format nil "#!finch ~a~%" program)) #o100755))
-   (tahoe-daemons)))
+   (tahoe-daemons)
+   (tahoe-fonts)))
 
 (defun image ()
   (let* ((core (core))

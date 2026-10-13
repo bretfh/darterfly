@@ -3,7 +3,8 @@
   (:export #:render-error #:decode-commit #:encode-commit #:commit-stream #:*commands*
            #:layer #:make-layer #:layer-id #:layer-position #:layer-bounds #:layer-frame
            #:layer-background-color #:layer-opacity #:layer-masks-to-bounds #:layer-sublayers
-           #:context #:context-create #:context-id #:context-layer #:commit #:+masks-to-bounds+))
+           #:context #:context-create #:context-id #:context-layer #:commit #:+masks-to-bounds+
+           #:layer-contents #:image))
 (in-package #:finch/ca)
 
 (define-condition render-error (error)

@@ -82,5 +82,7 @@
              "curl"
              "tar"
              "gzip"
-             "linux-libre"))
+             "linux-libre"
+             "sbcl-zpb-ttf"
+             "sbcl-cl-vectors"))
   (list opencore lilu virtualsmc whatevergreen)))

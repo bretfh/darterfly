@@ -57,7 +57,15 @@
              (is (= #xff2e5c8f (image:pixel screen 5 5)) "desktop ~x" (image:pixel screen 5 5))
              (is (= #xffd9d9d9 (image:pixel screen 300 140)) "title ~x" (image:pixel screen 300 140))
              (is (= #xffededed (image:pixel screen 215 300)) "frame ~x" (image:pixel screen 215 300))
-             (is (= #xffffffff (image:pixel screen 500 300)) "content ~x" (image:pixel screen 500 300)))
+             (is (= #xffffffff (image:pixel screen 500 300)) "content ~x" (image:pixel screen 500 300))
+             (is (< 50 (loop :for y :from 194 :below 230
+                             :sum (loop :for x :from 244 :below 480
+                                        :count (< (ldb (byte 8 0) (image:pixel screen x y)) 100))))
+                 "the words")
+             (is (< 5 (loop :for y :from 136 :below 160
+                            :sum (loop :for x :from 470 :below 560
+                                       :count (< (ldb (byte 8 0) (image:pixel screen x y)) 120))))
+                 "the title"))
            (image:pointer 100 600)
            (let ((screen (loop :repeat 20
                                :for screen := (image:screendump)

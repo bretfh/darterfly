@@ -15,7 +15,14 @@
    (background-color :initarg :background-color :initform #(0.0 0.0 0.0 0.0) :accessor layer-background-color)
    (opacity :initarg :opacity :initform 1.0 :accessor layer-opacity)
    (masks-to-bounds :initarg :masks-to-bounds :initform nil :accessor layer-masks-to-bounds)
-   (sublayers :initarg :sublayers :initform nil :accessor layer-sublayers)))
+   (sublayers :initarg :sublayers :initform nil :accessor layer-sublayers)
+   (contents :initarg :contents :initform nil :accessor layer-contents)))
+
+(defun image (width height pixels)
+  (list :type +image+ :flags #x800400 :format 11 :width width :height height
+        :rowbytes (list (* width 4)) :pixels pixels
+        :colorspace (list 3) :texture-a #x3f800000 :texture-b (list 0 0 0 0) :shape 0
+        :texture-c #x3f800000 :texture-d 0 :texture-e nil))
 
 (defun make-layer (&rest initargs)
   (apply #'make-instance 'layer initargs))
@@ -41,7 +48,7 @@
         :flags-b +flags-b+
         :position (map 'vector (lambda (v) (float v 0d0)) (layer-position layer))
         :bounds (map 'vector (lambda (v) (float v 0d0)) (layer-bounds layer))
-        :contents nil
+        :contents (layer-contents layer)
         :sublayers (and (layer-sublayers layer) (map 'vector #'layer-id (layer-sublayers layer)))
         :mask 0 :name nil))
 

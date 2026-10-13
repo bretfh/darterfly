@@ -86,8 +86,17 @@
             (destructuring-bind (r g b a) (coerce (getf layer :background-color) 'list)
               (destructuring-bind (x0 y0 x1 y1) (intersect clip frame)
                 (io:blend-rect fb x0 y0 x1 y1 r g b (* a alpha))))
+            (let ((image (contents layer)))
+              (when (and image (getf image :pixels))
+                (io:blit-image fb (round x) (round y) (round bw) (round bh)
+                               (coerce (getf image :pixels) '(simple-array (unsigned-byte 8) (*)))
+                               (getf image :width) (getf image :height) (float alpha 1.0) inner)))
             (loop :for child :across (or (getf layer :sublayers) #())
                   :do (draw-layer fb layers child (- x bx) (- y by) inner alpha))))))))
+
+(defun contents (layer)
+  (let ((c (getf layer :contents)))
+    (if (eq (getf c :type) :cached) (getf c :object) c)))
 
 (defun intersect (a b)
   (list (max (first a) (first b)) (max (second a) (second b))

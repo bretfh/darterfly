@@ -3,7 +3,7 @@
   (:export #:framebuffer #:open-framebuffer #:framebuffer-width #:framebuffer-height
            #:framebuffer-pixels #:flush #:fill-rect #:test-pattern
            #:read-events #:open-hid #:hid-event #:event-type #:event-code #:event-value #:blend-rect
-           #:kextload #:load-kexts #:*kexts* #:modules-dir #:abs-range #:event-fd))
+           #:kextload #:load-kexts #:*kexts* #:modules-dir #:abs-range #:event-fd #:blit-image))
 (in-package #:finch/io)
 
 (defclass framebuffer ()
