@@ -1,7 +1,8 @@
 (defpackage #:finch/image
   (:use #:cl)
   (:export #:core #:image #:boot #:check-boot #:write-cpio #:*build*
-   #:console #:expect #:send #:transcript #:finish #:screendump #:pixel #:monitor #:pointer #:qmp #:send-keys))
+   #:console #:expect #:send #:transcript #:finish #:screendump #:pixel #:monitor #:pointer #:qmp #:send-keys
+   #:boot-efi #:mach-kernel #:esp #:bare-console))
 (in-package #:finch/image)
 
 (defvar *build* (asdf:system-relative-pathname :finch "build/"))
@@ -252,9 +253,10 @@
 
 (defstruct (console (:constructor %console (process))) process (seen (make-string-output-stream)) (text ""))
 
-(defun console (&key (boot-args "vga=0x318"))
-  (%console (uiop:launch-program (qemu "-display" "none" "-serial" "stdio"
-                                       "-append" (format nil "console=ttyS0 quiet ~a" boot-args))
+(defun console (&key (boot-args "vga=0x318") args)
+  (%console (uiop:launch-program (or args
+                                     (qemu "-display" "none" "-serial" "stdio"
+                                           "-append" (format nil "console=ttyS0 quiet ~a" boot-args)))
                                  :input :stream :output :stream :error-output :output)))
 
 (defun expect (console text &key (timeout 30))
