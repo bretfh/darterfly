@@ -373,10 +373,13 @@
     (dolist (window (windows))
       (mach:mach-port-move-member mach:*task* (ca:context-events (window-context window)) set))
     (loop
-      (let ((message (mach:mach-msg-receive set)))
-        (if (eql (mach:msgh-local-port message) (main-port))
-            (progn (funcall (mach:msgh-body message)) (commit-dirty))
-            (dispatch message))))))
+      (loop :for message := (mach:mach-msg-receive set) :then (handler-case (mach:mach-msg-receive set :timeout 0)
+                                                                (mach:kern-return () nil))
+            :while message
+            :do (if (eql (mach:msgh-local-port message) (main-port))
+                    (funcall (mach:msgh-body message))
+                    (dispatch message)))
+      (commit-dirty))))
 
 (defun dispatch (message)
   (let ((window (find (mach:msgh-local-port message) (windows)
@@ -392,6 +395,4 @@
          (let ((char (server:event-character event)))
            (when char
              (window-key-down window (string char) (server:event-value event :keyboard-event-keycode))))))
-      (when (member window (windows))
-        (when (any-dirty (frame-view window))
-          (commit window))))))
+      window)))

@@ -68,7 +68,14 @@
 
 (defun put-le (w count n) (dotimes (i count) (vector-push-extend (ldb (byte 8 (* 8 i)) n) w)))
 
-(defun put-octets (w octets) (loop :for o :across octets :do (vector-push-extend o w)))
+(defun put-octets (w octets)
+  (let* ((start (fill-pointer w))
+         (end (+ start (length octets))))
+    (when (> end (array-dimension w 0))
+      (setf w (adjust-array w (max end (* 2 (array-dimension w 0))))))
+    (setf (fill-pointer w) end)
+    (replace w octets :start1 start)
+    w))
 
 (defun take-double (r)
   (let ((bits (take-le r 8)))

@@ -146,11 +146,37 @@
 (defun shadowed-p (window)
   (member (window-level window) '(0 101)))
 
+(defvar *damage* nil)
+
+(defun damage (x0 y0 x1 y1)
+  (setf *damage* (if *damage*
+                     (list (min x0 (first *damage*)) (min y0 (second *damage*))
+                           (max x1 (third *damage*)) (max y1 (fourth *damage*)))
+                     (list x0 y0 x1 y1))))
+
+(defun damage-window (window)
+  (damage (- (window-x window) 16) (- (window-y window) 16)
+          (+ (window-x window) (window-width window) 16) (+ (window-y window) (window-height window) 24)))
+
+(defun damage-cursor ()
+  (destructuring-bind (x y) *cursor*
+    (damage x y (+ x 13) (+ y 20))))
+
+(defun damage-all ()
+  (damage 0 0 (io:framebuffer-width *framebuffer*) (io:framebuffer-height *framebuffer*)))
+
 (defun render ()
   (let* ((fb *framebuffer*)
-         (screen (list 0 0 (io:framebuffer-width fb) (io:framebuffer-height fb))))
+         (whole (list 0 0 (io:framebuffer-width fb) (io:framebuffer-height fb)))
+         (screen (intersect whole (or (shiftf *damage* nil) whole)))
+         (io:*clip* screen))
+    (when (and (< (first screen) (third screen)) (< (second screen) (fourth screen)))
+      (render-rect fb screen))))
+
+(defun render-rect (fb screen)
+  (progn
     (destructuring-bind (r g b) (coerce +desktop+ 'list)
-      (io:blend-rect fb 0 0 (third screen) (fourth screen) r g b 1.0))
+      (io:blend-rect fb (first screen) (second screen) (third screen) (fourth screen) r g b 1.0))
     (dolist (window (reverse (by-level *windows*)))
       (let ((client (and (visible-p window) (context-client (window-context window)))))
         (when (and client (root client))
@@ -163,7 +189,8 @@
             (draw-layer fb (layers client) (root client) x y (intersect screen (window-frame window)) 1.0)
             (when saved (io:restore-corners fb x y w h radius saved))))))
     (draw-cursor fb)
-    (io:flush fb)))
+    (io:flush fb :x (first screen) :y (second screen)
+                 :width (- (third screen) (first screen)) :height (- (fourth screen) (second screen)))))
 
 (defconstant +ev-key+ 1)
 (defconstant +ev-rel+ 2)
@@ -179,11 +206,15 @@
     (destructuring-bind (x y) *cursor*
       (let ((nx (max 0 (min (1- (io:framebuffer-width fb)) nx)))
             (ny (max 0 (min (1- (io:framebuffer-height fb)) ny))))
+        (damage-cursor)
         (when *drag*
           (let ((window (first *drag*)))
+            (damage-window window)
             (incf (window-x window) (- nx x))
-            (incf (window-y window) (- ny y))))
-        (setf *cursor* (list nx ny))))))
+            (incf (window-y window) (- ny y))
+            (damage-window window)))
+        (setf *cursor* (list nx ny))
+        (damage-cursor)))))
 
 (defun pointer (event)
   (let ((fb *framebuffer*))
@@ -204,6 +235,7 @@
                (destructuring-bind (x y) *cursor*
                  (let ((window (window-at x y)))
                    (when window
+                     (damage-window window)
                      (setf *windows* (cons window (remove window *windows*)))
                      (if (and (zerop (window-level window)) (< y (+ (window-y window) +title-height+))
                               (> (- x (window-x window)) 76))
@@ -271,6 +303,15 @@
 (defun hid-loop ()
   (let ((devices (hid-devices)))
     (loop
+      (handler-case (hid-step devices)
+        (error (e)
+          (ignore-errors
+           (with-open-file (s "/tmp/WindowServer.err" :direction :output :if-exists :append :if-does-not-exist :create)
+             (format s "~a~%" e)
+             (sb-debug:print-backtrace :stream s :count 15))))))))
+
+(defun hid-step (devices)
+  (progn
       (let ((events (drain devices)))
         (if events
             (sb-thread:with-mutex (*lock*)
@@ -279,7 +320,7 @@
                 (mapc #'pointer events)
                 (unless (equal before (list *cursor* (first *windows*) (and *drag* (window-x (first *drag*))) (and *drag* (window-y (first *drag*)))))
                   (render))))
-            (sleep 0.005))))))
+            (sleep 0.005)))))
 
 (defun apply-commit (client octets)
   (dolist (command (getf (ca:decode-commit octets) :commands))
@@ -339,13 +380,15 @@
   (let* ((body (mach:msgh-body message))
          (window (find-window (le32 body 8))))
     (when window
-      (setf (window-context window) (le32 body 12)))))
+      (setf (window-context window) (le32 body 12))
+      (damage-window window))))
 
 (defun apply-transaction (forms)
   (dolist (form forms)
     (destructuring-bind (name &rest args) form
       (let ((window (find-window (first args))))
         (when window
+          (damage-window window)
           (cond ((string= name "SetWindowShape")
                  (destructuring-bind (x y w h) (server:region-bounds (second args))
                    (declare (ignore x y))
@@ -359,7 +402,8 @@
                    (setf (ordered window) (/= order 0))
                    (case order
                      (1 (setf *windows* (cons window (remove window *windows*))))
-                     (-1 (setf *windows* (append (remove window *windows*) (list window)))))))))))))
+                     (-1 (setf *windows* (append (remove window *windows*) (list window))))))))
+          (damage-window window))))))
 
 (defun transaction-commit (message)
   (let* ((body (mach:msgh-body message))
@@ -387,6 +431,7 @@
              (sb-thread:with-mutex (*lock*)
                (let ((client (client-of port)))
                  (when client
+                   (dolist (w *windows*) (when (eql (window-context w) (context client)) (damage-window w)))
                    (setf *clients* (remove client *clients*)
                          *windows* (remove-if (lambda (w) (eql (window-context w) (context client))) *windows*))
                    (mach:mach-port-mod-refs mach:*task* port :receive -1)
@@ -395,6 +440,7 @@
              (sb-thread:with-mutex (*lock*)
                (let ((client (client-of port)))
                  (when client
+                   (dolist (w *windows*) (when (eql (window-context w) (context client)) (damage-window w)))
                    (apply-commit client (mach:msgh-body message))
                    (render)))))))))
 
@@ -404,6 +450,7 @@
         *windows* nil
         *cursor* (list (floor (io:framebuffer-width *framebuffer*) 2)
                        (floor (io:framebuffer-height *framebuffer*) 2)))
+  (damage-all)
   (render)
   (bsd:bsdthread-create #'hid-loop "hid")
   (let ((set (mach:mach-port-allocate mach:*task* :port-set))
