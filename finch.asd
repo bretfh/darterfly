@@ -73,6 +73,13 @@
   :pathname "src/apps/"
   :components ((:file "hello") (:file "terminal") (:file "session")))
 
+(asdf:defsystem #:finch/iokit
+  :description "IOKit: the registry, PCI and drivers"
+  :depends-on (#:uiop)
+  :serial t
+  :pathname "src/iokit/"
+  :components ((:file "machine") (:file "registry") (:file "acpi") (:file "pci") (:file "virtio") (:file "block")))
+
 (asdf:defsystem #:finch/kernel
   :description "The kernel, run as pid 1"
   :depends-on (#:finch/mach #:finch/bsd #:finch/io #:uiop)
@@ -85,7 +92,7 @@
   :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/image/"
-  :components ((:file "image") (:file "efi") (:file "runtime")))
+  :components ((:file "image") (:file "runtime") (:file "efi")))
 
 (asdf:defsystem #:finch/plist
   :description "Property lists, XML and binary"
@@ -150,7 +157,7 @@
 
 (asdf:defsystem #:finch
   :description "A Darwin in Common Lisp"
-  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/xpc #:finch/launchd #:finch/shell #:finch/io #:finch/text #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/kernel #:finch/image)
+  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/xpc #:finch/launchd #:finch/shell #:finch/io #:finch/text #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/iokit #:finch/kernel #:finch/image)
   :in-order-to ((asdf:test-op (asdf:test-op #:finch/test))))
 
 (asdf:defsystem #:finch/test

@@ -224,11 +224,11 @@ void __libsa_mfs_init(void) {
   fds[0] = fds[1] = fds[2] = &console_file;
   mkdirs("/tmp");
   uint64_t kernel[2] = {0, 0}, ramdisk[2] = {0, 0};
-  __machdep(MACHDEP_kernel_file, (long)kernel);
+  __machdep(MACHDEP_kernel_file, (long)kernel, 0);
   node *k = make(mkdirs("/System/Library/Kernels"), "kernel", T_REG, 0555);
   k->ext = (const char *)kernel[0];
   k->size = kernel[1];
-  __machdep(MACHDEP_ramdisk, (long)ramdisk);
+  __machdep(MACHDEP_ramdisk, (long)ramdisk, 0);
   if (ramdisk[0]) load_cpio((const char *)ramdisk[0], ramdisk[1]);
 }
 

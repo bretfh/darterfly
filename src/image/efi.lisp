@@ -69,7 +69,7 @@
 (defun finch-sources ()
   (mapcar #'source '("src/mach/" "src/bsd/" "src/plist/" "src/macho/" "src/dyld/" "src/objc/" "src/mig/"
                      "src/server/" "src/ca/" "src/xpc/" "src/launchd/" "src/shell/" "src/io/" "src/text/"
-                     "src/imageio/" "src/kit/" "src/apps/" "src/kernel/" "src/tahoe/" "tests/" "src/image/")))
+                     "src/imageio/" "src/kit/" "src/apps/" "src/iokit/" "src/kernel/" "src/tahoe/" "tests/" "src/image/")))
 
 (defun finch-core ()
   (let ((core (build-path "finch.core")))
@@ -159,21 +159,25 @@
 (defun firmware (name)
   (format nil "~a/share/firmware/~a" (uiop:getenv "GUIX_ENVIRONMENT") name))
 
-(defun bare-qemu (esp)
+(defun bare-qemu (esp &optional disks)
   (let ((vars (build-path "OVMF_VARS.fd")))
     (unless (probe-file vars)
       (uiop:copy-file (firmware "ovmf_vars_x64.bin") vars)
       (run "chmod" "u+w" (uiop:native-namestring vars)))
-    (list "qemu-system-x86_64" "-enable-kvm" "-cpu" "host" "-m" "4096" "-smp" "4"
+    (append
+     (list "qemu-system-x86_64" "-enable-kvm" "-cpu" "host" "-m" "4096" "-smp" "4"
           "-machine" "q35"
           "-drive" (format nil "if=pflash,format=raw,readonly=on,file=~a" (firmware "ovmf_code_x64.bin"))
           "-drive" (format nil "if=pflash,format=raw,file=~a" (uiop:native-namestring vars))
           "-drive" (format nil "if=none,id=esp,format=raw,snapshot=on,file=fat:~a" (uiop:native-namestring esp))
-          "-device" "virtio-blk-pci,drive=esp"
-          "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
+          "-device" "virtio-blk-pci,drive=esp")
+     (loop for disk in disks for i from 0
+           append (list "-drive" (format nil "if=none,id=disk~d,format=raw,file=~a" i (uiop:native-namestring disk))
+                        "-device" (format nil "virtio-blk-pci,drive=disk~d" i)))
+     (list "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
           "-monitor" (format nil "unix:~a,server=on,wait=off" (monitor-path))
           "-qmp" (format nil "unix:~a,server=on,wait=off" (qmp-path))
-          "-display" "none" "-serial" "stdio" "-no-reboot")))
+          "-display" "none" "-serial" "stdio" "-no-reboot"))))
 
-(defun bare-console (&key (boot-args ""))
-  (console :args (bare-qemu (esp :boot-args boot-args))))
+(defun bare-console (&key (boot-args "") disks)
+  (console :args (bare-qemu (esp :boot-args boot-args) disks)))

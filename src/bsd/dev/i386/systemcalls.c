@@ -191,6 +191,15 @@ void machdep_syscall(x86_saved_state64_t *regs) {
     out[1] = PE_boot_args->ramdiskSize;
     return ok(regs, 0);
   }
+  case 8: return ok(regs, (uint64_t)PE_boot_args);
+  case 9: {
+    uint64_t pa = vm_page_grab();
+    if (!pa) return error(regs, 12);
+    uint64_t *page = PHYSMAP_PTOV(pa);
+    for (int i = 0; i < 512; i++) page[i] = 0;
+    return ok(regs, pa);
+  }
+  case 10: return ok(regs, ml_io_map(regs->rdi, regs->rsi));
   case 3: {
     uint64_t base = regs->rdi;
     current_thread()->fs_base = base;

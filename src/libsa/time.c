@@ -10,7 +10,7 @@ typedef struct { uint64_t tsc_hz, tsc_base, epoch_base; } commpage_time;
 static commpage_time *commpage;
 
 static commpage_time *page(void) {
-  if (!commpage) commpage = (commpage_time *)__machdep(MACHDEP_commpage, 0);
+  if (!commpage) commpage = (commpage_time *)__machdep(MACHDEP_commpage, 0, 0);
   return commpage;
 }
 

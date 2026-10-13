@@ -122,6 +122,46 @@
                          (ask "(let* ((sem (sb-thread:make-semaphore)) (ts (loop repeat 4 collect (sb-thread:make-thread (lambda () (dotimes (i 5000) (sb-thread:signal-semaphore sem))))))) (dotimes (i 20000) (sb-thread:wait-on-semaphore sem)) (mapc #'sb-thread:join-thread ts) :ok)"))))
         (image:finish c 5)))))
 
+(defun pattern-disk (name sectors)
+  (let ((path (merge-pathnames name (finch-file "build/"))))
+    (with-open-file (s path :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
+      (dotimes (i sectors)
+        (let ((sector (make-array 512 :element-type '(unsigned-byte 8) :initial-element 0)))
+          (replace sector (map 'vector #'char-code (format nil "finch sector ~d" i)))
+          (write-sequence sector s))))
+    path))
+
+(defun disk-sector (path n)
+  (with-open-file (s path :element-type '(unsigned-byte 8))
+    (file-position s (* n 512))
+    (let ((sector (make-array 512 :element-type '(unsigned-byte 8))))
+      (read-sequence sector s)
+      (map 'string #'code-char (subseq sector 0 (or (position 0 sector) 512))))))
+
+(test iokit-on-finch
+  (let* ((disk (pattern-disk "iokit-disk.img" 2048))
+         (c (image:bare-console :disks (list disk))))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 60)
+             (let ((tree (ask "(progn (iokit:start-iokit) (iokit:ioreg))")))
+               (is (search "+-o PCI0  <class IOACPIPlatformDevice>" tree))
+               (is (search "+-o pci1af4,1001@4  <class IOPCIDevice>" tree))
+               (is (search "| +-o AppleVirtIOPCITransport  <class AppleVirtIOPCITransport>" tree))
+               (is (search "+-o AppleVirtIOBlockStorageDevice  <class AppleVirtIOBlockStorageDevice>" tree)))
+             (ask "(defvar *b* (find 2048 (iokit:find-entries 'iokit:apple-virtio-block-storage-device) :key #'iokit:block-count))")
+             (is (search "\"finch sector 5\"" (ask "(map 'string #'code-char (subseq (iokit:read-blocks *b* 5 1) 0 14))")))
+             (is (search "\"finch sector 1099\""
+                         (ask "(map 'string #'code-char (subseq (iokit:read-blocks *b* 1000 100) (* 99 512) (+ (* 99 512) 17)))")))
+             (ask "(iokit:write-blocks *b* 7 (let ((v (make-array 512 :element-type '(unsigned-byte 8) :initial-element 0))) (replace v (map 'vector #'char-code \"written by finch\")) v))")
+             (is (search "\"written by finch\"" (ask "(map 'string #'code-char (subseq (iokit:read-blocks *b* 7 1) 0 16))")))
+             (image:send c "(sb-ext:exit)")
+             (image:expect c "exit(0)" :timeout 30))
+        (image:finish c 5))
+      (is (equal "written by finch" (disk-sector disk 7)))
+      (is (equal "finch sector 8" (disk-sector disk 8))))))
+
 (test xnu-checked-suites-pass-on-finch
   (let ((c (image:bare-console)))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 300)))

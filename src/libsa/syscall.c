@@ -20,7 +20,7 @@ long __syscall(long n, long a, long b, long c, long d, long e, long f) {
   return n;
 }
 
-long __machdep(long n, long a) {
-  __asm__ volatile("int $0x82" : "+a"(n), "+D"(a) : : "memory", "rcx", "rdx", "rsi", "r8", "r9", "r10", "r11", "cc");
+long __machdep(long n, long a, long b) {
+  __asm__ volatile("int $0x82" : "+a"(n), "+D"(a), "+S"(b) : : "memory", "rcx", "rdx", "r8", "r9", "r10", "r11", "cc");
   return n;
 }

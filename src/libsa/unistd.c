@@ -161,7 +161,7 @@ static size_t nsymbols;
 static uint64_t kimage[2];
 
 static void load_symbols(void) {
-  if (!kimage[0]) __machdep(MACHDEP_kernel_file, (long)kimage);
+  if (!kimage[0]) __machdep(MACHDEP_kernel_file, (long)kimage, 0);
   const char *k = (const char *)kimage[0];
   const Elf64_Ehdr *eh = (const Elf64_Ehdr *)k;
   const Elf64_Shdr *sh = (const Elf64_Shdr *)(k + eh->e_shoff);

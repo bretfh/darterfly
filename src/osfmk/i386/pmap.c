@@ -100,6 +100,15 @@ void pmap_remove(uint64_t va, uint64_t len) {
   while (n) vm_page_free(freed[--n]);
 }
 
+#define INTEL_PTE_NCACHE 0x10ull
+#define INTEL_PTE_WTHRU 0x8ull
+
+void pmap_enter_io(uint64_t va, uint64_t pa) {
+  *pte(va, 1) = (pa & PTE_PFN) | INTEL_PTE_VALID | INTEL_PTE_WRITE | INTEL_PTE_USER | INTEL_PTE_NX |
+                INTEL_PTE_NCACHE | INTEL_PTE_WTHRU;
+  invlpg(va);
+}
+
 int pmap_access_ok(uint64_t va, uint64_t err) {
   uint64_t *e = pte(va, 0);
   if (!e || !(*e & INTEL_PTE_VALID)) return 0;

@@ -31,8 +31,11 @@
 #define MACHDEP_console_ready 5
 #define MACHDEP_kernel_file 6
 #define MACHDEP_ramdisk 7
+#define MACHDEP_boot_args 8
+#define MACHDEP_vm_page_grab 9
+#define MACHDEP_ml_io_map 10
 void __libsa_mfs_init(void);
 
 long __syscall(long n, long a, long b, long c, long d, long e, long f);
-long __machdep(long n, long a);
+long __machdep(long n, long a, long b);
 void __libsa_stdio_init(void);

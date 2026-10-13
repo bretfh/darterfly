@@ -30,7 +30,7 @@ static void tls_init(void) {
   m->tp = __libsa_tls_new(m);
   m->stack = (void *)(0x00007ff000000000ul - (8ul << 20));
   m->stacksize = 8ul << 20;
-  __machdep(MACHDEP_set_cthread_self, (long)m->tp);
+  __machdep(MACHDEP_set_cthread_self, (long)m->tp, 0);
   m->tid = (uint64_t)__syscall(SYS_thread_selfid, 0, 0, 0, 0, 0, 0);
 }
 
