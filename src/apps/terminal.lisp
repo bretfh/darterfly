@@ -60,7 +60,7 @@
                                            (list :close to-shell) (list :close from-shell)))
       (bsd:close shell-in)
       (bsd:close shell-out)
-      (setf kit:*menus* '("Terminal" "Shell" "Edit" "View" "Window" "Help"))
+      (setf kit:*menus* (kit:standard-menus "Terminal"))
       (let* ((window (kit:make-window :title "Terminal — sh" :x 160 :y 100 :width 700 :height 460))
              (view (make-instance 'terminal-view :to-shell to-shell :frame (vector 0 0 676 408))))
         (kit:add-subview (kit:content-view window) view)

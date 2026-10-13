@@ -7,7 +7,7 @@
            #:content-view #:window-title #:first-responder #:show #:close-window #:run
            #:string-value #:font-size #:text-color #:title #:action #:background
            #:view-width #:view-height #:windows #:perform-on-main #:menu-bar #:*menus* #:*click-count* #:icon-view #:icon-path #:label #:remove-subviews
-           #:window-level #:style #:set-window-title))
+           #:window-level #:style #:set-window-title #:standard-menus #:terminate))
 (in-package #:finch/kit)
 
 (defclass responder () ())
@@ -193,7 +193,7 @@
                     (make-instance 'view :frame (vector 0 0 (window-width window) (window-height window)))
                     (make-instance 'theme-frame :title (window-title window)
                                                 :frame (vector 0 0 (window-width window) (window-height window)))))
-         (content (make-instance 'view :background (or background #(1.0 1.0 1.0 1.0))
+         (content (make-instance 'view :background (if (member :background initargs) background #(1.0 1.0 1.0 1.0))
                                        :frame (if borderless
                                                   (vector 0 0 (window-width window) (window-height window))
                                                   (vector 12 40 (- (window-width window) 24)
@@ -222,28 +222,99 @@
 
 (bsd:define-process-variable *menus* nil)
 
-(defun menu-bar (titles)
-  (let* ((font (text:font "SFNS" 14))
+(defun terminate (&optional sender)
+  (declare (ignore sender))
+  (bsd:exit 0))
+
+(defun standard-menus (name &rest menus)
+  (list* (list name (cons (format nil "About ~a" name) nil) :separator
+               (cons (format nil "Quit ~a" name) #'terminate))
+         (or menus
+             (list (list "File" (cons "Close Window" (lambda (sender) (declare (ignore sender))
+                                                        (let ((w (find-if (lambda (w) (eq (style w) :titled)) (windows))))
+                                                          (when w (close-window w))))))
+                   (list "Edit" (cons "Copy" nil) (cons "Paste" nil))
+                   (list "Window" (cons "Minimize" nil))
+                   (list "Help" (cons (format nil "~a Help" name) nil))))))
+
+(defparameter +menu-font-size+ 14)
+(defparameter +item-height+ 22)
+
+(defclass menu-bar-view (view)
+  ((menus :initarg :menus :reader menus)
+   (positions :accessor positions)
+   (dropdown :initform nil :accessor dropdown)))
+
+(defmethod draw ((view menu-bar-view) bitmap)
+  (let ((font (text:font "SFNS" +menu-font-size+)))
+    (loop :for (title) :in (menus view) :for x :in (positions view)
+          :do (text:draw-string bitmap font title x 17 0.0 0.0 0.0))))
+
+(defclass menu-view (view)
+  ((items :initarg :items :reader items)
+   (bar :initarg :bar :reader bar)))
+
+(defmethod draw ((view menu-view) bitmap)
+  (let ((font (text:font "SFNS" 13)) (w (view-width view)))
+    (text:fill-round-rect bitmap 0 0 w (view-height view) 6 0.97 0.97 0.97)
+    (loop :for item :in (items view)
+          :for y :from 5 :by +item-height+
+          :do (if (eq item :separator)
+                  (text:fill-rect bitmap 10 (+ y 10) (- w 20) 1 0.8 0.8 0.8)
+                  (let ((grey (if (cdr item) 0.0 0.6)))
+                    (text:draw-string bitmap font (car item) 14 (+ y 15) grey grey grey))))))
+
+(defun close-dropdown (bar)
+  (when (dropdown bar)
+    (close-window (dropdown bar))
+    (setf (dropdown bar) nil)))
+
+(defmethod mouse-down ((view menu-view) x y)
+  (declare (ignore x))
+  (let ((item (nth (floor (- y 5) +item-height+) (items view))))
+    (close-dropdown (bar view))
+    (when (and (consp item) (cdr item))
+      (funcall (cdr item) view)))
+  t)
+
+(defmethod mouse-down ((view menu-bar-view) x y)
+  (declare (ignore y))
+  (let ((index (position-if (lambda (p) (<= p x)) (positions view) :from-end t))
+        (was (dropdown view)))
+    (close-dropdown view)
+    (when (and index (not was))
+      (let* ((items (cdr (nth index (menus view))))
+             (font (text:font "SFNS" 13))
+             (width (max 180 (+ 40 (reduce #'max (mapcar (lambda (i) (if (consp i) (text:string-width font (car i)) 0)) items)
+                                       :initial-value 0))))
+             (window (make-window :style :borderless :level :pop-up-menu :x (- (nth index (positions view)) 8) :y 24
+                                  :width (round width) :height (+ 10 (* +item-height+ (max 1 (length items))))
+                                  :background nil)))
+        (add-subview (content-view window)
+                     (make-instance 'menu-view :items items :bar view
+                                               :frame (vector 0 0 (window-width window) (window-height window))))
+        (setf (dropdown view) window)
+        (show window))))
+  t)
+
+(defun menu-bar (menus)
+  (let* ((font (text:font "SFNS" +menu-font-size+))
          (positions (loop :with x := 14
-                          :for title :in titles
+                          :for (title) :in menus
                           :collect (prog1 x (incf x (+ 20 (round (text:string-width font title)))))))
-         (width (+ (car (last positions)) 20 (round (text:string-width font (car (last titles))))))
-         (bitmap (text:make-bitmap width 24))
-         (context (ca:context-create))
-         (layer (ca:make-layer)))
-    (loop :for title :in titles :for x :in positions
-          :do (text:draw-string bitmap font title x 17 0.0 0.0 0.0))
-    (setf (ca:layer-frame layer) (vector 0 0 width 24)
-          (ca:layer-contents layer) (ca:image width 24 (text:bitmap-pixels bitmap))
-          (ca:context-layer context) layer)
-    (ca:commit context)
-    (ca:window-create context 0 0 width 24 :level :main-menu)
-    context))
+         (width (+ (car (last positions)) 20 (round (text:string-width font (car (car (last menus)))))))
+         (window (make-window :style :borderless :level :main-menu :x 0 :y 0 :width width :height 24 :background nil))
+         (view (make-instance 'menu-bar-view :menus menus :frame (vector 0 0 width 24))))
+    (setf (positions view) positions)
+    (add-subview (content-view window) view)
+    (show window)
+    window))
 
 (defun show (window)
   (unless (app-menu *application*)
+    (setf (app-menu *application*) t)
     (setf (app-menu *application*)
-          (menu-bar (or *menus* (list (bsd:proc-comm bsd:*proc*) "File" "Edit" "View" "Window" "Help")))))
+          (menu-bar (or *menus* (standard-menus (bsd:proc-comm bsd:*proc*))))))
   (unless (window-context window)
     (setf (window-context window) (ca:context-create))
     (setf (ca:context-layer (window-context window)) (view-layer (frame-view window))))

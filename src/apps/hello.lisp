@@ -33,7 +33,7 @@
     window))
 
 (bsd:define-program "Hello" (argv envp)
-  (setf kit:*menus* '("Hello" "File" "Edit" "Window" "Help"))
+  (setf kit:*menus* (kit:standard-menus "Hello"))
   (let* ((window (kit:make-window :title "Hello" :x 212 :y 134 :width 600 :height 400))
          (label (make-instance 'kit:text-field :string "Hello from finch." :font-size 28
                                                :frame (vector 20 20 400 40)))

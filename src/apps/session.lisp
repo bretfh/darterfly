@@ -147,7 +147,10 @@
   t)
 
 (bsd:define-program "Finder" (argv envp)
-  (setf kit:*menus* '("Finder" "File" "Edit" "View" "Go" "Window" "Help"))
+  (setf kit:*menus* (list (list "Finder" (cons "About Finder" nil))
+                          (list "File" (cons "New Finder Window" nil)) (list "Edit" (cons "Copy" nil))
+                          (list "View" (cons "as Icons" nil)) (list "Go" (cons "Computer" nil))
+                          (list "Window" (cons "Minimize" nil)) (list "Help" (cons "macOS Help" nil))))
   (multiple-value-bind (width height) (screen-size)
     (let ((desktop (kit:make-window :style :borderless :level :desktop :x 0 :y 0 :width width :height height
                                     :background #(0.18 0.36 0.56 1.0))))

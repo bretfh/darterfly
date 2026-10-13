@@ -98,7 +98,7 @@
 
 (defun key-client ()
   (let ((window (key-window)))
-    (and window (find (owner window) *clients* :key #'pid))))
+    (and window (context-client (window-context window)))))
 
 (defun visible-p (window)
   (and (ordered window)
@@ -216,7 +216,7 @@
       (fourth *last-click*)))
 
 (defun click (window type x y)
-  (let ((client (find (owner window) *clients* :key #'pid)))
+  (let ((client (context-client (window-context window))))
     (post-event client (server:encode-event
                         (server:mouse-event type x y :timestamp (get-internal-real-time)
                                                      :window (window-id window)
@@ -374,7 +374,8 @@
              (sb-thread:with-mutex (*lock*)
                (let ((client (client-of port)))
                  (when client
-                   (setf *clients* (remove client *clients*))
+                   (setf *clients* (remove client *clients*)
+                         *windows* (remove-if (lambda (w) (eql (window-context w) (context client))) *windows*))
                    (mach:mach-port-mod-refs mach:*task* port :receive -1)
                    (render)))))
             ((<= 40002 (mach:msgh-id message) 40005)

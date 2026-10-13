@@ -151,7 +151,7 @@
          :descriptors (list (make-array 0 :element-type '(unsigned-byte 8))))))
 
 (defparameter +window-levels+
-  '((:desktop . -2147483623) (:normal . 0) (:dock . 20) (:main-menu . 24) (:status . 25)))
+  '((:desktop . -2147483623) (:normal . 0) (:dock . 20) (:main-menu . 24) (:status . 25) (:pop-up-menu . 101)))
 
 (defun window-create (context x y width height &key (level :normal) (order :above))
   (let* ((reply (mig +create-window+ (octets 0 1 5 12 #x10000 0 1 0)
