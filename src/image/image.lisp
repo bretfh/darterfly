@@ -17,7 +17,7 @@
     (uiop:run-program
      (list "sbcl" "--noinform" "--no-userinit" "--non-interactive"
            "--eval" "(require :asdf)"
-           "--eval" "(mapc #'asdf:load-system '(:finch/kernel :finch/launchd :finch/shell :finch/io :finch/text :finch/windowserver :finch/apps))"
+           "--eval" "(mapc #'asdf:load-system '(:finch/kernel :finch/launchd :finch/shell :finch/io :finch/text :finch/imageio :finch/windowserver :finch/apps))"
            "--eval" (format nil "(setf finch/kernel::*build-date* ~s)" (date))
            "--eval" (format nil "(sb-ext:save-lisp-and-die ~s :executable t :save-runtime-options t :toplevel (lambda () (finch/kernel:start)))"
                             (uiop:native-namestring path)))
@@ -116,6 +116,17 @@
           :collect (list :file (format nil "System/Library/Fonts/~a.ttf" (pathname-name file))
                          (octets file)))))
 
+(defparameter *tahoe-resources*
+  '("System/Applications/Utilities/Terminal.app/Contents/Resources/Terminal.icns"
+    "System/Library/CoreServices/Finder.app/Contents/Resources/Finder.icns"
+    "System/Applications/TextEdit.app/Contents/Resources/AppIcon.icns"))
+
+(defun tahoe-resources ()
+  (loop :for path :in *tahoe-resources*
+        :for file := (asdf:system-relative-pathname :finch (format nil "tahoe/system/~a" path))
+        :when (probe-file file)
+          :collect (list :file path (octets file))))
+
 (defun tahoe-daemons ()
   (loop :for kind :in '("LaunchDaemons" "LaunchAgents")
         :append (let ((dir (asdf:system-relative-pathname :finch (format nil "tahoe/system/System/Library/~a/" kind))))
@@ -151,7 +162,8 @@
    (loop :for (path program) :in *programs*
          :collect (list :file path (text (format nil "#!finch ~a~%" program)) #o100755))
    (tahoe-daemons)
-   (tahoe-fonts)))
+   (tahoe-fonts)
+   (tahoe-resources)))
 
 (defun image ()
   (let* ((core (core))

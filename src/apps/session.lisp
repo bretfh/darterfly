@@ -43,8 +43,18 @@
       (loop (sleep 30) (draw)))))
 
 (defparameter *dock-items*
-  '(("Terminal" "/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal" #(0.15 0.15 0.15 1.0))
-    ("Hello" "/Applications/Hello.app/Contents/MacOS/Hello" #(0.25 0.55 0.95 1.0))))
+  '(("Finder" "/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder" #(0.25 0.55 0.95 1.0)
+     "/System/Library/CoreServices/Finder.app/Contents/Resources/Finder.icns")
+    ("Terminal" "/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal" #(0.15 0.15 0.15 1.0)
+     "/System/Applications/Utilities/Terminal.app/Contents/Resources/Terminal.icns")
+    ("Hello" "/Applications/Hello.app/Contents/MacOS/Hello" #(0.25 0.55 0.95 1.0)
+     "/System/Applications/TextEdit.app/Contents/Resources/AppIcon.icns")))
+
+(defun icon-layer (path color size)
+  (let ((pixels (ignore-errors (finch/imageio:icon path size))))
+    (if pixels
+        (ca:make-layer :contents (ca:image size size pixels))
+        (ca:make-layer :background-color color))))
 
 (bsd:define-program "Dock" (argv envp)
   (multiple-value-bind (width height) (screen-size)
@@ -53,9 +63,9 @@
            (dock-width (+ gap (* (length *dock-items*) (+ tile gap))))
            (font (text:font "SFNS" 10))
            (dock (ca:make-layer :background-color #(0.85 0.85 0.88 0.85)
-                                :sublayers (loop :for (name nil color) :in *dock-items*
+                                :sublayers (loop :for (name nil color icns) :in *dock-items*
                                                  :for x :from gap :by (+ tile gap)
-                                                 :collect (let ((icon (ca:make-layer :background-color color))
+                                                 :collect (let ((icon (icon-layer icns color tile))
                                                                 (label (text-layer name font 0.1 0.1 0.1)))
                                                             (setf (ca:layer-frame icon) (vector x 8 tile tile))
                                                             (place label (+ x (round (- tile (aref (ca:layer-frame label) 2)) 2)) (+ 10 tile))
@@ -71,7 +81,7 @@
           (when (and event (eq (finch/server:event-type event) :left-mouse-down))
             (let ((x (first (finch/server:event-window-location event))))
               (let ((index (floor (- x gap) (+ tile gap))))
-                (when (< -1 index (length *dock-items*))
+                (when (< 0 index (length *dock-items*))
                   (bsd:posix-spawn (second (nth index *dock-items*))
                                    (list (second (nth index *dock-items*))) nil))))))))))
 

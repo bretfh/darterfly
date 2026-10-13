@@ -84,5 +84,6 @@
              "gzip"
              "linux-libre"
              "sbcl-zpb-ttf"
-             "sbcl-cl-vectors"))
+             "sbcl-cl-vectors"
+             "sbcl-chipz"))
   (list opencore lilu virtualsmc whatevergreen)))
