@@ -71,6 +71,8 @@
              "sbcl-trivial-features"
              "coreutils"
              "clang"
+             "gcc-toolchain"
+             "make"
              "lld"
              "llvm"
              "python"

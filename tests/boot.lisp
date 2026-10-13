@@ -21,10 +21,19 @@
     (unwind-protect
          (progn
            (is (image:expect c "mp_desc: gdt, idt and ktss loaded"))
-           (is (image:expect c "pmap: direct map"))
+           (is (image:expect c "pmap: physmap"))
            (let ((panic (image:expect c "Error code")))
              (is (search "panic(cpu 0 caller 0x" panic))
              (is (search "Kernel trap at 0x" panic))
              (is (search "type 3=breakpoint" panic))
              (is (search "CS:  0x0000000000000008, SS:  0x0000000000000010" panic))))
+      (image:finish c 5))))
+
+(test the-kernel-has-memory
+  (let ((c (image:bare-console :boot-args "vmtest halt")))
+    (unwind-protect
+         (progn
+           (is (search "at 0xffff800000000000" (image:expect c "kernel mapped at")))
+           (is (image:expect c "vmtest: 512 demand-zero pages, 512 read back"))
+           (is (image:expect c "vmtest: kalloc reuses freed blocks")))
       (image:finish c 5))))

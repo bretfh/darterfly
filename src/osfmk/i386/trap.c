@@ -1,5 +1,6 @@
 #include "../../pexpert/i386/pexpert.h"
 #include "seg.h"
+#include "../vm/vm.h"
 
 static const char *trap_type[] = {
     "divide error", "debug trap", "NMI", "breakpoint", "overflow", "bounds check", "invalid opcode",
@@ -17,6 +18,7 @@ static const char *trap_type[] = {
 void kernel_trap(x86_saved_state64_t *regs) {
   const char *type = regs->trapno < sizeof trap_type / sizeof *trap_type ? trap_type[regs->trapno] : "(reserved)";
   uint64_t cr2 = READ_CR(2);
+  if (regs->trapno == 14 && vm_fault(cr2, regs->err)) return;
   panic("Kernel trap at 0x%016lx, type %lu=%s, registers:\n"
         "CR0: 0x%016lx, CR2: 0x%016lx, CR3: 0x%016lx, CR4: 0x%016lx\n"
         "RAX: 0x%016lx, RBX: 0x%016lx, RCX: 0x%016lx, RDX: 0x%016lx\n"

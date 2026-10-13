@@ -11,13 +11,17 @@
       (error "~a failed:~%~a" (first args) out))
     out))
 
+(defun freestanding ()
+  (list "-nostdinc" "-isystem"
+        (format nil "~a/include" (string-trim '(#\Newline) (run "clang" "-print-resource-dir")))))
+
 (defun boot-efi ()
   (let ((object (build-path "efi/boot.o"))
         (out (build-path "efi/boot.efi")))
     (ensure-directories-exist object)
-    (run "clang" "-target" "x86_64-unknown-windows" "-ffreestanding" "-fshort-wchar" "-mno-red-zone"
+    (apply #'run "clang" "-target" "x86_64-unknown-windows" "-ffreestanding" "-fshort-wchar" "-mno-red-zone"
          "-fno-stack-protector" "-fno-builtin" "-nostdlib" "-O2" "-Wall"
-         "-c" (source "src/boot/boot.c") "-o" (uiop:native-namestring object))
+         "-c" (source "src/boot/boot.c") "-o" (uiop:native-namestring object) (freestanding))
     (run "lld-link" "/subsystem:efi_application" "/entry:efi_main" "/nodefaultlib"
          (format nil "/out:~a" (uiop:native-namestring out)) (uiop:native-namestring object))
     out))
@@ -25,7 +29,8 @@
 (defparameter *kernel-sources*
   '("src/osfmk/x86_64/start.s" "src/osfmk/x86_64/idt64.s" "src/osfmk/i386/i386_init.c"
     "src/osfmk/i386/mp_desc.c" "src/osfmk/i386/pmap.c" "src/osfmk/i386/trap.c"
-    "src/osfmk/kern/printf.c" "src/osfmk/kern/debug.c"
+    "src/osfmk/kern/printf.c" "src/osfmk/kern/debug.c" "src/osfmk/kern/kalloc.c"
+    "src/osfmk/vm/vm_resident.c" "src/osfmk/vm/vm_fault.c"
     "src/pexpert/i386/pe_serial.c" "src/pexpert/i386/pe_init.c"))
 
 (defun mach-kernel ()
@@ -33,10 +38,10 @@
           (loop :for name :in *kernel-sources*
                 :for object := (build-path (format nil "kernel/~a.o" (pathname-name name)))
                 :do (ensure-directories-exist object)
-                    (run "clang" "-target" "x86_64-unknown-none-elf" "-ffreestanding" "-mno-red-zone"
+                    (apply #'run "clang" "-target" "x86_64-unknown-none-elf" "-ffreestanding" "-mno-red-zone"
                          "-fPIE" "-fvisibility=hidden" "-fno-stack-protector" "-fno-builtin" "-nostdlib" "-O2" "-Wall"
                          (format nil "-DBUILD_DATE=~s" (date))
-                         "-c" (source name) "-o" (uiop:native-namestring object))
+                         "-c" (source name) "-o" (uiop:native-namestring object) (freestanding))
                 :collect (uiop:native-namestring object)))
         (out (build-path "kernel/kernel")))
     (apply #'run "ld.lld" "-T" (source "src/osfmk/x86_64/kernel.ld") "-nostdlib" "-pie" "--no-dynamic-linker"

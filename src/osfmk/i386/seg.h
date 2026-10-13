@@ -13,5 +13,4 @@ typedef struct x86_saved_state64 {
 } x86_saved_state64_t;
 
 void mp_desc_init(void);
-void pmap_bootstrap(void);
 void panic(const char *format, ...) __attribute__((noreturn));
