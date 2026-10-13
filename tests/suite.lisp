@@ -8,7 +8,8 @@
 (def-suite all)
 
 (defun run-them ()
-  (let ((results (run 'all)))
+  (let ((results (unwind-protect (run 'all)
+                   (uiop:delete-directory-tree (scratch) :validate t :if-does-not-exist :ignore))))
     (explain! results)
     (unless (results-status results)
       (uiop:quit 1))))
