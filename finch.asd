@@ -24,6 +24,13 @@
   :pathname "src/dyld/"
   :components ((:file "dyld") (:file "extract")))
 
+(asdf:defsystem #:finch/objc
+  :description "Objective-C metadata in cache images"
+  :depends-on (#:finch/dyld #:finch/macho)
+  :serial t
+  :pathname "src/objc/"
+  :components ((:file "objc")))
+
 (asdf:defsystem #:finch/tahoe
   :description "The Tahoe reference guest"
   :depends-on (#:finch/plist #:com.inuoe.jzon #:uiop (:require #:sb-bsd-sockets))
@@ -33,13 +40,13 @@
 
 (asdf:defsystem #:finch
   :description "A Darwin in Common Lisp"
-  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld)
+  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc)
   :in-order-to ((asdf:test-op (asdf:test-op #:finch/test))))
 
 (asdf:defsystem #:finch/test
   :depends-on (#:finch #:finch/tahoe #:fiveam (:require #:sb-posix))
   :serial t
   :pathname "tests/"
-  :components ((:file "suite") (:file "mach") (:file "plist") (:file "macho") (:file "dyld") (:file "tahoe"))
+  :components ((:file "suite") (:file "mach") (:file "plist") (:file "macho") (:file "dyld") (:file "objc") (:file "tahoe"))
   :perform (asdf:test-op (o c)
              (uiop:symbol-call :finch/test :run-them)))
