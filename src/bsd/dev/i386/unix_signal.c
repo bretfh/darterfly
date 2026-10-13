@@ -1,5 +1,6 @@
 #include "../../../pexpert/i386/pexpert.h"
 #include "../../../osfmk/i386/seg.h"
+#include "../../kern/kern_sig.h"
 
 typedef struct {
   uint8_t fxsave[512];
@@ -13,8 +14,6 @@ typedef struct {
   uint8_t rest[104];
 } user_siginfo;
 
-uint64_t sigtramp;
-
 int sendsig(x86_saved_state64_t *regs, int sig, int code, uint64_t addr) {
   if (!sigtramp) return 0;
   uint64_t sp = (regs->rsp - 128 - sizeof(user_ucontext)) & ~15ull;
@@ -25,11 +24,16 @@ int sendsig(x86_saved_state64_t *regs, int sig, int code, uint64_t addr) {
   *(uint64_t *)sp = 0;
   __asm__ volatile("fxsave64 %0" : "=m"(uc->fxsave));
   for (int i = 0; i < 16; i++) uc->sigmask[i] = 0;
+  uc->sigmask[0] = p_sigmask;
   uc->ss = *regs;
   si->si_signo = sig;
   si->si_errno = 0;
   si->si_code = code;
   si->si_addr = addr;
+  struct sigacts *act = &p_sigacts[sig];
+  p_sigmask |= act->mask;
+  if (!(act->flags & SA_NODEFER)) p_sigmask |= sigmask(sig);
+  if (act->flags & SA_RESETHAND) act->handler = 0;
   regs->rip = sigtramp;
   regs->rdi = (uint64_t)sig;
   regs->rsi = (uint64_t)si;
@@ -46,4 +50,5 @@ void sigreturn(x86_saved_state64_t *regs, user_ucontext *uc) {
   regs->cs = USER64_CS;
   regs->ss = USER_DS;
   regs->rflags = (uc->ss.rflags & 0x0dd5ull) | (rflags & ~0x0dd5ull);
+  p_sigmask = uc->sigmask[0] & ~(sigmask(SIGKILL) | sigmask(SIGSTOP));
 }

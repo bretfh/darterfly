@@ -12,6 +12,10 @@ static inline uint8_t inb(uint16_t port) {
 
 void serial_init(void);
 void serial_putc(char c);
+int serial_getc(void);
+int serial_ready(void);
+void serial_interrupt(void);
+void serial_enable_interrupts(void);
 int PE_parse_boot_arg(const char *name);
 void PE_halt(void) __attribute__((noreturn));
 void kprintf(const char *format, ...);

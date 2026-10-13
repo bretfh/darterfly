@@ -16,3 +16,4 @@ double ldexp(double, int), frexp(double, int *), modf(double, double *), scalbn(
 double copysign(double, double), nextafter(double, double), rint(double);
 long lrint(double);
 float sqrtf(float), fabsf(float), floorf(float), ceilf(float), truncf(float);
+long double truncl(long double);

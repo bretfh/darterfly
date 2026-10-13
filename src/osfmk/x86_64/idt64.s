@@ -49,6 +49,9 @@ trap_\vector:
 	TRAP 0x80
 	TRAP 0x81
 	TRAP 0x82
+	TRAP 0x24
+	TRAP 0xda
+	TRAP 0xdd
 
 trap_common:
 	pushq	%r15
@@ -96,6 +99,9 @@ idt64_stubs:
 	.globl	idt64_syscall_stubs
 idt64_syscall_stubs:
 	.quad	trap_0x80, trap_0x81, trap_0x82
+	.globl	idt64_interrupt_stubs
+idt64_interrupt_stubs:
+	.quad	0x24, trap_0x24, 0xda, trap_0xda, 0xdd, trap_0xdd, 0, 0
 
 	.text
 	.globl	gdt_load
@@ -120,7 +126,7 @@ thread_bootstrap_return:
 	movw	%ax, %es
 	pushq	$0x2b
 	pushq	%rsi
-	pushq	$0x002
+	pushq	$0x202
 	pushq	$0x33
 	pushq	%rdi
 	movq	%rdx, %rdi

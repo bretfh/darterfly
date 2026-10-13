@@ -2,7 +2,7 @@
   (:use #:cl)
   (:export #:core #:image #:boot #:check-boot #:write-cpio #:*build*
    #:console #:expect #:send #:transcript #:finish #:screendump #:pixel #:monitor #:pointer #:qmp #:send-keys
-   #:boot-efi #:mach-kernel #:esp #:bare-console))
+   #:boot-efi #:mach-kernel #:esp #:bare-console #:send-char))
 (in-package #:finch/image)
 
 (defvar *build* (asdf:system-relative-pathname :finch "build/"))
@@ -284,6 +284,11 @@
 (defun send (console line)
   (let ((in (uiop:process-info-input (console-process console))))
     (write-line line in)
+    (finish-output in)))
+
+(defun send-char (console char)
+  (let ((in (uiop:process-info-input (console-process console))))
+    (write-char char in)
     (finish-output in)))
 
 (defun transcript (console)

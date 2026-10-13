@@ -62,3 +62,7 @@ int gethostname(char *, size_t);
 long syscall(long, ...);
 int chown(const char *, uid_t, gid_t);
 int fchdir(int);
+int close_range(unsigned, unsigned, int);
+int getdtablesize(void);
+int setpgrp(pid_t, pid_t);
+int tcsetpgrp(int, pid_t);

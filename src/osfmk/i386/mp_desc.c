@@ -31,6 +31,7 @@ static uint8_t df_stack[16384] __attribute__((aligned(16)));
 
 extern uint64_t idt64_stubs[32];
 extern uint64_t idt64_syscall_stubs[3];
+extern uint64_t idt64_interrupt_stubs[];
 extern void gdt_load(struct pseudo_descriptor *);
 
 void mp_desc_init(void) {
@@ -68,6 +69,16 @@ void mp_desc_init(void) {
         .offset_low16 = (uint16_t)at,
         .selector16 = KERNEL64_CS,
         .access = 0xee,
+        .offset_high16 = (uint16_t)(at >> 16),
+        .offset_top32 = (uint32_t)(at >> 32),
+    };
+  }
+  for (uint64_t *e = idt64_interrupt_stubs; e[1]; e += 2) {
+    uint64_t at = e[1];
+    master_idt64[e[0]] = (struct real_gate64){
+        .offset_low16 = (uint16_t)at,
+        .selector16 = KERNEL64_CS,
+        .access = 0x8e,
         .offset_high16 = (uint16_t)(at >> 16),
         .offset_top32 = (uint32_t)(at >> 32),
     };

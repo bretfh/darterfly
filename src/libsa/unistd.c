@@ -151,7 +151,7 @@ pid_t getppid(void) { return 0; }
 pid_t getpgrp(void) { return 1; }
 int setpgid(pid_t a, pid_t b) { (void)a; (void)b; return 0; }
 pid_t setsid(void) { return 1; }
-int setpgrp(void) { return 0; }
+int setpgrp(pid_t a, pid_t b) { (void)a; (void)b; return 0; }
 pid_t tcgetpgrp(int fd) { (void)fd; return 1; }
 int tcsetpgrp(int fd, pid_t p) { (void)fd; (void)p; return 0; }
 uid_t getuid(void) { return 0; }
@@ -382,16 +382,10 @@ long syscall(long n, ...) {
 }
 
 int poll(struct pollfd *fds, nfds_t n, int timeout) {
-  int ready = 0;
-  for (;;) {
-    for (nfds_t i = 0; i < n; i++) {
-      fds[i].revents = 0;
-      if (fds[i].fd == 1 || fds[i].fd == 2) fds[i].revents = fds[i].events & POLLOUT;
-      if (fds[i].fd == 0 && (fds[i].events & POLLIN) && __machdep(MACHDEP_console_ready, 0))
-        fds[i].revents |= POLLIN;
-      if (fds[i].revents) ready++;
+  for (nfds_t i = 0; i < n; i++)
+    if (kfile(fds[i].fd)) {
+      fds[i].revents = fds[i].events & (POLLIN | POLLOUT);
+      return 1;
     }
-    if (ready || timeout == 0) return ready;
-    __asm__ volatile("pause");
-  }
+  return (int)__syscall(SYS_poll, (long)fds, (long)n, timeout, 0, 0, 0);
 }

@@ -12,4 +12,5 @@ DIR *opendir(const char *);
 DIR *fdopendir(int);
 struct dirent *readdir(DIR *);
 int closedir(DIR *);
+struct dirent *readdir64(DIR *);
 int dirfd(DIR *);

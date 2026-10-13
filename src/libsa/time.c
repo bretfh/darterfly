@@ -61,9 +61,13 @@ clock_t clock(void) { return (clock_t)(nanos_since_boot() / 1000); }
 
 int nanosleep(const struct timespec *req, struct timespec *rem) {
   uint64_t end = nanos_since_boot() + (uint64_t)req->tv_sec * 1000000000u + (uint64_t)req->tv_nsec;
-  while (nanos_since_boot() < end) __asm__ volatile("pause");
-  if (rem) rem->tv_sec = rem->tv_nsec = 0;
-  return 0;
+  long r = __syscall(SYS___semwait_signal, req->tv_sec, req->tv_nsec, 0, 0, 0, 0);
+  if (rem) {
+    uint64_t now = nanos_since_boot(), left = now < end ? end - now : 0;
+    rem->tv_sec = (time_t)(left / 1000000000u);
+    rem->tv_nsec = (long)(left % 1000000000u);
+  }
+  return r < 0 ? -1 : 0;
 }
 
 unsigned sleep(unsigned s) {
@@ -78,12 +82,10 @@ int usleep(useconds_t us) {
 }
 
 int setitimer(int which, const struct itimerval *v, struct itimerval *old) {
-  (void)which; (void)v;
-  if (old) memset(old, 0, sizeof *old);
-  return 0;
+  return (int)__syscall(SYS_setitimer, which, (long)v, (long)old, 0, 0, 0);
 }
 
-int getitimer(int which, struct itimerval *v) { (void)which; memset(v, 0, sizeof *v); return 0; }
+int getitimer(int which, struct itimerval *v) { return (int)__syscall(SYS_getitimer, which, (long)v, 0, 0, 0, 0); }
 
 long timezone;
 int daylight;

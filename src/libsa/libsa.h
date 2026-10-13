@@ -8,6 +8,11 @@
 #define SYS_getpid 20
 #define SYS_kill 37
 #define SYS_sigaction 46
+#define SYS_sigprocmask 48
+#define SYS_setitimer 83
+#define SYS_getitimer 86
+#define SYS_poll 230
+#define SYS___semwait_signal 334
 #define SYS_munmap 73
 #define SYS_mprotect 74
 #define SYS_madvise 75

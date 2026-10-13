@@ -59,3 +59,25 @@
              (image:send c "(sb-ext:exit :code 7)")
              (is (image:expect c "exit(7)" :timeout 30)))
         (image:finish c 5)))))
+
+(test interrupts-reach-lisp
+  (let ((c (image:bare-console)))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 30)))
+      (unwind-protect
+           (progn
+             (is (search "lapic: timer" (image:expect c "load_init_program: sbcl")))
+             (image:expect c "* " :timeout 60)
+             (let ((slept (ask "(let ((s (get-internal-real-time))) (sleep 0.5) (- (get-internal-real-time) s))")))
+               (is (<= 500000 (parse-integer slept :junk-allowed t :start (position-if #'digit-char-p slept)) 600000)))
+             (ask "(defvar *n* 0)")
+             (ask "(progn (sb-ext:schedule-timer (sb-ext:make-timer (lambda () (incf *n*))) 0.05 :repeat-interval 0.05) :scheduled)")
+             (let ((n (ask "(progn (sleep 1) *n*)")))
+               (is (<= 18 (parse-integer n :junk-allowed t :start (position-if #'digit-char-p n)) 22) "~s" n))
+             (image:send c "(loop)")
+             (sleep 0.5)
+             (image:send-char c (code-char 3))
+             (is (search "INTERACTIVE-INTERRUPT" (image:expect c "0] " :timeout 30)))
+             (image:send c ":abort")
+             (image:expect c "* " :timeout 30)
+             (is (search "3" (ask "(+ 1 2)"))))
+        (image:finish c 5)))))

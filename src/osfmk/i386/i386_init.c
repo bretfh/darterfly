@@ -35,6 +35,7 @@ static void vm_test(void) {
 #define USER_STACK_SIZE (8ull << 20)
 
 void rtclock_init(void);
+void lapic_init(void);
 extern void _libsa_start(const char *cmdline);
 
 static void load_init_program(void) {
@@ -71,6 +72,7 @@ void i386_init(boot_args *args) {
   kprintf("vm: %lu MB free\n", vm_page_free_count() * PAGE_SIZE / (1024 * 1024));
   if (PE_parse_boot_arg("vmtest")) vm_test();
   rtclock_init();
+  lapic_init();
   if (PE_parse_boot_arg("trap")) __asm__ volatile("int3");
   if (PE_parse_boot_arg("halt")) {
     kprintf("halt\n");

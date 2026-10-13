@@ -56,7 +56,7 @@
 (defun runtime-flags ()
   (append (list "-target" "x86_64-unknown-none-elf" "-ffreestanding" "-fPIE" "-mno-red-zone"
                 "-fno-stack-protector" "-fno-omit-frame-pointer" "-O2" "-g0"
-                "-Wno-everything" "-D__finch__")
+                "-Wno-everything" "-Werror=implicit-function-declaration" "-Werror=implicit-int" "-D__finch__")
           (list "-isystem" (source "src/libsa/include"))
           (freestanding)))
 

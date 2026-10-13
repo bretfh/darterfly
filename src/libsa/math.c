@@ -1,5 +1,23 @@
 #include <math.h>
 
+static inline unsigned short x87_enter(void) {
+  unsigned short cw, masked;
+  __asm__ volatile("fnstcw %0" : "=m"(cw));
+  masked = cw | 0x3f;
+  __asm__ volatile("fnclex; fldcw %0" ::"m"(masked));
+  return cw;
+}
+
+static inline void x87_leave(unsigned short cw) { __asm__ volatile("fnclex; fldcw %0" ::"m"(cw)); }
+
+#define X87(expr)                  \
+  ({                               \
+    unsigned short cw_ = x87_enter(); \
+    __typeof__(expr) r_ = (expr);  \
+    x87_leave(cw_);                \
+    r_;                            \
+  })
+
 #define X87_1(name, insn)                                       \
   double name(double x) {                                       \
     long double r;                                              \
@@ -17,7 +35,7 @@ double fabs(double x) { return __builtin_fabs(x); }
 float fabsf(float x) { return __builtin_fabsf(x); }
 double copysign(double a, double b) { return __builtin_copysign(a, b); }
 
-static double round_mode(double x, unsigned short mode) {
+static double round_mode_raw(double x, unsigned short mode) {
   long double r;
   unsigned short cw, ncw;
   __asm__ volatile("fnstcw %0" : "=m"(cw));
@@ -28,6 +46,8 @@ static double round_mode(double x, unsigned short mode) {
   return (double)r;
 }
 
+static double round_mode(double x, unsigned short mode) { return X87(round_mode_raw(x, mode)); }
+
 double floor(double x) { return round_mode(x, 0x0400); }
 double ceil(double x) { return round_mode(x, 0x0800); }
 double trunc(double x) { return round_mode(x, 0x0c00); }
@@ -37,23 +57,32 @@ long lrint(double x) { return (long)rint(x); }
 float floorf(float x) { return (float)floor(x); }
 float ceilf(float x) { return (float)ceil(x); }
 float truncf(float x) { return (float)trunc(x); }
-long double truncl(long double x) { return trunc((double)x); }
+long double truncl(long double x) {
+  unsigned short cw = x87_enter(), t = (unsigned short)(cw | 0x0c00 | 0x3f);
+  long double r;
+  __asm__ volatile("fldcw %0" ::"m"(t));
+  __asm__ volatile("frndint" : "=t"(r) : "0"(x));
+  x87_leave(cw);
+  return r;
+}
 
-double sin(double x) { return sin_x87(x); }
-double cos(double x) { return cos_x87(x); }
+double sin(double x) { return X87(sin_x87(x)); }
+double cos(double x) { return X87(cos_x87(x)); }
 
-double tan(double x) {
+static double tan_raw(double x) {
   long double r, one;
   __asm__("fptan" : "=t"(one), "=u"(r) : "0"((long double)x));
   return (double)r;
 }
 
-double atan2(double y, double x) {
+static double atan2_raw(double y, double x) {
   long double r;
   __asm__("fpatan" : "=t"(r) : "0"((long double)x), "u"((long double)y) : "st(1)");
   return (double)r;
 }
 
+double tan(double x) { return X87(tan_raw(x)); }
+double atan2(double y, double x) { return X87(atan2_raw(y, x)); }
 double atan(double x) { return atan2(x, 1.0); }
 double asin(double x) { return atan2(x, sqrt((1 - x) * (1 + x))); }
 double acos(double x) { return atan2(sqrt((1 - x) * (1 + x)), x); }
@@ -74,16 +103,16 @@ static long double exp2l_x87(long double x) {
   return r;
 }
 
-double log2(double x) { return x < 0 ? NAN : x == 0 ? -INFINITY : (double)log2l_x87(x); }
-double log(double x) { return x < 0 ? NAN : x == 0 ? -INFINITY : (double)(log2l_x87(x) * 0.69314718055994530942L); }
-double log10(double x) { return x < 0 ? NAN : x == 0 ? -INFINITY : (double)(log2l_x87(x) * 0.30102999566398119521L); }
+double log2(double x) { return x < 0 ? NAN : x == 0 ? -INFINITY : (double)X87(log2l_x87(x)); }
+double log(double x) { return x < 0 ? NAN : x == 0 ? -INFINITY : (double)X87(log2l_x87(x) * 0.69314718055994530942L); }
+double log10(double x) { return x < 0 ? NAN : x == 0 ? -INFINITY : (double)X87(log2l_x87(x) * 0.30102999566398119521L); }
 double log1p(double x) { return log(1 + x); }
 
 double exp(double x) {
   if (isnan(x)) return x;
   if (x > 709.8) return INFINITY;
   if (x < -745.2) return 0;
-  return (double)exp2l_x87(x * 1.44269504088896340736L);
+  return (double)X87(exp2l_x87(x * 1.44269504088896340736L));
 }
 
 double expm1(double x) { return exp(x) - 1; }
@@ -96,18 +125,19 @@ double pow(double x, double y) {
   if (x < 0) {
     double i = trunc(y);
     if (i != y) return NAN;
-    double r = (double)exp2l_x87(y * log2l_x87(-x));
+    double r = (double)X87(exp2l_x87(y * log2l_x87(-x)));
     return fmod(i, 2) != 0 ? -r : r;
   }
-  return (double)exp2l_x87(y * log2l_x87(x));
+  return (double)X87(exp2l_x87(y * log2l_x87(x)));
 }
 
-double fmod(double a, double b) {
+static double fmod_raw(double a, double b) {
   long double r;
   __asm__("1: fprem; fnstsw %%ax; testb $4, %%ah; jnz 1b" : "=t"(r) : "0"((long double)a), "u"((long double)b) : "ax", "cc");
   return (double)r;
 }
 
+double fmod(double a, double b) { return X87(fmod_raw(a, b)); }
 double hypot(double a, double b) { return sqrt(a * a + b * b); }
 double sinh(double x) { return (exp(x) - exp(-x)) / 2; }
 double cosh(double x) { return (exp(x) + exp(-x)) / 2; }
@@ -121,7 +151,7 @@ double asinh(double x) { return x < 0 ? -log(-x + sqrt(x * x + 1)) : log(x + sqr
 double acosh(double x) { return log(x + sqrt(x * x - 1)); }
 double atanh(double x) { return 0.5 * log((1 + x) / (1 - x)); }
 double cbrt(double x) { return x < 0 ? -pow(-x, 1.0 / 3) : pow(x, 1.0 / 3); }
-double ldexp(double x, int e) { return x * (double)exp2l_x87(e); }
+double ldexp(double x, int e) { return x * (double)X87(exp2l_x87(e)); }
 double scalbn(double x, int e) { return ldexp(x, e); }
 
 double frexp(double x, int *e) {

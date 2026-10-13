@@ -69,9 +69,19 @@ static void user_trap(x86_saved_state64_t *regs) {
   panic_trap(regs);
 }
 
+void lapic_interrupt(uint64_t vector);
+void bsd_ast(x86_saved_state64_t *regs);
+
 void kernel_trap(x86_saved_state64_t *regs) {
-  if ((regs->cs & 3) == 3) {
+  int user = (regs->cs & 3) == 3;
+  if ((regs->trapno >= 0x20 && regs->trapno < 0x80) || regs->trapno >= 0xd0) {
+    lapic_interrupt(regs->trapno);
+    if (user) bsd_ast(regs);
+    return;
+  }
+  if (user) {
     user_trap(regs);
+    bsd_ast(regs);
     return;
   }
   if (regs->trapno == 14 && vm_fault(READ_CR(2), regs->err)) return;

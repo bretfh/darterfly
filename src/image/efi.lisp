@@ -31,6 +31,7 @@
     "src/osfmk/i386/mp_desc.c" "src/osfmk/i386/pmap.c" "src/osfmk/i386/trap.c" "src/osfmk/i386/rtclock.c"
     "src/osfmk/kern/printf.c" "src/osfmk/kern/debug.c" "src/osfmk/kern/kalloc.c"
     "src/osfmk/vm/vm_resident.c" "src/osfmk/vm/vm_map.c"
+    "src/osfmk/i386/lapic.c" "src/bsd/kern/kern_sig.c"
     "src/bsd/dev/i386/systemcalls.c" "src/bsd/dev/i386/unix_signal.c"
     "src/pexpert/i386/pe_serial.c" "src/pexpert/i386/pe_init.c" "src/osfmk/x86_64/loose_ends.c"))
 
@@ -92,7 +93,7 @@
                         :maximize (newest (list sub)))))
 
 (defun kernel-inputs ()
-  (append (mapcar #'source '("src/osfmk/" "src/bsd/dev/" "src/pexpert/" "src/libsa/" "src/sbcl/" "src/image/"))
+  (append (mapcar #'source '("src/osfmk/" "src/bsd/dev/" "src/bsd/kern/" "src/pexpert/" "src/libsa/" "src/sbcl/" "src/image/"))
           (list (merge-pathnames "output/" (sbcl-tree)))))
 
 (defun mach-kernel ()
