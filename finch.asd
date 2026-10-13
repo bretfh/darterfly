@@ -2,7 +2,7 @@
   :description "Ports, rights, names and messages"
   :serial t
   :pathname "src/mach/"
-  :components ((:file "kern") (:file "port") (:file "msg")))
+  :components ((:file "kern") (:file "port") (:file "msg") (:file "task")))
 
 (asdf:defsystem #:finch/plist
   :description "Property lists, XML and binary"

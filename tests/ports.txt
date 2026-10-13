@@ -274,3 +274,61 @@ refs o send | 0 4
 send o copy-send none - 7002 ports make-send-once o+o | 0
 receive o - y | 0 7002 move-send none ports move-send-once 2
 type y | 0 send-once
+self t | 0
+type t | 0 send
+special-get k kernel | 0
+same k t | 0 yes
+type k | 0 send
+allocate bp receive | 0
+insert bp bp make-send | 0
+special-set bootstrap bp | 0
+special-get b bootstrap | 0
+same b bp | 0 yes
+refs bp send | 0 2
+allocate r1 receive | 0
+insert r1 r1 make-send | 0
+register r1 bp | 0
+refs r1 send | 0 1
+lookup l1 l2 l3 | 0 3
+same l1 r1 | 0 yes
+same l2 bp | 0 yes
+refs r1 send | 0 2
+fork | 0
+self ct | 0
+same ct t | 0 no
+special-get cb bootstrap | 0
+type cb | 0 send
+allocate cp receive | 0
+insert cp cp make-send | 0
+send cb copy-send cp make-send-once 8000 | 0
+send cb copy-send none - 8001 cp make-send | 0
+allocate cq receive | 0
+insert cq cq make-send | 0
+send cq copy-send none - 8100 | 0
+send cb copy-send none - 8002 cq move-receive | 0
+allocate cr receive | 0
+insert cr cr make-send | 0
+send cb copy-send none - 8003 cr make-send-once | 0
+exit | 0
+receive bp q | 0 8000 move-send move-send-once
+receive bp - y | 0 8001 move-send none move-send
+type y | 0 dead-name
+refs y dead-name | f
+receive bp - z | 0 8002 move-send none move-receive
+type z | 0 receive
+receive z x | 0 8100 move-send none
+receive z x | 10004003
+receive bp - o | 0 8003 move-send none move-send-once
+type o | 0 dead-name
+send q move-send-once none - 8004 | 10000003
+type q | 0 dead-name
+register | 0
+lookup l1 l2 l3 | 0 3
+thread-self th | 0
+type th | 0 send
+thread-self th2 | 0
+same th th2 | 0 yes
+reply-port rp | 0
+type rp | 0 receive
+reply-port rp2 | 0
+same rp rp2 | 0 no

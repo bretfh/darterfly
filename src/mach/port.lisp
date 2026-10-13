@@ -2,6 +2,7 @@
 
 (defconstant +mach-port-qlimit-default+ 5)
 (defconstant +mach-port-qlimit-max+ 1024)
+(defconstant +mach-port-dead+ #xffffffff)
 (defconstant +mach-notify-port-deleted+ #o101)
 (defconstant +mach-notify-send-possible+ #o102)
 (defconstant +mach-notify-port-destroyed+ #o105)
@@ -31,6 +32,7 @@
    (requests :initform nil :accessor requests)
    (seqno :initform 0 :accessor seqno)
    (context :initform 0 :accessor context)
+   (kobject :initform nil :accessor kobject)
    (arrived :initform (sb-thread:make-waitqueue) :reader arrived)
    (drained :initform (sb-thread:make-waitqueue) :reader drained)))
 
@@ -49,19 +51,40 @@
   ((name :initarg :name :initform nil :reader task-name)
    (entries :initform (make-hash-table) :reader entries)
    (names :initform (make-hash-table :test 'eq) :reader names)
-   (next :initform 0 :accessor next)))
+   (next :initform 0 :accessor next)
+   (port :reader task-port)
+   (bootstrap :initform nil :accessor bootstrap)
+   (registered :initform (list nil nil nil) :accessor registered)))
 
 (defmethod print-object ((task task) stream)
   (print-unreadable-object (task stream :type t :identity t)
     (format stream "~@[~a~]" (task-name task))))
+
+(defun kernel-port (object)
+  (let ((port (make-instance 'port)))
+    (setf (kobject port) object
+          (receiver port) :kernel)
+    port))
+
+(defmethod initialize-instance :after ((task task) &key)
+  (setf (slot-value task 'port) (kernel-port task)))
 
 (defun make-task (&optional name)
   (make-instance 'task :name name))
 
 (defvar *task* (make-task "self"))
 
-(defun mach-task-self ()
-  *task*)
+(defun valid-name-p (name)
+  (and name (/= name 0) (/= name +mach-port-dead+)))
+
+(defun ipc-space (task)
+  (if (typep task 'task)
+      task
+      (let* ((e (and (valid-name-p task) (gethash task (entries *task*))))
+             (port (and e (object (check e)))))
+        (unless (and port (member :send (rights e)) (typep (kobject port) 'task))
+          (fail :mach-send-invalid-dest))
+        (kobject port))))
 
 (defun fresh-name (task)
   (loop :for name := (logior (ash (incf (next task)) 8) 3)
@@ -215,6 +238,9 @@
 
 (defun copyout (task carried &optional name)
   (destructuring-bind (port . type) carried
+    (when (and (deadp port) (null name) (not (eq type :receive)))
+      (consume carried)
+      (return-from copyout +mach-port-dead+))
     (let* ((have (gethash port (names task)))
            (e (and have (check (gethash have (entries task))))))
       (when (and name have (/= name have) (not (eq type :send-once)))
@@ -243,6 +269,7 @@
 
 (defun mach-port-allocate (task right)
   (with-ipc
+    (setf task (ipc-space task))
     (ecase right
       (:receive
        (let ((port (make-instance 'port)))
@@ -257,6 +284,7 @@
 
 (defun mach-port-allocate-name (task right name)
   (with-ipc
+    (setf task (ipc-space task))
     (unless (and (integerp name) (< 0 name #xffffffff)) (fail :kern-invalid-value))
     (case right
       (:receive
@@ -269,6 +297,7 @@
 
 (defun mach-port-insert-right (task name poly disposition)
   (with-ipc
+    (setf task (ipc-space task))
     (let ((carried (copyin *task* poly disposition)))
       (handler-bind ((kern-return (lambda (c) (declare (ignore c)) (release carried))))
         (copyout task carried name)))
@@ -276,6 +305,7 @@
 
 (defun mach-port-deallocate (task name)
   (with-ipc
+    (setf task (ipc-space task))
     (let* ((e (entry task name))
            (port (object e)))
       (cond ((member :send (rights e))
@@ -293,6 +323,7 @@
 
 (defun mach-port-mod-refs (task name right delta)
   (with-ipc
+    (setf task (ipc-space task))
     (let* ((e (entry task name))
            (object (object e)))
       (unless (member right (rights e))
@@ -328,6 +359,7 @@
 
 (defun mach-port-destroy (task name)
   (with-ipc
+    (setf task (ipc-space task))
     (entry task name)
     (dolist (right '(:send :send-once :dead-name :receive :port-set))
       (let ((e (gethash name (entries task))))
@@ -338,10 +370,18 @@
 
 (defun mach-port-type (task name)
   (with-ipc
-    (copy-list (rights (entry task name)))))
+    (setf task (ipc-space task))
+    (if (eql name +mach-port-dead+)
+        (list :dead-name)
+        (copy-list (rights (entry task name))))))
 
 (defun mach-port-get-refs (task name right)
   (with-ipc
+    (setf task (ipc-space task))
+    (unless (valid-name-p name)
+      (if (member right '(:send :send-once))
+          (return-from mach-port-get-refs 1)
+          (fail :kern-invalid-name)))
     (let ((e (entry task name)))
       (cond ((not (member right (rights e))) 0)
             ((member right '(:send :dead-name)) (urefs e))
@@ -349,10 +389,12 @@
 
 (defun mach-port-names (task)
   (with-ipc
+    (setf task (ipc-space task))
     (sort (loop :for name :being :the :hash-keys :of (entries task) :collect name) #'<)))
 
 (defun mach-port-move-member (task member set)
   (with-ipc
+    (setf task (ipc-space task))
     (let* ((e (entry task member))
            (port (object e)))
       (unless (member :receive (rights e))
@@ -417,6 +459,7 @@
 
 (defun mach-port-request-notification (task name kind sync notify disposition)
   (with-ipc
+    (setf task (ipc-space task))
     (let ((carried (and notify (copyin *task* notify disposition
                                        :absent :mach-send-invalid-right
                                        :wrong :mach-send-invalid-right))))
@@ -430,6 +473,7 @@
 
 (defun mach-port-get-attributes (task name flavor)
   (with-ipc
+    (setf task (ipc-space task))
     (ecase flavor
       (:receive-status
        (let ((port (receive-port task name)))
@@ -440,6 +484,7 @@
 
 (defun mach-port-set-attributes (task name flavor value)
   (with-ipc
+    (setf task (ipc-space task))
     (ecase flavor
       (:limits-info
        (let ((port (receive-port task name)))
@@ -450,30 +495,36 @@
 
 (defun mach-port-set-mscount (task name mscount)
   (with-ipc
+    (setf task (ipc-space task))
     (setf (mscount (receive-port task name)) mscount)
     (values)))
 
 (defun mach-port-set-seqno (task name seqno)
   (with-ipc
+    (setf task (ipc-space task))
     (setf (seqno (receive-port task name)) seqno)
     (values)))
 
 (defun mach-port-set-context (task name context)
   (with-ipc
+    (setf task (ipc-space task))
     (setf (context (receive-port task name)) context)
     (values)))
 
 (defun mach-port-get-context (task name)
   (with-ipc
+    (setf task (ipc-space task))
     (context (receive-port task name))))
 
 (defun mach-port-get-set-status (task name)
   (with-ipc
+    (setf task (ipc-space task))
     (let ((e (entry task name)))
       (unless (member :port-set (rights e)) (fail :kern-invalid-right))
       (mapcar (lambda (port) (gethash port (names task))) (members (object e))))))
 
 (defun mach-port-extract-right (task name disposition)
   (with-ipc
+    (setf task (ipc-space task))
     (let ((carried (copyin task name disposition)))
       (values (copyout *task* carried) (moved (cdr carried))))))

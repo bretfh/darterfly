@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <mach/mach.h>
+extern mach_port_name_t mach_reply_port(void);
+#include <unistd.h>
+#include <sys/wait.h>
 
 static struct { char key[32]; mach_port_name_t name; } vars[64];
 static int nvars;
@@ -49,6 +52,14 @@ static const char *key(mach_port_name_t name) {
   for (int i = nvars - 1; i >= 0; i--) if (vars[i].name == name && strcmp(vars[i].key, "x")) return vars[i].key;
   return "?";
 }
+
+static int special(const char *s) {
+  if (!strcmp(s, "kernel")) return TASK_KERNEL_PORT;
+  if (!strcmp(s, "bootstrap")) return TASK_BOOTSTRAP_PORT;
+  return -1;
+}
+
+static int compare(const void *a, const void *b) { return strcmp(*(const char **)a, *(const char **)b); }
 
 static mach_port_right_t right(const char *s) {
   for (int i = 0; i < 5; i++) if (!strcmp(s, rights[i].name)) return rights[i].right;
@@ -188,6 +199,53 @@ int main(int argc, char **argv) {
           }
         }
       }
+    } else if (!strcmp(w[0], "self")) {
+      *var(w[1]) = mach_task_self();
+      printf(" 0");
+    } else if (!strcmp(w[0], "thread-self")) {
+      *var(w[1]) = mach_thread_self();
+      printf(" 0");
+    } else if (!strcmp(w[0], "reply-port")) {
+      *var(w[1]) = mach_reply_port();
+      printf(" 0");
+    } else if (!strcmp(w[0], "same")) {
+      printf(" 0 %s", get(w[1]) == get(w[2]) ? "yes" : "no");
+    } else if (!strcmp(w[0], "special-get")) {
+      mach_port_t port;
+      kr = task_get_special_port(self, special(w[2]), &port);
+      printf(" %x", kr);
+      if (!kr) *var(w[1]) = port;
+    } else if (!strcmp(w[0], "special-set")) {
+      printf(" %x", task_set_special_port(self, special(w[1]), get(w[2])));
+    } else if (!strcmp(w[0], "register")) {
+      mach_port_t ports[3];
+      for (int i = 1; i < n; i++) ports[i - 1] = get(w[i]);
+      printf(" %x", mach_ports_register(self, ports, n - 1));
+    } else if (!strcmp(w[0], "lookup")) {
+      mach_port_array_t ports;
+      mach_msg_type_number_t count;
+      kr = mach_ports_lookup(self, &ports, &count);
+      printf(" %x", kr);
+      if (!kr) {
+        printf(" %u", count);
+        for (unsigned i = 0; i < count && 1 + (int)i < n; i++) *var(w[1 + i]) = ports[i];
+      }
+    } else if (!strcmp(w[0], "fork")) {
+      printf(" 0\n");
+      fflush(stdout);
+      pid_t pid = fork();
+      if (pid) {
+        while (fgets(line, sizeof line, in) && strncmp(line, "exit", 4)) {}
+        waitpid(pid, NULL, 0);
+        self = mach_task_self();
+        continue;
+      }
+      self = mach_task_self();
+      continue;
+    } else if (!strcmp(w[0], "exit")) {
+      printf(" 0\n");
+      fflush(stdout);
+      _exit(0);
     } else if (!strcmp(w[0], "allocate-name")) {
       kr = mach_port_allocate_name(self, right(w[2]), strtoul(w[3], NULL, 0));
       if (!kr) *var(w[1]) = strtoul(w[3], NULL, 0);
@@ -218,7 +276,12 @@ int main(int argc, char **argv) {
       mach_msg_type_number_t count;
       kr = mach_port_get_set_status(self, get(w[1]), &members, &count);
       printf(" %x", kr);
-      if (!kr) for (unsigned i = 0; i < count; i++) printf(" %s", key(members[i]));
+      const char *keys[64];
+      if (!kr) {
+        for (unsigned i = 0; i < count; i++) keys[i] = key(members[i]);
+        qsort(keys, count, sizeof keys[0], compare);
+        for (unsigned i = 0; i < count; i++) printf(" %s", keys[i]);
+      }
     } else if (!strcmp(w[0], "context")) {
       printf(" %x", mach_port_set_context(self, get(w[1]), strtoull(w[2], NULL, 0)));
     } else if (!strcmp(w[0], "get-context")) {

@@ -10,6 +10,9 @@
    #:mach-port-get-attributes #:mach-port-set-attributes #:mach-port-set-mscount
    #:mach-port-set-seqno #:mach-port-set-context #:mach-port-get-context
    #:mach-port-get-set-status #:mach-port-extract-right #:msgh-seqno
+   #:mach-thread-self #:mach-reply-port #:task-get-special-port #:task-set-special-port
+   #:mach-ports-register #:mach-ports-lookup #:task-create #:task-terminate #:task-port
+   #:+mach-port-dead+
    #:message #:make-message #:msgh-remote-port #:msgh-local-port
    #:msgh-remote-disposition #:msgh-local-disposition #:msgh-id
    #:msgh-body #:msgh-descriptors

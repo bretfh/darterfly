@@ -274,3 +274,61 @@ refs o send
 send o copy-send none - 7002 ports make-send-once o+o
 receive o - y
 type y
+self t
+type t
+special-get k kernel
+same k t
+type k
+allocate bp receive
+insert bp bp make-send
+special-set bootstrap bp
+special-get b bootstrap
+same b bp
+refs bp send
+allocate r1 receive
+insert r1 r1 make-send
+register r1 bp
+refs r1 send
+lookup l1 l2 l3
+same l1 r1
+same l2 bp
+refs r1 send
+fork
+self ct
+same ct t
+special-get cb bootstrap
+type cb
+allocate cp receive
+insert cp cp make-send
+send cb copy-send cp make-send-once 8000
+send cb copy-send none - 8001 cp make-send
+allocate cq receive
+insert cq cq make-send
+send cq copy-send none - 8100
+send cb copy-send none - 8002 cq move-receive
+allocate cr receive
+insert cr cr make-send
+send cb copy-send none - 8003 cr make-send-once
+exit
+receive bp q
+receive bp - y
+type y
+refs y dead-name
+receive bp - z
+type z
+receive z x
+receive z x
+receive bp - o
+type o
+send q move-send-once none - 8004
+type q
+register
+lookup l1 l2 l3
+thread-self th
+type th
+thread-self th2
+same th th2
+reply-port rp
+type rp
+reply-port rp2
+same rp rp2
