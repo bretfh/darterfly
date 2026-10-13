@@ -161,19 +161,26 @@
 (defun qmp (command &optional arguments)
   (finch/qmp:qmp (qmp-path) command arguments))
 
+(defun key-name (char)
+  (case char
+    (#\( "9") (#\) "0") (#\+ "equal") (#\* "8") (#\" "apostrophe") (#\Space "spc")
+    (#\Newline "ret") (#\- "minus") (#\= "equal") (#\. "dot") (#\/ "slash")
+    (t (string (char-downcase char)))))
+
 (defun send-keys (string)
-  (loop :for char :across string
-        :do (let* ((shifted (find char "()+*\"!@#$%^&_{}|:<>?~"))
-                   (base (cond ((char= char #\() "9") ((char= char #\)) "0") ((char= char #\+) "equal")
-                               ((char= char #\*) "8") ((char= char #\") "apostrophe")
-                               ((char= char #\Space) "spc") ((char= char #\Newline) "ret")
-                               ((char= char #\-) "minus") ((char= char #\=) "equal")
-                               ((char= char #\.) "dot") ((char= char #\/) "slash")
-                               (t (string (char-downcase char)))))
-                   (keys (append (and (or shifted (upper-case-p char)) (list "shift")) (list base))))
-              (qmp "send-key" (finch/qmp:dict "keys" (map 'vector (lambda (k) (finch/qmp:dict "type" "qcode" "data" k))
-                                                          keys)))
-              )))
+  (flet ((key (name down)
+           (finch/qmp:dict "type" "key"
+                           "data" (finch/qmp:dict "down" down
+                                                  "key" (finch/qmp:dict "type" "qcode" "data" name)))))
+    (loop :for char :across string
+          :do (let* ((shift (or (find char "()+*\"!@#$%^&_{}|:<>?~") (upper-case-p char)))
+                     (name (key-name char)))
+                (qmp "input-send-event"
+                     (finch/qmp:dict "events"
+                                     (coerce (append (and shift (list (key "shift" t)))
+                                                     (list (key name t) (key name nil))
+                                                     (and shift (list (key "shift" nil))))
+                                             'vector)))))))
 
 (defun pointer (x y &optional (button nil button-p))
   (flet ((abs-event (axis value)
