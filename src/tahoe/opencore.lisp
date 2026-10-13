@@ -60,6 +60,7 @@
                              (at c "Kernel" "Add"))))
     (put c '("Kernel" "Quirks" "ProvideCurrentCpuInfo") t)
     (put c '("Kernel" "Emulate" "DummyPowerManagement") t)
+    (put c '("UEFI" "Output" "Resolution") "1280x800@32")
     (put c '("Misc" "Boot" "Timeout") 5)
     (put c '("Misc" "Boot" "PollAppleHotKeys") t)
     (put c '("Misc" "Debug" "Target") 9)

@@ -51,7 +51,7 @@
 (defun system-powerdown () (qmp "system_powerdown"))
 (defun quit () (qmp "quit"))
 
-(defparameter *screen* '(2560 1600))
+(defparameter *screen* '(1280 800))
 
 (defun axis (name value limit)
   (dict "type" "abs" "data" (dict "axis" name "value" (floor (* value 32767) (1- limit)))))
