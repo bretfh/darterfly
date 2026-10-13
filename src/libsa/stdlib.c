@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <stdint.h>
+#include <sched.h>
 
 #define MIN_CLASS 4
 #define MAX_CLASS 19
@@ -13,6 +14,13 @@
 typedef struct { size_t size; size_t class; } header;
 
 static void *free_lists[MAX_CLASS + 1];
+static char malloc_lock;
+
+static void lock(void) {
+  while (__atomic_test_and_set(&malloc_lock, __ATOMIC_ACQUIRE)) sched_yield();
+}
+
+static void unlock(void) { __atomic_clear(&malloc_lock, __ATOMIC_RELEASE); }
 static char *arena_next, *arena_end;
 
 static int class_of(size_t n) {
@@ -44,9 +52,12 @@ void *malloc(size_t n) {
     return h + 1;
   }
   int c = class_of(total);
+  lock();
   header *h = free_lists[c];
   if (h) free_lists[c] = *(void **)h;
-  else if (!(h = carve(1ul << c))) { errno = ENOMEM; return 0; }
+  else h = carve(1ul << c);
+  unlock();
+  if (!h) { errno = ENOMEM; return 0; }
   h->size = n;
   h->class = (size_t)c;
   return h + 1;
@@ -59,8 +70,10 @@ void free(void *p) {
     munmap(h, (h->size + sizeof(header) + 4095) & ~4095ul);
     return;
   }
+  lock();
   *(void **)h = free_lists[h->class];
   free_lists[h->class] = h;
+  unlock();
 }
 
 void *calloc(size_t a, size_t b) {

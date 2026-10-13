@@ -14,9 +14,7 @@ static const uint64_t unblockable = sigmask(SIGKILL) | sigmask(SIGSTOP);
 
 static uint64_t deliverable(thread_t t) { return (t->siglist | p_siglist) & ~(t->sigmask & ~unblockable); }
 
-static void interrupt_if_waiting(thread_t t) {
-  if (t->state == TH_WAIT) thread_wakeup_thread(t, THREAD_INTERRUPTED);
-}
+static void interrupt_if_waiting(thread_t t) { thread_abort_safely(t); }
 
 void psignal_thread(thread_t t, int sig) {
   if (sig <= 0 || sig >= NSIG) return;
@@ -50,6 +48,7 @@ void bsd_console_interrupt_char(void) { psignal(SIGINT); }
 
 void bsd_ast(x86_saved_state64_t *regs) {
   thread_t self = current_thread();
+  self->sched_flags &= ~TH_SFLAG_ABORTSAFELY;
   int sig;
   if (sigtrace < 0) sigtrace = PE_parse_boot_arg("sigtrace");
   while ((sig = issignal())) {

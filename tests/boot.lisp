@@ -98,6 +98,30 @@
                          (ask "(let ((ts (loop repeat 3 collect (sb-thread:make-thread (lambda () (let ((n 0)) (dotimes (i 300) (incf n (length (make-array 100000)))) n)))))) (mapcar #'sb-thread:join-thread ts))"))))
         (image:finish c 5)))))
 
+(test smp-on-finch
+  (let ((c (image:bare-console :boot-args "cpus=1 halt")))
+    (unwind-protect (is (image:expect c "mp: 1 cpu"))
+      (image:finish c 5)))
+  (let ((c (image:bare-console)))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
+      (unwind-protect
+           (progn
+             (is (image:expect c "mp: 4 cpus"))
+             (image:expect c "* " :timeout 60)
+             (ask "(defun cpu () (sb-alien:alien-funcall (sb-alien:extern-alien \"_os_cpu_number\" (function sb-alien:unsigned))))")
+             (is (search "(0 1 2 3)"
+                         (ask "(let ((ts (loop repeat 4 collect (sb-thread:make-thread (lambda () (let ((seen nil)) (dotimes (i 200000) (pushnew (cpu) seen)) seen)))))) (sort (remove-duplicates (mapcan #'sb-thread:join-thread ts)) #'<))")))
+             (ask "(defun work () (let ((n 0)) (declare (fixnum n)) (dotimes (i 1000000000) (setf n (logand (+ n i) #xffffff))) n))")
+             (ask "(defun timed (k) (let ((t0 (get-internal-real-time))) (mapc #'sb-thread:join-thread (loop repeat k collect (sb-thread:make-thread #'work))) (- (get-internal-real-time) t0)))")
+             (is (search "T" (ask "(let ((one (timed 1)) (four (timed 4))) (< four (* 2 one)))")))
+             (is (search "(30000000 30000000 30000000 30000000)"
+                         (ask "(let ((ts (loop repeat 4 collect (sb-thread:make-thread (lambda () (let ((n 0)) (dotimes (i 300) (incf n (length (make-array 100000)))) n)))))) (mapcar #'sb-thread:join-thread ts))")))
+             (is (search "T"
+                         (ask "(dotimes (k 5 t) (let ((ts (loop repeat 8 collect (sb-thread:make-thread (lambda () (let ((h (make-hash-table))) (dotimes (r 40) (dotimes (i 20000) (setf (gethash i h) (make-list 10)))) (hash-table-count h))))))) (assert (every (lambda (n) (= n 20000)) (mapcar #'sb-thread:join-thread ts)))))")))
+             (is (search ":OK"
+                         (ask "(let* ((sem (sb-thread:make-semaphore)) (ts (loop repeat 4 collect (sb-thread:make-thread (lambda () (dotimes (i 5000) (sb-thread:signal-semaphore sem))))))) (dotimes (i 20000) (sb-thread:wait-on-semaphore sem)) (mapc #'sb-thread:join-thread ts) :ok)"))))
+        (image:finish c 5)))))
+
 (test xnu-checked-suites-pass-on-finch
   (let ((c (image:bare-console)))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 300)))

@@ -52,6 +52,7 @@ trap_\vector:
 	TRAP 0x24
 	TRAP 0xda
 	TRAP 0xdd
+	TRAP 0xde
 
 trap_common:
 	pushq	%r15
@@ -73,6 +74,7 @@ trap_common:
 	call	kernel_trap
 	.globl	return_to_user
 return_to_user:
+	call	funnel_unlock
 	popq	%rax
 	popq	%rbx
 	popq	%rcx
@@ -103,7 +105,7 @@ idt64_syscall_stubs:
 	.quad	trap_0x80, trap_0x81, trap_0x82
 	.globl	idt64_interrupt_stubs
 idt64_interrupt_stubs:
-	.quad	0x24, trap_0x24, 0xda, trap_0xda, 0xdd, trap_0xdd, 0, 0
+	.quad	0x24, trap_0x24, 0xda, trap_0xda, 0xdd, trap_0xdd, 0xde, trap_0xde, 0, 0
 
 	.text
 	.globl	gdt_load

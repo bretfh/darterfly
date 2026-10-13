@@ -84,6 +84,8 @@ void mach_call(x86_saved_state64_t *regs);
 void sched_ast(void);
 
 void kernel_trap(x86_saved_state64_t *regs) {
+  process_pmap_updates();
+  funnel_lock();
   int user = (regs->cs & 3) == 3;
   if ((regs->trapno >= 0x20 && regs->trapno < 0x80) || regs->trapno >= 0xd0) {
     lapic_interrupt(regs->trapno);

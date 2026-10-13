@@ -1,6 +1,7 @@
 #include "../../pexpert/i386/pexpert.h"
 #include "../vm/vm.h"
 #include "seg.h"
+#include "cpu_data.h"
 
 #define INTEL_PTE_VALID 0x1ull
 #define INTEL_PTE_WRITE 0x2ull
@@ -58,31 +59,54 @@ static uint64_t prot_bits(int prot) {
 static inline void invlpg(uint64_t va) { __asm__ volatile("invlpg (%0)" ::"r"(va) : "memory"); }
 
 void pmap_enter(uint64_t va, uint64_t pa, int prot) {
-  *pte(va, 1) = (pa & PTE_PFN) | prot_bits(prot) | PTE_FRAME;
+  uint64_t *e = pte(va, 1);
+  uint64_t old = *e;
+  *e = (pa & PTE_PFN) | prot_bits(prot) | PTE_FRAME;
   invlpg(va);
+  if (old & INTEL_PTE_VALID) pmap_flush_tlbs();
 }
 
 
 
 void pmap_protect(uint64_t va, uint64_t len, int prot) {
+  int changed = 0;
   for (uint64_t a = va & ~(PAGE_SIZE - 1); a < va + len; a += PAGE_SIZE) {
     uint64_t *e = pte(a, 0);
     if (e && (*e & PTE_FRAME)) {
       *e = (*e & PTE_PFN) | prot_bits(prot) | PTE_FRAME;
       invlpg(a);
+      changed = 1;
     }
   }
+  if (changed) pmap_flush_tlbs();
 }
 
 void pmap_remove(uint64_t va, uint64_t len) {
+  uint64_t freed[64];
+  int n = 0;
   for (uint64_t a = va & ~(PAGE_SIZE - 1); a < va + len; a += PAGE_SIZE) {
     uint64_t *e = pte(a, 0);
     if (e && (*e & PTE_FRAME)) {
-      vm_page_free(*e & PTE_PFN);
+      freed[n++] = *e & PTE_PFN;
       *e = 0;
       invlpg(a);
+      if (n == 64) {
+        pmap_flush_tlbs();
+        while (n) vm_page_free(freed[--n]);
+      }
     }
   }
+  if (n) pmap_flush_tlbs();
+  while (n) vm_page_free(freed[--n]);
+}
+
+int pmap_access_ok(uint64_t va, uint64_t err) {
+  uint64_t *e = pte(va, 0);
+  if (!e || !(*e & INTEL_PTE_VALID)) return 0;
+  if ((err & 2) && !(*e & INTEL_PTE_WRITE)) return 0;
+  if ((err & 0x10) && (*e & INTEL_PTE_NX)) return 0;
+  invlpg(va);
+  return 1;
 }
 
 uint64_t pmap_find_phys(uint64_t va) {

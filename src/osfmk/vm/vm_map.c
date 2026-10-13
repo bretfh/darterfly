@@ -77,6 +77,7 @@ static vm_map_entry *lookup(uint64_t va) {
 }
 
 int vm_fault(uint64_t va, uint64_t err) {
+  if (pmap_access_ok(page_down(va), err)) return 1;
   vm_map_entry *entry = lookup(va);
   if (!entry || (err & 1) || !entry->prot) return 0;
   if ((err & 2) && !(entry->prot & VM_PROT_WRITE)) return 0;

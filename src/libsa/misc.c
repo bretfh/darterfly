@@ -19,3 +19,9 @@ char *basename(char *p) {
 }
 
 int prctl(int o, ...) { (void)o; return 0; }
+
+unsigned _os_cpu_number(void) {
+  unsigned aux;
+  __asm__ volatile("rdtscp" : "=c"(aux)::"eax", "edx");
+  return aux;
+}

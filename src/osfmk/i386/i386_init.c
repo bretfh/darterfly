@@ -1,6 +1,7 @@
 #include "../../pexpert/i386/pexpert.h"
 #include "seg.h"
 #include "../vm/vm.h"
+#include "cpu_data.h"
 
 typedef struct {
   uint32_t Type;
@@ -42,15 +43,17 @@ uint64_t boot_kernel_stack_top(void);
 #include "../kern/thread.h"
 
 static void load_init_program(void) {
-  thread_bootstrap(boot_kernel_stack_top());
   vm_map_enter(USER_STACK_TOP - USER_STACK_SIZE, USER_STACK_SIZE, VM_PROT_READ | VM_PROT_WRITE);
   kprintf("load_init_program: sbcl\n");
   uint64_t entry;
   __asm__("movabs $_libsa_start, %0" : "=r"(entry));
+  funnel_unlock();
   thread_bootstrap_return(entry, USER_STACK_TOP - 72, (uint64_t)PE_boot_args->CommandLine);
 }
 
 void i386_init(boot_args *args) {
+  cpu_data_set_gs(cpu_datap(0));
+  funnel_lock();
   PE_boot_args = args;
   serial_init();
   kprintf("finch Kernel Version 0.1: %s; root:finch/RELEASE_X86_64\n", BUILD_DATE);
@@ -66,7 +69,7 @@ void i386_init(boot_args *args) {
   kprintf("memory: %u ranges, %lu MB usable\n", ranges, pages * 4096 / (1024 * 1024));
   kprintf("video: %ux%ux%u at 0x%lx\n", args->Video.v_width, args->Video.v_height, args->Video.v_depth,
           args->Video.v_baseAddr);
-  mp_desc_init();
+  mp_desc_init(cpu_datap(0));
   kprintf("mp_desc: gdt, idt and ktss loaded\n");
   vm_page_bootstrap(args);
   pmap_bootstrap(args);
@@ -77,6 +80,8 @@ void i386_init(boot_args *args) {
   if (PE_parse_boot_arg("vmtest")) vm_test();
   rtclock_init();
   lapic_init();
+  thread_bootstrap(boot_kernel_stack_top());
+  i386_start_cpus();
   if (PE_parse_boot_arg("trap")) __asm__ volatile("int3");
   if (PE_parse_boot_arg("halt")) {
     kprintf("halt\n");

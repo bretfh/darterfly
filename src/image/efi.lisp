@@ -34,7 +34,8 @@
     "src/osfmk/i386/lapic.c" "src/osfmk/kern/sched_prim.c" "src/osfmk/x86_64/cswitch.s"
     "src/bsd/kern/kern_sig.c"
     "src/bsd/dev/i386/systemcalls.c" "src/bsd/dev/i386/unix_signal.c"
-    "src/pexpert/i386/pe_serial.c" "src/pexpert/i386/pe_init.c" "src/osfmk/x86_64/loose_ends.c"))
+    "src/pexpert/i386/pe_serial.c" "src/pexpert/i386/pe_init.c" "src/osfmk/x86_64/loose_ends.c"
+    "src/osfmk/i386/mp.c"))
 
 (defparameter *libsa-sources*
   '("syscall.c" "signal.c" "string.c" "stdio.c" "stdlib.c" "unistd.c" "time.c" "math.c" "misc.c"

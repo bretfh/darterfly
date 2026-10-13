@@ -17,6 +17,7 @@ int serial_ready(void);
 void serial_interrupt(void);
 void serial_enable_interrupts(void);
 int PE_parse_boot_arg(const char *name);
+int PE_parse_boot_argn(const char *name, int *value);
 void PE_halt(void) __attribute__((noreturn));
 void kprintf(const char *format, ...);
 void panic(const char *format, ...) __attribute__((noreturn));

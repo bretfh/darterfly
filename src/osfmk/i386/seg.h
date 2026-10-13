@@ -14,7 +14,6 @@ typedef struct x86_saved_state64 {
   uint64_t rip, cs, rflags, rsp, ss;
 } x86_saved_state64_t;
 
-void mp_desc_init(void);
 void thread_bootstrap_return(uint64_t rip, uint64_t rsp, uint64_t arg) __attribute__((noreturn));
 void unix_syscall(x86_saved_state64_t *regs);
 void machdep_syscall(x86_saved_state64_t *regs);

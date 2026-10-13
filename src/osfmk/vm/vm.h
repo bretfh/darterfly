@@ -24,6 +24,7 @@ void pmap_enter(uint64_t va, uint64_t pa, int prot);
 void pmap_protect(uint64_t va, uint64_t len, int prot);
 void pmap_remove(uint64_t va, uint64_t len);
 uint64_t pmap_find_phys(uint64_t va);
+int pmap_access_ok(uint64_t va, uint64_t err);
 
 int vm_map_enter(uint64_t start, uint64_t len, int prot);
 void vm_map_remove(uint64_t start, uint64_t len);
