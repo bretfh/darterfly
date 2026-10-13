@@ -81,5 +81,6 @@
              "sshpass"
              "curl"
              "tar"
-             "gzip"))
+             "gzip"
+             "linux-libre"))
   (list opencore lilu virtualsmc whatevergreen)))

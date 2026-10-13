@@ -4,6 +4,20 @@
   :pathname "src/mach/"
   :components ((:file "kern") (:file "port") (:file "msg") (:file "task")))
 
+(asdf:defsystem #:finch/kernel
+  :description "The kernel, run as pid 1"
+  :depends-on (#:finch/mach #:uiop)
+  :serial t
+  :pathname "src/kernel/"
+  :components ((:file "kernel")))
+
+(asdf:defsystem #:finch/image
+  :description "The bootable image"
+  :depends-on (#:uiop)
+  :serial t
+  :pathname "src/image/"
+  :components ((:file "image")))
+
 (asdf:defsystem #:finch/plist
   :description "Property lists, XML and binary"
   :depends-on (#:plump)
@@ -59,13 +73,13 @@
 
 (asdf:defsystem #:finch
   :description "A Darwin in Common Lisp"
-  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca)
+  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/kernel #:finch/image)
   :in-order-to ((asdf:test-op (asdf:test-op #:finch/test))))
 
 (asdf:defsystem #:finch/test
   :depends-on (#:finch #:finch/tahoe #:fiveam (:require #:sb-posix))
   :serial t
   :pathname "tests/"
-  :components ((:file "suite") (:file "mach") (:file "plist") (:file "macho") (:file "dyld") (:file "objc") (:file "mig") (:file "server") (:file "ca") (:file "tahoe"))
+  :components ((:file "suite") (:file "mach") (:file "plist") (:file "macho") (:file "dyld") (:file "objc") (:file "mig") (:file "server") (:file "ca") (:file "kernel") (:file "tahoe"))
   :perform (asdf:test-op (o c)
              (uiop:symbol-call :finch/test :run-them)))
