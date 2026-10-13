@@ -34,6 +34,10 @@ extern uint64_t idt64_syscall_stubs[3];
 extern uint64_t idt64_interrupt_stubs[];
 extern void gdt_load(struct pseudo_descriptor *);
 
+void set_kernel_stack(uint64_t top) { master_ktss.rsp0 = top; }
+
+uint64_t boot_kernel_stack_top(void) { return (uint64_t)(kernel_stack + sizeof kernel_stack); }
+
 void mp_desc_init(void) {
   master_gdt[0] = 0;
   master_gdt[1] = 0x00209a0000000000ull;

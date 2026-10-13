@@ -81,3 +81,19 @@
              (image:expect c "* " :timeout 30)
              (is (search "3" (ask "(+ 1 2)"))))
         (image:finish c 5)))))
+
+(test threads-on-finch
+  (let ((c (image:bare-console)))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 60)
+             (is (search ":SB-THREAD" (ask "(find :sb-thread *features*)")))
+             (is (search "3" (ask "(sb-thread:join-thread (sb-thread:make-thread (lambda () (+ 1 2))))")))
+             (is (search "(0 1000000 2000000 3000000)"
+                         (ask "(let ((ts (loop for i below 4 collect (let ((i i)) (sb-thread:make-thread (lambda () (loop repeat 1000000 sum i))))))) (mapcar #'sb-thread:join-thread ts))")))
+             (is (search "80000"
+                         (ask "(let ((m (sb-thread:make-mutex)) (n 0)) (mapc #'sb-thread:join-thread (loop repeat 4 collect (sb-thread:make-thread (lambda () (dotimes (i 20000) (sb-thread:with-mutex (m) (incf n))))))) n)")))
+             (is (search "(30000000 30000000 30000000)"
+                         (ask "(let ((ts (loop repeat 3 collect (sb-thread:make-thread (lambda () (let ((n 0)) (dotimes (i 300) (incf n (length (make-array 100000)))) n)))))) (mapcar #'sb-thread:join-thread ts))"))))
+        (image:finish c 5)))))

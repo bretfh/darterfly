@@ -9,7 +9,7 @@
     "x86-64-arch.c" "fullcgc.c" "gencgc.c" "traceroot.c" "immobile-space.c" "tlsf.c"
     "finch-os.c" "x86-64-finch-os.c" "x86-64-assem.S"))
 
-(defun sbcl-tree () (asdf:system-relative-pathname :finch "build/sbcl/"))
+(defun sbcl-tree () (asdf:system-relative-pathname :finch "build/sbcl-mt/"))
 
 (defparameter *runtime-patches*
   '(("x86-64-arch.c" "#if defined __linux__

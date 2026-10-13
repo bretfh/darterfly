@@ -2,11 +2,12 @@
 #include "../../../osfmk/i386/seg.h"
 #include "../../../osfmk/vm/vm.h"
 #include "../../kern/kern_sig.h"
+#include "../../../osfmk/kern/thread.h"
 
 #define EBADF 9
 #define ENOMEM 12
 #define EINVAL 22
-#define ENOSYS 78
+#define ENOSYS 38
 
 #define DARWIN_MAP_FIXED 0x10
 #define DARWIN_MAP_ANON 0x1000
@@ -23,12 +24,22 @@ static void error(x86_saved_state64_t *regs, int code) {
   regs->rflags |= 1ull;
 }
 
-extern int sigtrace;
+static uint64_t serial_event;
+
+void bsd_serial_wakeup(void) { thread_wakeup((uint64_t)&serial_event, 1); }
+
+static thread_t thread_by_id(uint64_t id) {
+  for (thread_t t = all_threads; t; t = t->all_next)
+    if (t->thread_id == id && t->state != TH_TERMINATE) return t;
+  return 0;
+}
 
 void unix_syscall(x86_saved_state64_t *regs) {
   uint64_t a = regs->rdi, b = regs->rsi, c = regs->rdx, d = regs->r10, e = regs->r8;
-  if (sigtrace > 0 && regs->rax != 3 && regs->rax != 4 && regs->rax != 197 && regs->rax != 75)
-    kprintf("[syscall %lu (0x%lx, 0x%lx, 0x%lx) mask 0x%lx pending 0x%lx]\n", regs->rax, a, b && regs->rax == 48 ? *(uint64_t *)b : b, c, p_sigmask, p_siglist);
+  if (sigtrace > 0 && regs->rax != 3 && regs->rax != 4 && regs->rax != 230)
+    kprintf("[syscall %lu thread 0x%lx (0x%lx, 0x%lx, 0x%lx) mask 0x%lx pending 0x%lx]\n", regs->rax,
+            current_thread()->thread_id, a, b && (regs->rax == 48 || regs->rax == 329) ? *(uint64_t *)b : b, c,
+            current_thread()->sigmask, p_siglist | current_thread()->siglist);
   switch (regs->rax) {
   case 1:
     kprintf("exit(%d)\n", (int)a);
@@ -38,7 +49,7 @@ void unix_syscall(x86_saved_state64_t *regs) {
     char *buf = (char *)b;
     uint64_t n = 0;
     if (c == 0) return ok(regs, 0);
-    int r = tsleep(serial_ready, 0);
+    int r = tsleep(serial_ready, (uint64_t)&serial_event, 0);
     if (r) return error(regs, r);
     while (n < c && serial_ready()) buf[n++] = (char)serial_getc();
     return ok(regs, n);
@@ -53,6 +64,29 @@ void unix_syscall(x86_saved_state64_t *regs) {
   case 37:
     psignal((int)b);
     return ok(regs, 0);
+  case 328: {
+    thread_t t = thread_by_id(a);
+    if (!t) return error(regs, 3);
+    psignal_thread(t, (int)b);
+    return ok(regs, 0);
+  }
+  case 360: {
+    thread_t t = thread_create_user(a, c, b, d);
+    return ok(regs, t->thread_id);
+  }
+  case 361:
+    thread_terminate_self();
+  case 372: return ok(regs, current_thread()->thread_id);
+  case 515: {
+    if (*(volatile uint32_t *)b != (uint32_t)c) return error(regs, EAGAIN);
+    uint64_t deadline = d ? deadline_after((int64_t)(d / 1000000), (int64_t)(d % 1000000) * 1000) : 0;
+    int r = thread_wait(b, deadline);
+    if (r == THREAD_TIMED_OUT) return error(regs, ETIMEDOUT);
+    if (r == THREAD_INTERRUPTED) return error(regs, EINTR);
+    return ok(regs, 0);
+  }
+  case 516:
+    return ok(regs, (uint64_t)thread_wakeup(b, (a & 0x100) != 0));
   case 46: {
     if (a == 0 || a >= NSIG) return error(regs, EINVAL);
     if (c) {
@@ -68,14 +102,16 @@ void unix_syscall(x86_saved_state64_t *regs) {
     }
     return ok(regs, 0);
   }
-  case 48: {
-    uint64_t old = p_sigmask;
+  case 48:
+  case 329: {
+    thread_t self = current_thread();
+    uint64_t old = self->sigmask;
     if (b) {
       uint64_t set = *(uint64_t *)b;
-      if (a == 0) p_sigmask |= set;
-      else if (a == 1) p_sigmask &= ~set;
-      else p_sigmask = set;
-      p_sigmask &= ~(sigmask(SIGKILL) | sigmask(SIGSTOP));
+      if (a == 0) self->sigmask |= set;
+      else if (a == 1) self->sigmask &= ~set;
+      else self->sigmask = set;
+      self->sigmask &= ~(sigmask(SIGKILL) | sigmask(SIGSTOP));
     }
     if (c) *(uint64_t *)c = old;
     return ok(regs, 0);
@@ -100,13 +136,13 @@ void unix_syscall(x86_saved_state64_t *regs) {
         if (fds[i].revents) ready++;
       }
       if (ready || (int)c == 0) return ok(regs, ready);
-      int r = tsleep(serial_ready, deadline);
+      int r = tsleep(serial_ready, (uint64_t)&serial_event, deadline);
       if (r == EINTR) return error(regs, EINTR);
       if (r == ETIMEDOUT) return ok(regs, 0);
     }
   }
   case 334: {
-    int r = tsleep(0, deadline_after((int64_t)a, (int64_t)b));
+    int r = tsleep(0, 0, deadline_after((int64_t)a, (int64_t)b));
     if (r == EINTR) return error(regs, EINTR);
     return ok(regs, 0);
   }
@@ -127,6 +163,7 @@ void unix_syscall(x86_saved_state64_t *regs) {
     uint64_t at = (d & DARWIN_MAP_FIXED) || a ? a : vm_map_find_space(b);
     (void)e;
     vm_map_enter(at, b, (int)c);
+    if (PE_parse_boot_arg("faulttrace")) kprintf("[mmap 0x%lx len 0x%lx prot %lu -> 0x%lx]\n", a, b, c, at);
     return ok(regs, at);
   }
   default:
@@ -150,9 +187,21 @@ void machdep_syscall(x86_saved_state64_t *regs) {
   }
   case 3: {
     uint64_t base = regs->rdi;
+    current_thread()->fs_base = base;
     __asm__ volatile("wrmsr" ::"c"(0xc0000100), "a"((uint32_t)base), "d"((uint32_t)(base >> 32)));
     return ok(regs, 0);
   }
+  default:
+    return error(regs, ENOSYS);
+  }
+}
+
+void mach_call(x86_saved_state64_t *regs) {
+  switch ((int64_t)regs->rax) {
+  case -60:
+  case -61:
+    thread_block();
+    return ok(regs, 0);
   default:
     return error(regs, ENOSYS);
   }

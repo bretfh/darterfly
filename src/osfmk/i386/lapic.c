@@ -71,13 +71,17 @@ void lapic_init(void) {
 }
 
 void bsd_hardclock(void);
+void sched_tick(void);
+void bsd_serial_wakeup(void);
 
 void lapic_interrupt(uint64_t vector) {
   if (vector == LAPIC_TIMER_VECTOR) {
     ticks++;
     bsd_hardclock();
+    sched_tick();
   } else if (vector == COM1_VECTOR) {
     serial_interrupt();
+    bsd_serial_wakeup();
   }
   if (vector != LAPIC_SPURIOUS_VECTOR) *lapic(LAPIC_EOI) = 0;
 }

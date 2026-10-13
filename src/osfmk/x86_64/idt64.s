@@ -71,6 +71,8 @@ trap_common:
 	pushq	%rax
 	movq	%rsp, %rdi
 	call	kernel_trap
+	.globl	return_to_user
+return_to_user:
 	popq	%rax
 	popq	%rbx
 	popq	%rcx

@@ -1,6 +1,7 @@
 #include "../../pexpert/i386/pexpert.h"
 #include "seg.h"
 #include "../vm/vm.h"
+#include "../kern/thread.h"
 
 #define SIGILL 4
 #define SIGTRAP 5
@@ -42,9 +43,17 @@ static void user_trap(x86_saved_state64_t *regs) {
   uint64_t cr2 = READ_CR(2);
   switch (regs->trapno) {
   case 0x80: unix_syscall(regs); return;
+  case 0x81: mach_call(regs); return;
   case 0x82: machdep_syscall(regs); return;
   case 14:
     if (vm_fault(cr2, regs->err)) return;
+    if (PE_parse_boot_arg("faulttrace")) {
+      uint32_t lo, hi;
+      __asm__ volatile("rdmsr" : "=a"(lo), "=d"(hi) : "c"(0xc0000100));
+      kprintf("[fault: thread 0x%lx rip 0x%lx cr2 0x%lx err 0x%lx r13 0x%lx rsp 0x%lx fs 0x%lx]\n",
+              current_thread()->thread_id, regs->rip, cr2, regs->err, regs->r13, regs->rsp,
+              ((uint64_t)hi << 32) | lo);
+    }
     if (sendsig(regs, SIGSEGV, (regs->err & 1) ? 2 : 1, cr2)) return;
     break;
   case 1:
@@ -71,16 +80,22 @@ static void user_trap(x86_saved_state64_t *regs) {
 
 void lapic_interrupt(uint64_t vector);
 void bsd_ast(x86_saved_state64_t *regs);
+void mach_call(x86_saved_state64_t *regs);
+void sched_ast(void);
 
 void kernel_trap(x86_saved_state64_t *regs) {
   int user = (regs->cs & 3) == 3;
   if ((regs->trapno >= 0x20 && regs->trapno < 0x80) || regs->trapno >= 0xd0) {
     lapic_interrupt(regs->trapno);
-    if (user) bsd_ast(regs);
+    if (user) {
+      sched_ast();
+      bsd_ast(regs);
+    }
     return;
   }
   if (user) {
     user_trap(regs);
+    sched_ast();
     bsd_ast(regs);
     return;
   }

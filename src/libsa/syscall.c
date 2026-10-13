@@ -1,7 +1,7 @@
 #include <errno.h>
 #include "libsa.h"
 
-static int errno_value;
+static __thread int errno_value;
 int *__errno_location(void) { return &errno_value; }
 
 long __syscall(long n, long a, long b, long c, long d, long e, long f) {

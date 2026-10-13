@@ -38,7 +38,11 @@ void rtclock_init(void);
 void lapic_init(void);
 extern void _libsa_start(const char *cmdline);
 
+uint64_t boot_kernel_stack_top(void);
+#include "../kern/thread.h"
+
 static void load_init_program(void) {
+  thread_bootstrap(boot_kernel_stack_top());
   vm_map_enter(USER_STACK_TOP - USER_STACK_SIZE, USER_STACK_SIZE, VM_PROT_READ | VM_PROT_WRITE);
   kprintf("load_init_program: sbcl\n");
   uint64_t entry;

@@ -13,6 +13,13 @@
 #define SYS_getitimer 86
 #define SYS_poll 230
 #define SYS___semwait_signal 334
+#define SYS___pthread_kill 328
+#define SYS___pthread_sigmask 329
+#define SYS_bsdthread_create 360
+#define SYS_bsdthread_terminate 361
+#define SYS_thread_selfid 372
+#define SYS_ulock_wait 515
+#define SYS_ulock_wake 516
 #define SYS_munmap 73
 #define SYS_mprotect 74
 #define SYS_madvise 75

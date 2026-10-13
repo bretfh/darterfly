@@ -376,7 +376,7 @@ long syscall(long n, ...) {
   case 9: return (long)mmap((void *)a, b, (int)c, (int)d, (int)e, f);
   case 10: return mprotect((void *)a, b, (int)c);
   case 11: return munmap((void *)a, b);
-  case 186: return 1;
+  case 186: return __syscall(SYS_thread_selfid, 0, 0, 0, 0, 0, 0);
   default: errno = ENOSYS; return -1;
   }
 }

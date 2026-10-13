@@ -7,7 +7,7 @@ extern char __tdata_start[], __tdata_end[], __tbss_start[], __tbss_end[], __tls_
 extern char **environ;
 int main(int argc, char **argv, char **envp);
 
-static void tls_init(void) {
+void *__libsa_tls_new(void *self) {
   uintptr_t align = (uintptr_t)__tls_align;
   if (align < 16) align = 16;
   size_t data = (size_t)(__tdata_end - __tdata_start);
@@ -18,7 +18,20 @@ static void tls_init(void) {
   memcpy(block, __tdata_start, data);
   void **tp = (void **)(block + size);
   tp[0] = tp;
-  __machdep(MACHDEP_set_cthread_self, (long)tp);
+  tp[1] = self;
+  return tp;
+}
+
+struct main_thread { void *tp; uint64_t tid; void *start, *arg, *retval, *stack; size_t stacksize; };
+void *__libsa_main_thread(void);
+
+static void tls_init(void) {
+  struct main_thread *m = __libsa_main_thread();
+  m->tp = __libsa_tls_new(m);
+  m->stack = (void *)(0x00007ff000000000ul - (8ul << 20));
+  m->stacksize = 8ul << 20;
+  __machdep(MACHDEP_set_cthread_self, (long)m->tp);
+  m->tid = (uint64_t)__syscall(SYS_thread_selfid, 0, 0, 0, 0, 0, 0);
 }
 
 static char *argv_storage[32];

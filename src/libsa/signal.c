@@ -38,7 +38,11 @@ int sigprocmask(int how, const sigset_t *set, sigset_t *old) {
   return (int)__syscall(SYS_sigprocmask, how, (long)set, (long)old, 0, 0, 0);
 }
 
-int pthread_sigmask(int how, const sigset_t *set, sigset_t *old) { return sigprocmask(how, set, old); }
+int pthread_sigmask(int how, const sigset_t *set, sigset_t *old) {
+  if (old) memset(old, 0, sizeof *old);
+  long r = __syscall(SYS___pthread_sigmask, how, (long)set, (long)old, 0, 0, 0);
+  return r < 0 ? errno : 0;
+}
 int sigpending(sigset_t *s) { return sigemptyset(s); }
 
 static void default_action(int sig, siginfo_t *info, void *uc) {

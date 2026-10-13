@@ -1,25 +1,41 @@
 #include "../../pexpert/i386/pexpert.h"
 #include "../../osfmk/i386/seg.h"
+#include "../../osfmk/kern/thread.h"
 #include "kern_sig.h"
 
-uint64_t p_sigmask, p_siglist;
+uint64_t p_siglist;
 struct sigacts p_sigacts[NSIG];
 uint64_t sigtramp;
+int sigtrace = -1;
 
 static struct { uint64_t interval, deadline; } realtimer;
 
-static uint64_t rdtsc(void) {
-  uint32_t lo, hi;
-  __asm__ volatile("rdtsc" : "=a"(lo), "=d"(hi));
-  return ((uint64_t)hi << 32) | lo;
+static const uint64_t unblockable = sigmask(SIGKILL) | sigmask(SIGSTOP);
+
+static uint64_t deliverable(thread_t t) { return (t->siglist | p_siglist) & ~(t->sigmask & ~unblockable); }
+
+static void interrupt_if_waiting(thread_t t) {
+  if (t->state == TH_WAIT) thread_wakeup_thread(t, THREAD_INTERRUPTED);
+}
+
+void psignal_thread(thread_t t, int sig) {
+  if (sig <= 0 || sig >= NSIG) return;
+  t->siglist |= sigmask(sig);
+  if (deliverable(t)) interrupt_if_waiting(t);
 }
 
 void psignal(int sig) {
-  if (sig > 0 && sig < NSIG) p_siglist |= sigmask(sig);
+  if (sig <= 0 || sig >= NSIG) return;
+  p_siglist |= sigmask(sig);
+  for (thread_t t = all_threads; t; t = t->all_next)
+    if (t->state != TH_TERMINATE && !(t->sigmask & sigmask(sig))) {
+      interrupt_if_waiting(t);
+      return;
+    }
 }
 
 int issignal(void) {
-  uint64_t ready = p_siglist & ~(p_sigmask & ~(sigmask(SIGKILL) | sigmask(SIGSTOP)));
+  uint64_t ready = deliverable(current_thread());
   return ready ? __builtin_ctzll(ready) + 1 : 0;
 }
 
@@ -32,26 +48,29 @@ void bsd_hardclock(void) {
 
 void bsd_console_interrupt_char(void) { psignal(SIGINT); }
 
-int sigtrace = -1;
-
 void bsd_ast(x86_saved_state64_t *regs) {
+  thread_t self = current_thread();
   int sig;
   if (sigtrace < 0) sigtrace = PE_parse_boot_arg("sigtrace");
   while ((sig = issignal())) {
-    p_siglist &= ~sigmask(sig);
-    if (sigtrace) kprintf("[ast: deliver %d at 0x%lx mask 0x%lx]\n", sig, regs->rip, p_sigmask);
+    if (self->siglist & sigmask(sig)) self->siglist &= ~sigmask(sig);
+    else p_siglist &= ~sigmask(sig);
+    if (sigtrace) kprintf("[ast: thread 0x%lx deliver %d at 0x%lx mask 0x%lx]\n", self->thread_id, sig, regs->rip, self->sigmask);
     if (p_sigacts[sig].handler == SIG_IGN_VALUE) continue;
     sendsig(regs, sig, 0, 0);
     return;
   }
 }
 
-int tsleep(int (*ready)(void), uint64_t deadline) {
+int tsleep(int (*ready)(void), uint64_t event, uint64_t deadline) {
   for (;;) {
     if (ready && ready()) return 0;
     if (issignal()) return EINTR;
     if (deadline && rdtsc() >= deadline) return ETIMEDOUT;
-    __asm__ volatile("sti; hlt; cli");
+    int r = thread_wait(event, deadline);
+    if (r == THREAD_INTERRUPTED && issignal()) return EINTR;
+    if (r == THREAD_TIMED_OUT) return ETIMEDOUT;
+    if (!ready && r == THREAD_AWAKENED && event) return 0;
   }
 }
 
