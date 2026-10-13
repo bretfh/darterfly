@@ -85,7 +85,7 @@
   :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/image/"
-  :components ((:file "image") (:file "efi")))
+  :components ((:file "image") (:file "efi") (:file "runtime")))
 
 (asdf:defsystem #:finch/plist
   :description "Property lists, XML and binary"

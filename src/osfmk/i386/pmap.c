@@ -18,11 +18,13 @@ extern boot_args *PE_boot_args;
 
 static void *ptov(uint64_t pa) { return physmap_ready ? PHYSMAP_PTOV(pa) : (void *)pa; }
 
+uint64_t kernel_phys;
+
 static uint64_t table_page(void) {
   uint64_t pa;
   if (!physmap_ready) {
     if (bootstrap_used == 16) panic("pmap: out of bootstrap tables");
-    pa = (uint64_t)bootstrap_tables[bootstrap_used++];
+    pa = kvtophys(bootstrap_tables[bootstrap_used++]);
   } else {
     pa = vm_page_grab();
     if (!pa) panic("pmap: out of pages");
@@ -33,7 +35,7 @@ static uint64_t table_page(void) {
 }
 
 static uint64_t *pte(uint64_t va, int create) {
-  uint64_t *table = ptov((uint64_t)IdlePML4);
+  uint64_t *table = ptov(kvtophys(IdlePML4));
   for (int shift = 39; shift > 12; shift -= 9) {
     uint64_t *e = &table[(va >> shift) & 511];
     if (!(*e & INTEL_PTE_VALID)) {
@@ -98,6 +100,7 @@ static void enable_nx(void) {
 
 void pmap_bootstrap(boot_args *args) {
   int gigs;
+  kernel_phys = args->kaddr;
   if (cpu_has_1g_pages()) {
     gigs = 512;
     for (uint64_t i = 0; i < 512; i++)
@@ -107,17 +110,17 @@ void pmap_bootstrap(boot_args *args) {
     for (uint64_t g = 0; g < 64; g++) {
       for (uint64_t i = 0; i < 512; i++)
         IdlePhysPD[g][i] = (g << 30) | (i << 21) | INTEL_PTE_VALID | INTEL_PTE_WRITE | INTEL_PTE_PS | INTEL_PTE_NX;
-      IdlePhysPDPT[g] = (uint64_t)IdlePhysPD[g] | INTEL_PTE_VALID | INTEL_PTE_WRITE;
+      IdlePhysPDPT[g] = kvtophys(IdlePhysPD[g]) | INTEL_PTE_VALID | INTEL_PTE_WRITE;
     }
   }
   enable_nx();
-  IdlePML4[256] = (uint64_t)IdlePhysPDPT | INTEL_PTE_VALID | INTEL_PTE_WRITE;
-  for (uint64_t a = args->kaddr; a < (uint64_t)args->kaddr + args->ksize; a += PAGE_SIZE)
-    pmap_enter(a, a, VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE);
+  IdlePML4[256] = kvtophys(IdlePhysPDPT) | INTEL_PTE_VALID | INTEL_PTE_WRITE;
+  for (uint64_t off = 0; off < args->ksize; off += PAGE_SIZE)
+    pmap_enter(KERNEL_BASE + off, kernel_phys + off, VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE);
   uint32_t kaddr = args->kaddr;
-  __asm__ volatile("mov %0, %%cr3" ::"r"((uint64_t)IdlePML4) : "memory");
+  __asm__ volatile("mov %0, %%cr3" ::"r"(kvtophys(IdlePML4)) : "memory");
   physmap_ready = 1;
   PE_boot_args = PHYSMAP_PTOV(args);
-  kprintf("pmap: physmap %d GB at 0x%lx with %s pages, kernel mapped at 0x%x\n", gigs, PHYSMAP_BASE,
-          gigs == 512 ? "1 GB" : "2 MB", kaddr);
+  kprintf("pmap: physmap %d GB at 0x%lx with %s pages, kernel at 0x%lx from 0x%x\n", gigs, PHYSMAP_BASE,
+          gigs == 512 ? "1 GB" : "2 MB", KERNEL_BASE, kaddr);
 }

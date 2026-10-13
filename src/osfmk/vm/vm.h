@@ -6,6 +6,9 @@
 #define PAGE_SIZE 4096ull
 #define PHYSMAP_BASE 0xffff800000000000ull
 #define PHYSMAP_PTOV(pa) ((void *)((uint64_t)(pa) + PHYSMAP_BASE))
+#define KERNEL_BASE 0xffffffff80000000ull
+extern uint64_t kernel_phys;
+#define kvtophys(va) ((uint64_t)(va) - KERNEL_BASE + kernel_phys)
 
 #define VM_PROT_READ 1
 #define VM_PROT_WRITE 2

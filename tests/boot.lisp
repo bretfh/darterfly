@@ -33,7 +33,7 @@
   (let ((c (image:bare-console :boot-args "vmtest halt")))
     (unwind-protect
          (progn
-           (is (search "at 0xffff800000000000" (image:expect c "kernel mapped at")))
+           (is (search "at 0xffff800000000000" (image:expect c "kernel at 0xffffffff80000000")))
            (is (image:expect c "vmtest: 512 demand-zero pages, 512 read back"))
            (is (image:expect c "vmtest: kalloc reuses freed blocks")))
       (image:finish c 5))))

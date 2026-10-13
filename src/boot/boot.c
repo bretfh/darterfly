@@ -133,15 +133,37 @@ typedef struct {
   uint64_t p_offset, p_vaddr, p_paddr, p_filesz, p_memsz, p_align;
 } Elf64_Phdr;
 
-typedef struct {
-  int64_t d_tag;
-  uint64_t d_val;
-} Elf64_Dyn;
+#define KERNEL_BASE 0xffffffff80000000ull
+#define PTE_P 1ull
+#define PTE_W 2ull
+#define PTE_PS 0x80ull
 
-typedef struct {
-  uint64_t r_offset, r_info;
-  int64_t r_addend;
-} Elf64_Rela;
+static uint64_t *table(void) { return allocate_low(4096); }
+
+static uint64_t *kernel_pml4;
+
+static void map_kernel(uint64_t va, uint64_t pa, uint64_t size) {
+  for (uint64_t off = 0; off < size; off += 4096) {
+    uint64_t v = va + off, *t = kernel_pml4;
+    for (int shift = 39; shift > 12; shift -= 9) {
+      uint64_t *e = &t[(v >> shift) & 511];
+      if (!(*e & PTE_P)) *e = (uint64_t)table() | PTE_P | PTE_W;
+      t = (uint64_t *)(*e & 0x000ffffffffff000ull);
+    }
+    t[(v >> 12) & 511] = (pa + off) | PTE_P | PTE_W;
+  }
+}
+
+static void page_tables(void) {
+  kernel_pml4 = table();
+  uint64_t *pdpt = table();
+  kernel_pml4[0] = (uint64_t)pdpt | PTE_P | PTE_W;
+  for (uint64_t g = 0; g < 64; g++) {
+    uint64_t *pd = table();
+    for (uint64_t i = 0; i < 512; i++) pd[i] = (g << 30) | (i << 21) | PTE_P | PTE_W | PTE_PS;
+    pdpt[g] = (uint64_t)pd | PTE_P | PTE_W;
+  }
+}
 
 static uint64_t load_kernel(EFI_FILE_PROTOCOL *root, boot_args *args) {
   UINTN size;
@@ -150,29 +172,19 @@ static uint64_t load_kernel(EFI_FILE_PROTOCOL *root, boot_args *args) {
   Elf64_Ehdr *eh = (Elf64_Ehdr *)image;
   if (eh->e_ident[0] != 0x7f || eh->e_ident[1] != 'E' || eh->e_machine != 62) fail("kernel is not x86_64 ELF", 0);
   Elf64_Phdr *ph = (Elf64_Phdr *)(image + eh->e_phoff);
-  uint64_t span = 0;
+  uint64_t end = 0;
   for (int i = 0; i < eh->e_phnum; i++)
-    if (ph[i].p_type == 1 && ph[i].p_vaddr + ph[i].p_memsz > span) span = ph[i].p_vaddr + ph[i].p_memsz;
-  span = (span + 4095) & ~4095ull;
+    if (ph[i].p_type == 1 && ph[i].p_vaddr + ph[i].p_memsz > end) end = ph[i].p_vaddr + ph[i].p_memsz;
+  uint64_t span = (end - KERNEL_BASE + 4095) & ~4095ull;
   uint8_t *base = allocate_low(span);
-  Elf64_Dyn *dynamic = 0;
-  for (int i = 0; i < eh->e_phnum; i++) {
-    if (ph[i].p_type == 1) memcpy(base + ph[i].p_vaddr, image + ph[i].p_offset, ph[i].p_filesz);
-    if (ph[i].p_type == 2) dynamic = (Elf64_Dyn *)(base + ph[i].p_vaddr);
-  }
-  uint64_t rela = 0, relasz = 0;
-  for (; dynamic && dynamic->d_tag; dynamic++) {
-    if (dynamic->d_tag == 7) rela = dynamic->d_val;
-    if (dynamic->d_tag == 8) relasz = dynamic->d_val;
-  }
-  for (Elf64_Rela *r = (Elf64_Rela *)(base + rela); (uint8_t *)r < base + rela + relasz; r++) {
-    if ((r->r_info & 0xffffffff) != 8) fail("kernel relocation type", r->r_info);
-    *(uint64_t *)(base + r->r_offset) = (uint64_t)base + r->r_addend;
-  }
+  for (int i = 0; i < eh->e_phnum; i++)
+    if (ph[i].p_type == 1) memcpy(base + (ph[i].p_vaddr - KERNEL_BASE), image + ph[i].p_offset, ph[i].p_filesz);
+  page_tables();
+  map_kernel(KERNEL_BASE, (uint64_t)base, span);
   args->kaddr = (uint32_t)(uintptr_t)base;
   args->ksize = (uint32_t)span;
-  args->kslide = (uint32_t)(uintptr_t)base;
-  return (uint64_t)base + eh->e_entry;
+  args->kslide = 0;
+  return eh->e_entry;
 }
 
 static void video(boot_args *args) {
@@ -263,6 +275,6 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *system_table) {
   args->MemoryMapDescriptorSize = (uint32_t)descriptor_size;
   args->MemoryMapDescriptorVersion = descriptor_version;
 
-  __asm__ volatile("cli");
+  __asm__ volatile("cli; mov %0, %%cr3" ::"r"(kernel_pml4) : "memory");
   ((kernel_entry)entry)(args);
 }

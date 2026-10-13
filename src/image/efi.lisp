@@ -39,12 +39,12 @@
                 :for object := (build-path (format nil "kernel/~a.o" (pathname-name name)))
                 :do (ensure-directories-exist object)
                     (apply #'run "clang" "-target" "x86_64-unknown-none-elf" "-ffreestanding" "-mno-red-zone"
-                         "-fPIE" "-fvisibility=hidden" "-fno-stack-protector" "-fno-builtin" "-nostdlib" "-O2" "-Wall"
+                         "-mcmodel=kernel" "-fno-pie" "-fno-stack-protector" "-fno-builtin" "-nostdlib" "-O2" "-Wall"
                          (format nil "-DBUILD_DATE=~s" (date))
                          "-c" (source name) "-o" (uiop:native-namestring object) (freestanding))
                 :collect (uiop:native-namestring object)))
         (out (build-path "kernel/kernel")))
-    (apply #'run "ld.lld" "-T" (source "src/osfmk/x86_64/kernel.ld") "-nostdlib" "-pie" "--no-dynamic-linker"
+    (apply #'run "ld.lld" "-T" (source "src/osfmk/x86_64/kernel.ld") "-nostdlib" "-static"
            "-o" (uiop:native-namestring out) objects)
     out))
 
