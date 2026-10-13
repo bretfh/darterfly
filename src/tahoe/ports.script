@@ -1,0 +1,118 @@
+allocate a receive
+type a
+refs a receive
+refs a send
+insert a a make-send
+type a
+refs a send
+insert a a make-send
+refs a send
+insert a a copy-send
+refs a send
+deallocate a
+deallocate a
+deallocate a
+type a
+deallocate a
+mod-refs a send 1
+mod-refs a receive 1
+mod-refs a receive 0
+allocate b receive
+insert b b make-send
+mod-refs b send 2
+refs b send
+mod-refs b send -5
+mod-refs b send -2
+type b
+allocate r receive
+send b copy-send r make-send-once 1000
+type r
+receive b q
+type q
+send q move-send-once none - 1100
+type q
+receive r x
+receive r x
+send b copy-send none - 1
+send b copy-send none - 2
+send b copy-send none - 3
+send b copy-send none - 4
+send b copy-send none - 5
+send b copy-send none - 6
+refs b send
+receive b x
+send b copy-send none - 6
+receive b x
+receive b x
+receive b x
+receive b x
+receive b x
+receive b x
+send b move-send none - 7
+refs b send
+type b
+receive b x
+allocate c receive
+insert c c make-send
+insert c c make-send
+mod-refs c receive -1
+type c
+refs c dead-name
+refs c send
+deallocate c
+type c
+deallocate c
+type c
+receive c x
+send c copy-send none - 1
+allocate s port-set
+type s
+allocate d receive
+insert d d make-send
+move-member d s
+receive d x
+send d copy-send none - 2000
+receive s x
+receive s x
+move-member d none
+receive d x
+allocate e receive
+move-member e s
+destroy s
+type d
+type e
+allocate f receive
+allocate g receive
+insert g g make-send
+send g copy-send none - 3000 f make-send
+receive g - y
+type y
+refs y send
+send g copy-send none - 3001 f make-send-once
+receive g - y
+type y
+send g copy-send none - 3002 f move-receive
+type f
+receive g - y
+type y
+type f
+send g copy-send none - 3003 g copy-send g copy-send
+receive g - y z
+refs g send
+allocate h dead-name
+type h
+refs h dead-name
+mod-refs h dead-name 2
+refs h dead-name
+destroy h
+type h
+allocate i receive
+insert i i make-send-once
+type i
+send i make-send none - 4000
+send i move-send none - 4001
+send i make-send-once none - 4002
+receive i x
+receive i x
+destroy i
+type i

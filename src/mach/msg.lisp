@@ -73,6 +73,11 @@
   (when (port-set port)
     (broadcast (arrived (port-set port)))))
 
+(defun pseudo-receive (task k)
+  (copyout task (kmsg-dest k))
+  (when (kmsg-reply k) (copyout task (kmsg-reply k)))
+  (mapc (lambda (carried) (copyout task carried)) (kmsg-rights k)))
+
 (defun mach-msg-send (message &key timeout)
   (with-ipc
     (let ((task *task*)
@@ -85,12 +90,13 @@
             (enqueue port (copyin-message task message nil))
             (return :mach-msg-success))
           (unless (wait (drained port) deadline)
+            (pseudo-receive task (copyin-message task message nil))
             (fail :mach-send-timed-out)))))))
 
 (defun deliver (task port)
   (let ((k (pop (messages port))))
     (broadcast (drained port))
-    (release (kmsg-dest k))
+    (consume (kmsg-dest k))
     (let ((reply (kmsg-reply k)))
       (make-message
        :local-port (gethash port (names task))
@@ -115,8 +121,6 @@
                  (let ((port (find-if #'messages (members object))))
                    (when port (return (deliver task port)))))
                 ((member :receive rights)
-                 (when (port-set object)
-                   (fail (if waited :mach-rcv-port-changed :mach-rcv-in-set)))
                  (when (messages object)
                    (return (deliver task object))))
                 ((or waited (member :dead-name rights))

@@ -55,7 +55,7 @@
   :depends-on (#:finch/plist #:com.inuoe.jzon #:uiop (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/tahoe/"
-  :components ((:static-file "SSDT-EC-USBX.dsl") (:static-file "transactions.c") (:static-file "commit-tap.c") (:static-file "commits.m") (:file "opencore") (:file "qmp") (:file "guest")))
+  :components ((:static-file "SSDT-EC-USBX.dsl") (:static-file "transactions.c") (:static-file "commit-tap.c") (:static-file "commits.m") (:static-file "ports.c") (:static-file "ports.script") (:file "opencore") (:file "qmp") (:file "guest")))
 
 (asdf:defsystem #:finch
   :description "A Darwin in Common Lisp"

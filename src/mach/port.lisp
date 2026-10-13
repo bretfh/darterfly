@@ -100,10 +100,21 @@
     (broadcast (arrived port))
     (broadcast (drained port))))
 
+(defconstant +mach-notify-send-once+ #o107)
+
 (defun release (carried)
   (destructuring-bind (port . type) carried
     (ecase type
       (:receive (kill port))
+      (:send (decf (srights port)))
+      (:send-once
+       (if (deadp port)
+           (decf (sorights port))
+           (enqueue port (make-kmsg :dest carried :id +mach-notify-send-once+)))))))
+
+(defun consume (carried)
+  (destructuring-bind (port . type) carried
+    (ecase type
       (:send (decf (srights port)))
       (:send-once (decf (sorights port))))))
 
@@ -188,7 +199,9 @@
 
 (defun mach-port-insert-right (task name poly disposition)
   (with-ipc
-    (copyout task (copyin *task* poly disposition) name)
+    (let ((carried (copyin *task* poly disposition)))
+      (handler-bind ((kern-return (lambda (c) (declare (ignore c)) (release carried))))
+        (copyout task carried name)))
     (values)))
 
 (defun mach-port-deallocate (task name)
@@ -200,8 +213,8 @@
                (decf (srights port))
                (drop task name e :send)))
             ((member :send-once (rights e))
-             (decf (sorights port))
-             (drop task name e :send-once))
+             (drop task name e :send-once)
+             (release (cons port :send-once)))
             ((member :dead-name (rights e))
              (unless (plusp (decf (urefs e)))
                (drop task name e :dead-name)))
@@ -225,8 +238,8 @@
         (:send-once
          (unless (member delta '(0 -1)) (fail :kern-invalid-value))
          (when (= delta -1)
-           (decf (sorights object))
-           (drop task name e :send-once)))
+           (drop task name e :send-once)
+           (release (cons object :send-once))))
         (:receive
          (unless (member delta '(0 -1)) (fail :kern-invalid-value))
          (when (= delta -1)

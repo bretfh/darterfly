@@ -148,3 +148,6 @@
 (defun commits ()
   (oracle "commits" "clang -w -dynamiclib -o commit-tap.dylib commit-tap.c && clang -w -fobjc-arc -o commits commits.m -framework Foundation -framework QuartzCore -framework CoreGraphics && DYLD_INSERT_LIBRARIES=$PWD/commit-tap.dylib ./commits"
           "commit-tap.c" "commits.m"))
+
+(defun ports ()
+  (oracle "ports" "clang -w -o ports ports.c && ./ports ports.script" "ports.c" "ports.script"))

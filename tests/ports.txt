@@ -1,0 +1,118 @@
+allocate a receive | 0
+type a | 0 receive
+refs a receive | 0 1
+refs a send | 0 0
+insert a a make-send | 0
+type a | 0 receive send
+refs a send | 0 1
+insert a a make-send | 0
+refs a send | 0 2
+insert a a copy-send | 0
+refs a send | 0 3
+deallocate a | 0
+deallocate a | 0
+deallocate a | 0
+type a | 0 receive
+deallocate a | 11
+mod-refs a send 1 | 11
+mod-refs a receive 1 | 12
+mod-refs a receive 0 | 0
+allocate b receive | 0
+insert b b make-send | 0
+mod-refs b send 2 | 0
+refs b send | 0 3
+mod-refs b send -5 | 12
+mod-refs b send -2 | 0
+type b | 0 receive send
+allocate r receive | 0
+send b copy-send r make-send-once 1000 | 0
+type r | 0 receive
+receive b q | 0 1000 move-send move-send-once
+type q | 0 send-once
+send q move-send-once none - 1100 | 0
+type q | f
+receive r x | 0 1100 move-send-once none
+receive r x | 10004003
+send b copy-send none - 1 | 0
+send b copy-send none - 2 | 0
+send b copy-send none - 3 | 0
+send b copy-send none - 4 | 0
+send b copy-send none - 5 | 0
+send b copy-send none - 6 | 10000004
+refs b send | 0 2
+receive b x | 0 1 move-send none
+send b copy-send none - 6 | 0
+receive b x | 0 2 move-send none
+receive b x | 0 3 move-send none
+receive b x | 0 4 move-send none
+receive b x | 0 5 move-send none
+receive b x | 0 6 move-send none
+receive b x | 10004003
+send b move-send none - 7 | 0
+refs b send | 0 1
+type b | 0 receive send
+receive b x | 0 7 move-send none
+allocate c receive | 0
+insert c c make-send | 0
+insert c c make-send | 0
+mod-refs c receive -1 | 0
+type c | 0 dead-name
+refs c dead-name | 0 2
+refs c send | 0 0
+deallocate c | 0
+type c | 0 dead-name
+deallocate c | 0
+type c | f
+receive c x | 10004002
+send c copy-send none - 1 | 10000003
+allocate s port-set | 0
+type s | 0 port-set
+allocate d receive | 0
+insert d d make-send | 0
+move-member d s | 0
+receive d x | 10004003
+send d copy-send none - 2000 | 0
+receive s x | 0 2000 move-send none
+receive s x | 10004003
+move-member d none | 0
+receive d x | 10004003
+allocate e receive | 0
+move-member e s | 0
+destroy s | 0
+type d | 0 receive send
+type e | 0 receive
+allocate f receive | 0
+allocate g receive | 0
+insert g g make-send | 0
+send g copy-send none - 3000 f make-send | 0
+receive g - y | 0 3000 move-send none move-send
+type y | 0 receive send
+refs y send | 0 1
+send g copy-send none - 3001 f make-send-once | 0
+receive g - y | 0 3001 move-send none move-send-once
+type y | 0 send-once
+send g copy-send none - 3002 f move-receive | 0
+type f | 0 send
+receive g - y | 0 3002 move-send none move-receive
+type y | 0 receive send
+type f | 0 receive send
+send g copy-send none - 3003 g copy-send g copy-send | 0
+receive g - y z | 0 3003 move-send none move-send move-send
+refs g send | 0 3
+allocate h dead-name | 0
+type h | 0 dead-name
+refs h dead-name | 0 1
+mod-refs h dead-name 2 | 0
+refs h dead-name | 0 3
+destroy h | 0
+type h | f
+allocate i receive | 0
+insert i i make-send-once | d
+type i | 0 receive
+send i make-send none - 4000 | 0
+send i move-send none - 4001 | 10000003
+send i make-send-once none - 4002 | 0
+receive i x | 0 71 move-send-once none
+receive i x | 0 4000 move-send none
+destroy i | 0
+type i | f
