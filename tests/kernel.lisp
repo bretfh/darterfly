@@ -79,11 +79,31 @@
            (let ((screen (loop :repeat 20
                                :for screen := (image:screendump)
                                :until (= #xff2e5c8f (image:pixel screen 230 300))
-                               :do (sleep 0.2)
+                               :do (sleep 0.05)
                                :finally (return screen))))
              (is (= #xff2e5c8f (image:pixel screen 230 300)) "old place ~x" (image:pixel screen 230 300))
              (is (= #xffffffff (image:pixel screen 550 400)) "moved content ~x" (image:pixel screen 550 400)))
            (image:send c "(run \"/bin/launchctl\" \"list\")")
            (is (search "com.apple.WindowServer" (image:expect c "# ")))
+           (image:send c "(halt)"))
+      (image:finish c))))
+
+(test finch-has-a-terminal
+  (let ((c (image:console)))
+    (unwind-protect
+         (progn
+           (image:expect c "# ")
+           (image:send c "(spawn \"/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal\")")
+           (image:expect c "# ")
+           (flet ((screen-text (until)
+                    (loop :repeat 60
+                          :do (image:send c "(progn (cat \"/tmp/Terminal.txt\") :done)")
+                              (let ((text (image:expect c ":DONE")))
+                                (when (search until text) (return text)))
+                              (sleep 0.05))))
+             (is (screen-text "# "))
+             (image:send-keys (format nil "(+ 1 2)~%"))
+             (let ((text (screen-text (format nil "(+ 1 2)~%3"))))
+               (is (search (format nil "(+ 1 2)~%3") text) "~s" text)))
            (image:send c "(halt)"))
       (image:finish c))))

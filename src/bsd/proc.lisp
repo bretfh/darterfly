@@ -260,3 +260,9 @@
                 (:block (logior (proc-mask *proc*) set))
                 (:unblock (logandc2 (proc-mask *proc*) set))
                 (:setmask set)))))))
+
+(defun task-pid (task)
+  (with-bsd
+    (loop :for proc :being :the :hash-values :of *procs*
+          :when (and (eq (proc-task proc) task) (not (eq (proc-state proc) :zombie)))
+            :return (proc-pid proc))))

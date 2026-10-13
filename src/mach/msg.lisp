@@ -10,7 +10,8 @@
    (id :initarg :id :initform 0 :accessor msgh-id)
    (body :initarg :body :initform nil :accessor msgh-body)
    (descriptors :initarg :descriptors :initform nil :accessor msgh-descriptors)
-   (seqno :initarg :seqno :initform 0 :accessor msgh-seqno)))
+   (seqno :initarg :seqno :initform 0 :accessor msgh-seqno)
+   (audit :initarg :audit :initform nil :accessor msgh-audit)))
 
 (defmethod print-object ((m message) stream)
   (print-unreadable-object (m stream :type t)
@@ -20,7 +21,7 @@
 (defun make-message (&rest initargs)
   (apply #'make-instance 'message initargs))
 
-(defstruct kmsg dest reply id body rights)
+(defstruct kmsg dest reply id body rights audit)
 
 (defun discard (kmsg)
   (release (kmsg-dest kmsg))
@@ -73,6 +74,7 @@
                        :dry dry))
    :id (msgh-id m)
    :body (msgh-body m)
+   :audit task
    :rights (loop :for d :in (msgh-descriptors m) :collect (copyin-descriptor task d dry))))
 
 (defun deadline (timeout)
@@ -130,6 +132,7 @@
        :id (kmsg-id k)
        :body (kmsg-body k)
        :seqno (prog1 (seqno port) (incf (seqno port)))
+       :audit (kmsg-audit k)
        :descriptors (loop :for d :in (kmsg-rights k) :collect (copyout-descriptor task d))))))
 
 (defun mach-msg-receive (name &key timeout)

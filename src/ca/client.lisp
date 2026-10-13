@@ -55,6 +55,7 @@
 (defclass context ()
   ((id :initarg :id :reader context-id)
    (port :initarg :port :reader context-port)
+   (events :initarg :events :reader context-events)
    (layer :initform nil :accessor context-layer)
    (commits :initform 0 :accessor commits)))
 
@@ -71,14 +72,22 @@
 
 (defun context-create ()
   (let ((server (render-server))
-        (reply (finch/mach:mach-reply-port)))
+        (reply (finch/mach:mach-reply-port))
+        (events (finch/mach:mach-port-allocate finch/mach:*task* :receive)))
+    (finch/mach:mach-port-set-attributes finch/mach:*task* events :limits-info 1024)
     (finch/mach:mach-msg-send (finch/mach:make-message :remote-port server :local-port reply
                                                        :id +register-client+
-                                                       :body (list :pid (finch/bsd:getpid))))
+                                                       :body (list :pid (finch/bsd:getpid))
+                                                       :descriptors (list (cons events :make-send))))
     (let ((message (finch/mach:mach-msg-receive reply :timeout 5000)))
       (finch/mach:mach-port-mod-refs finch/mach:*task* reply :receive -1)
       (make-instance 'context :id (getf (finch/mach:msgh-body message) :context-id)
-                              :port (car (first (finch/mach:msgh-descriptors message)))))))
+                              :port (car (first (finch/mach:msgh-descriptors message)))
+                              :events events))))
+
+(defun next-event (context &key timeout)
+  (handler-case (finch/mach:msgh-body (finch/mach:mach-msg-receive (context-events context) :timeout timeout))
+    (finch/mach:kern-return () nil)))
 
 (defun tree (layer)
   (cons layer (mapcan #'tree (copy-list (layer-sublayers layer)))))

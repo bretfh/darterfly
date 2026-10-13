@@ -1,0 +1,86 @@
+(in-package #:finch/apps)
+
+(defclass terminal ()
+  ((context :initarg :context :reader context)
+   (screen :initarg :screen :reader screen)
+   (output :initform "" :accessor output)
+   (input :initform "" :accessor input)
+   (to-shell :initarg :to-shell :reader to-shell)
+   (lock :initform (sb-thread:make-mutex :name "terminal") :reader lock)))
+
+(defparameter +terminal-font+ "SFNSMono")
+(defparameter +terminal-size+ 13)
+(defparameter +line-height+ 17)
+
+(defun visible-lines (terminal rows)
+  (let ((lines (uiop:split-string (concatenate 'string (output terminal) (input terminal))
+                                  :separator '(#\Newline))))
+    (last lines rows)))
+
+(defun redraw (terminal)
+  (let* ((screen (screen terminal))
+         (frame (ca:layer-frame screen))
+         (width (round (aref frame 2)))
+         (height (round (aref frame 3)))
+         (rows (floor (- height 8) +line-height+))
+         (bitmap (text:fill-bitmap (text:make-bitmap width height) 1.0 1.0 1.0 1.0))
+         (font (text:font +terminal-font+ +terminal-size+))
+         (lines (visible-lines terminal rows)))
+    (loop :for line :in lines
+          :for y :from (+ 4 +line-height+) :by +line-height+
+          :do (text:draw-string bitmap font line 6 (- y 4) 0.0 0.0 0.0))
+    (with-open-file (s "/tmp/Terminal.txt" :direction :output :if-exists :supersede
+                                            :if-does-not-exist :create)
+      (format s "~{~a~%~}" lines))
+    (setf (ca:layer-contents screen) (ca:image width height (text:bitmap-pixels bitmap)))
+    (ca:commit (context terminal))))
+
+(defun shell-output (terminal from-shell)
+  (lambda ()
+    (loop
+      (let ((octets (handler-case (bsd:read from-shell 4096) (bsd:errno () #()))))
+        (when (zerop (length octets)) (return))
+        (sb-thread:with-mutex ((lock terminal))
+          (setf (output terminal)
+                (concatenate 'string (output terminal)
+                             (sb-ext:octets-to-string octets :external-format :utf-8)))
+          (redraw terminal))))))
+
+(defun key (terminal characters)
+  (sb-thread:with-mutex ((lock terminal))
+    (let ((char (char characters 0)))
+      (case char
+        (#\Return
+         (let ((line (format nil "~a~%" (input terminal))))
+           (setf (output terminal) (concatenate 'string (output terminal) line)
+                 (input terminal) "")
+           (bsd:write (to-shell terminal) (sb-ext:string-to-octets line :external-format :utf-8))))
+        (#\Backspace
+         (when (plusp (length (input terminal)))
+           (setf (input terminal) (subseq (input terminal) 0 (1- (length (input terminal)))))))
+        (t (setf (input terminal) (concatenate 'string (input terminal) characters))))
+      (redraw terminal))))
+
+(bsd:define-program "Terminal" (argv envp)
+  (multiple-value-bind (shell-in to-shell) (bsd:pipe)
+    (multiple-value-bind (from-shell shell-out) (bsd:pipe)
+      (bsd:posix-spawn "/bin/sh" (list "/bin/sh") nil
+                       :file-actions (list (list :dup2 shell-in 0) (list :dup2 shell-out 1)
+                                           (list :dup2 shell-out 2)
+                                           (list :close shell-in) (list :close shell-out)
+                                           (list :close to-shell) (list :close from-shell)))
+      (bsd:close shell-in)
+      (bsd:close shell-out)
+      (let* ((context (ca:context-create))
+             (screen (ca:make-layer :background-color #(1.0 1.0 1.0 1.0)))
+             (window (window 160 100 700 460 #(0.85 0.85 0.85 1.0) #(1.0 1.0 1.0 1.0) "Terminal — sh")))
+        (setf (ca:layer-frame screen) (vector 0 0 676 408)
+              (ca:layer-sublayers (second (ca:layer-sublayers window))) (list screen)
+              (ca:context-layer context) window)
+        (let ((terminal (make-instance 'terminal :context context :screen screen :to-shell to-shell)))
+          (redraw terminal)
+          (bsd:bsdthread-create (shell-output terminal from-shell) "shell output")
+          (loop
+            (let ((event (ca:next-event context)))
+              (when (and event (eq (getf event :type) :key-down))
+                (key terminal (getf event :characters))))))))))

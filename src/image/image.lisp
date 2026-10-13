@@ -1,7 +1,7 @@
 (defpackage #:finch/image
   (:use #:cl)
   (:export #:core #:image #:boot #:check-boot #:write-cpio #:*build*
-   #:console #:expect #:send #:transcript #:finish #:screendump #:pixel #:monitor #:pointer #:qmp))
+   #:console #:expect #:send #:transcript #:finish #:screendump #:pixel #:monitor #:pointer #:qmp #:send-keys))
 (in-package #:finch/image)
 
 (defvar *build* (asdf:system-relative-pathname :finch "build/"))
@@ -92,7 +92,8 @@
 (defparameter *programs*
   '(("sbin/launchd" "launchd") ("bin/launchctl" "launchctl") ("bin/sh" "sh")
     ("System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer" "WindowServer")
-    ("Applications/Hello.app/Contents/MacOS/Hello" "Hello")))
+    ("Applications/Hello.app/Contents/MacOS/Hello" "Hello")
+    ("System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal" "Terminal")))
 
 (defun console-job ()
   (let ((job (make-hash-table :test 'equal)))
@@ -159,6 +160,20 @@
 
 (defun qmp (command &optional arguments)
   (finch/qmp:qmp (qmp-path) command arguments))
+
+(defun send-keys (string)
+  (loop :for char :across string
+        :do (let* ((shifted (find char "()+*\"!@#$%^&_{}|:<>?~"))
+                   (base (cond ((char= char #\() "9") ((char= char #\)) "0") ((char= char #\+) "equal")
+                               ((char= char #\*) "8") ((char= char #\") "apostrophe")
+                               ((char= char #\Space) "spc") ((char= char #\Newline) "ret")
+                               ((char= char #\-) "minus") ((char= char #\=) "equal")
+                               ((char= char #\.) "dot") ((char= char #\/) "slash")
+                               (t (string (char-downcase char)))))
+                   (keys (append (and (or shifted (upper-case-p char)) (list "shift")) (list base))))
+              (qmp "send-key" (finch/qmp:dict "keys" (map 'vector (lambda (k) (finch/qmp:dict "type" "qcode" "data" k))
+                                                          keys)))
+              )))
 
 (defun pointer (x y &optional (button nil button-p))
   (flet ((abs-event (axis value)
@@ -260,16 +275,19 @@
              (height (parse-integer (token)))
              (pixels (make-array (list height width) :element-type '(unsigned-byte 32))))
         (token)
-        (dotimes (y height)
-          (dotimes (x width)
-            (setf (aref pixels y x)
-                  (logior #xff000000 (ash (read-byte s) 16) (ash (read-byte s) 8) (read-byte s)))))
+        (let ((raw (make-array (* width height 3) :element-type '(unsigned-byte 8))))
+          (read-sequence raw s)
+          (dotimes (y height)
+            (dotimes (x width)
+              (let ((at (* 3 (+ x (* y width)))))
+                (setf (aref pixels y x)
+                      (logior #xff000000 (ash (aref raw at) 16) (ash (aref raw (+ at 1)) 8) (aref raw (+ at 2))))))))
         pixels))))
 
 (defun screendump ()
   (let ((path (uiop:native-namestring (build-path "screen.ppm"))))
     (uiop:delete-file-if-exists path)
-    (monitor (format nil "screendump ~a" path))
+    (qmp "screendump" (finch/qmp:dict "filename" path))
     (read-ppm path)))
 
 (defun pixel (screen x y)

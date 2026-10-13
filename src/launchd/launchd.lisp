@@ -1,6 +1,6 @@
 (defpackage #:finch/launchd
   (:use #:cl)
-  (:local-nicknames (#:bsd #:finch/bsd) (#:mach #:finch/mach) (#:plist #:finch/plist))
+  (:local-nicknames (#:bsd #:finch/bsd) (#:mach #:finch/mach) (#:plist #:finch/plist) (#:xpc #:finch/xpc))
   (:export #:bootstrap-check-in #:bootstrap-look-up #:bootstrap-port #:launchd-call
            #:+bootstrap-unknown-service+ #:+bootstrap-not-privileged+ #:+bootstrap-service-active+))
 (in-package #:finch/launchd)
@@ -9,6 +9,10 @@
 (defconstant +bootstrap-unknown-service+ 1102)
 (defconstant +bootstrap-service-active+ 1103)
 (defconstant +mach-notify-port-destroyed+ #o105)
+(defconstant +routine-check-in+ #x400000ce)
+(defconstant +routine-look-up+ #x400000cf)
+(defconstant +routine-list+ #x40000fff)
+(defconstant +reply+ #x20000000)
 
 (defparameter *daemons* '("/System/Library/LaunchDaemons" "/Library/LaunchDaemons"))
 
@@ -128,20 +132,27 @@
           (reaped pid status))
       (bsd:errno () (sleep 0.1)))))
 
-(defun reply (message body &optional descriptors)
+(defun reply (message entries &optional descriptors)
   (when (mach:msgh-remote-port message)
-    (mach:mach-msg-send (mach:make-message :remote-port (mach:msgh-remote-port message)
-                                           :remote-disposition :move-send-once
-                                           :body body :descriptors descriptors))))
+    (multiple-value-bind (octets rights)
+        (xpc:encode (apply #'xpc:dictionary "rec_execcnt" (list :uint64 0)
+                           "req_pid" (list :uint64 (bsd:getpid)) entries))
+      (declare (ignore rights))
+      (mach:mach-msg-send (mach:make-message :remote-port (mach:msgh-remote-port message)
+                                             :remote-disposition :move-send-once :id +reply+
+                                             :body octets :descriptors descriptors)))))
+
+(defun fail-reply (message code)
+  (reply message (list "error" (list :int64 code))))
 
 (defun job-of-pid (pid)
   (find pid *jobs* :key #'pid))
 
 (defun check-in (message name pid)
   (let ((service (gethash name *services*)))
-    (cond ((null service) (reply message (list :kr +bootstrap-unknown-service+)))
-          ((not (eq (job service) (job-of-pid pid))) (reply message (list :kr +bootstrap-not-privileged+)))
-          ((active service) (reply message (list :kr +bootstrap-service-active+)))
+    (cond ((null service) (fail-reply message +bootstrap-unknown-service+))
+          ((not (eq (job service) (job-of-pid pid))) (fail-reply message +bootstrap-not-privileged+))
+          ((active service) (fail-reply message +bootstrap-service-active+))
           (t
            (let ((port (port service)))
              (unless (send service)
@@ -150,29 +161,31 @@
              (mach:mach-port-request-notification mach:*task* port :port-destroyed 0 *notify* :make-send-once)
              (setf (active service) t
                    (hidden service) nil)
-             (reply message (list :kr 0) (list (cons port :move-receive))))))))
+             (reply message (list "port" (list :receive port)) (list (cons port :move-receive))))))))
 
 (defun look-up (message name)
   (let ((service (gethash name *services*)))
     (if (or (null service) (hidden service))
-        (reply message (list :kr +bootstrap-unknown-service+))
+        (fail-reply message +bootstrap-unknown-service+)
         (progn
           (start (job service))
-          (reply message (list :kr 0)
+          (reply message (list "port" (list :send (port service)))
                  (list (cons (port service) (if (send service) :copy-send :make-send))))))))
 
 (defun list-jobs (message)
-  (reply message (list :kr 0
-                       :jobs (mapcar (lambda (job)
-                                       (list (pid job)
-                                             (let ((s (status job)))
-                                               (cond ((null s) 0)
-                                                     ((bsd:wifexited s) (bsd:wexitstatus s))
-                                                     ((bsd:wifsignaled s) (- (bsd:wtermsig s)))
-                                                     (t 0)))
-                                             (label job)
-                                             (unavailable job)))
-                                     *jobs*))))
+  (reply message
+         (list "jobs" (cons :array
+                            (mapcar (lambda (job)
+                                      (xpc:dictionary
+                                       "pid" (list :int64 (or (pid job) 0))
+                                       "status" (list :int64 (let ((s (status job)))
+                                                               (cond ((null s) 0)
+                                                                     ((bsd:wifexited s) (bsd:wexitstatus s))
+                                                                     ((bsd:wifsignaled s) (- (bsd:wtermsig s)))
+                                                                     (t 0))))
+                                       "label" (label job)
+                                       "available" (list :bool (not (unavailable job)))))
+                                    *jobs*)))))
 
 (defun returned (message)
   (let* ((carried (car (first (mach:msgh-descriptors message))))
@@ -190,12 +203,16 @@
       (sb-thread:with-mutex (*lock*)
         (if (= (mach:msgh-id message) +mach-notify-port-destroyed+)
             (returned message)
-            (destructuring-bind (&key routine name pid &allow-other-keys) (mach:msgh-body message)
-              (case routine
-                (:check-in (check-in message name pid))
-                (:look-up (look-up message name))
-                (:list (list-jobs message))
-                (t (reply message (list :kr 1))))))))
+            (let* ((request (handler-case (xpc:decode (mach:msgh-body message)
+                                                      (mapcar #'car (mach:msgh-descriptors message)))
+                              (error () nil)))
+                   (name (and request (xpc:value request "name"))))
+              (cond ((null request) (fail-reply message 22))
+                    ((= (mach:msgh-id message) +routine-check-in+)
+                     (check-in message name (bsd:task-pid (mach:msgh-audit message))))
+                    ((= (mach:msgh-id message) +routine-look-up+) (look-up message name))
+                    ((= (mach:msgh-id message) +routine-list+) (list-jobs message))
+                    (t (fail-reply message 78)))))))
     bootstrap))
 
 (bsd:define-program "launchd" (argv envp)
@@ -222,32 +239,44 @@
 (defun bootstrap-port ()
   (mach:task-get-special-port mach:*task* :bootstrap))
 
-(defun launchd-call (body &key (timeout 5000))
-  (let ((reply (mach:mach-reply-port)))
+(defun launchd-call (routine entries &key (timeout 5000))
+  (let ((reply (mach:mach-reply-port))
+        (domain (bootstrap-port)))
     (unwind-protect
-         (progn
-           (mach:mach-msg-send (mach:make-message :remote-port (bootstrap-port) :local-port reply
-                                                  :local-disposition :make-send-once :body body))
+         (multiple-value-bind (octets rights)
+             (xpc:encode (apply #'xpc:dictionary (append entries (list "domain-port" (list :send domain)))))
+           (mach:mach-msg-send (mach:make-message :remote-port domain :local-port reply
+                                                  :local-disposition :make-send-once :id routine :body octets
+                                                  :descriptors (mapcar (lambda (r) (cons (car r) :copy-send)) rights)))
            (let ((message (mach:mach-msg-receive reply :timeout timeout)))
-             (values (mach:msgh-body message) (mach:msgh-descriptors message))))
+             (xpc:decode (mach:msgh-body message) (mapcar #'car (mach:msgh-descriptors message)))))
       (mach:mach-port-mod-refs mach:*task* reply :receive -1))))
 
+(defun result (reply)
+  (let ((error (xpc:value reply "error")))
+    (if error
+        (values nil (second error))
+        (values (second (xpc:value reply "port")) 0))))
+
 (defun bootstrap-check-in (name)
-  (multiple-value-bind (body descriptors)
-      (launchd-call (list :routine :check-in :name name :pid (bsd:getpid)))
-    (values (and (zerop (getf body :kr)) (car (first descriptors))) (getf body :kr))))
+  (result (launchd-call +routine-check-in+
+                        (list "handle" (list :uint64 0) "flags" (list :uint64 0) "name" name
+                              "type" (list :uint64 7)))))
 
 (defun bootstrap-look-up (name)
-  (multiple-value-bind (body descriptors) (launchd-call (list :routine :look-up :name name))
-    (values (and (zerop (getf body :kr)) (car (first descriptors))) (getf body :kr))))
+  (result (launchd-call +routine-look-up+
+                        (list "handle" (list :uint64 0) "instance" (list :uuid (make-array 16 :element-type '(unsigned-byte 8) :initial-element 0))
+                              "flags" (list :uint64 0) "name" name "type" (list :uint64 7)
+                              "targetpid" (list :int64 0)))))
 
 (bsd:define-program "launchctl" (argv envp)
   (let ((command (second argv)))
     (cond ((equal command "list")
            (format t "PID~cStatus~cLabel~%" #\Tab #\Tab)
-           (dolist (row (getf (launchd-call (list :routine :list)) :jobs))
-             (destructuring-bind (pid status label unavailable) row
-               (unless unavailable
-                 (format t "~a~c~d~c~a~%" (or pid "-") #\Tab status #\Tab label))))
+           (dolist (job (rest (xpc:value (launchd-call +routine-list+ nil) "jobs")))
+             (when (second (xpc:value job "available"))
+               (let ((pid (second (xpc:value job "pid"))))
+                 (format t "~a~c~d~c~a~%" (if (zerop pid) "-" pid) #\Tab
+                         (second (xpc:value job "status")) #\Tab (xpc:value job "label")))))
            0)
           (t (format *error-output* "usage: launchctl list~%") 64))))

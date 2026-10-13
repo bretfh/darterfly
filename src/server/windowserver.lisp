@@ -14,6 +14,7 @@
    (pid :initarg :pid :reader pid)
    (layers :initform (make-hash-table) :reader layers)
    (root :initform nil :accessor root)
+   (events :initarg :events :initform nil :reader events)
    (dx :initform 0 :accessor dx)
    (dy :initform 0 :accessor dy)))
 
@@ -157,6 +158,25 @@
                        (setf *drag* (list client))))))
                (setf *drag* nil))))))
 
+(defvar *shift* nil)
+
+(defun post-event (client body)
+  (when (and client (events client))
+    (handler-case
+        (mach:mach-msg-send (mach:make-message :remote-port (events client) :body body) :timeout 0)
+      (mach:kern-return () nil))))
+
+(defun keyboard (event)
+  (when (= (io:event-type event) +ev-key+)
+    (let ((code (io:event-code event))
+          (value (io:event-value event)))
+      (cond ((io:shift-key-p code) (setf *shift* (plusp value)))
+            ((plusp value)
+             (let ((char (io:key-character code *shift*)))
+               (when char
+                 (post-event (first *clients*)
+                             (list :type :key-down :keycode code :characters (string char))))))))))
+
 (defun hid-devices ()
   (loop :for name :in (ignore-errors (bsd:readdir "/dev/input"))
         :when (uiop:string-prefix-p "event" name)
@@ -169,6 +189,7 @@
         (if events
             (sb-thread:with-mutex (*lock*)
               (mapc #'pointer events)
+              (mapc #'keyboard events)
               (render))
             (sleep 0.01))))))
 
@@ -189,7 +210,8 @@
     (mach:mach-port-move-member mach:*task* port set)
     (mach:mach-port-request-notification mach:*task* port :no-senders 1 port :make-send-once)
     (push (make-instance 'client :port port :context context
-                                 :pid (getf (mach:msgh-body message) :pid))
+                                 :pid (getf (mach:msgh-body message) :pid)
+                                 :events (car (first (mach:msgh-descriptors message))))
           *clients*)
     (mach:mach-msg-send (mach:make-message :remote-port (mach:msgh-remote-port message)
                                            :remote-disposition :move-send-once
