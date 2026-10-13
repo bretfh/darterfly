@@ -62,7 +62,7 @@
                              (at c "Kernel" "Add"))))
     (put c '("Kernel" "Quirks" "ProvideCurrentCpuInfo") t)
     (put c '("Kernel" "Emulate" "DummyPowerManagement") t)
-    (put c '("Misc" "Boot" "Timeout") 0)
+    (put c '("Misc" "Boot" "Timeout") 5)
     (put c '("Misc" "Boot" "PollAppleHotKeys") t)
     (put c '("Misc" "Debug" "Target") 9)
     (put c '("Misc" "Serial" "Init") t)
