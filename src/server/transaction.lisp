@@ -93,6 +93,7 @@
                 (#x45 "SetWindowPrefersCurrentSpace" :u32 :bool)
                 (#x46 "SetWindowShadowProperties" :u32 :shadow)
                 (#x47 "SetWindowActiveShadowLegacy" :u32 :bool)
+                (#x48 "SetWindowCornerMask" :u32 :corner-mask)
                 (#x49 "SetWindowDragRegion" :u32 :region)
                 (#x4a "SetWindowActivationRegion" :u32 :region)
                 (#x4b "SetWindowButtonRegion" :u32 :region)
@@ -115,6 +116,7 @@
                 (#x5d "RemoveSurface" :u32 :u32)
                 (#x5e "SpaceFinishedResizeForRect" :u64 (4 :f64))
                 (#x5f "SetMenuBarCompanionWindow" :u64 :u32 :f64)
+                (#x60 "SetMenuBars" :menu-bars)
                 (#x61 "SystemStatusBarSetItemPrivacyIndicator" :u32 (4 :f64) :u32)
                 (#x62 "SetWindowResizeEventShape" :u32 :region)
                 (#x63 "SetGlobalVisibleWindowList" :u32-array)
@@ -299,6 +301,43 @@
     (1 (take-string r))
     (2 (if (zerop (take-byte r)) :false :true))
     (3 (take-data r))))
+
+(define-argument :corner-mask (v w r)
+  (destructuring-bind (width height extra rect mask) v
+    (encode-argument :u32 (length mask) w)
+    (encode-argument :u32 width w)
+    (encode-argument :u32 height w)
+    (encode-argument :u32 extra w)
+    (dolist (x rect) (encode-argument :f64 x w))
+    (put-octets w mask))
+  (let* ((length (decode-argument :u32 r))
+         (width (decode-argument :u32 r))
+         (height (decode-argument :u32 r))
+         (extra (decode-argument :u32 r))
+         (rect (loop :repeat 4 :collect (decode-argument :f64 r))))
+    (list width height extra rect (take r length))))
+
+(defparameter +menu-bar-record+
+  '(:u32 :u32 :u32 :u32 :u32 :u32 :u64 :f32 :f32 :u32 :u32 :f64 :f64 :f64 :f64 :f64 :f64 :f64 :f64))
+
+(define-argument :menu-bars (v w r)
+  (destructuring-bind (header floats flags records) v
+    (dolist (x header) (encode-argument :u32 x w))
+    (dolist (x floats) (encode-argument :f32 x w))
+    (dolist (x flags) (encode-argument :u8 x w))
+    (encode-argument :u32 (length records) w)
+    (dolist (record records)
+      (destructuring-bind (fields widths) record
+        (mapc (lambda (type x) (encode-argument type x w)) +menu-bar-record+ fields)
+        (encode-argument :u32 (length widths) w)
+        (dolist (x widths) (encode-argument :f32 x w)))))
+  (let ((header (loop :repeat 4 :collect (decode-argument :u32 r)))
+        (floats (loop :repeat 4 :collect (decode-argument :f32 r)))
+        (flags (loop :repeat 6 :collect (decode-argument :u8 r))))
+    (list header floats flags
+          (loop :repeat (decode-argument :u32 r)
+                :collect (list (mapcar (lambda (type) (decode-argument type r)) +menu-bar-record+)
+                               (loop :repeat (decode-argument :u32 r) :collect (decode-argument :f32 r)))))))
 
 (define-argument :shadow (v w r)
   (progn (put-packed w (length v))

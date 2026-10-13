@@ -73,3 +73,26 @@
       (is (equal '(512) (getf image :rowbytes)))
       (is (= #x34 (getf (getf image :shmem) :type)))
       (is (eq :port (getf (getf image :shmem) :port))))))
+
+(defun appkit-commits ()
+  (mapcar (lambda (line)
+            (coerce (loop :for i :from 0 :below (length line) :by 2
+                          :collect (parse-integer line :start i :end (+ i 2) :radix 16))
+                    '(simple-array (unsigned-byte 8) (*))))
+          (uiop:read-file-lines (asdf:system-relative-pathname :finch "tests/appkit-commits.txt"))))
+
+(test appkit-commits-round-trip
+  (let ((streams (appkit-commits))
+        (transactions 0))
+    (is (= 130 (length streams)))
+    (dolist (stream streams)
+      (let* ((commit (ca:decode-commit stream))
+             (octets (ca:encode-commit commit)))
+        (is (equalp octets (subseq stream 0 (length octets))))
+        (dolist (command (getf commit :commands))
+          (when (eq (first command) :set-client-info)
+            (let ((txn (cdr (assoc "SLSTxn" (rest (second command)) :test #'equal))))
+              (when txn
+                (incf transactions)
+                (is (equalp (second txn) (server:encode-transaction (server:decode-transaction (second txn)))))))))))
+    (is (= 6 transactions))))

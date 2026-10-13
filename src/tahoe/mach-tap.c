@@ -10,7 +10,7 @@ extern mach_msg_return_t mach_msg2_internal(void *data, uint64_t option64, uint6
 static void dump(const char *tag, const void *data, uint32_t size) {
   const uint8_t *b = data;
   fprintf(stderr, "%s %u", tag, size);
-  for (uint32_t i = 0; i < size && i < 4096; i++) fprintf(stderr, " %02x", b[i]);
+  for (uint32_t i = 0; i < size; i++) fprintf(stderr, " %02x", b[i]);
   fprintf(stderr, "\n");
 }
 
