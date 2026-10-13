@@ -3,7 +3,7 @@
   (:export
    #:*home* #:*boot-args* #:*csr-active-config* #:*product*
    #:config #:esp
-   #:boot #:screendump #:send-key #:send-text #:query-status #:quit #:system-powerdown
+   #:boot #:screendump #:click #:*screen* #:send-key #:send-text #:query-status #:quit #:system-powerdown
    #:serial-log))
 (in-package #:finch/tahoe)
 

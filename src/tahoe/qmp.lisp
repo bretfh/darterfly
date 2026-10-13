@@ -77,3 +77,19 @@
 
 (defun system-powerdown () (qmp "system_powerdown"))
 (defun quit () (qmp "quit"))
+
+(defparameter *screen* '(2560 1600))
+
+(defun axis (name value limit)
+  (dict "type" "abs" "data" (dict "axis" name "value" (floor (* value 32767) (1- limit)))))
+
+(defun button (down)
+  (vector (dict "type" "btn" "data" (dict "down" down "button" "left"))))
+
+(defun click (x y)
+  (destructuring-bind (w h) *screen*
+    (qmp "input-send-event" (dict "events" (vector (axis "x" x w) (axis "y" y h))))
+    (sleep 0.1)
+    (qmp "input-send-event" (dict "events" (button t)))
+    (sleep 0.08)
+    (qmp "input-send-event" (dict "events" (button nil)))))
