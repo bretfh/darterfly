@@ -6,10 +6,10 @@
 
 (asdf:defsystem #:finch/bsd
   :description "Processes, signals and files"
-  :depends-on (#:finch/mach)
+  :depends-on (#:finch/mach (:require #:sb-posix))
   :serial t
   :pathname "src/bsd/"
-  :components ((:file "errno") (:file "proc") (:file "file")))
+  :components ((:file "errno") (:file "proc") (:file "file") (:file "vfs")))
 
 (asdf:defsystem #:finch/kernel
   :description "The kernel, run as pid 1"

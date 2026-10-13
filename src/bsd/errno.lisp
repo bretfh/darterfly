@@ -6,8 +6,11 @@
    #:fork #:exit #:wait4 #:kill #:pause #:sigaction #:sigprocmask #:signo #:signame
    #:pipe #:read #:write #:close #:dup #:dup2 #:fcntl
    #:+o-nonblock+ #:+f-getfl+ #:+f-setfl+
+   #:open #:lseek #:stat #:lstat #:fstat #:mkdir #:rmdir #:unlink #:rename #:symlink #:readdir
+   #:chdir #:getcwd #:+o-rdonly+ #:+o-wronly+ #:+o-rdwr+ #:+o-append+ #:+o-creat+ #:+o-trunc+
+   #:+o-excl+ #:+o-directory+ #:+s-ifmt+ #:+s-ifdir+ #:+s-ifreg+ #:+s-ififo+ #:+s-iflnk+
    #:wifexited #:wexitstatus #:wifsignaled #:wtermsig #:wifstopped #:wstopsig #:wifcontinued)
-  (:shadow #:read #:write #:close))
+  (:shadow #:read #:write #:close #:open))
 (in-package #:finch/bsd)
 
 (defparameter +errno+

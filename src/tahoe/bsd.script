@@ -121,3 +121,73 @@ wait v
 exit 0
 end
 wait u
+scratch
+open f a rdonly
+open f a wronly|creat
+write f hello
+fstat f
+close f
+stat a
+open f a rdonly
+read f 2
+dup f g
+read g 2
+lseek f 0 cur
+lseek f 1 set
+read f 10
+lseek f 0 end
+lseek f -10 cur
+close f
+close g
+open f a wronly|creat|excl
+open f a wronly|append
+write f !!
+close f
+stat a
+open f a rdwr|trunc
+fstat f
+write f abc
+lseek f 0 set
+read f 10
+read f 10
+close f
+mkdir d
+mkdir d
+stat d
+open f d wronly
+open f d rdonly|directory
+close f
+open f a rdonly|directory
+open f d/b wronly|creat
+write f in
+close f
+readdir d
+readdir .
+rmdir d
+unlink d
+unlink d/b
+rmdir d
+stat d
+stat d/b
+stat a/b
+rename a c
+stat a
+stat c
+symlink c l
+lstat l
+stat l
+readdir .
+unlink l
+mkdir e
+chdir e
+cwd-ends /e
+chdir ..
+cwd-ends /e
+chdir c
+chdir missing
+open f missing/x wronly|creat
+read 99 1
+rename c e
+mkdir e/f
+rename c e/f
+rename e e/f/g

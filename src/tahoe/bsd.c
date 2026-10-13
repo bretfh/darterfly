@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
+#include <dirent.h>
 #include <unistd.h>
 
 static struct { char key[32]; long value; } vars[64];
@@ -36,6 +38,24 @@ static int signo(const char *s) {
   for (int i = 1; i < 32; i++) if (!strcmp(s, signals[i])) return i;
   return atoi(s);
 }
+
+static int flag_bits(const char *s) {
+  static const struct { const char *name; int bits; } flags[] = {
+    {"rdonly", O_RDONLY}, {"wronly", O_WRONLY}, {"rdwr", O_RDWR}, {"append", O_APPEND}, {"creat", O_CREAT},
+    {"trunc", O_TRUNC}, {"excl", O_EXCL}, {"directory", O_DIRECTORY}, {"nonblock", O_NONBLOCK}};
+  char copy[128];
+  int bits = 0;
+  strcpy(copy, s);
+  for (char *t = strtok(copy, "|"); t; t = strtok(NULL, "|"))
+    for (unsigned i = 0; i < sizeof flags / sizeof flags[0]; i++) if (!strcmp(t, flags[i].name)) bits |= flags[i].bits;
+  return bits;
+}
+
+static void kind(mode_t mode) {
+  printf(" %s", S_ISDIR(mode) ? "dir" : S_ISREG(mode) ? "file" : S_ISFIFO(mode) ? "fifo" : S_ISLNK(mode) ? "link" : "other");
+}
+
+static int compare(const void *a, const void *b) { return strcmp(*(char **)a, *(char **)b); }
 
 static void caught(int sig) { _exit(100 + sig); }
 
@@ -164,6 +184,59 @@ int main(int argc, char **argv) {
     } else if (!strcmp(w[0], "dup")) {
       r = dup(get(w[1]));
       if (r < 0) printf(" %d", errno); else { *var(w[2]) = r; printf(" 0"); }
+    } else if (!strcmp(w[0], "scratch")) {
+      char dir[] = "/tmp/finch.XXXXXX";
+      r = mkdtemp(dir) && !chdir(dir) ? 0 : -1;
+      printf(" %d", r < 0 ? errno : 0);
+    } else if (!strcmp(w[0], "open")) {
+      r = open(w[2], flag_bits(w[3]), 0644);
+      if (r < 0) printf(" %d", errno); else { *var(w[1]) = r; printf(" 0"); }
+    } else if (!strcmp(w[0], "lseek")) {
+      int whence = !strcmp(w[3], "set") ? SEEK_SET : !strcmp(w[3], "cur") ? SEEK_CUR : SEEK_END;
+      r = lseek(get(w[1]), atol(w[2]), whence);
+      if (r < 0) printf(" %d", errno); else printf(" 0 %ld", r);
+    } else if (!strcmp(w[0], "stat") || !strcmp(w[0], "lstat") || !strcmp(w[0], "fstat")) {
+      struct stat st;
+      r = !strcmp(w[0], "stat") ? stat(w[1], &st) : !strcmp(w[0], "lstat") ? lstat(w[1], &st) : fstat(get(w[1]), &st);
+      if (r < 0) printf(" %d", errno);
+      else { printf(" 0"); kind(st.st_mode); if (S_ISREG(st.st_mode)) printf(" %lld", (long long)st.st_size); }
+    } else if (!strcmp(w[0], "mkdir")) {
+      r = mkdir(w[1], 0755);
+      printf(" %d", r < 0 ? errno : 0);
+    } else if (!strcmp(w[0], "rmdir")) {
+      r = rmdir(w[1]);
+      printf(" %d", r < 0 ? errno : 0);
+    } else if (!strcmp(w[0], "unlink")) {
+      r = unlink(w[1]);
+      printf(" %d", r < 0 ? errno : 0);
+    } else if (!strcmp(w[0], "rename")) {
+      r = rename(w[1], w[2]);
+      printf(" %d", r < 0 ? errno : 0);
+    } else if (!strcmp(w[0], "symlink")) {
+      r = symlink(w[1], w[2]);
+      printf(" %d", r < 0 ? errno : 0);
+    } else if (!strcmp(w[0], "chdir")) {
+      r = chdir(w[1]);
+      printf(" %d", r < 0 ? errno : 0);
+    } else if (!strcmp(w[0], "cwd-ends")) {
+      char cwd[1024];
+      getcwd(cwd, sizeof cwd);
+      size_t a = strlen(cwd), b = strlen(w[1]);
+      printf(" 0 %s", a >= b && !strcmp(cwd + a - b, w[1]) ? "yes" : "no");
+    } else if (!strcmp(w[0], "readdir")) {
+      DIR *d = opendir(w[1]);
+      if (!d) printf(" %d", errno);
+      else {
+        char *names[64];
+        int k = 0;
+        struct dirent *e;
+        while ((e = readdir(d)) && k < 64)
+          if (strcmp(e->d_name, ".") && strcmp(e->d_name, "..")) names[k++] = strdup(e->d_name);
+        closedir(d);
+        qsort(names, k, sizeof names[0], compare);
+        printf(" 0");
+        for (int i = 0; i < k; i++) printf(" %s", names[i]);
+      }
     } else if (!strcmp(w[0], "same")) {
       printf(" 0 %s", get(w[1]) == get(w[2]) ? "yes" : "no");
     } else {
