@@ -158,3 +158,6 @@
 (defun bootstrap ()
   (oracle "bootstrap" "clang -w -dynamiclib -o mach-tap.dylib mach-tap.c && clang -w -o lookup lookup.c && DYLD_INSERT_LIBRARIES=$PWD/mach-tap.dylib ./lookup com.apple.windowserver com.apple.finch.nothing check-in:com.apple.finch.nothing check-in:com.apple.windowserver 2>&1"
           "mach-tap.c" "lookup.c"))
+
+(defun events ()
+  (oracle "events" "clang -w -o events events.c -framework ApplicationServices && ./events" "events.c"))

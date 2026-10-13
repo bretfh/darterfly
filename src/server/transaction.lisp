@@ -1,6 +1,7 @@
 (defpackage #:finch/server
   (:use #:cl)
   (:export
+   #:decode-event #:encode-event #:event-value #:event-type #:event-character #:key-event
    #:transaction-error #:encode-transaction #:decode-transaction
    #:op-code #:op-name #:op-arguments #:*ops*))
 (in-package #:finch/server)

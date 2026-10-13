@@ -82,5 +82,5 @@
           (bsd:bsdthread-create (shell-output terminal from-shell) "shell output")
           (loop
             (let ((event (ca:next-event context)))
-              (when (and event (eq (getf event :type) :key-down))
-                (key terminal (getf event :characters))))))))))
+              (when (and event (eq (finch/server:event-type event) :key-down) (finch/server:event-character event))
+                (key terminal (string (finch/server:event-character event)))))))))))

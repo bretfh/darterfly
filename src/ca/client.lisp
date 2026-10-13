@@ -86,7 +86,8 @@
                               :events events))))
 
 (defun next-event (context &key timeout)
-  (handler-case (finch/mach:msgh-body (finch/mach:mach-msg-receive (context-events context) :timeout timeout))
+  (handler-case (finch/server:decode-event
+                 (finch/mach:msgh-body (finch/mach:mach-msg-receive (context-events context) :timeout timeout)))
     (finch/mach:kern-return () nil)))
 
 (defun tree (layer)

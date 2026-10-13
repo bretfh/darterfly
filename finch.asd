@@ -47,14 +47,14 @@
 
 (asdf:defsystem #:finch/windowserver
   :description "WindowServer"
-  :depends-on (#:finch/ca #:finch/bsd #:finch/mach #:finch/launchd #:finch/io)
+  :depends-on (#:finch/ca #:finch/server #:finch/bsd #:finch/mach #:finch/launchd #:finch/io)
   :serial t
   :pathname "src/server/"
   :components ((:file "windowserver")))
 
 (asdf:defsystem #:finch/apps
   :description "Applications"
-  :depends-on (#:finch/ca #:finch/bsd #:finch/text)
+  :depends-on (#:finch/ca #:finch/server #:finch/bsd #:finch/text)
   :serial t
   :pathname "src/apps/"
   :components ((:file "hello") (:file "terminal")))
@@ -111,11 +111,11 @@
   :description "The window server"
   :serial t
   :pathname "src/server/"
-  :components ((:file "transaction")))
+  :components ((:file "transaction") (:file "event")))
 
 (asdf:defsystem #:finch/ca
   :description "CoreAnimation's render protocol"
-  :depends-on (#:finch/mach #:finch/bsd #:finch/launchd)
+  :depends-on (#:finch/mach #:finch/bsd #:finch/launchd #:finch/server)
   :serial t
   :pathname "src/ca/"
   :components ((:file "render") (:file "client")))
@@ -132,7 +132,7 @@
   :depends-on (#:finch/plist #:finch/qmp #:com.inuoe.jzon #:uiop (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/tahoe/"
-  :components ((:static-file "SSDT-EC-USBX.dsl") (:static-file "transactions.c") (:static-file "commit-tap.c") (:static-file "commits.m") (:static-file "ports.c") (:static-file "ports.script") (:static-file "bsd.c") (:static-file "bsd.script") (:static-file "mach-tap.c") (:static-file "lookup.c") (:file "opencore") (:file "qmp") (:file "guest")))
+  :components ((:static-file "SSDT-EC-USBX.dsl") (:static-file "transactions.c") (:static-file "commit-tap.c") (:static-file "commits.m") (:static-file "ports.c") (:static-file "ports.script") (:static-file "bsd.c") (:static-file "bsd.script") (:static-file "mach-tap.c") (:static-file "lookup.c") (:static-file "events.c") (:file "opencore") (:file "qmp") (:file "guest")))
 
 (asdf:defsystem #:finch
   :description "A Darwin in Common Lisp"

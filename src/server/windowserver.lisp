@@ -1,6 +1,6 @@
 (defpackage #:finch/windowserver
   (:use #:cl)
-  (:local-nicknames (#:bsd #:finch/bsd) (#:mach #:finch/mach) (#:ca #:finch/ca) (#:io #:finch/io)
+  (:local-nicknames (#:bsd #:finch/bsd) (#:mach #:finch/mach) (#:ca #:finch/ca) (#:io #:finch/io) (#:server #:finch/server)
                     (#:launchd #:finch/launchd)))
 (in-package #:finch/windowserver)
 
@@ -175,7 +175,10 @@
              (let ((char (io:key-character code *shift*)))
                (when char
                  (post-event (first *clients*)
-                             (list :type :key-down :keycode code :characters (string char))))))))))
+                             (server:encode-event
+                              (server:key-event t (or (io:virtual-keycode code) 0) char
+                                                :timestamp (get-internal-real-time)
+                                                :location (mapcar (lambda (v) (float v 1.0)) *cursor*)))))))))))
 
 (defun hid-devices ()
   (loop :for name :in (ignore-errors (bsd:readdir "/dev/input"))
