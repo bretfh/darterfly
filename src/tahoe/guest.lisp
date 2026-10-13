@@ -67,3 +67,63 @@
              :error-output :output)
       (loop :repeat 100 :until (probe-file (qmp-socket)) :do (sleep 0.1))
       (query-status))))
+
+(defparameter *user* "finch")
+(defparameter *password* "finch")
+(defparameter *ssh-port* 2222)
+
+(defun ssh-key () (home "id_ed25519"))
+
+(defun ssh-options ()
+  (list "-o" "StrictHostKeyChecking=no" "-o" "UserKnownHostsFile=/dev/null" "-o" "LogLevel=ERROR"
+        "-p" (princ-to-string *ssh-port*)))
+
+(defun authorize ()
+  (unless (probe-file (ssh-key))
+    (sh "ssh-keygen" "-q" "-t" "ed25519" "-N" "" "-f" (ssh-key)))
+  (apply #'sh "sshpass" "-p" *password* "ssh"
+         (append (ssh-options)
+                 (list (format nil "~a@127.0.0.1" *user*)
+                       (format nil "mkdir -p .ssh && chmod 700 .ssh && echo '~a' >> .ssh/authorized_keys && chmod 600 .ssh/authorized_keys"
+                               (string-trim '(#\Newline) (uiop:read-file-string (format nil "~a.pub" (uiop:native-namestring (ssh-key))))))))))
+
+(defun guest (command)
+  (apply #'sh "ssh" "-i" (ssh-key) "-o" "BatchMode=yes"
+         (append (ssh-options) (list (format nil "~a@127.0.0.1" *user*) command))))
+
+(defparameter *node* "v24.21.0")
+(defparameter *node-sha256* "1462cb3b3046b815cf8ea436d3da450ec1a9f11dac7e5a46b0ada5305d7e8097")
+
+(defun node-tarball ()
+  (let ((file (home (format nil "node-~a-darwin-x64.tar.gz" *node*))))
+    (unless (probe-file file)
+      (sh "curl" "-4" "-sSfL" "--cacert" "/etc/ssl/certs/ca-certificates.crt" "-o" file
+          (format nil "https://nodejs.org/dist/~a/node-~a-darwin-x64.tar.gz" *node* *node*)))
+    (let ((sum (subseq (sh "sha256sum" file) 0 64)))
+      (unless (string= sum *node-sha256*)
+        (delete-file file)
+        (error "~a: sha256 ~a, expected ~a" file sum *node-sha256*)))
+    file))
+
+(defun rea-root ()
+  (let ((rea (string-trim '(#\Newline) (sh "readlink" "-f" (sh-which "rea")))))
+    (uiop:parse-native-namestring (format nil "~a/../share/" (directory-namestring rea)))))
+
+(defun sh-which (name)
+  (loop :for dir :in (uiop:split-string (uiop:getenv "PATH") :separator ":")
+        :for file := (format nil "~a/~a" dir name)
+        :when (probe-file file) :return file
+        :finally (error "~a is not on PATH" name)))
+
+(defun scp (file destination)
+  (apply #'sh "scp" "-i" (ssh-key) "-o" "BatchMode=yes"
+         (append (substitute "-P" "-p" (ssh-options) :test #'string=)
+                 (list (uiop:native-namestring file)
+                       (format nil "~a@127.0.0.1:~a" *user* destination)))))
+
+(defun install-rea ()
+  (let ((rea (home "rea.tar.gz")))
+    (sh "tar" "-C" (rea-root) "-czf" rea "rea")
+    (scp (node-tarball) "node.tar.gz")
+    (scp rea "rea.tar.gz")
+    (guest (format nil "rm -rf node rea && mkdir node && tar -xzf node.tar.gz -C node --strip-components 1 && tar -xzf rea.tar.gz && rm node.tar.gz rea.tar.gz && mkdir -p bin && printf '#!/bin/sh~%exec ~~/node/bin/node ~~/rea/node_modules/rea-agents/scripts/rea.mjs \"$@\"~%' > bin/rea && chmod +x bin/rea && bin/rea --version"))))

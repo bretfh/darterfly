@@ -76,5 +76,10 @@
              "python"
              "qemu"
              "ovmf-x86-64"
-             "acpica"))
+             "acpica"
+             "openssh"
+             "sshpass"
+             "curl"
+             "tar"
+             "gzip"))
   (list opencore lilu virtualsmc whatevergreen)))
