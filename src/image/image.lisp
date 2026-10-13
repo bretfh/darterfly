@@ -1,7 +1,7 @@
 (defpackage #:finch/image
   (:use #:cl)
   (:export #:core #:image #:boot #:check-boot #:write-cpio #:*build*
-   #:console #:expect #:send #:transcript #:finish #:screendump #:pixel))
+   #:console #:expect #:send #:transcript #:finish #:screendump #:pixel #:monitor #:pointer #:qmp))
 (in-package #:finch/image)
 
 (defvar *build* (asdf:system-relative-pathname :finch "build/"))
@@ -110,8 +110,17 @@
           :collect (list :file (format nil "System/Library/LaunchDaemons/~a.plist" (pathname-name file))
                          (octets file)))))
 
+(defun kexts ()
+  (let ((dir (format nil "~a/lib/modules/" (uiop:getenv "GUIX_ENVIRONMENT"))))
+    (loop :for release :in (directory (format nil "~a*/" dir))
+          :for name := (car (last (pathname-directory release)))
+          :append (loop :for kext :in finch/io:*kexts*
+                        :collect (list :file (format nil "lib/modules/~a/~a" name kext)
+                                       (octets (format nil "~a~a" (uiop:native-namestring release) kext)))))))
+
 (defun root ()
   (append
+   (kexts)
    (list (list :dir "dev")
          (list :char "dev/console" 5 1)
          (list :char "dev/null" 1 3)
@@ -138,9 +147,31 @@
 (defun monitor-path ()
   (uiop:native-namestring (build-path "monitor.sock")))
 
+(defun qmp-path ()
+  (uiop:native-namestring (build-path "qmp.sock")))
+
+(defun qmp (command &optional arguments)
+  (finch/qmp:qmp (qmp-path) command arguments))
+
+(defun pointer (x y &optional (button nil button-p))
+  (flet ((abs-event (axis value)
+           (finch/qmp:dict "type" "abs" "data" (finch/qmp:dict "axis" axis "value" value))))
+    (qmp "input-send-event"
+         (finch/qmp:dict "events"
+                         (concatenate 'vector
+                                      (vector (abs-event "x" (floor (* x 32768) 1024))
+                                              (abs-event "y" (floor (* y 32768) 768)))
+                                      (and button-p
+                                           (vector (finch/qmp:dict "type" "btn"
+                                                                   "data" (finch/qmp:dict "button" "left"
+                                                                                          "down" button)))))))))
+
 (defun qemu (&rest args)
   (append (list "qemu-system-x86_64" "-enable-kvm" "-cpu" "host" "-m" "4096" "-smp" "4"
+                "-machine" "pc,vmport=off"
                 "-monitor" (format nil "unix:~a,server=on,wait=off" (monitor-path))
+                "-qmp" (format nil "unix:~a,server=on,wait=off" (qmp-path))
+                "-device" "virtio-tablet-pci"
                 "-kernel" (kernel)
                 "-initrd" (uiop:native-namestring (build-path "finch.cpio"))
                 "-no-reboot")

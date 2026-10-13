@@ -30,7 +30,7 @@
   :depends-on (#:uiop (:require #:sb-posix))
   :serial t
   :pathname "src/io/"
-  :components ((:file "framebuffer") (:file "hid") (:file "blend")))
+  :components ((:file "framebuffer") (:file "hid") (:file "blend") (:file "kext")))
 
 (asdf:defsystem #:finch/windowserver
   :description "WindowServer"
@@ -48,14 +48,14 @@
 
 (asdf:defsystem #:finch/kernel
   :description "The kernel, run as pid 1"
-  :depends-on (#:finch/mach #:finch/bsd #:uiop)
+  :depends-on (#:finch/mach #:finch/bsd #:finch/io #:uiop)
   :serial t
   :pathname "src/kernel/"
   :components ((:file "kernel")))
 
 (asdf:defsystem #:finch/image
   :description "The bootable image"
-  :depends-on (#:uiop #:finch/plist (:require #:sb-bsd-sockets))
+  :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/image/"
   :components ((:file "image")))
@@ -107,9 +107,16 @@
   :pathname "src/ca/"
   :components ((:file "render") (:file "client")))
 
+(asdf:defsystem #:finch/qmp
+  :description "QEMU's machine protocol"
+  :depends-on (#:com.inuoe.jzon #:uiop (:require #:sb-bsd-sockets))
+  :serial t
+  :pathname "src/qmp/"
+  :components ((:file "qmp")))
+
 (asdf:defsystem #:finch/tahoe
   :description "The Tahoe reference guest"
-  :depends-on (#:finch/plist #:com.inuoe.jzon #:uiop (:require #:sb-bsd-sockets))
+  :depends-on (#:finch/plist #:finch/qmp #:com.inuoe.jzon #:uiop (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/tahoe/"
   :components ((:static-file "SSDT-EC-USBX.dsl") (:static-file "transactions.c") (:static-file "commit-tap.c") (:static-file "commits.m") (:static-file "ports.c") (:static-file "ports.script") (:static-file "bsd.c") (:static-file "bsd.script") (:file "opencore") (:file "qmp") (:file "guest")))

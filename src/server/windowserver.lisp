@@ -13,11 +13,63 @@
    (context :initarg :context :reader context)
    (pid :initarg :pid :reader pid)
    (layers :initform (make-hash-table) :reader layers)
-   (root :initform nil :accessor root)))
+   (root :initform nil :accessor root)
+   (dx :initform 0 :accessor dx)
+   (dy :initform 0 :accessor dy)))
 
 (defvar *clients* nil)
 (defvar *next-context* #x1000)
 (defvar *framebuffer* nil)
+(defvar *lock* (sb-thread:make-mutex :name "WindowServer"))
+(defvar *cursor* (list 512 384))
+(defvar *drag* nil)
+(defparameter +title-height+ 28)
+
+(defparameter +arrow+
+  #("X           "
+    "XX          "
+    "X.X         "
+    "X..X        "
+    "X...X       "
+    "X....X      "
+    "X.....X     "
+    "X......X    "
+    "X.......X   "
+    "X........X  "
+    "X.........X "
+    "X......XXXXX"
+    "X...X..X    "
+    "X..XX..X    "
+    "X.X  X..X   "
+    "XX   X..X   "
+    "X     X..X  "
+    "      X..X  "
+    "       XX   "))
+
+(defun draw-cursor (fb)
+  (destructuring-bind (cx cy) *cursor*
+    (loop :for row :across +arrow+
+          :for y :from cy
+          :do (loop :for c :across row
+                    :for x :from cx
+                    :do (case c
+                          (#\X (io:blend-rect fb x y (1+ x) (1+ y) 0.0 0.0 0.0 1.0))
+                          (#\. (io:blend-rect fb x y (1+ x) (1+ y) 1.0 1.0 1.0 1.0)))))))
+
+(defun window-frame (client)
+  (let ((layer (gethash (root client) (layers client))))
+    (when layer
+      (destructuring-bind (px py) (coerce (getf layer :position) 'list)
+        (destructuring-bind (bx by bw bh) (coerce (getf layer :bounds) 'list)
+          (declare (ignore bx by))
+          (let ((x (+ (dx client) (- px (/ bw 2)))) (y (+ (dy client) (- py (/ bh 2)))))
+            (list x y (+ x bw) (+ y bh))))))))
+
+(defun window-at (x y)
+  (find-if (lambda (client)
+             (let ((frame (and (root client) (window-frame client))))
+               (and frame (<= (first frame) x (third frame)) (<= (second frame) y (fourth frame)))))
+           *clients*))
 
 (defun draw-layer (fb layers id ox oy clip alpha)
   (let ((layer (gethash id layers)))
@@ -48,8 +100,68 @@
       (io:blend-rect fb 0 0 (third screen) (fourth screen) r g b 1.0))
     (dolist (client (reverse *clients*))
       (when (root client)
-        (draw-layer fb (layers client) (root client) 0 0 screen 1.0)))
+        (draw-layer fb (layers client) (root client) (dx client) (dy client) screen 1.0)))
+    (draw-cursor fb)
     (io:flush fb)))
+
+(defconstant +ev-key+ 1)
+(defconstant +ev-rel+ 2)
+(defconstant +rel-x+ 0)
+(defconstant +rel-y+ 1)
+(defconstant +btn-left+ #x110)
+
+(defconstant +ev-abs+ 3)
+(defconstant +abs-max+ 32768)
+
+(defun move-cursor (nx ny)
+  (let ((fb *framebuffer*))
+    (destructuring-bind (x y) *cursor*
+      (let ((nx (max 0 (min (1- (io:framebuffer-width fb)) nx)))
+            (ny (max 0 (min (1- (io:framebuffer-height fb)) ny))))
+        (when *drag*
+          (destructuring-bind (client . nil) *drag*
+            (incf (dx client) (- nx x))
+            (incf (dy client) (- ny y))))
+        (setf *cursor* (list nx ny))))))
+
+(defun pointer (event)
+  (let ((fb *framebuffer*))
+    (cond ((= (io:event-type event) +ev-rel+)
+           (destructuring-bind (x y) *cursor*
+             (move-cursor (+ x (if (= (io:event-code event) +rel-x+) (io:event-value event) 0))
+                          (+ y (if (= (io:event-code event) +rel-y+) (io:event-value event) 0)))))
+          ((and (= (io:event-type event) +ev-abs+) (<= 0 (io:event-code event) 1))
+           (destructuring-bind (x y) *cursor*
+             (let* ((range (or (io:abs-range (io:event-fd event) (io:event-code event)) (cons 0 +abs-max+)))
+                    (span (max 1 (- (cdr range) (car range))))
+                    (at (- (io:event-value event) (car range))))
+               (case (io:event-code event)
+                 (0 (move-cursor (floor (* at (io:framebuffer-width fb)) span) y))
+                 (1 (move-cursor x (floor (* at (io:framebuffer-height fb)) span)))))))
+          ((and (= (io:event-type event) +ev-key+) (= (io:event-code event) +btn-left+))
+           (if (plusp (io:event-value event))
+               (destructuring-bind (x y) *cursor*
+                 (let ((client (window-at x y)))
+                   (when client
+                     (setf *clients* (cons client (remove client *clients*)))
+                     (when (< y (+ (second (window-frame client)) +title-height+))
+                       (setf *drag* (list client))))))
+               (setf *drag* nil))))))
+
+(defun hid-devices ()
+  (loop :for name :in (ignore-errors (bsd:readdir "/dev/input"))
+        :when (uiop:string-prefix-p "event" name)
+          :collect (io:open-hid (format nil "/dev/input/~a" name))))
+
+(defun hid-loop ()
+  (let ((devices (hid-devices)))
+    (loop
+      (let ((events (loop :for fd :in devices :append (io:read-events fd))))
+        (if events
+            (sb-thread:with-mutex (*lock*)
+              (mapc #'pointer events)
+              (render))
+            (sleep 0.01))))))
 
 (defun apply-commit (client octets)
   (dolist (command (getf (ca:decode-commit octets) :commands))
@@ -59,6 +171,10 @@
       (:set-layer-id (setf (root client) (second command))))))
 
 (defun register-client (message set)
+  (sb-thread:with-mutex (*lock*)
+    (%register-client message set)))
+
+(defun %register-client (message set)
   (let ((port (mach:mach-port-allocate mach:*task* :receive))
         (context (incf *next-context*)))
     (mach:mach-port-move-member mach:*task* port set)
@@ -82,21 +198,26 @@
              (when (= (mach:msgh-id message) +register-client+)
                (register-client message set)))
             ((= (mach:msgh-id message) +mach-notify-no-senders+)
-             (let ((client (client-of port)))
-               (when client
-                 (setf *clients* (remove client *clients*))
-                 (mach:mach-port-mod-refs mach:*task* port :receive -1)
-                 (render))))
+             (sb-thread:with-mutex (*lock*)
+               (let ((client (client-of port)))
+                 (when client
+                   (setf *clients* (remove client *clients*))
+                   (mach:mach-port-mod-refs mach:*task* port :receive -1)
+                   (render)))))
             ((<= 40002 (mach:msgh-id message) 40005)
-             (let ((client (client-of port)))
-               (when client
-                 (apply-commit client (mach:msgh-body message))
-                 (render))))))))
+             (sb-thread:with-mutex (*lock*)
+               (let ((client (client-of port)))
+                 (when client
+                   (apply-commit client (mach:msgh-body message))
+                   (render)))))))))
 
 (bsd:define-program "WindowServer" (argv envp)
   (setf *framebuffer* (io:open-framebuffer)
-        *clients* nil)
+        *clients* nil
+        *cursor* (list (floor (io:framebuffer-width *framebuffer*) 2)
+                       (floor (io:framebuffer-height *framebuffer*) 2)))
   (render)
+  (bsd:bsdthread-create #'hid-loop "hid")
   (let ((set (mach:mach-port-allocate mach:*task* :port-set))
         (render-server (launchd:bootstrap-check-in "com.apple.CARenderServer")))
     (dolist (name '("com.apple.windowserver" "com.apple.windowserver.active"))

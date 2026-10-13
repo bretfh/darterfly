@@ -60,6 +60,8 @@
   (mount "tmpfs" "/tmp" "tmpfs")
   (dotimes (i 3)
     (finch/bsd:open "/dev/console" finch/bsd:+o-rdwr+))
+  (loop :for (name result) :in (finch/io:load-kexts)
+        :unless (eq result t) :do (format t "kextload ~a: ~a~%" name result))
   (setf finch/bsd:*reboot* (lambda (how) (declare (ignore how)) (halt)))
   (format t "bsd_init: boot-args ~{~a~^ ~}~%" (boot-args)))
 

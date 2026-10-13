@@ -29,9 +29,7 @@
   (map '(vector (unsigned-byte 8)) #'char-code string))
 
 (defun dict (&rest kv)
-  (let ((h (make-hash-table :test 'equal)))
-    (loop :for (k v) :on kv :by #'cddr :do (setf (gethash k h) v))
-    h))
+  (apply #'finch/qmp:dict kv))
 
 (defun at (h &rest path)
   (reduce (lambda (h k) (gethash k h)) path :initial-value h))
