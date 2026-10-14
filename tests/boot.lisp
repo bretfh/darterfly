@@ -119,6 +119,9 @@
              (is (search "T"
                          (ask "(dotimes (k 5 t) (let ((ts (loop repeat 8 collect (sb-thread:make-thread (lambda () (let ((h (make-hash-table))) (dotimes (r 40) (dotimes (i 20000) (setf (gethash i h) (make-list 10)))) (hash-table-count h))))))) (assert (every (lambda (n) (= n 20000)) (mapcar #'sb-thread:join-thread ts)))))")))
              (is (search ":OK"
+                         (ask "(let ((m (sb-thread:make-mutex)) (q (sb-thread:make-waitqueue)) (turn 0)) (mapc #'sb-thread:join-thread (loop for i below 4 collect (let ((i i)) (sb-thread:make-thread (lambda () (dotimes (r 5000) (sb-thread:with-mutex (m) (loop until (= turn i) do (sb-thread:condition-wait q m)) (setf turn (mod (1+ turn) 4)) (sb-thread:condition-broadcast q)))))))) :ok)")))
+             (is (search "T" (ask "(let ((ids (mapcar #'sb-thread:join-thread (loop repeat 4 collect (sb-thread:make-thread (lambda () (sb-thread::thread-os-tid sb-thread:*current-thread*))))))) (= 4 (length (remove-duplicates ids))))")))
+             (is (search ":OK"
                          (ask "(let* ((sem (sb-thread:make-semaphore)) (ts (loop repeat 4 collect (sb-thread:make-thread (lambda () (dotimes (i 5000) (sb-thread:signal-semaphore sem))))))) (dotimes (i 20000) (sb-thread:wait-on-semaphore sem)) (mapc #'sb-thread:join-thread ts) :ok)"))))
         (image:finish c 5)))))
 
