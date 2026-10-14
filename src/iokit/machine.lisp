@@ -12,7 +12,7 @@
    #:apple-virtio-transport #:apple-virtio-pci-transport #:virtio-device-type
    #:apple-virtio-block-storage-device #:block-count #:block-size #:read-blocks #:write-blocks
    #:io-block-storage-device #:io-media #:media-read #:media-write #:media-size #:io-guid-partition-scheme #:crc32
-   #:acpi-table #:vm-page-grab #:ml-io-map
+   #:acpi-table #:vm-page-grab #:ml-io-map #:boot-arg #:kernel-flags
    #:define-io-class #:add-personality #:personality #:publish-media #:io-partition-scheme
    #:media-device #:media-base #:next-bsd-unit #:bsd-client-class #:io-media-bsd-client))
 (in-package #:finch/iokit)
@@ -42,3 +42,13 @@
   (map 'string #'code-char (loop for i below n collect (ml-phys-read-8 (+ pa i)))))
 
 (defun io-sap (va) (sb-sys:int-sap va))
+
+(defun kernel-flags ()
+  (let ((sap (sb-sys:sap+ (sb-sys:int-sap (boot-args)) 8)))
+    (map 'string #'code-char (loop for i below 1024 for c = (sb-sys:sap-ref-8 sap i) until (zerop c) collect c))))
+
+(defun boot-arg (name)
+  (dolist (word (uiop:split-string (kernel-flags) :separator " "))
+    (let ((eq (position #\= word)))
+      (when (string= name (subseq word 0 (or eq (length word))))
+        (return (if eq (subseq word (1+ eq)) t))))))

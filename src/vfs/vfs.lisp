@@ -8,7 +8,8 @@
    #:vattr #:make-vattr #:vattr-mode #:vattr-uid #:vattr-gid #:vattr-size #:vattr-nlink #:vattr-mtime #:vattr-rdev
    #:namei #:vfs-open #:vfs-close #:vfs-read #:vfs-write #:vfs-stat #:vfs-readdir #:vfs-readlink #:vfs-mkdir
    #:vfs-unlink #:vfs-rename #:vfs-chdir #:vfs-getcwd #:*root*
-   #:vfs-symlink #:vfs-remove #:vfs-lseek #:vfs-fstat #:vfs-realpath #:make-ram-node))
+   #:vfs-symlink #:vfs-remove #:vfs-lseek #:vfs-fstat #:vfs-realpath #:make-ram-node
+   #:make-devfs #:make-kernel-dir #:vfs-mkdirs #:vfs-start))
 (in-package #:finch/vfs)
 
 (define-condition vfs-error (error)

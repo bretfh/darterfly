@@ -155,6 +155,9 @@
                 (probe-bus bridge (config-read-8 d #x19) d)))))))))
 
 (defun start-iokit ()
+  (or *registry-root* (%start-iokit)))
+
+(defun %start-iokit ()
   (let* ((root (make-instance 'io-registry-entry :name "Root"))
          (expert (attach (make-instance 'io-platform-expert-device :name "finch") root))
          (mcfg (acpi-table "MCFG"))

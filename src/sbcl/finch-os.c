@@ -10,7 +10,9 @@
 #include "validate.h"
 #include "thread.h"
 
-int sb_GetTID() { return 1; }
+long __syscall(long n, long a, long b, long c, long d, long e, long f);
+
+int sb_GetTID() { return (int)__syscall(372, 0, 0, 0, 0, 0, 0); }
 
 void os_init() {}
 
@@ -52,8 +54,6 @@ void os_install_interrupt_handlers(void) {
 
 #ifdef LISP_FEATURE_SB_FUTEX
 #include "genesis/vector.h"
-
-long __syscall(long n, long a, long b, long c, long d, long e, long f);
 
 bool futex_private_supported_p = 1;
 

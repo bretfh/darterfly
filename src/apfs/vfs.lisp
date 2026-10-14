@@ -1,5 +1,7 @@
 (in-package #:finch/apfs)
 
+(defvar *root-media* nil)
+
 (defclass apfs-vnode (vfs:vnode)
   ((volume :initarg :volume :reader vnode-volume)
    (inode :initarg :inode :reader vnode-inode)))
@@ -52,14 +54,15 @@
   (loop for vol in (iokit:find-entries 'apple-apfs-volume)
         for v = (apfs-volume vol)
         for path = (format nil "/Volumes/~a" (volume-name v))
-        do (vfs:vfs-mkdir path #o755)
+        unless (eq vol *root-media*)
+        do (vfs:vfs-mkdirs path)
            (if writable
                (let ((media vol))
                  (mount-writable (lambda (at length) (iokit:media-read media at length))
                                  (lambda (at octets) (iokit:media-write media at octets))
                                  path))
                (mount-volume v path))
-        collect path))
+        and collect path))
 
 (defclass apfs-wvnode (vfs:vnode)
   ((mount :initarg :mount :reader vnode-mount)))

@@ -92,7 +92,7 @@
   :depends-on (#:uiop #:finch/iokit #:finch/vfs)
   :serial t
   :pathname "src/apfs/"
-  :components ((:file "apfs") (:file "iokit") (:file "newfs") (:file "transaction") (:file "write") (:file "vfs")))
+  :components ((:file "apfs") (:file "iokit") (:file "newfs") (:file "transaction") (:file "write") (:file "vfs") (:file "root")))
 
 (asdf:defsystem #:finch/kernel
   :description "The kernel, run as pid 1"
@@ -103,7 +103,7 @@
 
 (asdf:defsystem #:finch/image
   :description "The bootable image"
-  :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io (:require #:sb-bsd-sockets))
+  :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io #:finch/apfs (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/image/"
   :components ((:file "image") (:file "runtime") (:file "efi")))

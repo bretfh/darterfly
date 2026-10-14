@@ -4,7 +4,7 @@
 (in-suite boot)
 
 (test boot-efi-starts-the-kernel
-  (let ((c (image:bare-console :boot-args "halt")))
+  (let ((c (image:bare-console :boot-args "halt" :root nil)))
     (unwind-protect
          (progn
            (is (image:expect c "finch boot.efi"))
@@ -17,7 +17,7 @@
       (image:finish c 5))))
 
 (test the-kernel-owns-the-machine
-  (let ((c (image:bare-console :boot-args "trap halt")))
+  (let ((c (image:bare-console :boot-args "trap halt" :root nil)))
     (unwind-protect
          (progn
            (is (image:expect c "mp_desc: gdt, idt and ktss loaded"))
@@ -30,7 +30,7 @@
       (image:finish c 5))))
 
 (test the-kernel-has-memory
-  (let ((c (image:bare-console :boot-args "vmtest halt")))
+  (let ((c (image:bare-console :boot-args "vmtest halt" :root nil)))
     (unwind-protect
          (progn
            (is (search "at 0xffff800000000000" (image:expect c "kernel at 0xffffffff80000000")))
@@ -99,7 +99,7 @@
         (image:finish c 5)))))
 
 (test smp-on-finch
-  (let ((c (image:bare-console :boot-args "cpus=1 halt")))
+  (let ((c (image:bare-console :boot-args "cpus=1 halt" :root nil)))
     (unwind-protect (is (image:expect c "mp: 1 cpu"))
       (image:finish c 5)))
   (let ((c (image:bare-console)))
@@ -236,7 +236,7 @@
            (progn
              (image:expect c "* " :timeout 60)
              (ask "(iokit:start-iokit)")
-             (ask "(defvar *v* (finch/apfs::apfs-volume (first (iokit:find-entries 'finch/apfs::apple-apfs-volume))))")
+             (ask "(defvar *v* (find \"finch\" (mapcar #'finch/apfs::apfs-volume (iokit:find-entries 'finch/apfs::apple-apfs-volume)) :key #'finch/apfs:volume-name :test #'equal))")
              (is (search "\"finch\"" (ask "(finch/apfs:volume-name *v*)")))
              (is (search "\"hello from tahoe" (ask "(map 'string #'code-char (finch/apfs:read-file *v* (finch/apfs:lookup *v* \"/hello.txt\")))")))
              (is (search "\"hello.txt\"" (ask "(finch/apfs:readlink *v* (finch/apfs:lookup *v* \"/link\"))")))
@@ -299,6 +299,27 @@
         (is (= 299 (length (apfs:directory-entries v (apfs:lookup v "/many")))))
         (is (= #o100644 (apfs:inode-mode (apfs:inode v (apfs:lookup v "/from-finch.txt")))))
         (is (= #o040755 (apfs:inode-mode (apfs:inode v (apfs:lookup v "/made/by")))))))))
+
+(test apfs-root-on-finch
+  (let* ((disk (merge-pathnames "root-keep.img" (finch-file "build/")))
+         (c (image:bare-console :root disk)))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 60)
+             (is (search "APFS-WVNODE" (ask "(type-of (finch/vfs:namei \"/\"))")))
+             (is (search "\"finch HD\"" (ask "(iokit:get-property (find \"disk2s1\" (iokit:find-entries 'finch/apfs::apple-apfs-volume) :key (lambda (e) (iokit:get-property e \"BSD Name\")) :test #'equal) \"FullName\")")))
+             (is (search "334" (ask "(length (uiop:read-file-lines \"/finch/tests/ports.txt\"))")))
+             (is (search "#P\"/System/Library/Kernels/kernel\"" (ask "(probe-file \"/System/Library/Kernels/kernel\")")))
+             (is (search "DEV-NODE" (ask "(type-of (finch/vfs:namei \"/dev/console\"))")))
+             (ask "(with-open-file (s \"/Users/finch/notes.txt\" :direction :output) (write-line \"kept across boots\" s))")
+             (image:send c "(sb-ext:exit)")
+             (image:expect c "exit(0)" :timeout 30))
+        (image:finish c 5))
+      (let ((v (first (apfs:container-volumes (apfs:open-container (apfs:file-device disk))))))
+        (is (equal "finch HD" (apfs:volume-name v)))
+        (is (equal (format nil "kept across boots~%")
+                   (map 'string #'code-char (apfs:read-file v (apfs:lookup v "/Users/finch/notes.txt")))))))))
 
 (test xnu-checked-suites-pass-on-finch
   (let ((c (image:bare-console)))

@@ -71,7 +71,7 @@
 (defun probe-score (personality) (or (gethash "IOProbeScore" personality) 0))
 
 (defun register-service (service)
-  (dolist (p (sort (remove-if-not (lambda (p) (matches-p p service)) *personalities*) #'> :key #'probe-score))
+  (dolist (p (stable-sort (copy-list (remove-if-not (lambda (p) (matches-p p service)) *personalities*)) #'> :key #'probe-score))
     (let ((driver (make-instance (find-io-class (gethash "IOClass" p)))))
       (maphash (lambda (k v) (set-property driver k v)) p)
       (set-property driver "IOMatchCategory" "IODefaultMatchCategory")

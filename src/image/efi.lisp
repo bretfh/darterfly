@@ -139,6 +139,24 @@
                       (loop :for f :in *ramdisk-files*
                             :collect (list :file (concatenate 'string "finch/" f) (octets (source f)))))))
 
+(defun root-entries ()
+  (let ((dirs (list "tmp" "Users" "Users/finch" "dev" "Volumes" "System" "System/Library" "System/Library/Kernels" "finch"))
+        (files nil))
+    (dolist (f *ramdisk-files*)
+      (let ((path (concatenate 'string "finch/" f)))
+        (loop for slash = (position #\/ path) then (position #\/ path :start (1+ slash))
+              while slash
+              do (pushnew (subseq path 0 slash) dirs :test #'string=))
+        (push (list :file path (octets (source f))) files)))
+    (append (mapcar (lambda (d) (list :dir d))
+                    (sort (remove-duplicates dirs :test #'string=) #'< :key (lambda (d) (count #\/ d))))
+            (nreverse files))))
+
+(defun root-disk (&optional (path (build-path "root.img")))
+  (finch/apfs:newfs path :volume-name "finch HD" :entries (root-entries)
+                         :container-uuid "F1C40000-0000-4000-8000-000000000001"
+                         :volume-uuid "F1C40000-0000-4000-8000-000000000002"))
+
 (defun esp (&key (boot-args ""))
   (let ((root (build-path "esp/")))
     (uiop:delete-directory-tree root :validate t :if-does-not-exist :ignore)
@@ -159,7 +177,7 @@
 (defun firmware (name)
   (format nil "~a/share/firmware/~a" (uiop:getenv "GUIX_ENVIRONMENT") name))
 
-(defun bare-qemu (esp &optional disks)
+(defun bare-qemu (esp &optional disks root)
   (let ((vars (build-path "OVMF_VARS.fd")))
     (unless (probe-file vars)
       (uiop:copy-file (firmware "ovmf_vars_x64.bin") vars)
@@ -171,6 +189,9 @@
           "-drive" (format nil "if=pflash,format=raw,file=~a" (uiop:native-namestring vars))
           "-drive" (format nil "if=none,id=esp,format=raw,snapshot=on,file=fat:~a" (uiop:native-namestring esp))
           "-device" "virtio-blk-pci,drive=esp")
+     (when root
+       (list "-drive" (format nil "if=none,id=root,format=raw,~:[~;snapshot=on,~]file=~a" (eq (car root) :snapshot) (uiop:native-namestring (cdr root)))
+             "-device" "virtio-blk-pci,drive=root"))
      (loop for disk in disks for i from 0
            append (list "-drive" (format nil "if=none,id=disk~d,format=raw,file=~a" i (uiop:native-namestring disk))
                         "-device" (format nil "virtio-blk-pci,drive=disk~d" i)))
@@ -179,10 +200,19 @@
           "-qmp" (format nil "unix:~a,server=on,wait=off" (qmp-path))
           "-display" "none" "-serial" "stdio" "-no-reboot"))))
 
-(defun bare-boot (&key (boot-args "") disks)
-  (uiop:run-program (substitute "mon:stdio" "stdio" (bare-qemu (esp :boot-args boot-args) disks) :test #'equal)
+(defun root-boot-args (boot-args root)
+  (if root (format nil "rd=disk2s1 ~a" boot-args) boot-args))
+
+(defun root-drive (root)
+  (cond ((null root) nil)
+        ((eq root t) (cons :snapshot (root-disk)))
+        (t (cons :keep (root-disk root)))))
+
+(defun bare-boot (&key (boot-args "") disks (root t))
+  (uiop:run-program (substitute "mon:stdio" "stdio" (bare-qemu (esp :boot-args (root-boot-args boot-args root)) disks (root-drive root))
+                                :test #'equal)
                     :input :interactive :output :interactive :error-output :interactive :ignore-error-status t)
   (values))
 
-(defun bare-console (&key (boot-args "") disks)
-  (console :args (bare-qemu (esp :boot-args boot-args) disks)))
+(defun bare-console (&key (boot-args "") disks (root t))
+  (console :args (bare-qemu (esp :boot-args (root-boot-args boot-args root)) disks (root-drive root))))
