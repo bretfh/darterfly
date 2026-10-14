@@ -245,6 +245,32 @@
                          (ask "(string-downcase (format nil \"~{~2,'0x~}\" (coerce (sb-md5:md5sum-sequence (finch/apfs:read-file *v* (finch/apfs:lookup *v* \"/big.txt\"))) 'list)))"))))
         (image:finish c 5)))))
 
+(test apfs-mounts-on-finch
+  (let* ((disk (gunzip-fixture "apfs-disk.img.gz" "apfs-mount.img"))
+         (c (image:bare-console :disks (list disk))))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 60)
+             (ask "(iokit:start-iokit)")
+             (is (search "(\"/Volumes/finch\")" (ask "(finch/apfs:mount-volumes)")))
+             (is (search "\"hello from tahoe\"" (ask "(with-open-file (s \"/Volumes/finch/hello.txt\") (read-line s))")))
+             (is (search "300" (ask "(length (directory \"/Volumes/finch/many/*\"))")))
+             (is (search "#P\"/Volumes/finch/hello.txt\"" (ask "(truename \"/Volumes/finch/link\")")))
+             (is (search "(0 NIL)"
+                         (ask (concatenate 'string
+                                           "(let ((bad nil) (n 0)) "
+                                           "(dolist (l (uiop:read-file-lines \"/finch/tests/apfs-files.txt\") (list (- 309 n) bad)) "
+                                           "(destructuring-bind (path type perms size ino nlink uid gid target md5) (uiop:split-string l :separator \"|\") "
+                                           "(declare (ignore type target md5)) "
+                                           "(let ((st (sb-posix:lstat (concatenate 'string \"/Volumes/finch\" (subseq path 1))))) "
+                                           "(if (and (= (parse-integer perms :radix 8) (logand (sb-posix:stat-mode st) #o7777)) "
+                                           "(= (parse-integer size) (sb-posix:stat-size st)) (= (parse-integer ino) (sb-posix:stat-ino st)) "
+                                           "(= (parse-integer nlink) (sb-posix:stat-nlink st)) (= (parse-integer uid) (sb-posix:stat-uid st)) "
+                                           "(= (parse-integer gid) (sb-posix:stat-gid st))) (incf n) (push path bad))))))"))))
+             (is (search "read-only file system" (ask "(handler-case (with-open-file (s \"/Volumes/finch/new.txt\" :direction :output) (write-line \"x\" s)) (error (e) (string-downcase (princ-to-string e))))"))))
+        (image:finish c 5)))))
+
 (test xnu-checked-suites-pass-on-finch
   (let ((c (image:bare-console)))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 300)))

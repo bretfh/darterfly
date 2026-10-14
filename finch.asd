@@ -80,12 +80,19 @@
   :pathname "src/iokit/"
   :components ((:file "machine") (:file "registry") (:file "acpi") (:file "pci") (:file "virtio") (:file "storage") (:file "block")))
 
+(asdf:defsystem #:finch/vfs
+  :description "The virtual file system"
+  :depends-on (#:uiop)
+  :serial t
+  :pathname "src/vfs/"
+  :components ((:file "vfs") (:file "ramfs") (:file "libsa")))
+
 (asdf:defsystem #:finch/apfs
   :description "Apple File System"
-  :depends-on (#:uiop #:finch/iokit)
+  :depends-on (#:uiop #:finch/iokit #:finch/vfs)
   :serial t
   :pathname "src/apfs/"
-  :components ((:file "apfs") (:file "iokit")))
+  :components ((:file "apfs") (:file "iokit") (:file "vfs")))
 
 (asdf:defsystem #:finch/kernel
   :description "The kernel, run as pid 1"
@@ -164,7 +171,7 @@
 
 (asdf:defsystem #:finch
   :description "A Darwin in Common Lisp"
-  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/xpc #:finch/launchd #:finch/shell #:finch/io #:finch/text #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/iokit #:finch/apfs #:finch/kernel #:finch/image)
+  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/xpc #:finch/launchd #:finch/shell #:finch/io #:finch/text #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/iokit #:finch/vfs #:finch/apfs #:finch/kernel #:finch/image)
   :in-order-to ((asdf:test-op (asdf:test-op #:finch/test))))
 
 (asdf:defsystem #:finch/test

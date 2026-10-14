@@ -1,5 +1,6 @@
 (defpackage #:finch/apfs
   (:use #:cl)
+  (:local-nicknames (#:vfs #:finch/vfs))
   (:export
    #:apfs-error #:open-container #:file-device
    #:container #:container-block-size #:container-uuid #:container-xid #:container-volumes
@@ -8,7 +9,7 @@
    #:inode-id #:inode-parent-id #:inode-mode #:inode-nlink #:inode-owner #:inode-group
    #:inode-size #:inode-name #:inode-mod-time #:inode-private-id
    #:entry-name #:entry-file-id #:entry-type #:volume-index #:volume-formatted-by #:volume-incompatible-features
-   #:container-size))
+   #:container-size #:mount-volume #:mount-volumes))
 (in-package #:finch/apfs)
 
 (define-condition apfs-error (error)

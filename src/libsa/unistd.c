@@ -200,18 +200,21 @@ int dladdr(const void *a, Dl_info *info) {
 
 int h_errno;
 
-int __libsa_fd_data(int fd, const char **data, size_t *size);
 int __libsa_fd_console(int fd);
 
 void *mmap(void *addr, size_t len, int prot, int flags, int fd, off_t off) {
   if (!(flags & MAP_ANONYMOUS)) {
-    const char *k;
-    size_t ksize;
-    if (!__libsa_fd_data(fd, &k, &ksize)) { errno = ENODEV; return MAP_FAILED; }
     void *at = mmap(addr, len, PROT_READ | PROT_WRITE, (flags & MAP_FIXED) | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (at == MAP_FAILED) return at;
-    size_t n = (uint64_t)off >= ksize ? 0 : len < ksize - off ? len : ksize - off;
-    memcpy(at, k + off, n);
+    for (size_t done = 0; done < len;) {
+      ssize_t n = pread(fd, (char *)at + done, len - done, off + (off_t)done);
+      if (n < 0) {
+        munmap(at, len);
+        return MAP_FAILED;
+      }
+      if (n == 0) break;
+      done += (size_t)n;
+    }
     if (prot != (PROT_READ | PROT_WRITE)) mprotect(at, len, prot);
     return at;
   }

@@ -39,7 +39,7 @@
 
 (defparameter *libsa-sources*
   '("syscall.c" "signal.c" "string.c" "stdio.c" "stdlib.c" "unistd.c" "time.c" "math.c" "misc.c"
-    "setjmp.s" "start.c" "pthread.c" "mfs.c"))
+    "setjmp.s" "start.c" "pthread.c" "vfs.c"))
 
 (defun compile-objects (sources dir flags)
   (loop :for name :in sources
@@ -69,7 +69,7 @@
 (defun finch-sources ()
   (mapcar #'source '("src/mach/" "src/bsd/" "src/plist/" "src/macho/" "src/dyld/" "src/objc/" "src/mig/"
                      "src/server/" "src/ca/" "src/xpc/" "src/launchd/" "src/shell/" "src/io/" "src/text/"
-                     "src/imageio/" "src/kit/" "src/apps/" "src/iokit/" "src/apfs/" "src/kernel/" "src/tahoe/" "tests/" "src/image/")))
+                     "src/imageio/" "src/kit/" "src/apps/" "src/iokit/" "src/vfs/" "src/apfs/" "src/kernel/" "src/tahoe/" "tests/" "src/image/")))
 
 (defun finch-core ()
   (let ((core (build-path "finch.core")))
@@ -131,7 +131,7 @@
     d))
 
 (defparameter *ramdisk-files*
-  '("tests/ports.txt" "tests/bsd.txt" "tests/bootstrap.txt" "src/tahoe/ports.script" "src/tahoe/bsd.script"))
+  '("tests/ports.txt" "tests/bsd.txt" "tests/bootstrap.txt" "src/tahoe/ports.script" "src/tahoe/bsd.script" "tests/apfs-files.txt"))
 
 (defun ramdisk ()
   (write-cpio (build-path "root.cpio")
