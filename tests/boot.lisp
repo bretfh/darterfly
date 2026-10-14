@@ -358,28 +358,65 @@
                            (nth-value 1 (sb-bsd-sockets:socket-name s)))
       (sb-bsd-sockets:socket-close s))))
 
+(defun host-listener ()
+  (let ((server (make-instance 'sb-bsd-sockets:inet-socket :type :stream :protocol :tcp)))
+    (setf (sb-bsd-sockets:sockopt-reuse-address server) t)
+    (sb-bsd-sockets:socket-bind server #(127 0 0 1) 0)
+    (sb-bsd-sockets:socket-listen server 5)
+    (values server (nth-value 1 (sb-bsd-sockets:socket-name server)))))
+
 (test network-on-finch
-  (let* ((port (free-udp-port))
-         (c (image:bare-console :forwards (list (list :udp port 7)))))
+  (let* ((udp (free-udp-port))
+         (tcp (free-udp-port))
+         (c (image:bare-console :forwards (list (list :udp udp 7) (list :tcp tcp 7)))))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
       (unwind-protect
            (progn
              (image:expect c "* " :timeout 90)
-             (is (search "\"10.0.2.15\"" (ask "(progn (finch/net:start-network) (finch/net:udp-echo 7) (finch/net:address-string (finch/net::interface-ip finch/net:*interface*)))")))
+             (is (search "\"10.0.2.15\"" (ask "(progn (finch/net:start-network) (finch/net:udp-echo 7) (finch/net:tcp-echo 7) (finch/net:address-string (finch/net::interface-ip finch/net:*interface*)))")))
              (is (search "\"en0\"" (ask "(iokit:get-property (first (iokit:find-entries 'iokit:io-ethernet-interface)) \"BSD Name\")")))
              (is (not (search "NIL" (ask "(finch/net:ping \"10.0.2.2\")"))) "the gateway answers a ping")
              (let ((s (make-instance 'sb-bsd-sockets:inet-socket :type :datagram :protocol :udp))
                    (buf (make-array 100 :element-type '(unsigned-byte 8))))
                (unwind-protect
                     (progn
-                      (sb-bsd-sockets:socket-connect s #(127 0 0 1) port)
+                      (sb-bsd-sockets:socket-connect s #(127 0 0 1) udp)
                       (sb-bsd-sockets:socket-send s (sb-ext:string-to-octets "hello finch over udp") nil)
                       (is (equal "hello finch over udp"
                                  (handler-case (sb-sys:with-deadline (:seconds 10)
                                                  (multiple-value-bind (b n) (sb-bsd-sockets:socket-receive s buf nil)
                                                    (map 'string #'code-char (subseq b 0 n))))
                                    (error (e) (princ-to-string e))))))
-                 (sb-bsd-sockets:socket-close s))))
+                 (sb-bsd-sockets:socket-close s)))
+             (let ((s (make-instance 'sb-bsd-sockets:inet-socket :type :stream :protocol :tcp))
+                   (payload (with-output-to-string (o) (dotimes (i 1000) (format o "line ~4,'0d~%" i)))))
+               (unwind-protect
+                    (progn
+                      (sb-bsd-sockets:socket-connect s #(127 0 0 1) tcp)
+                      (let ((stream (sb-bsd-sockets:socket-make-stream s :input t :output t :element-type 'character :buffering :full))
+                            (got (make-string (length payload))))
+                        (write-string payload stream)
+                        (finish-output stream)
+                        (handler-case (sb-sys:with-deadline (:seconds 15) (read-sequence got stream)) (error () nil))
+                        (is (string= payload got) "10000 bytes through finch's tcp echo")))
+                 (sb-bsd-sockets:socket-close s)))
+             (multiple-value-bind (server port) (host-listener)
+               (unwind-protect
+                    (let ((acceptor (sb-thread:make-thread
+                                     (lambda ()
+                                       (handler-case
+                                           (sb-sys:with-deadline (:seconds 20)
+                                             (let* ((conn (sb-bsd-sockets:socket-accept server))
+                                                    (st (sb-bsd-sockets:socket-make-stream conn :input t :output t :element-type 'character)))
+                                               (prog1 (read-line st)
+                                                 (write-line "hello finch, from the host" st)
+                                                 (finish-output st)
+                                                 (sb-bsd-sockets:socket-close conn))))
+                                         (error (e) (princ-to-string e)))))))
+                      (is (search "hello finch, from the host"
+                                  (ask (format nil "(let ((c (finch/net:tcp-connect \"10.0.2.2\" ~d))) (finch/net:tcp-send c (sb-ext:string-to-octets (format nil \"hello host, from finch~~%\"))) (prog1 (map 'string #'code-char (finch/net:tcp-receive c :timeout 5)) (finch/net:tcp-close c)))" port))))
+                      (is (equal "hello host, from finch" (sb-thread:join-thread acceptor :default nil :timeout 20))))
+                 (sb-bsd-sockets:socket-close server))))
         (image:finish c 5)))))
 
 (test xnu-checked-suites-pass-on-finch

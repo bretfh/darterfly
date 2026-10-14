@@ -1,7 +1,8 @@
 (defpackage #:finch/net
   (:use #:cl)
   (:export #:start-network #:*interface* #:ping #:udp-bind #:udp-send #:udp-receive #:udp-echo
-           #:ip-address #:address-string))
+           #:ip-address #:address-string
+           #:tcp-listen #:tcp-accept #:tcp-connect #:tcp-send #:tcp-receive #:tcp-close #:tcp-echo))
 (in-package #:finch/net)
 
 (defstruct interface device mac ip prefix gateway
@@ -142,6 +143,7 @@
     (when (or (= dst (interface-ip *interface*)) (= dst #xffffffff))
       (case protocol
         (1 (receive-icmp src payload))
+        (6 (receive-tcp src payload))
         (17 (receive-udp src payload))))))
 
 (defun receive-frame (frame)
