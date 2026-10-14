@@ -153,7 +153,7 @@
             (nreverse files))))
 
 (defun root-disk (&optional (path (build-path "root.img")))
-  (finch/apfs:newfs path :volume-name "finch HD" :entries (root-entries)
+  (finch/apfs:newfs path :size (* 128 1048576) :volume-name "finch HD" :entries (root-entries)
                          :container-uuid "F1C40000-0000-4000-8000-000000000001"
                          :volume-uuid "F1C40000-0000-4000-8000-000000000002"))
 

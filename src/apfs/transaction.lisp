@@ -3,7 +3,7 @@
 (defstruct nx
   read write block-count sb xid next-oid
   desc-base desc-blocks desc-next data-base data-blocks data-next
-  sm cib-paddr bitmap-paddr bitmap ip-base ip-count ip-bm-base ip-bitmap
+  sm cib-paddr bitmap-paddrs bitmap ip-base ip-count ip-bm-base ip-bitmap
   ip-fq main-fq fq-oids reaper
   omap-paddr omap-nodes omap-entries
   vol-oid vol-sb vol-paddr vol-omap-paddr vol-omap-nodes fs-records fs-nodes extent-records extent-nodes snap-node)
@@ -63,9 +63,10 @@
             (nx-reaper nx) (copy-seq (nx-block nx (funcall where (u64 sb 168))))
             (nx-cib-paddr nx) (u64 sm (u32 sm 80))
             (nx-ip-base nx) (u64 sm 176) (nx-ip-count nx) (u64 sm 152) (nx-ip-bm-base nx) (u64 sm 168))
-      (let ((cib (nx-block nx (nx-cib-paddr nx))))
-        (setf (nx-bitmap-paddr nx) (u64 cib 64)
-              (nx-bitmap nx) (copy-seq (nx-block nx (u64 cib 64)))))
+      (let* ((cib (nx-block nx (nx-cib-paddr nx)))
+             (paddrs (loop for c below (u32 cib 36) collect (u64 cib (+ 40 (* 32 c) 24)))))
+        (setf (nx-bitmap-paddrs nx) paddrs
+              (nx-bitmap nx) (apply #'octets (mapcar (lambda (b) (nx-block nx b)) paddrs))))
       (setf (nx-ip-bitmap nx) (copy-seq (nx-block nx (+ (nx-ip-bm-base nx) (u16 sm (u32 sm 328))))))
       (setf (nx-fq-oids nx) (list (u64 sm 208) (u64 sm 248))
             (nx-ip-fq nx) (fq-records nx (if (plusp (u64 sm 208)) (funcall where (u64 sm 208)) 0))
@@ -164,7 +165,7 @@
         (loop for b from (second e) below (+ (second e) (third e)) do (setf (bitmap-bit (nx-ip-bitmap nx) (- b (nx-ip-base nx))) 0)))
       (dolist (e (nx-main-fq nx))
         (loop for b from (second e) below (+ (second e) (third e)) do (setf (bitmap-bit (nx-bitmap nx) b) 0)))
-      (setf (nx-ip-fq nx) (coalesce xid (list (nx-cib-paddr nx) (nx-bitmap-paddr nx)))
+      (setf (nx-ip-fq nx) (coalesce xid (cons (nx-cib-paddr nx) (nx-bitmap-paddrs nx)))
             (nx-main-fq nx) (coalesce xid (append (list (nx-omap-paddr nx) (nx-vol-paddr nx) (nx-vol-omap-paddr nx) (nx-snap-node nx))
                                                   (nx-omap-nodes nx) (nx-vol-omap-nodes nx) (nx-fs-nodes nx) (nx-extent-nodes nx) also-free)))
       (let* ((alloc (lambda () (alloc-block nx)))
@@ -206,17 +207,25 @@
               (nx-fs-nodes nx) fs-blocks (nx-extent-nodes nx) (mapcar #'first extent-nodes)
               (nx-snap-node nx) (first (first snap-nodes))
               (nx-next-oid nx) virtual))
-      (let* ((bitmap-block (alloc-ip-block nx))
+      (let* ((chunks (length (nx-bitmap-paddrs nx)))
              (cib-block (alloc-ip-block nx))
+             (bitmap-blocks (loop repeat chunks collect (alloc-ip-block nx)))
              (free (free-count nx))
              (slot (u16 sm (u32 sm 328)))
              (free-next (u32 sm 332))
              (new-slot (u16 sm 320))
              (cib (new-block)))
-        (put bitmap-block (copy-seq (nx-bitmap nx)))
         (object-header cib cib-block xid (logior +obj-physical+ 7))
-        (put-u32 cib 36 1)
-        (put-u64 cib 40 xid) (put-u32 cib 56 (nx-block-count nx)) (put-u32 cib 60 free) (put-u64 cib 64 bitmap-block)
+        (put-u32 cib 36 chunks)
+        (loop for c from 0
+              for block in bitmap-blocks
+              for start = (* c 32768)
+              for count = (min 32768 (- (nx-block-count nx) start))
+              for at = (+ 40 (* 32 c))
+              do (put block (subseq (nx-bitmap nx) (* c +block-size+) (* (1+ c) +block-size+)))
+                 (put-u64 cib at xid) (put-u64 cib (+ at 8) start) (put-u32 cib (+ at 16) count)
+                 (put-u32 cib (+ at 20) (loop for n from start below (+ start count) count (zerop (bitmap-bit (nx-bitmap nx) n))))
+                 (put-u64 cib (+ at 24) block))
         (put cib-block (seal cib))
         (put-u16 sm 320 (u16 sm (+ free-next (* 2 new-slot))))
         (put-u16 sm (+ free-next (* 2 new-slot)) #xffff)
@@ -226,7 +235,7 @@
         (put-u16 sm (u32 sm 328) new-slot)
         (put-u64 sm (u32 sm 324) xid)
         (put (+ (nx-ip-bm-base nx) new-slot) (copy-seq (nx-ip-bitmap nx)))
-        (setf (nx-cib-paddr nx) cib-block (nx-bitmap-paddr nx) bitmap-block)
+        (setf (nx-cib-paddr nx) cib-block (nx-bitmap-paddrs nx) bitmap-blocks)
         (put-u64 sm (u32 sm 80) cib-block)
         (put-u64 sm 72 free)))
     (let* ((data-start (nx-data-next nx))
