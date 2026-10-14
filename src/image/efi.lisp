@@ -69,7 +69,7 @@
 (defun finch-sources ()
   (mapcar #'source '("src/mach/" "src/bsd/" "src/plist/" "src/macho/" "src/dyld/" "src/objc/" "src/mig/"
                      "src/server/" "src/ca/" "src/xpc/" "src/launchd/" "src/shell/" "src/io/" "src/text/"
-                     "src/imageio/" "src/kit/" "src/apps/" "src/iokit/" "src/kernel/" "src/tahoe/" "tests/" "src/image/")))
+                     "src/imageio/" "src/kit/" "src/apps/" "src/iokit/" "src/apfs/" "src/kernel/" "src/tahoe/" "tests/" "src/image/")))
 
 (defun finch-core ()
   (let ((core (build-path "finch.core")))

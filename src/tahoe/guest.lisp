@@ -165,8 +165,9 @@
                  (list (format nil "~a@127.0.0.1:~a" *user* source) (uiop:native-namestring file)))))
 
 (defun media ()
-  (prog1 (oracle "media" "sh media.sh" "media.sh")
-    (fetch "/tmp/finch.img.gz" (asdf:system-relative-pathname :finch "tests/apfs-disk.img.gz"))))
+  (prog1 (oracle "media" (format nil "FINCH_PASSWORD=~a sh media.sh" *password*) "media.sh")
+    (fetch "/tmp/finch.img.gz" (asdf:system-relative-pathname :finch "tests/apfs-disk.img.gz"))
+    (fetch "/tmp/finch-files.txt" (asdf:system-relative-pathname :finch "tests/apfs-files.txt"))))
 
 (defun events ()
   (oracle "events" "clang -w -o events events.c -framework ApplicationServices && ./events" "events.c"))

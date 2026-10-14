@@ -170,7 +170,8 @@
     path))
 
 (defparameter *media-keys*
-  '("Content" "Content Hint" "Whole" "Leaf" "Writable" "Preferred Block Size" "Size" "Base" "UUID" "Partition ID" "BSD Name"))
+  '("Content" "Content Hint" "Whole" "Leaf" "Writable" "Preferred Block Size" "Size" "Base" "UUID" "Partition ID" "BSD Name"
+    "Logical Block Size" "Physical Block Size" "FullName" "RoleValue" "CaseSensitive" "FormattedBy" "IncompatibleFeatures"))
 
 (defun ioreg-value (text)
   (cond ((string= text "Yes") t)
@@ -184,7 +185,7 @@
       (let ((o (search "+-o " line)))
         (cond (o (let* ((head (subseq line (+ o 4) (search "  <class " line)))
                         (at (position #\@ head :from-end t)))
-                   (setf current (and (search "<class IOMedia," line)
+                   (setf current (and (some (lambda (c) (search c line)) '("<class IOMedia," "<class AppleAPFSMedia," "<class AppleAPFSVolume,"))
                                       (list (if at (subseq head 0 at) head) (and at (subseq head (1+ at))) nil)))
                    (when current (push current entries))))
               (current
@@ -219,12 +220,29 @@
                         (loop for (key . value) in wprops
                               for mine = (cdr (assoc key gprops :test #'string=))
                               do (cond ((string= key "BSD Name") (is (equal (bsd-suffix value) (bsd-suffix mine))))
-                                       ((and (string= key "Leaf") (equal (cdr (assoc "Content" wprops :test #'string=)) "7C3457EF-0000-11AA-AA11-00306543ECAC")))
                                        (t (is (equal value mine) "~a ~a: Tahoe ~s, finch ~s" wname key value mine))))))
              (is (search (let ((line (find "UUID" (uiop:read-file-lines (finch-file "tests/media.txt"))
                                            :test (lambda (k l) (and (search k l) (search "|   \"UUID\"" l))))))
                            (subseq line (- (length line) 37) (1- (length line))))
                          (ask "(iokit:get-property (first (iokit:find-entries 'iokit:io-guid-partition-scheme)) \"UUID\")"))))
+        (image:finish c 5)))))
+
+(test apfs-on-finch
+  (let* ((disk (gunzip-fixture "apfs-disk.img.gz" "apfs-boot.img"))
+         (files (mapcar (lambda (l) (uiop:split-string l :separator "|")) (uiop:read-file-lines (finch-file "tests/apfs-files.txt"))))
+         (c (image:bare-console :disks (list disk))))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 60)
+             (ask "(iokit:start-iokit)")
+             (ask "(defvar *v* (finch/apfs::apfs-volume (first (iokit:find-entries 'finch/apfs::apple-apfs-volume))))")
+             (is (search "\"finch\"" (ask "(finch/apfs:volume-name *v*)")))
+             (is (search "\"hello from tahoe" (ask "(map 'string #'code-char (finch/apfs:read-file *v* (finch/apfs:lookup *v* \"/hello.txt\")))")))
+             (is (search "\"hello.txt\"" (ask "(finch/apfs:readlink *v* (finch/apfs:lookup *v* \"/link\"))")))
+             (is (search "300" (ask "(length (finch/apfs:directory-entries *v* (finch/apfs:lookup *v* \"/many\")))")))
+             (is (search (format nil "~s" (car (last (find "./big.txt" files :key #'first :test #'string=))))
+                         (ask "(string-downcase (format nil \"~{~2,'0x~}\" (coerce (sb-md5:md5sum-sequence (finch/apfs:read-file *v* (finch/apfs:lookup *v* \"/big.txt\"))) 'list)))"))))
         (image:finish c 5)))))
 
 (test xnu-checked-suites-pass-on-finch

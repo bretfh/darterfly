@@ -54,10 +54,13 @@
     h))
 
 (defun property-match-p (service table)
-  (let ((want (gethash "IOPropertyMatch" table)))
-    (or (null want)
-        (loop for k being the hash-keys of want using (hash-value v)
-              always (equal (get-property service k) v)))))
+  (flet ((all (want)
+           (loop for k being the hash-keys of want using (hash-value v)
+                 always (equal (get-property service k) v))))
+    (let ((want (gethash "IOPropertyMatch" table)))
+      (cond ((null want) t)
+            ((listp want) (some #'all want))
+            (t (all want))))))
 
 (defun matches-p (personality service)
   (let ((class (find-io-class (gethash "IOProviderClass" personality))))

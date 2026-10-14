@@ -12,7 +12,9 @@
    #:apple-virtio-transport #:apple-virtio-pci-transport #:virtio-device-type
    #:apple-virtio-block-storage-device #:block-count #:block-size #:read-blocks #:write-blocks
    #:io-block-storage-device #:io-media #:media-read #:media-write #:media-size #:io-guid-partition-scheme #:crc32
-   #:acpi-table #:vm-page-grab #:ml-io-map))
+   #:acpi-table #:vm-page-grab #:ml-io-map
+   #:define-io-class #:add-personality #:personality #:publish-media #:io-partition-scheme
+   #:media-device #:media-base #:next-bsd-unit #:bsd-client-class #:io-media-bsd-client))
 (in-package #:finch/iokit)
 
 (defconstant +physmap-base+ #xffff800000000000)

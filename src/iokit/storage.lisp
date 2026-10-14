@@ -30,14 +30,19 @@
       (error "media-write: ~d bytes at ~d are not whole blocks" (length vector) at))
     (write-blocks (media-device media) (floor at 512) vector)))
 
+(defgeneric bsd-client-class (media)
+  (:method ((media io-media)) 'io-media-bsd-client))
+
+(defun next-bsd-unit () (prog1 *bsd-units* (incf *bsd-units*)))
+
 (defun publish-media (media parent)
   (attach media parent)
-  (attach (make-instance 'io-media-bsd-client) media)
+  (attach (make-instance (bsd-client-class media)) media)
   (register-service media)
   media)
 
 (defmethod start ((driver io-block-storage-driver) (device io-block-storage-device))
-  (let* ((unit (prog1 *bsd-units* (incf *bsd-units*)))
+  (let* ((unit (next-bsd-unit))
          (media (make-instance 'io-media :name "Media" :device device :base 0)))
     (loop for (k v) on (list "Content" "" "Content Hint" "" "Whole" t "Leaf" t "Writable" t
                              "Removable" nil "Ejectable" nil "Preferred Block Size" (block-size device)

@@ -80,6 +80,13 @@
   :pathname "src/iokit/"
   :components ((:file "machine") (:file "registry") (:file "acpi") (:file "pci") (:file "virtio") (:file "storage") (:file "block")))
 
+(asdf:defsystem #:finch/apfs
+  :description "Apple File System"
+  :depends-on (#:uiop #:finch/iokit)
+  :serial t
+  :pathname "src/apfs/"
+  :components ((:file "apfs") (:file "iokit")))
+
 (asdf:defsystem #:finch/kernel
   :description "The kernel, run as pid 1"
   :depends-on (#:finch/mach #:finch/bsd #:finch/io #:uiop)
@@ -157,13 +164,13 @@
 
 (asdf:defsystem #:finch
   :description "A Darwin in Common Lisp"
-  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/xpc #:finch/launchd #:finch/shell #:finch/io #:finch/text #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/iokit #:finch/kernel #:finch/image)
+  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/xpc #:finch/launchd #:finch/shell #:finch/io #:finch/text #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/iokit #:finch/apfs #:finch/kernel #:finch/image)
   :in-order-to ((asdf:test-op (asdf:test-op #:finch/test))))
 
 (asdf:defsystem #:finch/test
-  :depends-on (#:finch #:finch/tahoe #:fiveam (:require #:sb-posix))
+  :depends-on (#:finch #:finch/tahoe #:fiveam (:require #:sb-posix) (:require #:sb-md5))
   :serial t
   :pathname "tests/"
-  :components ((:file "suite") (:file "mach") (:file "plist") (:file "macho") (:file "dyld") (:file "objc") (:file "mig") (:file "server") (:file "ca") (:file "bsd") (:file "xpc") (:file "launchd") (:file "kernel") (:file "boot") (:file "tahoe"))
+  :components ((:file "suite") (:file "mach") (:file "plist") (:file "macho") (:file "dyld") (:file "objc") (:file "mig") (:file "server") (:file "ca") (:file "bsd") (:file "xpc") (:file "launchd") (:file "kernel") (:file "boot") (:file "apfs") (:file "tahoe"))
   :perform (asdf:test-op (o c)
              (uiop:symbol-call :finch/test :run-them)))
