@@ -10,7 +10,7 @@
 (defparameter +ops+
   #(nil :open :close :read :write :pread :pwrite :lseek :stat :lstat :fstat :readlink :symlink :mkdir :rmdir
     :unlink :rename :chdir :fchdir :getcwd :realpath :chmod :fchmod :chown :fchown :truncate :ftruncate :dup :dup2
-    :fcntl :readdir :link :utimes :fsync))
+    :fcntl :readdir :link :utimes :fsync :umask))
 
 (defun c-string (address)
   (let* ((sap (sb-sys:int-sap address))
@@ -117,7 +117,8 @@
                 (if entry (put-dirent (car entry) (cdr entry) c) 0)))
     (:link (fail :enotsup))
     (:utimes (namei (c-string a)) 0)
-    (:fsync (fd-file a) 0)))
+    (:fsync (fd-file a) 0)
+    (:umask (prog1 *umask* (setf *umask* (logand a #o777))))))
 
 (defun vfs-entry (op a b c d)
   (sb-sys:without-interrupts

@@ -73,6 +73,7 @@
   (with-vfs (setf *mounts* (remove path *mounts* :key #'mount-path :test #'string=))))
 
 (defvar *cwd* nil)
+(defvar *umask* #o022)
 
 (defun split-path (path)
   (remove "" (uiop:split-string path :separator "/") :test #'string=))
@@ -147,7 +148,7 @@
       (unless vnode
         (unless (getf flags :creat) (fail :enoent))
         (multiple-value-bind (parent leaf) (namei-parent path)
-          (setf vnode (vnop-create parent leaf (logand mode #o7777)))))
+          (setf vnode (vnop-create parent leaf (logand mode #o7777 (lognot *umask*))))))
       (when (and (getf flags :directory) (not (eq (vnode-type vnode) :vdir))) (fail :enotdir))
       (when (and (eq (vnode-type vnode) :vdir) (not (eq (getf flags :access) :rdonly)))
         (fail :eisdir))
@@ -216,7 +217,7 @@
   (with-vfs
     (when (lookup-or-nil path :follow nil) (fail :eexist))
     (multiple-value-bind (parent leaf) (namei-parent path)
-      (vnop-mkdir parent leaf (logand mode #o7777)))
+      (vnop-mkdir parent leaf (logand mode #o7777 (lognot *umask*))))
     0))
 
 (defun busy-p (vnode)

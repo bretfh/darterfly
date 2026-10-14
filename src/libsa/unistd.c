@@ -66,7 +66,6 @@ long sysconf(int name) {
 
 int getpagesize(void) { return 4096; }
 int getdtablesize(void) { return 64; }
-mode_t umask(mode_t m) { (void)m; return 022; }
 int mkfifo(const char *p, mode_t m) { (void)p; (void)m; errno = EROFS; return -1; }
 int flock(int fd, int op) { (void)fd; (void)op; return 0; }
 

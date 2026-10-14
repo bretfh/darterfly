@@ -296,7 +296,9 @@
         (is (equal (format nil "hello from finch~%") (funcall read "/made/hello.txt")))
         (is (null (apfs:lookup v "/many/f7")))
         (is (null (apfs:lookup v "/hello.txt")))
-        (is (= 299 (length (apfs:directory-entries v (apfs:lookup v "/many")))))))))
+        (is (= 299 (length (apfs:directory-entries v (apfs:lookup v "/many")))))
+        (is (= #o100644 (apfs:inode-mode (apfs:inode v (apfs:lookup v "/from-finch.txt")))))
+        (is (= #o040755 (apfs:inode-mode (apfs:inode v (apfs:lookup v "/made/by")))))))))
 
 (test xnu-checked-suites-pass-on-finch
   (let ((c (image:bare-console)))
