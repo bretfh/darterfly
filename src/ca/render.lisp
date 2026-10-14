@@ -4,7 +4,7 @@
            #:layer #:make-layer #:layer-id #:layer-position #:layer-bounds #:layer-frame
            #:layer-background-color #:layer-opacity #:layer-masks-to-bounds #:layer-sublayers
            #:context #:context-create #:context-id #:context-layer #:commit #:+masks-to-bounds+
-           #:layer-contents #:image #:next-event #:context-events #:window-create #:transaction-commit))
+           #:layer-contents #:image #:next-event #:context-events #:window-create #:transaction-commit #:main-display-bounds))
 (in-package #:finch/ca)
 
 (define-condition render-error (error)

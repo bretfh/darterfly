@@ -109,6 +109,7 @@
                                                          :time time :commands commands))))))
 
 (defconstant +create-window+ 30263)
+(defconstant +main-display-bounds+ 33028)
 (defconstant +set-window-layer-context+ 30264)
 (defconstant +transaction-commit-async+ 30429)
 
@@ -149,6 +150,11 @@
     (loop :for b :across (octets 0) :do (vector-push-extend b body))
     (mig +transaction-commit-async+ body
          :descriptors (list (make-array 0 :element-type '(unsigned-byte 8))))))
+
+(defun main-display-bounds ()
+  (let ((body (finch/mach:msgh-body (mig +main-display-bounds+ (octets 0 1) :reply t))))
+    (flet ((i32 (at) (logior (aref body at) (ash (aref body (+ at 1)) 8) (ash (aref body (+ at 2)) 16) (ash (aref body (+ at 3)) 24))))
+      (list (i32 8) (i32 12) (i32 16) (i32 20)))))
 
 (defparameter +window-levels+
   '((:desktop . -2147483623) (:normal . 0) (:dock . 20) (:main-menu . 24) (:status . 25) (:pop-up-menu . 101)))

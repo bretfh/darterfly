@@ -1,6 +1,6 @@
 (defpackage #:finch/kernel
   (:use #:cl)
-  (:export #:start #:boot-args #:version #:halt))
+  (:export #:start #:launch #:boot-args #:version #:halt))
 (in-package #:finch/kernel)
 
 (defparameter *version* "0.1")
@@ -82,6 +82,14 @@
            (multiple-value-bind (pid status) (finch/bsd:wait4 init)
              (declare (ignore pid))
              (error "init died, status #x~x" status))))))
+
+(defun launch ()
+  (dotimes (i 3)
+    (finch/bsd:open "/dev/console" finch/bsd:+o-rdwr+))
+  (let ((init (finch/bsd:fork (lambda () (finch/bsd:execve "/sbin/launchd" (list "/sbin/launchd") nil)))))
+    (format t "~&load_init_program: /sbin/launchd pid ~d~%" init)
+    (finish-output)
+    init))
 
 (defun start ()
   (handler-case

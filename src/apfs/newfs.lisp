@@ -224,7 +224,7 @@ data blocks as (block . octets), the next inode number and counts."
           (setf (gethash path ids) (prog1 next (incf next)))
           (push path (gethash (parent-of path) children))))
       (dolist (e entries)
-        (destructuring-bind (kind raw &optional content) e
+        (destructuring-bind (kind raw &optional content (mode #o644)) e
           (let* ((path (string-trim "/" raw))
                  (id (gethash path ids))
                  (parent (or (gethash (parent-of path) ids) (error "~a has no parent directory" raw)))
@@ -240,7 +240,7 @@ data blocks as (block . octets), the next inode number and counts."
                (incf files)
                (let ((n (ceiling (length content) +block-size+)))
                  (push (drec-record parent name id time 8) fs)
-                 (push (inode-record id :parent parent :time time :owner owner :group group :mode #o100644 :name name
+                 (push (inode-record id :parent parent :time time :owner owner :group group :mode (logior #o100000 (logand mode #o7777)) :name name
                                         :nchildren 1 :dstream (and (plusp n) (dstream-field (length content) n)))
                        fs)
                  (when (plusp n)

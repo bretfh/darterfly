@@ -33,7 +33,7 @@
 
 (asdf:defsystem #:finch/io
   :description "Frame buffers and input devices"
-  :depends-on (#:uiop (:require #:sb-posix))
+  :depends-on (#:uiop #:finch/iokit (:require #:sb-posix))
   :serial t
   :pathname "src/io/"
   :components ((:file "framebuffer") (:file "hid") (:file "blend") (:file "kext") (:file "keymap")))
@@ -78,7 +78,7 @@
   :depends-on (#:uiop)
   :serial t
   :pathname "src/iokit/"
-  :components ((:file "machine") (:file "registry") (:file "acpi") (:file "pci") (:file "virtio") (:file "storage") (:file "block")))
+  :components ((:file "machine") (:file "registry") (:file "acpi") (:file "pci") (:file "virtio") (:file "storage") (:file "block") (:file "input")))
 
 (asdf:defsystem #:finch/vfs
   :description "The virtual file system"

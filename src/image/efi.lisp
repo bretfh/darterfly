@@ -139,18 +139,26 @@
                       (loop :for f :in *ramdisk-files*
                             :collect (list :file (concatenate 'string "finch/" f) (octets (source f)))))))
 
+(defun desktop-entries ()
+  (when (probe-file (asdf:system-relative-pathname :finch "tahoe/system/System/Library/LaunchDaemons/"))
+    (append (loop :for (path program) :in *programs*
+                  :collect (list :file path (text (format nil "#!finch ~a~%" program)) #o755))
+            (list (list :file "Library/LaunchDaemons/finch.gui.plist" (gui-job)))
+            (tahoe-daemons) (tahoe-fonts) (tahoe-resources))))
+
 (defun root-entries ()
-  (let ((dirs (list "tmp" "Users" "Users/finch" "dev" "Volumes" "System" "System/Library" "System/Library/Kernels" "finch"))
-        (files nil))
-    (dolist (f *ramdisk-files*)
-      (let ((path (concatenate 'string "finch/" f)))
+  (let ((files (append (loop :for f :in *ramdisk-files*
+                             :collect (list :file (concatenate 'string "finch/" f) (octets (source f))))
+                       (desktop-entries)))
+        (dirs (list "tmp" "Users" "Users/finch" "dev" "Volumes" "System" "System/Library" "System/Library/Kernels")))
+    (dolist (f files)
+      (let ((path (second f)))
         (loop for slash = (position #\/ path) then (position #\/ path :start (1+ slash))
               while slash
-              do (pushnew (subseq path 0 slash) dirs :test #'string=))
-        (push (list :file path (octets (source f))) files)))
+              do (pushnew (subseq path 0 slash) dirs :test #'string=))))
     (append (mapcar (lambda (d) (list :dir d))
                     (sort (remove-duplicates dirs :test #'string=) #'< :key (lambda (d) (count #\/ d))))
-            (nreverse files))))
+            files)))
 
 (defun root-disk (&optional (path (build-path "root.img")))
   (finch/apfs:newfs path :size (* 128 1048576) :volume-name "finch HD" :entries (root-entries)
@@ -195,7 +203,8 @@
      (loop for disk in disks for i from 0
            append (list "-drive" (format nil "if=none,id=disk~d,format=raw,file=~a" i (uiop:native-namestring disk))
                         "-device" (format nil "virtio-blk-pci,drive=disk~d" i)))
-     (list "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
+     (list "-device" "virtio-keyboard-pci" "-device" "virtio-tablet-pci"
+           "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
           "-monitor" (format nil "unix:~a,server=on,wait=off" (monitor-path))
           "-qmp" (format nil "unix:~a,server=on,wait=off" (qmp-path))
           "-display" "none" "-serial" "stdio" "-no-reboot"))))

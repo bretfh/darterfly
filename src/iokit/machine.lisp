@@ -12,7 +12,8 @@
    #:apple-virtio-transport #:apple-virtio-pci-transport #:virtio-device-type
    #:apple-virtio-block-storage-device #:block-count #:block-size #:read-blocks #:write-blocks
    #:io-block-storage-device #:io-media #:media-read #:media-write #:media-size #:io-guid-partition-scheme #:crc32
-   #:acpi-table #:vm-page-grab #:ml-io-map #:boot-arg #:kernel-flags
+   #:acpi-table #:vm-page-grab #:ml-io-map #:boot-arg #:kernel-flags #:boot-video
+   #:apple-virtio-input #:input-events #:input-abs-range
    #:define-io-class #:add-personality #:personality #:publish-media #:io-partition-scheme
    #:media-device #:media-base #:next-bsd-unit #:bsd-client-class #:io-media-bsd-client))
 (in-package #:finch/iokit)
@@ -27,6 +28,11 @@
 (defun boot-args () (machdep 8))
 (defun vm-page-grab () (machdep 9))
 (defun ml-io-map (pa size) (machdep 10 pa size))
+
+(defun boot-video ()
+  (let ((sap (sb-sys:int-sap (machdep 11))))
+    (list :row-bytes (sb-sys:sap-ref-32 sap 4) :width (sb-sys:sap-ref-32 sap 8) :height (sb-sys:sap-ref-32 sap 12)
+          :depth (sb-sys:sap-ref-32 sap 16) :base (sb-sys:sap-ref-64 sap 48))))
 
 (defun phys-sap (pa) (sb-sys:int-sap (+ +physmap-base+ pa)))
 (defun ml-phys-read-8 (pa) (sb-sys:sap-ref-8 (phys-sap pa) 0))

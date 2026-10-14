@@ -2,7 +2,7 @@
   (:use #:cl)
   (:export #:core #:image #:boot #:check-boot #:write-cpio #:*build*
    #:console #:expect #:send #:transcript #:finish #:screendump #:pixel #:monitor #:pointer #:qmp #:send-keys
-   #:boot-efi #:mach-kernel #:esp #:bare-console #:bare-boot #:send-char))
+   #:boot-efi #:mach-kernel #:esp #:bare-console #:bare-boot #:send-char #:*screen-size*))
 (in-package #:finch/image)
 
 (defvar *build* (asdf:system-relative-pathname :finch "build/"))
@@ -216,14 +216,16 @@
                                                      (and shift (list (key "shift" nil))))
                                              'vector)))))))
 
+(defvar *screen-size* '(1024 768))
+
 (defun pointer (x y &optional (button nil button-p))
   (flet ((abs-event (axis value)
            (finch/qmp:dict "type" "abs" "data" (finch/qmp:dict "axis" axis "value" value))))
     (qmp "input-send-event"
          (finch/qmp:dict "events"
                          (concatenate 'vector
-                                      (vector (abs-event "x" (floor (* x 32768) 1024))
-                                              (abs-event "y" (floor (* y 32768) 768)))
+                                      (vector (abs-event "x" (floor (* x 32768) (first *screen-size*)))
+                                              (abs-event "y" (floor (* y 32768) (second *screen-size*))))
                                       (and button-p
                                            (vector (finch/qmp:dict "type" "btn"
                                                                    "data" (finch/qmp:dict "button" "left"

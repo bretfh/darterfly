@@ -18,6 +18,7 @@
 ))
 
 (defconstant +create-window+ 30263)
+(defconstant +main-display-bounds+ 33028)
 (defconstant +set-window-layer-context+ 30264)
 (defconstant +transaction-commit-async+ 30429)
 
@@ -290,10 +291,7 @@
                                                 :timestamp (get-internal-real-time)
                                                 :location (mapcar (lambda (v) (float v 1.0)) *cursor*)))))))))))
 
-(defun hid-devices ()
-  (loop :for name :in (ignore-errors (bsd:readdir "/dev/input"))
-        :when (uiop:string-prefix-p "event" name)
-          :collect (io:open-hid (format nil "/dev/input/~a" name))))
+(defun hid-devices () (io:input-devices))
 
 (defun drain (devices)
   (loop :for batch := (loop :for fd :in devices :append (io:read-events fd))
@@ -423,6 +421,11 @@
                (register-client message set)))
             ((= (mach:msgh-id message) +create-window+)
              (sb-thread:with-mutex (*lock*) (create-window message)))
+            ((= (mach:msgh-id message) +main-display-bounds+)
+             (mach:mach-msg-send (mach:make-message :remote-port (mach:msgh-remote-port message)
+                                                    :remote-disposition :move-send-once :id (+ +main-display-bounds+ 100)
+                                                    :body (mig-body 0 0 (io:framebuffer-width *framebuffer*)
+                                                                    (io:framebuffer-height *framebuffer*)))))
             ((= (mach:msgh-id message) +set-window-layer-context+)
              (sb-thread:with-mutex (*lock*) (set-window-layer-context message) (render)))
             ((= (mach:msgh-id message) +transaction-commit-async+)

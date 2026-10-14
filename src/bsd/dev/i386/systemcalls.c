@@ -204,6 +204,7 @@ void machdep_syscall(x86_saved_state64_t *regs) {
     return ok(regs, pa);
   }
   case 10: return ok(regs, ml_io_map(regs->rdi, regs->rsi));
+  case 11: return ok(regs, (uint64_t)&PE_boot_args->Video);
   case 3: {
     uint64_t base = regs->rdi;
     current_thread()->fs_base = base;

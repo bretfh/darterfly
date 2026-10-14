@@ -3,7 +3,7 @@
   (:export #:framebuffer #:open-framebuffer #:framebuffer-width #:framebuffer-height
            #:framebuffer-pixels #:flush #:fill-rect #:test-pattern
            #:read-events #:open-hid #:hid-event #:event-type #:event-code #:event-value #:blend-rect
-           #:kextload #:load-kexts #:*kexts* #:modules-dir #:abs-range #:event-fd #:blit-image #:key-character #:shift-key-p #:virtual-keycode #:shadow-under #:save-corners #:restore-corners #:*clip*))
+           #:input-devices #:kextload #:load-kexts #:*kexts* #:modules-dir #:abs-range #:event-fd #:blit-image #:key-character #:shift-key-p #:virtual-keycode #:shadow-under #:save-corners #:restore-corners #:*clip*))
 (in-package #:finch/io)
 
 (defclass framebuffer ()
@@ -27,7 +27,16 @@
      (sb-posix:ioctl fd +kdsetmode+ +kd-graphics+)
      fd)))
 
+(defun open-boot-framebuffer ()
+  (destructuring-bind (&key row-bytes width height depth base) (finch/iokit:boot-video)
+    (make-instance 'framebuffer :width width :height height :depth depth :stride row-bytes
+                                :sap (sb-sys:int-sap (finch/iokit:ml-io-map base (* row-bytes height)))
+                                :pixels (make-array (* width height) :element-type '(unsigned-byte 32)
+                                                                     :initial-element #xff000000))))
+
 (defun open-framebuffer (&optional (device "/dev/fb0"))
+  (unless (probe-file device)
+    (return-from open-framebuffer (open-boot-framebuffer)))
   (graphics-mode)
   (destructuring-bind (width height)
       (mapcar #'parse-integer (uiop:split-string (sysfs "virtual_size") :separator ","))

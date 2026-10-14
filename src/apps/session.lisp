@@ -10,7 +10,9 @@
       layer)))
 
 (defun screen-size ()
-  (values 1024 768))
+  (destructuring-bind (x y width height) (ca:main-display-bounds)
+    (declare (ignore x y))
+    (values width height)))
 
 (defun clock ()
   (multiple-value-bind (s m h day month year weekday) (decode-universal-time (get-universal-time))
