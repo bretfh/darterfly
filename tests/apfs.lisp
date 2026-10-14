@@ -58,8 +58,21 @@
   (with-open-file (s path :element-type '(unsigned-byte 8))
     (string-downcase (format nil "~{~2,'0x~}" (coerce (sb-md5:md5sum-stream s) 'list)))))
 
+(defun text (s) (sb-ext:string-to-octets s :external-format :utf-8))
+
+(defun newfs-entries ()
+  (append (list '(:dir "System") '(:dir "System/Library")
+                (list :file "System/Library/name" (text (format nil "finch~%")))
+                (list :file "hello.txt" (text (format nil "hello from finch~%")))
+                '(:symlink "link" "hello.txt")
+                (list :file "big.txt" (text (with-output-to-string (s)
+                                              (dotimes (i 20000) (format s "line ~5,'0d of a file finch wrote~%" i)))))
+                (list :file "café.txt" (text (format nil "accent~%")))
+                '(:dir "many"))
+          (loop for i from 1 to 300 collect (list :file (format nil "many/f~d" i) (text (format nil "file ~d~%" i))))))
+
 (defun newfs-image ()
-  (apfs:newfs (merge-pathnames "newfs.img" (finch-file "build/")) :volume-name "finch"))
+  (apfs:newfs (merge-pathnames "newfs.img" (finch-file "build/")) :volume-name "finch" :entries (newfs-entries)))
 
 (defun record-newfs ()
   (let* ((image (newfs-image))
@@ -70,10 +83,25 @@
 
 (test newfs-was-judged-by-tahoe
   (let* ((lines (uiop:read-file-lines (finch-file "tests/apfs-newfs.txt")))
-         (image (newfs-image)))
+         (image (newfs-image))
+         (listing (remove-if-not (lambda (l) (search "|" l)) lines)))
     (is (equal (first lines) (format nil "md5 ~a" (image-md5 image))))
     (is (find "** The container /dev/disk7 appears to be OK." lines :test #'search))
-    (is (find ".|Directory|755|64|2|2|501|20||-" lines :test #'string=))
+    (is (= 309 (length listing)))
+    (dolist (e (newfs-entries))
+      (destructuring-bind (kind path &optional content) e
+        (let ((line (find (format nil "./~a|" path) listing :test (lambda (p l) (eql 0 (search p l))))))
+          (is (not (null line)) "~a is missing in Tahoe's listing" path)
+          (when line
+            (destructuring-bind (name type perms size ino nlink uid gid target md5) (uiop:split-string line :separator "|")
+              (declare (ignore name ino uid gid))
+              (ecase kind
+                (:dir (is (equal type "Directory")) (is (equal perms "755")))
+                (:symlink (is (equal type "Symbolic Link")) (is (equal target content)) (is (equal nlink "1")))
+                (:file (is (equal type "Regular File"))
+                 (is (= (length content) (parse-integer size)))
+                 (is (equal md5 (string-downcase (format nil "~{~2,'0x~}" (coerce (sb-md5:md5sum-sequence content) 'list)))))
+                 (is (equal nlink "1")))))))))
     (let ((v (first (apfs:container-volumes (apfs:open-container (apfs:file-device image))))))
       (is (equal "finch" (apfs:volume-name v)))
-      (is (= 2 (apfs:lookup v "/"))))))
+      (is (= 300 (length (apfs:directory-entries v (apfs:lookup v "/many"))))))))
