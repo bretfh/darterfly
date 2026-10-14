@@ -39,21 +39,21 @@
   :components ((:file "framebuffer") (:file "hid") (:file "blend") (:file "kext") (:file "keymap")))
 
 (asdf:defsystem #:finch/text
-  :description "Fonts and text, CoreText's shape"
+  :description "Fonts and text"
   :depends-on (#:zpb-ttf #:cl-vectors #:cl-paths-ttf)
   :serial t
   :pathname "src/text/"
   :components ((:file "text")))
 
 (asdf:defsystem #:finch/imageio
-  :description "Images and icons, ImageIO's shape"
+  :description "Images and icons"
   :depends-on (#:chipz)
   :serial t
   :pathname "src/imageio/"
   :components ((:file "imageio")))
 
 (asdf:defsystem #:finch/kit
-  :description "AppKit's shape"
+  :description "Views, windows and menus"
   :depends-on (#:finch/ca #:finch/text #:finch/mach #:finch/server #:finch/bsd #:finch/imageio)
   :serial t
   :pathname "src/kit/"
@@ -156,7 +156,7 @@
   :components ((:file "transaction") (:file "event") (:file "region")))
 
 (asdf:defsystem #:finch/ca
-  :description "CoreAnimation's render protocol"
+  :description "The layer render protocol"
   :depends-on (#:finch/mach #:finch/bsd #:finch/launchd #:finch/server)
   :serial t
   :pathname "src/ca/"
@@ -177,7 +177,7 @@
   :components ((:static-file "SSDT-EC-USBX.dsl") (:static-file "transactions.c") (:static-file "commit-tap.c") (:static-file "commits.m") (:static-file "ports.c") (:static-file "ports.script") (:static-file "bsd.c") (:static-file "bsd.script") (:static-file "mach-tap.c") (:static-file "lookup.c") (:static-file "events.c") (:static-file "windows.c") (:static-file "media.sh") (:static-file "apfs-check.sh") (:file "opencore") (:file "qmp") (:file "guest")))
 
 (asdf:defsystem #:finch
-  :description "A Darwin in Common Lisp"
+  :description "A live, hackable OS on SBCL"
   :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/xpc #:finch/launchd #:finch/shell #:finch/io #:finch/text #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/iokit #:finch/vfs #:finch/apfs #:finch/net #:finch/kernel #:finch/image)
   :in-order-to ((asdf:test-op (asdf:test-op #:finch/test))))
 

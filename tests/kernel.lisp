@@ -55,7 +55,7 @@
              (is (< 200 (ldb (byte 8 16) (image:pixel screen 300 12))) "menu bar ~x" (image:pixel screen 300 12))
              (is (< 30 (dark-pixels screen 990 4 1020 20 120)) "the clock")
              (is (< 100 (dark-pixels screen 484 684 540 740 90)) "terminal's icon in the dock")
-             (is (/= #xff2e5c8f (image:pixel screen 960 60)) "macintosh hd ~x" (image:pixel screen 960 60)))
+             (is (/= #xff2e5c8f (image:pixel screen 960 60)) "the disk ~x" (image:pixel screen 960 60)))
            (let ((screen (screen-until (lambda (s) (and (= #xffd9d9d9 (image:pixel s 300 140))
                                                         (= #xffededed (image:pixel s 215 520))
                                                         (< 50 (dark-pixels s 244 194 480 230 100)))))))

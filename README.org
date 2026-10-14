@@ -1,29 +1,22 @@
 #+TITLE: finch
 
-A Darwin in Common Lisp: Mach underneath, BSD on top, the macOS shape all the
-way up. Forked from macOS 26 Tahoe, the last macOS for Intel, which is also
-its reference. The design record is =~/org/finch.org=.
+A live, hackable operating system on SBCL with Unix semantics: processes, file
+descriptors, signals, pipes and sockets. A small C core boots the machine,
+owns the page tables, traps and the scheduler; everything above it, from the
+VFS and the network stack to the window server and the apps, is Common Lisp
+you can change while it runs.
 
-* Systems
-
-| =finch/mach=  | ports, rights, names, messages, port sets, dead names |
-| =finch/plist= | property lists, XML and =bplist00=                    |
-| =finch/macho= | Mach-O images, thin and fat                           |
-| =finch/dyld=  | the dyld shared cache, its subcaches and images       |
+Some designs come from macOS because they are good ones: Mach ports and
+launchd, IOKit-style driver matching, APFS, a layer compositor, and xnu's
+system call numbers as the line between SBCL's runtime and the kernel. macOS 26
+Tahoe and xnu sit on the reference shelf (=finch/tahoe=); finch does not try
+to look or behave like macOS. Icons and fonts are GNOME's Adwaita.
 
 * Running it
 
 #+begin_src sh
   make repl
   make check   # loads with no warnings from finch's own code
-  make test    # Mach semantics; plists against plistlib; Mach-O against llvm-objdump;
-             # Tahoe's cache against Apple's own .map (skipped without tahoe/)
-#+end_src
-
-#+begin_src lisp
-  (let* ((task (finch/mach:mach-task-self))
-         (port (finch/mach:mach-port-allocate task :receive)))
-    (finch/mach:mach-port-insert-right task port port :make-send)
-    (finch/mach:mach-msg-send (finch/mach:make-message :remote-port port :id 1 :body "hello"))
-    (finch/mach:msgh-body (finch/mach:mach-msg-receive port :timeout 100)))
+  make test    # the whole suite, including boots of the image under QEMU
+  make bare    # build the image and boot it
 #+end_src

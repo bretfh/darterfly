@@ -135,7 +135,7 @@
                       #'string-lessp))
          (columns 6) (cell 92) (row 96))
     (kit:remove-subviews content)
-    (kit:set-window-title window (if (string= path "/") "Macintosh HD" (subseq path (1+ (position #\/ path :from-end t)))))
+    (kit:set-window-title window (if (string= path "/") "finch HD" (subseq path (1+ (position #\/ path :from-end t)))))
     (loop :for name :in names
           :for i :from 0
           :do (let ((child (child-path path name)))
@@ -151,7 +151,7 @@
 (defmethod kit:mouse-down ((view disk-view) x y)
   (declare (ignore x y))
   (when (>= kit:*click-count* 2)
-    (let ((window (kit:make-window :title "Macintosh HD" :x 120 :y 80 :width 600 :height 420)))
+    (let ((window (kit:make-window :title "finch HD" :x 120 :y 80 :width 600 :height 420)))
       (browse window "/")
       (kit:show window)))
   t)
@@ -160,13 +160,13 @@
   (setf kit:*menus* (list (list "Finder" (cons "About Finder" nil))
                           (list "File" (cons "New Finder Window" nil)) (list "Edit" (cons "Copy" nil))
                           (list "View" (cons "as Icons" nil)) (list "Go" (cons "Computer" nil))
-                          (list "Window" (cons "Minimize" nil)) (list "Help" (cons "macOS Help" nil))))
+                          (list "Window" (cons "Minimize" nil)) (list "Help" (cons "finch Help" nil))))
   (multiple-value-bind (width height) (screen-size)
     (let ((desktop (kit:make-window :style :borderless :level :desktop :x 0 :y 0 :width width :height height
                                     :background #(0.18 0.36 0.56 1.0))))
       (kit:add-subview (kit:content-view desktop)
                        (make-instance 'disk-view :icon-path (icon-path "devices/drive-harddisk")
-                                                 :label "Macintosh HD" :label-color #(1.0 1.0 1.0)
+                                                 :label "finch HD" :label-color #(1.0 1.0 1.0)
                                                  :frame (vector (- width 112) 36 100 90)))
       (kit:show desktop)
       (kit:run))))
