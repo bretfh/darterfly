@@ -7,7 +7,8 @@
    #:vnop-create #:vnop-mkdir #:vnop-symlink #:vnop-remove #:vnop-rmdir #:vnop-rename #:vnop-setattr #:vnop-truncate
    #:vattr #:make-vattr #:vattr-mode #:vattr-uid #:vattr-gid #:vattr-size #:vattr-nlink #:vattr-mtime #:vattr-rdev
    #:namei #:vfs-open #:vfs-close #:vfs-read #:vfs-write #:vfs-stat #:vfs-readdir #:vfs-readlink #:vfs-mkdir
-   #:vfs-unlink #:vfs-rename #:vfs-chdir #:vfs-getcwd #:*root*))
+   #:vfs-unlink #:vfs-rename #:vfs-chdir #:vfs-getcwd #:*root*
+   #:vfs-symlink #:vfs-remove #:vfs-lseek #:vfs-fstat #:vfs-realpath #:make-ram-node))
 (in-package #:finch/vfs)
 
 (define-condition vfs-error (error)

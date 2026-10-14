@@ -48,10 +48,97 @@
 (defun mount-volume (v path)
   (vfs:vfs-mount (apfs-vnode v +root-dir-ino-num+) path))
 
-(defun mount-volumes ()
+(defun mount-volumes (&key writable)
   (loop for vol in (iokit:find-entries 'apple-apfs-volume)
         for v = (apfs-volume vol)
         for path = (format nil "/Volumes/~a" (volume-name v))
         do (vfs:vfs-mkdir path #o755)
-           (mount-volume v path)
+           (if writable
+               (let ((media vol))
+                 (mount-writable (lambda (at length) (iokit:media-read media at length))
+                                 (lambda (at octets) (iokit:media-write media at octets))
+                                 path))
+               (mount-volume v path))
         collect path))
+
+(defclass apfs-wvnode (vfs:vnode)
+  ((mount :initarg :mount :reader vnode-mount)))
+
+(defvar *wvnodes* (make-hash-table :test 'equal))
+
+(defun wvnode (w id)
+  (or (gethash (cons w id) *wvnodes*)
+      (setf (gethash (cons w id) *wvnodes*)
+            (make-instance 'apfs-wvnode :mount w :id id
+                                        :type (case (logand (inode-field w id 80 2) #o170000)
+                                                (#o040000 :vdir) (#o120000 :vlnk) (#o100000 :vreg) (t :vchr))))))
+
+(defmacro with-commit ((w vnode) &body body)
+  `(let ((,w (vnode-mount ,vnode)))
+     (prog1 (progn ,@body) (wcommit ,w))))
+
+(defmethod vfs:vnop-lookup ((dir apfs-wvnode) name)
+  (let* ((w (vnode-mount dir)) (id (wlookup w (vfs:vnode-id dir) name)))
+    (and id (wvnode w id))))
+
+(defmethod vfs:vnop-readdir ((dir apfs-wvnode))
+  (let ((w (vnode-mount dir)))
+    (mapcar (lambda (e) (cons (car e) (wvnode w (cdr e)))) (wentries w (vfs:vnode-id dir)))))
+
+(defmethod vfs:vnop-read ((n apfs-wvnode) offset count)
+  (wread (vnode-mount n) (vfs:vnode-id n) offset (+ offset count)))
+
+(defmethod vfs:vnop-write ((n apfs-wvnode) offset octets)
+  (with-commit (w n) (wwrite w (vfs:vnode-id n) offset octets)))
+
+(defmethod vfs:vnop-truncate ((n apfs-wvnode) size)
+  (unless (eq (vfs:vnode-type n) :vreg) (vfs:fail :einval))
+  (with-commit (w n) (wtruncate w (vfs:vnode-id n) size)))
+
+(defun wreadlink (w id)
+  (let ((v (gethash (octets (j-key id +apfs-type-xattr+) (le 21 2) (c-octets "com.apple.fs.symlink")) (wvolume-records w))))
+    (unless v (vfs:fail :einval))
+    (c-string v 4 (+ 4 (u16 v 2)))))
+
+(defmethod vfs:vnop-readlink ((n apfs-wvnode)) (wreadlink (vnode-mount n) (vfs:vnode-id n)))
+
+(defmethod vfs:vnop-getattr ((n apfs-wvnode))
+  (let* ((w (vnode-mount n)) (id (vfs:vnode-id n))
+         (dir (eq (vfs:vnode-type n) :vdir))
+         (links (if dir (+ 2 (inode-field w id 56 4)) (inode-field w id 56 4))))
+    (vfs:make-vattr :mode (inode-field w id 80 2) :uid (inode-field w id 72 4) :gid (inode-field w id 76 4) :nlink links
+                    :size (cond (dir (* 32 links))
+                                ((eq (vfs:vnode-type n) :vlnk) (length (sb-ext:string-to-octets (wreadlink w id) :external-format :utf-8)))
+                                (t (let ((d (inode-dstream w id))) (if d (u64 d 0) 0))))
+                    :mtime (inode-field w id 24 8))))
+
+(defmethod vfs:vnop-create ((dir apfs-wvnode) name mode)
+  (with-commit (w dir) (wvnode w (wcreate w (vfs:vnode-id dir) name :file :mode mode))))
+
+(defmethod vfs:vnop-mkdir ((dir apfs-wvnode) name mode)
+  (with-commit (w dir) (wvnode w (wcreate w (vfs:vnode-id dir) name :dir :mode mode))))
+
+(defmethod vfs:vnop-symlink ((dir apfs-wvnode) name target)
+  (with-commit (w dir) (wvnode w (wcreate w (vfs:vnode-id dir) name :symlink :mode #o755 :target target))))
+
+(defmethod vfs:vnop-remove ((dir apfs-wvnode) name vnode)
+  (with-commit (w dir) (wremove w (vfs:vnode-id dir) name (vfs:vnode-id vnode)) (remhash (cons w (vfs:vnode-id vnode)) *wvnodes*)))
+
+(defmethod vfs:vnop-rmdir ((dir apfs-wvnode) name vnode)
+  (with-commit (w dir) (wremove w (vfs:vnode-id dir) name (vfs:vnode-id vnode)) (remhash (cons w (vfs:vnode-id vnode)) *wvnodes*)))
+
+(defmethod vfs:vnop-rename ((from apfs-wvnode) from-name vnode (to apfs-wvnode) to-name)
+  (unless (eq (vnode-mount from) (vnode-mount to)) (vfs:fail :exdev))
+  (with-commit (w from) (wrename w (vfs:vnode-id from) from-name (vfs:vnode-id vnode) (vfs:vnode-id to) to-name)))
+
+(defmethod vfs:vnop-setattr ((n apfs-wvnode) &key mode uid gid)
+  (with-commit (w n)
+    (update-inode w (vfs:vnode-id n)
+                  :mode (and mode (logior (logand (inode-field w (vfs:vnode-id n) 80 2) #o170000) (logand mode #o7777)))
+                  :owner (and uid (/= uid -1) uid) :group (and gid (/= gid -1) gid))
+    0))
+
+(defun mount-writable (read write path)
+  (let ((w (make-wvolume (open-writable read write))))
+    (vfs:vfs-mount (wvnode w +root-dir-ino-num+) path)
+    w))

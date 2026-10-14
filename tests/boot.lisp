@@ -271,6 +271,33 @@
              (is (search "read-only file system" (ask "(handler-case (with-open-file (s \"/Volumes/finch/new.txt\" :direction :output) (write-line \"x\" s)) (error (e) (string-downcase (princ-to-string e))))"))))
         (image:finish c 5)))))
 
+(test apfs-writes-on-finch
+  (let* ((disk (merge-pathnames "apfs-write-boot.img" (finch-file "build/")))
+         (c (progn (uiop:copy-file (newfs-image) disk) (image:bare-console :disks (list disk)))))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 60)
+             (ask "(iokit:start-iokit)")
+             (is (search "(\"/Volumes/finch\")" (ask "(finch/apfs:mount-volumes :writable t)")))
+             (ask "(with-open-file (s \"/Volumes/finch/from-finch.txt\" :direction :output) (write-line \"written on bare finch\" s))")
+             (ask "(ensure-directories-exist \"/Volumes/finch/made/by/finch/\")")
+             (ask "(with-open-file (s \"/Volumes/finch/made/by/finch/lines.txt\" :direction :output) (dotimes (i 3000) (format s \"line ~d~%\" i)))")
+             (ask "(delete-file \"/Volumes/finch/many/f7\")")
+             (ask "(rename-file \"/Volumes/finch/hello.txt\" \"/Volumes/finch/made/hello.txt\")")
+             (is (search "\"written on bare finch\"" (ask "(with-open-file (s \"/Volumes/finch/from-finch.txt\") (read-line s))")))
+             (image:send c "(sb-ext:exit)")
+             (image:expect c "exit(0)" :timeout 30))
+        (image:finish c 5))
+      (let* ((v (first (apfs:container-volumes (apfs:open-container (apfs:file-device disk)))))
+             (read (lambda (path) (map 'string #'code-char (apfs:read-file v (apfs:lookup v path))))))
+        (is (equal (format nil "written on bare finch~%") (funcall read "/from-finch.txt")))
+        (is (equal (with-output-to-string (s) (dotimes (i 3000) (format s "line ~d~%" i))) (funcall read "/made/by/finch/lines.txt")))
+        (is (equal (format nil "hello from finch~%") (funcall read "/made/hello.txt")))
+        (is (null (apfs:lookup v "/many/f7")))
+        (is (null (apfs:lookup v "/hello.txt")))
+        (is (= 299 (length (apfs:directory-entries v (apfs:lookup v "/many")))))))))
+
 (test xnu-checked-suites-pass-on-finch
   (let ((c (image:bare-console)))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 300)))

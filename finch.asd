@@ -92,7 +92,7 @@
   :depends-on (#:uiop #:finch/iokit #:finch/vfs)
   :serial t
   :pathname "src/apfs/"
-  :components ((:file "apfs") (:file "iokit") (:file "vfs") (:file "newfs")))
+  :components ((:file "apfs") (:file "iokit") (:file "newfs") (:file "transaction") (:file "write") (:file "vfs")))
 
 (asdf:defsystem #:finch/kernel
   :description "The kernel, run as pid 1"

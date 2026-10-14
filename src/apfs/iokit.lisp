@@ -17,7 +17,9 @@
 (defmethod iokit:bsd-client-class ((m apple-apfs-volume)) 'apple-apfs-volume-bsd-client)
 
 (iokit:add-personality "IOClass" "AppleAPFSContainerScheme" "IOProviderClass" "IOMedia"
-                       "IOPropertyMatch" (list (iokit:personality "Content Hint" +apfs-partition+)) "IOProbeScore" 2000)
+                       "IOPropertyMatch" (list (iokit:personality "Content Hint" +apfs-partition+)
+                                                              (iokit:personality "Whole" t))
+                       "IOProbeScore" 2000)
 (iokit:add-personality "IOClass" "AppleAPFSContainer" "IOProviderClass" "IOMedia"
                        "IOPropertyMatch" (list (iokit:personality "Content Hint" +apfs-container+)) "IOProbeScore" 1000)
 
@@ -28,7 +30,8 @@
   (loop for (k v) on kv by #'cddr do (iokit:set-property entry k v)))
 
 (defmethod iokit:start ((scheme apple-apfs-container-scheme) (partition iokit:io-media))
-  (let ((c (handler-case (open-container (media-device partition)) (apfs-error () nil))))
+  (let ((c (and (not (typep partition 'apple-apfs-media))
+                (handler-case (open-container (media-device partition)) (apfs-error () nil)))))
     (when c
       (let* ((unit (iokit:next-bsd-unit))
              (media (make-instance 'apple-apfs-media :device (iokit:media-device partition) :base (iokit:media-base partition))))
