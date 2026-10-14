@@ -259,6 +259,16 @@
                                            "-append" (format nil "console=ttyS0 quiet ~a" boot-args)))
                                  :input :stream :output :stream :error-output :output)))
 
+(defun cpu-states ()
+  (ignore-errors
+   (let ((r (qmp "human-monitor-command" (finch/qmp:dict "command-line" "info registers -a"))))
+     (when (stringp r)
+       (with-output-to-string (out)
+         (with-input-from-string (s r)
+           (loop for line = (read-line s nil) while line
+                 when (or (search "CPU#" line) (search "RIP=" line) (search "RSP=" line) (search "RAX=" line))
+                   do (write-line line out))))))))
+
 (defun expect (console text &key (timeout 30))
   (let* ((out (uiop:process-info-output (console-process console)))
          (deadline (+ (get-internal-real-time) (* timeout internal-time-units-per-second))))
@@ -269,7 +279,7 @@
             (setf (console-text console) (subseq (console-text console) (+ at (length text))))
             (return seen))))
       (when (> (get-internal-real-time) deadline)
-        (error "console: no ~s after ~a s, saw ~s" text timeout (console-text console)))
+        (error "console: no ~s after ~a s, saw ~s~@[~%cpus:~%~a~]" text timeout (console-text console) (cpu-states)))
       (if (listen out)
           (let ((c (read-char out nil)))
             (unless c (error "console: closed, saw ~s" (console-text console)))

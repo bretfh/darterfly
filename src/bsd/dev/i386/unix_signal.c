@@ -2,6 +2,7 @@
 #include "../../../osfmk/i386/seg.h"
 #include "../../kern/kern_sig.h"
 #include "../../../osfmk/kern/thread.h"
+#include "../../../osfmk/vm/vm.h"
 
 typedef struct {
   uint8_t fxsave[512];
@@ -18,6 +19,12 @@ typedef struct {
 int sendsig(x86_saved_state64_t *regs, int sig, int code, uint64_t addr) {
   if (!sigtramp) return 0;
   uint64_t sp = (regs->rsp - 128 - sizeof(user_ucontext)) & ~15ull;
+  uint64_t low = ((sp - sizeof(user_siginfo)) & ~15ull) - 8;
+  for (uint64_t page = low & ~4095ull; page < regs->rsp; page += 4096)
+    if (!vm_fault(page, 2)) {
+      kprintf("sendsig: thread 0x%lx has no stack at 0x%lx for signal %d\n", current_thread()->thread_id, page, sig);
+      thread_terminate_self();
+    }
   user_ucontext *uc = (user_ucontext *)sp;
   sp = (sp - sizeof(user_siginfo)) & ~15ull;
   user_siginfo *si = (user_siginfo *)sp;

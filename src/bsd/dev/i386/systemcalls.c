@@ -75,6 +75,10 @@ void unix_syscall(x86_saved_state64_t *regs) {
     return ok(regs, t->thread_id);
   }
   case 361:
+    if (d) {
+      *(volatile uint32_t *)d = 1;
+      thread_wakeup(d, 1);
+    }
     thread_terminate_self();
   case 372: return ok(regs, current_thread()->thread_id);
   case 515: {

@@ -84,9 +84,7 @@ int pthread_create(pthread_t *out, const pthread_attr_t *attr, void *(*start)(vo
 void pthread_exit(void *value) {
   pthread_t self = pthread_self();
   self->retval = value;
-  self->done = 1;
-  ulock_wake(&self->done, 1);
-  __syscall(SYS_bsdthread_terminate, 0, 0, 0, 0, 0, 0);
+  __syscall(SYS_bsdthread_terminate, 0, 0, 0, (long)&self->done, 0, 0);
   for (;;) {}
 }
 
