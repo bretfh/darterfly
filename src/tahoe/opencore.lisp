@@ -4,7 +4,7 @@
    #:*home* #:*boot-args* #:*csr-active-config* #:*product*
    #:config #:esp
    #:boot #:screendump #:click #:*screen* #:send-key #:send-text #:query-status #:quit #:system-powerdown
-   #:serial-log #:*user* #:*password* #:authorize #:guest #:install-rea #:transactions #:commits #:ports #:bsd #:bootstrap #:events #:media))
+   #:serial-log #:*user* #:*password* #:authorize #:guest #:install-rea #:transactions #:commits #:ports #:bsd #:bootstrap #:events #:media #:apfs-check))
 (in-package #:finch/tahoe)
 
 (defvar *home*

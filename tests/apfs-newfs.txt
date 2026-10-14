@@ -1,0 +1,20 @@
+md5 c96fd41d76c621a5f794dc28743f3881
+** Checking the container superblock.
+   Checking the checkpoint with transaction ID 1.
+** Checking the space manager.
+** Checking the space manager free queue trees.
+** Checking the object map.
+** Checking volume /dev/rdisk8s1.
+** Checking the APFS volume superblock.
+   The volume finch was formatted by finch newfs and last modified by .
+** Checking the object map.
+** Checking the snapshot metadata tree.
+** Checking the snapshot metadata.
+** Checking the fsroot tree.
+** Checking the extent ref tree.
+** Verifying volume object map space.
+** The volume /dev/rdisk8s1 with UUID 00000000-0000-0000-0000-000000000002 appears to be OK.
+** Verifying allocated space.
+** The container /dev/disk7 appears to be OK.
+--- volume disk8s1
+.|Directory|755|64|2|2|501|20||-

@@ -53,3 +53,27 @@
     (is (= 300 (length many)))
     (is (equal "file 7" (string-right-trim '(#\Newline) (map 'string #'code-char (apfs:read-file v (apfs:lookup v "/many/f7"))))))
     (is (equal "line 12345 of a" (map 'string #'code-char (apfs:read-file v (apfs:lookup v "/big.txt") :start (* 12345 47) :end (+ (* 12345 47) 15)))))))
+
+(defun image-md5 (path)
+  (with-open-file (s path :element-type '(unsigned-byte 8))
+    (string-downcase (format nil "~{~2,'0x~}" (coerce (sb-md5:md5sum-stream s) 'list)))))
+
+(defun newfs-image ()
+  (apfs:newfs (merge-pathnames "newfs.img" (finch-file "build/")) :volume-name "finch"))
+
+(defun record-newfs ()
+  (let* ((image (newfs-image))
+         (verdict (tahoe:apfs-check image)))
+    (with-open-file (s (finch-file "tests/apfs-newfs.txt") :direction :output :if-exists :supersede)
+      (format s "md5 ~a~%~a" (image-md5 image) verdict))
+    verdict))
+
+(test newfs-was-judged-by-tahoe
+  (let* ((lines (uiop:read-file-lines (finch-file "tests/apfs-newfs.txt")))
+         (image (newfs-image)))
+    (is (equal (first lines) (format nil "md5 ~a" (image-md5 image))))
+    (is (find "** The container /dev/disk7 appears to be OK." lines :test #'search))
+    (is (find ".|Directory|755|64|2|2|501|20||-" lines :test #'string=))
+    (let ((v (first (apfs:container-volumes (apfs:open-container (apfs:file-device image))))))
+      (is (equal "finch" (apfs:volume-name v)))
+      (is (= 2 (apfs:lookup v "/"))))))

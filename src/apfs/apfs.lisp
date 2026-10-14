@@ -9,7 +9,7 @@
    #:inode-id #:inode-parent-id #:inode-mode #:inode-nlink #:inode-owner #:inode-group
    #:inode-size #:inode-name #:inode-mod-time #:inode-private-id
    #:entry-name #:entry-file-id #:entry-type #:volume-index #:volume-formatted-by #:volume-incompatible-features
-   #:container-size #:mount-volume #:mount-volumes))
+   #:container-size #:mount-volume #:mount-volumes #:newfs))
 (in-package #:finch/apfs)
 
 (define-condition apfs-error (error)

@@ -169,5 +169,10 @@
     (fetch "/tmp/finch.img.gz" (asdf:system-relative-pathname :finch "tests/apfs-disk.img.gz"))
     (fetch "/tmp/finch-files.txt" (asdf:system-relative-pathname :finch "tests/apfs-files.txt"))))
 
+(defun apfs-check (image)
+  (scp (asdf:system-relative-pathname :finch/tahoe "src/tahoe/apfs-check.sh") "apfs-check.sh")
+  (scp image "/tmp/finch-check.img")
+  (guest "sh apfs-check.sh"))
+
 (defun events ()
   (oracle "events" "clang -w -o events events.c -framework ApplicationServices && ./events" "events.c"))
