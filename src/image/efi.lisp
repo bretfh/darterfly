@@ -179,5 +179,10 @@
           "-qmp" (format nil "unix:~a,server=on,wait=off" (qmp-path))
           "-display" "none" "-serial" "stdio" "-no-reboot"))))
 
+(defun bare-boot (&key (boot-args "") disks)
+  (uiop:run-program (substitute "mon:stdio" "stdio" (bare-qemu (esp :boot-args boot-args) disks) :test #'equal)
+                    :input :interactive :output :interactive :error-output :interactive :ignore-error-status t)
+  (values))
+
 (defun bare-console (&key (boot-args "") disks)
   (console :args (bare-qemu (esp :boot-args boot-args) disks)))

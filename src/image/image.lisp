@@ -2,7 +2,7 @@
   (:use #:cl)
   (:export #:core #:image #:boot #:check-boot #:write-cpio #:*build*
    #:console #:expect #:send #:transcript #:finish #:screendump #:pixel #:monitor #:pointer #:qmp #:send-keys
-   #:boot-efi #:mach-kernel #:esp #:bare-console #:send-char))
+   #:boot-efi #:mach-kernel #:esp #:bare-console #:bare-boot #:send-char))
 (in-package #:finch/image)
 
 (defvar *build* (asdf:system-relative-pathname :finch "build/"))
