@@ -18,5 +18,6 @@ to look or behave like macOS. Icons and fonts are GNOME's Adwaita.
   make repl
   make check   # loads with no warnings from finch's own code
   make test    # the whole suite, including boots of the image under QEMU
-  make bare    # build the image and boot it
+  make bare    # build the image and boot it to a REPL on the terminal
+  make desktop # the desktop in a window, on build/finch-hd.img, which keeps your files
 #+end_src

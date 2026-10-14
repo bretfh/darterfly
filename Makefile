@@ -1,4 +1,4 @@
-.PHONY: repl check test tahoe image boot bare
+.PHONY: repl check test tahoe image boot bare desktop
 
 EVAL ?= (finch/tahoe:boot)
 export EVAL
@@ -27,3 +27,6 @@ boot: image
 
 bare:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :finch/image)" --eval "(finch/image:bare-boot)"'
+
+desktop:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :finch/image)" --eval "(finch/image:desktop)"'

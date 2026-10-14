@@ -2,7 +2,7 @@
   (:use #:cl)
   (:export #:core #:image #:boot #:check-boot #:write-cpio #:*build*
    #:console #:expect #:send #:transcript #:finish #:screendump #:pixel #:monitor #:pointer #:qmp #:send-keys
-   #:boot-efi #:mach-kernel #:esp #:bare-console #:bare-boot #:send-char #:*screen-size*))
+   #:boot-efi #:mach-kernel #:esp #:bare-console #:bare-boot #:send-char #:*screen-size* #:update-root #:desktop))
 (in-package #:finch/image)
 
 (defvar *build* (asdf:system-relative-pathname :finch "build/"))
@@ -206,6 +206,7 @@
   (case char
     (#\( "9") (#\) "0") (#\+ "equal") (#\* "8") (#\" "apostrophe") (#\Space "spc")
     (#\Newline "ret") (#\- "minus") (#\= "equal") (#\. "dot") (#\/ "slash")
+    (#\: "semicolon") (#\; "semicolon") (#\' "apostrophe")
     (t (string (char-downcase char)))))
 
 (defun send-keys (string)

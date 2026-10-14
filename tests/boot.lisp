@@ -306,7 +306,7 @@
 
 (test apfs-root-on-finch
   (let* ((disk (merge-pathnames "root-keep.img" (finch-file "build/")))
-         (c (image:bare-console :root disk)))
+         (c (progn (uiop:delete-file-if-exists disk) (image:bare-console :root disk))))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
       (unwind-protect
            (progn

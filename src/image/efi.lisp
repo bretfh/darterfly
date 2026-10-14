@@ -158,10 +158,33 @@
                     (sort (remove-duplicates dirs :test #'string=) #'< :key (lambda (d) (count #\/ d))))
             files)))
 
-(defun root-disk (&optional (path (build-path "root.img")))
-  (finch/apfs:newfs path :size (* 128 1048576) :volume-name "finch HD" :entries (root-entries)
+(defun root-disk (&optional (path (build-path "root.img")) (size (* 128 1048576)))
+  (finch/apfs:newfs path :size size :volume-name "finch HD" :entries (root-entries)
                          :container-uuid "F1C40000-0000-4000-8000-000000000001"
                          :volume-uuid "F1C40000-0000-4000-8000-000000000002"))
+
+(defun same-content-p (path octets)
+  (let ((attr (ignore-errors (finch/vfs:vfs-stat path))))
+    (and attr (= (finch/vfs:vattr-size attr) (length octets))
+         (let ((fd (finch/vfs:vfs-open path (list :access :rdonly) 0)))
+           (unwind-protect (equalp (finch/vfs:vfs-read fd (length octets)) octets)
+             (finch/vfs:vfs-close fd))))))
+
+(defun update-root (path &optional (entries (root-entries)))
+  (let ((finch/vfs:*root* nil) (finch/vfs:*mounts* nil))
+    (finch/vfs:vfs-mount (finch/vfs:make-ram-node :vdir #o755) "/")
+    (finch/vfs:vfs-mkdir "/root" #o755)
+    (multiple-value-bind (read write) (finch/apfs:file-store path)
+      (finch/apfs:mount-writable read write "/root"))
+    (dolist (entry entries path)
+      (let ((at (format nil "/root/~a" (second entry))))
+        (ecase (first entry)
+          (:dir (unless (ignore-errors (finch/vfs:vfs-stat at)) (finch/vfs:vfs-mkdir at #o755)))
+          (:file (destructuring-bind (octets &optional (mode #o644)) (cddr entry)
+                   (unless (same-content-p at octets)
+                     (let ((fd (finch/vfs:vfs-open at (list :access :wronly :creat t :trunc t) (logand mode #o7777))))
+                       (unwind-protect (finch/vfs:vfs-write fd octets)
+                         (finch/vfs:vfs-close fd)))))))))))
 
 (defun esp (&key (boot-args ""))
   (let ((root (build-path "esp/")))
@@ -215,6 +238,7 @@
 (defun root-drive (root)
   (cond ((null root) nil)
         ((eq root t) (cons :snapshot (root-disk)))
+        ((probe-file root) (cons :keep (update-root root)))
         (t (cons :keep (root-disk root)))))
 
 (defun bare-boot (&key (boot-args "") disks (root t))
@@ -222,6 +246,18 @@
                                 :test #'equal)
                     :input :interactive :output :interactive :error-output :interactive :ignore-error-status t)
   (values))
+
+(defun desktop (&key (disk (build-path "finch-hd.img")))
+  (let ((root (if (probe-file disk) (update-root disk) (root-disk disk (* 1024 1048576))))
+        (esp (build-path "desktop/esp/")))
+    (uiop:delete-directory-tree esp :validate t :if-does-not-exist :ignore)
+    (run "cp" "-a" (uiop:native-namestring (esp :boot-args (root-boot-args "launchd" t)))
+         (uiop:native-namestring (ensure-directories-exist (build-path "desktop/"))))
+    (uiop:run-program (substitute "gtk,zoom-to-fit=off" "none"
+                                  (bare-qemu esp nil (cons :keep root))
+                                  :test #'equal)
+                      :output :interactive :error-output :interactive :ignore-error-status t)
+    (values)))
 
 (defun bare-console (&key (boot-args "") disks (root t) forwards)
   (console :args (bare-qemu (esp :boot-args (root-boot-args boot-args root)) disks (root-drive root) forwards)))

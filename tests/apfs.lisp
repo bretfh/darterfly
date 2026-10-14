@@ -168,3 +168,18 @@
       (is (null (entry "./many/f1")))
       (is (null (entry "./gone")))
       (is (entry "./many/f51")))))
+
+(test update-root-keeps-what-is-not-the-system
+  (let ((disk (merge-pathnames "update-root.img" (finch-file "build/"))))
+    (apfs:newfs disk :volume-name "finch HD"
+                     :entries (list '(:dir "Users") '(:dir "System")
+                                    (list :file "Users/notes.txt" (text "mine")) (list :file "System/name" (text "old"))))
+    (image:update-root disk (list '(:dir "System") '(:dir "System/Library")
+                                  (list :file "System/name" (text "new system"))
+                                  (list :file "System/Library/added" (text "added") #o100755)))
+    (let* ((v (first (apfs:container-volumes (apfs:open-container (apfs:file-device disk)))))
+           (read (lambda (path) (map 'string #'code-char (apfs:read-file v (apfs:lookup v path))))))
+      (is (equal "mine" (funcall read "/Users/notes.txt")))
+      (is (equal "new system" (funcall read "/System/name")))
+      (is (equal "added" (funcall read "/System/Library/added")))
+      (is (= #o100755 (apfs:inode-mode (apfs:inode v (apfs:lookup v "/System/Library/added"))))))))
