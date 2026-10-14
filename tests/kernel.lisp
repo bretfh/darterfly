@@ -88,7 +88,7 @@
            (is (= #xff2e5c8f (image:pixel (screen-until (lambda (s) (= #xff2e5c8f (image:pixel s 550 400)))) 550 400))
                "close takes the window away")
            (image:send c "(run \"/bin/launchctl\" \"list\")")
-           (is (search "com.apple.WindowServer" (image:expect c "# ")))
+           (is (search "finch.windowserver" (image:expect c "# ")))
            (image:pointer 512 712)
            (image:pointer 512 712 t)
            (image:pointer 512 712 nil)

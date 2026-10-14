@@ -23,7 +23,7 @@
             day (if (zerop (mod h 12)) 12 (mod h 12)) m (if (< h 12) "AM" "PM"))))
 
 (bsd:define-program "loginwindow" (argv envp)
-  (dolist (label '("com.apple.Finder" "com.apple.SystemUIServer.agent" "com.apple.Dock.agent"))
+  (dolist (label '("finch.finder" "finch.systemuiserver" "finch.dock"))
     (finch/launchd:kickstart label))
   (loop (bsd:pause)))
 

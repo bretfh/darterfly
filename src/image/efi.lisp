@@ -140,11 +140,9 @@
                             :collect (list :file (concatenate 'string "finch/" f) (octets (source f)))))))
 
 (defun desktop-entries ()
-  (when (probe-file (asdf:system-relative-pathname :finch "tahoe/system/System/Library/LaunchDaemons/"))
-    (append (loop :for (path program) :in *programs*
-                  :collect (list :file path (text (format nil "#!finch ~a~%" program)) #o755))
-            (list (list :file "Library/LaunchDaemons/finch.gui.plist" (gui-job)))
-            (tahoe-daemons) (fonts) (icons) (tahoe-resources))))
+  (append (loop :for (path program) :in *programs*
+                :collect (list :file path (text (format nil "#!finch ~a~%" program)) #o755))
+          (desktop-jobs) (fonts) (icons)))
 
 (defun root-entries ()
   (let ((files (append (loop :for f :in *ramdisk-files*

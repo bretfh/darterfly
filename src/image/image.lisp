@@ -101,15 +101,35 @@
     ("System/Library/CoreServices/Finder.app/Contents/MacOS/Finder" "Finder")
     ("usr/libexec/finch-gui" "finch-gui")))
 
+(defun dict (&rest pairs)
+  (let ((table (make-hash-table :test 'equal)))
+    (loop :for (key value) :on pairs :by #'cddr :do (setf (gethash key table) value))
+    table))
+
+(defun job (label &rest pairs)
+  (list :file (format nil "Library/LaunchDaemons/~a.plist" label)
+        (text (with-output-to-string (s) (finch/plist:write-plist (apply #'dict "Label" label pairs) s)))))
+
 (defun console-job ()
-  (let ((job (make-hash-table :test 'equal)))
-    (setf (gethash "Label" job) "finch.console"
-          (gethash "ProgramArguments" job) (vector "/bin/sh")
-          (gethash "StandardInPath" job) "/dev/console"
-          (gethash "StandardOutPath" job) "/dev/console"
-          (gethash "StandardErrorPath" job) "/dev/console"
-          (gethash "KeepAlive" job) t)
-    (text (with-output-to-string (s) (finch/plist:write-plist job s)))))
+  (job "finch.console" "ProgramArguments" (vector "/bin/sh") "KeepAlive" t
+       "StandardInPath" "/dev/console" "StandardOutPath" "/dev/console" "StandardErrorPath" "/dev/console"))
+
+(defun desktop-jobs ()
+  (let ((hidden (dict "HideUntilCheckIn" t))
+        (on-demand (dict "AfterInitialDemand" t "SuccessfulExit" nil)))
+    (list (job "finch.gui" "ProgramArguments" (vector "/usr/libexec/finch-gui") "RunAtLoad" t)
+          (job "finch.windowserver"
+               "ProgramArguments" (vector "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer")
+               "MachServices" (dict "com.apple.windowserver" t "com.apple.windowserver.active" hidden
+                                    "com.apple.CARenderServer" hidden))
+          (job "finch.loginwindow"
+               "ProgramArguments" (vector "/System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow")
+               "MachServices" (dict "com.apple.loginwindow" t))
+          (job "finch.dock" "Program" "/System/Library/CoreServices/Dock.app/Contents/MacOS/Dock" "KeepAlive" on-demand)
+          (job "finch.systemuiserver" "Program" "/System/Library/CoreServices/SystemUIServer.app/Contents/MacOS/SystemUIServer"
+               "KeepAlive" on-demand)
+          (job "finch.finder" "Program" "/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder"
+               "KeepAlive" on-demand "ThrottleInterval" 1))))
 
 (defun fonts ()
   (let ((dir (format nil "~a/share/fonts/truetype/" (uiop:getenv "GUIX_ENVIRONMENT"))))
@@ -137,38 +157,6 @@
                                 :error-output *error-output*)
           :collect (list :file (format nil "usr/share/icons/Adwaita/~a/~a.png" kind name) (octets png)))))
 
-(defparameter *tahoe-resources*
-  '("System/Applications/Utilities/Terminal.app/Contents/Resources/Terminal.icns"
-    "System/Library/CoreServices/Finder.app/Contents/Resources/Finder.icns"
-    "System/Applications/TextEdit.app/Contents/Resources/AppIcon.icns"
-    "System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/ApplicationsFolderIcon.icns"
-    "System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericApplicationIcon.icns"
-    "System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericDocumentIcon.icns"
-    "System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericFolderIcon.icns"
-    "System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/LibraryFolderIcon.icns"
-    "System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/SystemFolderIcon.icns"
-    "System/Library/Extensions/IOStorageFamily.kext/Contents/Resources/Internal.icns"))
-
-(defun tahoe-resources ()
-  (loop :for path :in *tahoe-resources*
-        :for file := (asdf:system-relative-pathname :finch (format nil "tahoe/system/~a" path))
-        :when (probe-file file)
-          :collect (list :file path (octets file))))
-
-(defun tahoe-daemons ()
-  (loop :for kind :in '("LaunchDaemons" "LaunchAgents")
-        :append (let ((dir (asdf:system-relative-pathname :finch (format nil "tahoe/system/System/Library/~a/" kind))))
-                  (loop :for file :in (directory (merge-pathnames "*.plist" dir))
-                        :collect (list :file (format nil "System/Library/~a/~a.plist" kind (pathname-name file))
-                                       (octets file))))))
-
-(defun gui-job ()
-  (let ((job (make-hash-table :test 'equal)))
-    (setf (gethash "Label" job) "finch.gui"
-          (gethash "ProgramArguments" job) (vector "/usr/libexec/finch-gui")
-          (gethash "RunAtLoad" job) t)
-    (text (with-output-to-string (s) (finch/plist:write-plist job s)))))
-
 (defun kexts ()
   (let ((dir (format nil "~a/lib/modules/" (uiop:getenv "GUIX_ENVIRONMENT"))))
     (loop :for release :in (directory (format nil "~a*/" dir))
@@ -185,14 +173,12 @@
          (list :char "dev/null" 1 3)
          (list :dir "proc") (list :dir "sys") (list :dir "tmp")
          (list :dir "System/Library/LaunchDaemons")
-         (list :file "Library/LaunchDaemons/finch.console.plist" (console-job))
-         (list :file "Library/LaunchDaemons/finch.gui.plist" (gui-job)))
+         (console-job))
    (loop :for (path program) :in *programs*
          :collect (list :file path (text (format nil "#!finch ~a~%" program)) #o100755))
-   (tahoe-daemons)
+   (desktop-jobs)
    (fonts)
-   (icons)
-   (tahoe-resources)))
+   (icons)))
 
 (defun image ()
   (let* ((core (core))
