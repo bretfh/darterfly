@@ -7,6 +7,11 @@
 (defconstant +ack+ 16)
 (defconstant +mss+ 1460)
 (defconstant +window+ 65535)
+(defconstant +cwnd-init-pkts+ 10)
+(defconstant +rexmtthresh+ 3)
+(defconstant +rtobase+ 1)
+(defconstant +rexmtmax+ 64)
+(defconstant +sndbuf+ 65536)
 
 (defvar *tcp-lock* (sb-thread:make-mutex :name "tcp"))
 (defvar *tcp-changed* (sb-thread:make-waitqueue))
@@ -19,7 +24,10 @@
   local-port remote-ip remote-port (state :closed)
   iss snd-una snd-nxt (snd-wnd +window+) irs rcv-nxt
   (unacked nil) (received (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0))
-  (eof nil) (reset nil) listener (closed-at nil) (out-of-order nil))
+  (eof nil) (reset nil) listener (closed-at nil) (out-of-order nil)
+  (snd-buffer (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0)) (snd-off 0)
+  (snd-cwnd (* +cwnd-init-pkts+ +mss+)) (snd-ssthresh +window+) snd-recover (dupacks 0) (bytes-acked 0)
+  srtt rttvar (rxtcur +rtobase+))
 
 (defstruct listener port (pending nil))
 
@@ -59,14 +67,88 @@
   (let ((c (make-connection :local-port dst-port :remote-ip src :remote-port src-port :rcv-nxt ack)))
     (send-segment c (logior +rst+ flags) seq)))
 
+(defun segment-end (s)
+  (seq+ (first s) (+ (length (third s)) (if (logtest (second s) (logior +syn+ +fin+)) 1 0))))
+
 (defun ack-up-to (c ack)
   (when (and (seq< (tcp-snd-una c) ack) (seq<= ack (tcp-snd-nxt c)))
-    (setf (tcp-snd-una c) ack
-          (tcp-unacked c) (remove-if (lambda (s) (seq<= (seq+ (first s) (+ (length (third s))
-                                                                             (if (logtest (second s) (logior +syn+ +fin+)) 1 0)))
-                                                        ack))
-                                     (tcp-unacked c)))
-    t))
+    (let ((acked (remove-if-not (lambda (s) (seq<= (segment-end s) ack)) (tcp-unacked c)))
+          (bytes (seq- ack (tcp-snd-una c))))
+      (setf (tcp-snd-una c) ack
+            (tcp-unacked c) (set-difference (tcp-unacked c) acked))
+      (let ((timed (find 0 acked :key #'fifth)))
+        (when timed (xmit-timer c (/ (- (get-internal-real-time) (fourth timed)) internal-time-units-per-second))))
+      bytes)))
+
+(defun xmit-timer (c rtt)
+  (if (tcp-srtt c)
+      (setf (tcp-rttvar c) (+ (* 3/4 (tcp-rttvar c)) (* 1/4 (abs (- (tcp-srtt c) rtt))))
+            (tcp-srtt c) (+ (* 7/8 (tcp-srtt c)) (* 1/8 rtt)))
+      (setf (tcp-srtt c) rtt (tcp-rttvar c) (/ rtt 2)))
+  (setf (tcp-rxtcur c) (min +rexmtmax+ (max +rtobase+ (+ (tcp-srtt c) (* 4 (tcp-rttvar c)))))))
+
+(defun flight-size (c) (seq- (tcp-snd-nxt c) (tcp-snd-una c)))
+
+(defun oldest-unacked (c)
+  (let ((best nil))
+    (dolist (s (tcp-unacked c) best)
+      (when (or (null best) (seq< (first s) (first best))) (setf best s)))))
+
+(defun retransmit (c s)
+  (setf (fourth s) (get-internal-real-time))
+  (incf (fifth s))
+  (send-segment c (second s) (first s) (third s) (if (logtest (second s) +syn+) (mss-option) #())))
+
+(defun halve-window (c)
+  (setf (tcp-snd-ssthresh c) (* +mss+ (max 2 (floor (min (tcp-snd-wnd c) (tcp-snd-cwnd c)) (* 2 +mss+))))))
+
+(defun ack-rcvd (c acked)
+  (setf (tcp-dupacks c) 0)
+  (cond ((tcp-snd-recover c)
+         (if (seq< (tcp-snd-una c) (tcp-snd-recover c))
+             (let ((next (oldest-unacked c)))
+               (when next (retransmit c next))
+               (setf (tcp-snd-cwnd c) (max +mss+ (+ (- (tcp-snd-cwnd c) acked) +mss+))))
+             (let ((ss (flight-size c)))
+               (setf (tcp-snd-recover c) nil (tcp-bytes-acked c) 0
+                     (tcp-snd-cwnd c) (if (< ss (tcp-snd-ssthresh c)) (+ (max ss +mss+) +mss+) (tcp-snd-ssthresh c))))))
+        ((>= (tcp-snd-cwnd c) (tcp-snd-ssthresh c))
+         (incf (tcp-bytes-acked c) acked)
+         (when (>= (tcp-bytes-acked c) (tcp-snd-cwnd c))
+           (decf (tcp-bytes-acked c) (tcp-snd-cwnd c))
+           (incf (tcp-snd-cwnd c) +mss+)))
+        (t (incf (tcp-snd-cwnd c) (min acked +mss+)))))
+
+(defun dupack-rcvd (c)
+  (incf (tcp-dupacks c))
+  (cond ((tcp-snd-recover c) (incf (tcp-snd-cwnd c) +mss+))
+        ((= (tcp-dupacks c) +rexmtthresh+)
+         (halve-window c)
+         (setf (tcp-snd-recover c) (tcp-snd-nxt c))
+         (let ((s (oldest-unacked c))) (when s (retransmit c s)))
+         (setf (tcp-snd-cwnd c) (+ (tcp-snd-ssthresh c) (* +rexmtthresh+ +mss+))))))
+
+(defun after-timeout (c)
+  (halve-window c)
+  (setf (tcp-snd-cwnd c) +mss+ (tcp-dupacks c) 0 (tcp-bytes-acked c) 0
+        (tcp-snd-recover c) (tcp-snd-nxt c)
+        (tcp-rxtcur c) (min +rexmtmax+ (* 2 (tcp-rxtcur c)))))
+
+(defun unsent (c) (- (length (tcp-snd-buffer c)) (tcp-snd-off c)))
+
+(defun tcp-output (c)
+  (loop for size = (min +mss+ (unsent c))
+        while (and (plusp size)
+                   (member (tcp-state c) '(:established :close-wait))
+                   (or (zerop (flight-size c))
+                       (<= (+ (flight-size c) size) (min (tcp-snd-cwnd c) (max +mss+ (tcp-snd-wnd c))))))
+        do (let ((start (tcp-snd-off c)))
+             (incf (tcp-snd-off c) size)
+             (queue-segment c (logior +ack+ +psh+) (subseq (tcp-snd-buffer c) start (+ start size)))))
+  (let ((buffer (tcp-snd-buffer c)) (off (tcp-snd-off c)))
+    (when (or (zerop (unsent c)) (> off +sndbuf+))
+      (replace buffer buffer :start2 off)
+      (setf (fill-pointer buffer) (- (length buffer) off) (tcp-snd-off c) 0))))
 
 (defun all-acked-p (c) (= (tcp-snd-una c) (tcp-snd-nxt c)))
 
@@ -101,7 +183,11 @@
              (send-segment c +ack+ (tcp-snd-nxt c))))
           (t
            (when (logtest flags +ack+)
-             (ack-up-to c ack)
+             (let ((acked (ack-up-to c ack)))
+               (cond (acked (unless (eq (tcp-state c) :syn-received) (ack-rcvd c acked)))
+                     ((and (= ack (tcp-snd-una c)) (zerop (length data)) (not (logtest flags (logior +syn+ +fin+)))
+                           (= window (tcp-snd-wnd c)) (tcp-unacked c))
+                      (dupack-rcvd c))))
              (setf (tcp-snd-wnd c) window)
              (when (and (eq (tcp-state c) :syn-received) (all-acked-p c))
                (setf (tcp-state c) :established)
@@ -113,7 +199,8 @@
                  (:last-ack (setf (tcp-state c) :closed) (remhash key *connections*)))))
            (when (or (plusp (length data)) (logtest flags +fin+))
              (receive-in-order c seq data (logtest flags +fin+))
-             (send-segment c +ack+ (tcp-snd-nxt c))))))
+             (send-segment c +ack+ (tcp-snd-nxt c)))
+           (tcp-output c))))
       (sb-thread:condition-broadcast *tcp-changed*))))
 
 (defun receive-in-order (c seq data fin)
@@ -151,13 +238,11 @@
     (sb-thread:with-recursive-lock (*tcp-lock*)
       (let ((now (get-internal-real-time)) (dead nil))
         (maphash (lambda (key c)
-                   (dolist (s (tcp-unacked c))
-                     (when (> (- now (fourth s)) (* 1 internal-time-units-per-second))
+                   (let ((s (oldest-unacked c)))
+                     (when (and s (> (- now (fourth s)) (* (tcp-rxtcur c) internal-time-units-per-second)))
                        (if (> (fifth s) 8)
                            (progn (setf (tcp-reset c) t (tcp-state c) :closed) (push key dead))
-                           (progn (setf (fourth s) now) (incf (fifth s))
-                                  (send-segment c (second s) (first s) (third s)
-                                                (if (logtest (second s) +syn+) (mss-option) #()))))))
+                           (progn (after-timeout c) (retransmit c s)))))
                    (when (and (eq (tcp-state c) :time-wait)
                               (> (- now (tcp-closed-at c)) (* 2 internal-time-units-per-second)))
                      (push key dead)))
@@ -210,10 +295,12 @@
 (defun tcp-send (c data)
   (let ((data (coerce data '(simple-array (unsigned-byte 8) (*)))))
     (sb-thread:with-recursive-lock (*tcp-lock*)
-      (loop for start from 0 below (length data) by +mss+
-            do (tcp-wait (lambda () (or (tcp-reset c) (< (seq- (tcp-snd-nxt c) (tcp-snd-una c)) (max +mss+ (tcp-snd-wnd c))))) nil)
+      (loop for start from 0 below (length data) by +sndbuf+
+            do (tcp-wait (lambda () (or (tcp-reset c) (< (unsent c) +sndbuf+))) nil)
                (when (tcp-reset c) (net-fail :econnreset "tcp: connection reset"))
-               (queue-segment c (logior +ack+ +psh+) (subseq data start (min (length data) (+ start +mss+))))))
+               (loop for b across (subseq data start (min (length data) (+ start +sndbuf+)))
+                     do (vector-push-extend b (tcp-snd-buffer c)))
+               (tcp-output c)))
     (length data)))
 
 (defun tcp-receive (c &key timeout)
@@ -231,6 +318,7 @@
 
 (defun tcp-close (c)
   (sb-thread:with-recursive-lock (*tcp-lock*)
+    (tcp-wait (lambda () (or (tcp-reset c) (zerop (unsent c)))) 30)
     (case (tcp-state c)
       ((:established :syn-received) (setf (tcp-state c) :fin-wait-1) (queue-segment c (logior +fin+ +ack+) #()))
       (:close-wait (setf (tcp-state c) :last-ack) (queue-segment c (logior +fin+ +ack+) #())))
