@@ -23,13 +23,15 @@
                     for type = (u16be v name-end)
                     for length = (u16be v (+ name-end 8))
                     when (and (= type 1) (= length 4)) collect (u32be v (+ name-end 10))
+                    when (and (= type 28) (= length 16)) collect (subseq v (+ name-end 10) (+ name-end 26))
                     do (setf at (+ name-end 10 length)))
               0))))
 
 (defvar *dns-random* nil)
 
-(defun resolve-name (name &key (timeout 2) (tries 3))
-  (let ((server (or (first (interface-dns *interface*)) (net-fail :edestaddrreq "dns: no server")))
+(defun resolve-name (name &key (type :a) (timeout 2) (tries 3))
+  (let ((server (or (first (interface-dns *interface*)) (first (interface-dns6 *interface*))
+                    (net-fail :edestaddrreq "dns: no server")))
         (random (or *dns-random* (setf *dns-random* (make-random-state t)))))
     (dotimes (try tries (net-fail :etimedout "dns: no answer for ~a" name))
       (let* ((id (random #x10000 random))
@@ -38,7 +40,7 @@
         (unwind-protect
              (progn
                (udp-send server local 53 (octets (be id 2) (be #x0100 2) (be 1 2) (be 0 2) (be 0 2) (be 0 2)
-                                                 (dns-name name) (be 1 2) (be 1 2)))
+                                                 (dns-name name) (be (ecase type (:a 1) (:aaaa 28)) 2) (be 1 2)))
                (loop for data = (udp-receive port :timeout timeout)
                      while data
                      do (multiple-value-bind (addresses rcode) (dns-answers data id)

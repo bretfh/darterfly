@@ -85,7 +85,7 @@
   :depends-on (#:uiop #:finch/iokit)
   :serial t
   :pathname "src/net/"
-  :components ((:file "net") (:file "tcp") (:file "dhcp") (:file "dns")))
+  :components ((:file "net") (:file "ip6") (:file "tcp") (:file "dhcp") (:file "dns")))
 
 (asdf:defsystem #:finch/vfs
   :description "The virtual file system"

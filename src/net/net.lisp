@@ -6,8 +6,8 @@
            #:tcp-listen #:tcp-unlisten #:tcp-peer #:tcp-reset-p #:tcp-accept #:tcp-connect #:tcp-send #:tcp-receive #:tcp-close #:tcp-echo))
 (in-package #:finch/net)
 
-(defstruct interface device mac (ip 0) (prefix 0) (gateway 0) dns lease
-  (arp (make-hash-table)) (ports (make-hash-table)) (pings (make-hash-table :test 'equal))
+(defstruct interface device mac (ip 0) (prefix 0) (gateway 0) dns lease ip6 router6 dns6
+  (arp (make-hash-table)) (nd6 (make-hash-table :test 'equalp)) (ports (make-hash-table)) (pings (make-hash-table :test 'equalp))
   (lock (sb-thread:make-mutex :name "net")) (changed (sb-thread:make-waitqueue)) (id 0) thread)
 
 (defvar *interface* nil)
@@ -21,9 +21,16 @@
   (error 'net-error :errno errno :message (apply #'format nil control args)))
 
 (defun ip-address (string)
+  (if (find #\: string)
+      (ip6-address string)
+      (ip4-address string)))
+
+(defun ip4-address (string)
   (reduce (lambda (a b) (logior (ash a 8) b)) (mapcar #'parse-integer (uiop:split-string string :separator "."))))
 
-(defun address-string (ip) (format nil "~{~d~^.~}" (loop for s from 24 downto 0 by 8 collect (ldb (byte 8 s) ip))))
+(defun address-string (ip) (if (ip6-p ip) (ip6-string ip) (ip4-string ip)))
+
+(defun ip4-string (ip) (format nil "~{~d~^.~}" (loop for s from 24 downto 0 by 8 collect (ldb (byte 8 s) ip))))
 
 (defun u16be (v at) (logior (ash (aref v at) 8) (aref v (1+ at))))
 (defun u32be (v at) (logior (ash (u16be v at) 16) (u16be v (+ at 2))))
@@ -47,6 +54,7 @@
 
 (defconstant +ethertype-ip+ #x0800)
 (defconstant +ethertype-arp+ #x0806)
+(defconstant +ethertype-ip6+ #x86dd)
 (defparameter +broadcast+ (make-array 6 :element-type '(unsigned-byte 8) :initial-element #xff))
 
 (defgeneric if-output (device frame))
@@ -88,6 +96,11 @@
       (send-frame sha +ethertype-arp+ (arp-packet 2 sha spa)))))
 
 (defun send-ip (protocol dst payload)
+  (if (ip6-p dst)
+      (send-ip6 protocol dst payload)
+      (send-ip4 protocol dst payload)))
+
+(defun send-ip4 (protocol dst payload)
   (let* ((if *interface*)
          (header (octets (be #x45 1) (be 0 1) (be (+ 20 (length payload)) 2)
                          (be (ldb (byte 16 0) (incf (interface-id if))) 2) (be #x4000 2)
@@ -108,12 +121,15 @@
 
 (defun ping (address &key (id 1) (sequence 1) (timeout 2))
   (let* ((dst (if (stringp address) (ip-address address) address))
-         (packet (octets (be 8 1) (be 0 1) (be 0 2) (be id 2) (be sequence 2) (map '(vector (unsigned-byte 8)) #'char-code "finch")))
+         (body (octets (be id 2) (be sequence 2) (map '(vector (unsigned-byte 8)) #'char-code "finch")))
          (if *interface*)
          (key (list dst id sequence))
          (sent (get-internal-real-time)))
-    (replace packet (be (checksum packet) 2) :start1 2)
-    (send-ip 1 dst packet)
+    (if (ip6-p dst)
+        (send-icmp6 128 0 body dst :hops 64)
+        (let ((packet (octets (be 8 1) (be 0 1) (be 0 2) body)))
+          (replace packet (be (checksum packet) 2) :start1 2)
+          (send-ip 1 dst packet)))
     (sb-thread:with-mutex ((interface-lock if))
       (loop for got = (gethash key (interface-pings if))
             when got return (/ (- got sent) (float internal-time-units-per-second))
@@ -132,7 +148,9 @@
 
 (defun udp-send (address src-port dst-port data)
   (let ((dst (if (stringp address) (ip-address address) address)))
-    (send-ip 17 dst (octets (be src-port 2) (be dst-port 2) (be (+ 8 (length data)) 2) (be 0 2) data))))
+    (let ((datagram (octets (be src-port 2) (be dst-port 2) (be (+ 8 (length data)) 2) (be 0 2) data)))
+      (replace datagram (be (transport-checksum (source-address dst) dst 17 datagram) 2) :start1 6)
+      (send-ip 17 dst datagram))))
 
 (defun udp-receive (port &key timeout)
   (sb-thread:with-mutex ((port-lock port))
@@ -168,7 +186,8 @@
   (when (>= (length frame) 14)
     (let ((type (u16be frame 12)) (payload (subseq frame 14)))
       (cond ((= type +ethertype-arp+) (receive-arp payload))
-            ((= type +ethertype-ip+) (receive-ip payload))))))
+            ((= type +ethertype-ip+) (receive-ip payload))
+            ((= type +ethertype-ip6+) (receive-ip6 payload))))))
 
 (defun input-loop ()
   (let* ((device (interface-device *interface*))
@@ -185,6 +204,7 @@
     (unless device (net-fail :enetdown "no network device"))
     (setf *interface* (make-interface :device device :mac (finch/iokit:network-mac device)))
     (setf (interface-thread *interface*) (sb-thread:make-thread #'input-loop :name "net input"))
+    (start-ip6)
     (if ip
         (setf (interface-ip *interface*) (ip-address ip) (interface-prefix *interface*) prefix
               (interface-gateway *interface*) (if gateway (ip-address gateway) 0))

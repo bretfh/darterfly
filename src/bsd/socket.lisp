@@ -1,6 +1,7 @@
 (in-package #:finch/bsd)
 
 (defconstant +af-inet+ 2)
+(defconstant +af-inet6+ 30)
 (defconstant +sock-stream+ 1)
 (defconstant +sock-dgram+ 2)
 
@@ -40,7 +41,7 @@
 (defun socket (domain type &optional (protocol 0))
   (declare (ignore protocol))
   (syscall
-    (unless (= domain +af-inet+) (fail :eafnosupport))
+    (unless (member domain (list +af-inet+ +af-inet6+)) (fail :eafnosupport))
     (unless (member type (list +sock-stream+ +sock-dgram+)) (fail :eprotonosupport))
     (fd-alloc (make-instance 'socket :type type :flags 2))))
 

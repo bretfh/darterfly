@@ -437,6 +437,36 @@
            (error (e) (princ-to-string e)))
       (sb-bsd-sockets:socket-close s))))
 
+(test ip6-on-finch
+  (let* ((server (make-instance 'sb-bsd-sockets:inet6-socket :type :stream :protocol :tcp))
+         (port (progn (setf (sb-bsd-sockets:sockopt-reuse-address server) t)
+                      (sb-bsd-sockets:socket-bind server (sb-bsd-sockets:make-inet6-address "::1") 0)
+                      (sb-bsd-sockets:socket-listen server 5)
+                      (nth-value 1 (sb-bsd-sockets:socket-name server))))
+         (c (image:bare-console)))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 90)
+             (ask "(progn (finch/net:start-network) :up)")
+             (is (search "((\"fe80::5054:ff:fe12:3456\" \"fec0::5054:ff:fe12:3456\") \"fe80::2\")"
+                         (ask "(let ((i finch/net:*interface*)) (list (mapcar #'finch/net:address-string (finch/net::interface-ip6 i)) (finch/net:address-string (finch/net::interface-router6 i))))"))
+                 "a router advertisement gives the prefix and the router")
+             (is (not (search "NIL" (ask "(finch/net:ping \"fec0::2\")"))) "the router answers an ICMPv6 echo")
+             (let ((acceptor (sb-thread:make-thread
+                              (lambda ()
+                                (let* ((conn (sb-bsd-sockets:socket-accept server))
+                                       (st (sb-bsd-sockets:socket-make-stream conn :input t :output t :element-type 'character)))
+                                  (prog1 (read-line st) (write-line "hello finch, over ipv6" st) (finish-output st)
+                                    (sb-bsd-sockets:socket-close conn)))))))
+               (is (search "hello finch, over ipv6"
+                           (ask (format nil "(let ((c (finch/net:tcp-connect \"fec0::2\" ~d))) (finch/net:tcp-send c (sb-ext:string-to-octets (format nil \"hello host~~%\"))) (prog1 (map 'string #'code-char (finch/net:tcp-receive c :timeout 5)) (finch/net:tcp-close c)))" port))))
+               (is (equal "hello host" (sb-thread:join-thread acceptor :timeout 10 :default nil)) "tcp over ipv6 to the host"))
+             (when (ignore-errors (sb-bsd-sockets:get-host-by-name "example.com"))
+               (is (search ":" (ask "(finch/net:resolve-name \"example.com\" :type :aaaa)")) "an AAAA lookup")))
+        (sb-bsd-sockets:socket-close server)
+        (image:finish c 5)))))
+
 (test sockets-on-finch
   (let* ((tcp (free-udp-port))
          (c (image:bare-console :forwards (list (list :tcp tcp 8)))))
