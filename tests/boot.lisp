@@ -374,6 +374,10 @@
            (progn
              (image:expect c "* " :timeout 90)
              (is (search "\"10.0.2.15\"" (ask "(progn (finch/net:start-network) (finch/net:udp-echo 7) (finch/net:tcp-echo 7) (finch/net:address-string (finch/net::interface-ip finch/net:*interface*)))")))
+             (is (search "(\"10.0.2.2\" (\"10.0.2.3\") 24)" (ask "(let ((i finch/net:*interface*)) (list (finch/net:address-string (finch/net::interface-gateway i)) (mapcar #'finch/net:address-string (finch/net::interface-dns i)) (finch/net::interface-prefix i)))"))
+                 "dhcp gives the gateway, the name server and the mask")
+             (when (ignore-errors (sb-bsd-sockets:get-host-by-name "example.com"))
+               (is (search "(\"" (ask "(finch/net:resolve-name \"example.com\")")) "finch resolves a name through the dhcp name server"))
              (is (search "\"en0\"" (ask "(iokit:get-property (first (iokit:find-entries 'iokit:io-ethernet-interface)) \"BSD Name\")")))
              (is (not (search "NIL" (ask "(finch/net:ping \"10.0.2.2\")"))) "the gateway answers a ping")
              (let ((s (make-instance 'sb-bsd-sockets:inet-socket :type :datagram :protocol :udp))

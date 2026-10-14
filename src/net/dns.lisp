@@ -1,0 +1,49 @@
+(in-package #:finch/net)
+
+(defun dns-name (name)
+  (apply #'octets (append (loop for label in (uiop:split-string name :separator ".")
+                                unless (string= label "")
+                                  collect (octets (be (length label) 1) (sb-ext:string-to-octets label :external-format :utf-8)))
+                          (list (be 0 1)))))
+
+(defun skip-name (v at)
+  (loop (let ((n (aref v at)))
+          (cond ((zerop n) (return (1+ at)))
+                ((= (logand n #xc0) #xc0) (return (+ at 2)))
+                (t (incf at (1+ n)))))))
+
+(defun dns-answers (v id)
+  (when (and (>= (length v) 12) (= (u16be v 0) id) (logbitp 15 (u16be v 2)))
+    (let ((rcode (logand (u16be v 2) 15))
+          (at 12))
+      (unless (zerop rcode) (return-from dns-answers (values nil rcode)))
+      (dotimes (i (u16be v 4)) (setf at (+ (skip-name v at) 4)))
+      (values (loop repeat (u16be v 6)
+                    for name-end = (skip-name v at)
+                    for type = (u16be v name-end)
+                    for length = (u16be v (+ name-end 8))
+                    when (and (= type 1) (= length 4)) collect (u32be v (+ name-end 10))
+                    do (setf at (+ name-end 10 length)))
+              0))))
+
+(defvar *dns-random* nil)
+
+(defun resolve-name (name &key (timeout 2) (tries 3))
+  (let ((server (or (first (interface-dns *interface*)) (error "dns: no server")))
+        (random (or *dns-random* (setf *dns-random* (make-random-state t)))))
+    (dotimes (try tries (error "dns: no answer for ~a" name))
+      (let* ((id (random #x10000 random))
+             (local (+ 49152 (random 16384 random)))
+             (port (udp-bind local)))
+        (unwind-protect
+             (progn
+               (udp-send server local 53 (octets (be id 2) (be #x0100 2) (be 1 2) (be 0 2) (be 0 2) (be 0 2)
+                                                 (dns-name name) (be 1 2) (be 1 2)))
+               (loop for data = (udp-receive port :timeout timeout)
+                     while data
+                     do (multiple-value-bind (addresses rcode) (dns-answers data id)
+                          (when rcode
+                            (if (zerop rcode)
+                                (return-from resolve-name (mapcar #'address-string addresses))
+                                (error "dns: ~a: rcode ~d" name rcode))))))
+          (udp-close port))))))

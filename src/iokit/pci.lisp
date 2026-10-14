@@ -154,6 +154,7 @@
               (when (= (ldb (byte 7 0) (config-read-8 d #xe)) 1)
                 (probe-bus bridge (config-read-8 d #x19) d)))))))))
 
+(defvar *bsd-units* 0)
 (defvar *interface-units* 0)
 
 (defun start-iokit ()

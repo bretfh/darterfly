@@ -58,6 +58,8 @@
 (defmacro with-vfs (&body body)
   `(sb-thread:with-recursive-lock (*lock*) ,@body))
 
+(defvar *cwd* nil)
+
 (defun mounted-on (vnode)
   (find vnode *mounts* :key #'mount-covered))
 
@@ -73,7 +75,6 @@
 (defun vfs-unmount (path)
   (with-vfs (setf *mounts* (remove path *mounts* :key #'mount-path :test #'string=))))
 
-(defvar *cwd* nil)
 (defvar *umask* #o022)
 
 (defun split-path (path)

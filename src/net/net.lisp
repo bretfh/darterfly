@@ -1,11 +1,11 @@
 (defpackage #:finch/net
   (:use #:cl)
-  (:export #:start-network #:*interface* #:ping #:udp-bind #:udp-send #:udp-receive #:udp-echo
-           #:ip-address #:address-string
+  (:export #:start-network #:*interface* #:ping #:udp-bind #:udp-close #:udp-send #:udp-receive #:udp-echo
+           #:ip-address #:address-string #:dhcp #:resolve-name
            #:tcp-listen #:tcp-accept #:tcp-connect #:tcp-send #:tcp-receive #:tcp-close #:tcp-echo))
 (in-package #:finch/net)
 
-(defstruct interface device mac ip prefix gateway
+(defstruct interface device mac (ip 0) (prefix 0) (gateway 0) dns lease
   (arp (make-hash-table)) (ports (make-hash-table)) (pings (make-hash-table :test 'equal))
   (lock (sb-thread:make-mutex :name "net")) (changed (sb-thread:make-waitqueue)) (id 0) thread)
 
@@ -53,6 +53,7 @@
     (= (logand ip mask) (logand (interface-ip *interface*) mask))))
 
 (defun resolve (ip)
+  (when (= ip #xffffffff) (return-from resolve +broadcast+))
   (let ((hop (if (on-link-p ip) ip (interface-gateway *interface*)))
         (if *interface*))
     (dotimes (try 4 (error "arp: no answer from ~a" (address-string hop)))
@@ -112,6 +113,10 @@
   (sb-thread:with-mutex ((interface-lock *interface*))
     (setf (gethash number (interface-ports *interface*)) (make-port :number number))))
 
+(defun udp-close (port)
+  (sb-thread:with-mutex ((interface-lock *interface*))
+    (remhash (port-number port) (interface-ports *interface*))))
+
 (defun udp-send (address src-port dst-port data)
   (let ((dst (if (stringp address) (ip-address address) address)))
     (send-ip 17 dst (octets (be src-port 2) (be dst-port 2) (be (+ 8 (length data)) 2) (be 0 2) data))))
@@ -140,7 +145,7 @@
          (src (u32be packet 12))
          (dst (u32be packet 16))
          (payload (subseq packet ihl (min total (length packet)))))
-    (when (or (= dst (interface-ip *interface*)) (= dst #xffffffff))
+    (when (or (= dst (interface-ip *interface*)) (= dst #xffffffff) (zerop (interface-ip *interface*)))
       (case protocol
         (1 (receive-icmp src payload))
         (6 (receive-tcp src payload))
@@ -159,13 +164,16 @@
           (dolist (f frames) (ignore-errors (receive-frame f)))
           (sleep 0.002)))))
 
-(defun start-network (&key (ip "10.0.2.15") (prefix 24) (gateway "10.0.2.2"))
+(defun start-network (&key ip (prefix 24) gateway)
   (finch/iokit:start-iokit)
   (let ((device (first (finch/iokit:find-entries 'finch/iokit:apple-virtio-network))))
     (unless device (error "no network device"))
-    (setf *interface* (make-interface :device device :mac (finch/iokit:network-mac device) :ip (ip-address ip)
-                                      :prefix prefix :gateway (ip-address gateway)))
+    (setf *interface* (make-interface :device device :mac (finch/iokit:network-mac device)))
     (setf (interface-thread *interface*) (sb-thread:make-thread #'input-loop :name "net input"))
+    (if ip
+        (setf (interface-ip *interface*) (ip-address ip) (interface-prefix *interface*) prefix
+              (interface-gateway *interface*) (if gateway (ip-address gateway) 0))
+        (dhcp))
     *interface*))
 
 (defun udp-echo (number)

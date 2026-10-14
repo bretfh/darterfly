@@ -13,7 +13,6 @@
 (add-personality "IOClass" "IOGUIDPartitionScheme" "IOProviderClass" "IOMedia"
                  "IOPropertyMatch" (personality "Whole" t) "Content Mask" "GUID_partition_scheme")
 
-(defvar *bsd-units* 0)
 
 (defun media-size (media) (get-property media "Size"))
 
