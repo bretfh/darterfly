@@ -19,7 +19,7 @@
   local-port remote-ip remote-port (state :closed)
   iss snd-una snd-nxt (snd-wnd +window+) irs rcv-nxt
   (unacked nil) (received (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0))
-  (eof nil) (reset nil) listener (closed-at nil))
+  (eof nil) (reset nil) listener (closed-at nil) (out-of-order nil))
 
 (defstruct listener port (pending nil))
 
@@ -111,25 +111,39 @@
                  (:fin-wait-1 (setf (tcp-state c) :fin-wait-2))
                  (:closing (setf (tcp-state c) :time-wait (tcp-closed-at c) (get-internal-real-time)))
                  (:last-ack (setf (tcp-state c) :closed) (remhash key *connections*)))))
-           (cond ((/= seq (tcp-rcv-nxt c))
-                  (when (or (plusp (length data)) (logtest flags +fin+))
-                    (send-segment c +ack+ (tcp-snd-nxt c))))
-                 (t
-                  (when (plusp (length data))
-                    (loop for b across data do (vector-push-extend b (tcp-received c)))
-                    (setf (tcp-rcv-nxt c) (seq+ (tcp-rcv-nxt c) (length data))))
-                  (when (logtest flags +fin+)
-                    (setf (tcp-rcv-nxt c) (seq+ (tcp-rcv-nxt c) 1) (tcp-eof c) t)
-                    (setf (tcp-state c)
-                          (case (tcp-state c)
-                            ((:established :syn-received) :close-wait)
-                            (:fin-wait-1 (if (all-acked-p c) :time-wait :closing))
-                            (:fin-wait-2 :time-wait)
-                            (t (tcp-state c))))
-                    (when (eq (tcp-state c) :time-wait) (setf (tcp-closed-at c) (get-internal-real-time))))
-                  (when (or (plusp (length data)) (logtest flags +fin+))
-                    (send-segment c +ack+ (tcp-snd-nxt c))))))))
+           (when (or (plusp (length data)) (logtest flags +fin+))
+             (receive-in-order c seq data (logtest flags +fin+))
+             (send-segment c +ack+ (tcp-snd-nxt c))))))
       (sb-thread:condition-broadcast *tcp-changed*))))
+
+(defun receive-in-order (c seq data fin)
+  (let ((behind (seq- (tcp-rcv-nxt c) seq)))
+    (cond ((minusp behind)
+           (when (< (- behind) +window+)
+             (pushnew (list seq data fin) (tcp-out-of-order c) :key #'first)))
+          ((or (< behind (length data)) (and fin (= behind (length data))))
+           (accept-data c (subseq data behind) fin)
+           (loop for next = (find-if (lambda (s) (seq<= (first s) (tcp-rcv-nxt c))) (tcp-out-of-order c))
+                 while next
+                 do (setf (tcp-out-of-order c) (remove next (tcp-out-of-order c)))
+                    (destructuring-bind (seq data fin) next
+                      (let ((behind (seq- (tcp-rcv-nxt c) seq)))
+                        (when (or (< behind (length data)) (and fin (= behind (length data))))
+                          (accept-data c (subseq data behind) fin)))))))))
+
+(defun accept-data (c data fin)
+  (unless (tcp-eof c)
+    (loop for b across data do (vector-push-extend b (tcp-received c)))
+    (setf (tcp-rcv-nxt c) (seq+ (tcp-rcv-nxt c) (length data)))
+    (when fin
+      (setf (tcp-rcv-nxt c) (seq+ (tcp-rcv-nxt c) 1) (tcp-eof c) t (tcp-out-of-order c) nil)
+      (setf (tcp-state c)
+            (case (tcp-state c)
+              ((:established :syn-received) :close-wait)
+              (:fin-wait-1 (if (all-acked-p c) :time-wait :closing))
+              (:fin-wait-2 :time-wait)
+              (t (tcp-state c))))
+      (when (eq (tcp-state c) :time-wait) (setf (tcp-closed-at c) (get-internal-real-time))))))
 
 (defun tcp-timer ()
   (loop

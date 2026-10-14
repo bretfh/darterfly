@@ -185,6 +185,6 @@
   :depends-on (#:finch #:finch/tahoe #:fiveam (:require #:sb-posix) (:require #:sb-md5) (:require #:sb-bsd-sockets))
   :serial t
   :pathname "tests/"
-  :components ((:file "suite") (:file "mach") (:file "plist") (:file "macho") (:file "dyld") (:file "objc") (:file "mig") (:file "server") (:file "ca") (:file "bsd") (:file "xpc") (:file "launchd") (:file "kernel") (:file "boot") (:file "apfs") (:file "tahoe"))
+  :components ((:file "suite") (:file "mach") (:file "plist") (:file "macho") (:file "dyld") (:file "objc") (:file "mig") (:file "server") (:file "ca") (:file "bsd") (:file "xpc") (:file "launchd") (:file "kernel") (:file "boot") (:file "apfs") (:file "net") (:file "tahoe"))
   :perform (asdf:test-op (o c)
              (uiop:symbol-call :finch/test :run-them)))

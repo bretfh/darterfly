@@ -2,7 +2,7 @@
   (:use #:cl)
   (:export #:start-network #:*interface* #:ping #:udp-bind #:udp-close #:udp-send #:udp-receive #:udp-echo
            #:ip-address #:address-string #:dhcp #:resolve-name
-           #:net-error #:net-errno #:listener #:connection #:port
+           #:if-output #:net-error #:net-errno #:listener #:connection #:port
            #:tcp-listen #:tcp-unlisten #:tcp-peer #:tcp-reset-p #:tcp-accept #:tcp-connect #:tcp-send #:tcp-receive #:tcp-close #:tcp-echo))
 (in-package #:finch/net)
 
@@ -49,9 +49,13 @@
 (defconstant +ethertype-arp+ #x0806)
 (defparameter +broadcast+ (make-array 6 :element-type '(unsigned-byte 8) :initial-element #xff))
 
+(defgeneric if-output (device frame))
+
+(defmethod if-output ((device finch/iokit:apple-virtio-network) frame)
+  (finch/iokit:network-send device frame))
+
 (defun send-frame (dst type payload)
-  (let ((frame (octets dst (interface-mac *interface*) (be type 2) payload)))
-    (finch/iokit:network-send (interface-device *interface*) frame)))
+  (if-output (interface-device *interface*) (octets dst (interface-mac *interface*) (be type 2) payload)))
 
 (defun arp-packet (op target-mac target-ip)
   (octets (be 1 2) (be +ethertype-ip+ 2) (be 6 1) (be 4 1) (be op 2)
