@@ -43,19 +43,33 @@
       (ca:window-create context 0 0 width 24 :level :main-menu :order :below)
       (loop (sleep 30) (draw)))))
 
-(defparameter *dock-items*
-  '(("Finder" "/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder" #(0.25 0.55 0.95 1.0)
-     "/System/Library/CoreServices/Finder.app/Contents/Resources/Finder.icns")
-    ("Terminal" "/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal" #(0.15 0.15 0.15 1.0)
-     "/System/Applications/Utilities/Terminal.app/Contents/Resources/Terminal.icns")
-    ("Hello" "/Applications/Hello.app/Contents/MacOS/Hello" #(0.25 0.55 0.95 1.0)
-     "/System/Applications/TextEdit.app/Contents/Resources/AppIcon.icns")))
+(defparameter +icons+ "/usr/share/icons/Adwaita/")
 
-(defun icon-layer (path color size)
-  (let ((pixels (ignore-errors (finch/imageio:icon path size))))
-    (if pixels
-        (ca:make-layer :contents (ca:image size size pixels))
-        (ca:make-layer :background-color color))))
+(defparameter *dock-items*
+  '(("Finder" "/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder" #(0.21 0.52 0.89 1.0)
+     "legacy/system-file-manager-symbolic")
+    ("Terminal" "/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal" #(0.24 0.22 0.27 1.0)
+     "legacy/utilities-terminal-symbolic")
+    ("Hello" "/Applications/Hello.app/Contents/MacOS/Hello" #(0.90 0.38 0.0 1.0)
+     "legacy/accessories-text-editor-symbolic")))
+
+(defun icon-path (name) (format nil "~a~a.png" +icons+ name))
+
+(defun icon-layer (name color size)
+  (let ((tile (text:make-bitmap size size))
+        (inset (round size 4))
+        (glyph (ignore-errors (finch/imageio:icon (icon-path name) (- size (* 2 (round size 4)))))))
+    (text:fill-round-rect tile 0 0 size size (round size 5) (aref color 0) (aref color 1) (aref color 2))
+    (when glyph
+      (let ((out (text:bitmap-pixels tile)) (g (- size (* 2 inset))))
+        (dotimes (y g)
+          (dotimes (x g)
+            (let* ((from (* 4 (+ x (* y g))))
+                   (to (* 4 (+ inset x (* (+ inset y) size))))
+                   (keep (- 255 (aref glyph (+ from 3)))))
+              (dotimes (c 4)
+                (setf (aref out (+ to c)) (min 255 (+ (aref glyph (+ from c)) (round (* keep (aref out (+ to c))) 255))))))))))
+    (ca:make-layer :contents (ca:image size size (text:bitmap-pixels tile)))))
 
 (bsd:define-program "Dock" (argv envp)
   (multiple-value-bind (width height) (screen-size)
@@ -86,17 +100,11 @@
                   (bsd:posix-spawn (second (nth index *dock-items*))
                                    (list (second (nth index *dock-items*))) nil))))))))))
 
-(defparameter +core-types+ "/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/")
-
 (defun file-icon (path)
   (let ((mode (getf (ignore-errors (bsd:stat path)) :mode 0)))
-    (format nil "~a~a" +core-types+
-            (cond ((string= path "/Applications") "ApplicationsFolderIcon.icns")
-                  ((string= path "/Library") "LibraryFolderIcon.icns")
-                  ((string= path "/System") "SystemFolderIcon.icns")
-                  ((uiop:string-suffix-p path ".app") "GenericApplicationIcon.icns")
-                  ((= (logand mode bsd:+s-ifmt+) bsd:+s-ifdir+) "GenericFolderIcon.icns")
-                  (t "GenericDocumentIcon.icns")))))
+    (icon-path (cond ((uiop:string-suffix-p path ".app") "mimetypes/application-x-executable")
+                     ((= (logand mode bsd:+s-ifmt+) bsd:+s-ifdir+) "places/folder")
+                     (t "mimetypes/text-x-generic")))))
 
 (defun child-path (dir name)
   (if (string= dir "/") (format nil "/~a" name) (format nil "~a/~a" dir name)))
@@ -157,7 +165,7 @@
     (let ((desktop (kit:make-window :style :borderless :level :desktop :x 0 :y 0 :width width :height height
                                     :background #(0.18 0.36 0.56 1.0))))
       (kit:add-subview (kit:content-view desktop)
-                       (make-instance 'disk-view :icon-path "/System/Library/Extensions/IOStorageFamily.kext/Contents/Resources/Internal.icns"
+                       (make-instance 'disk-view :icon-path (icon-path "devices/drive-harddisk")
                                                  :label "Macintosh HD" :label-color #(1.0 1.0 1.0)
                                                  :frame (vector (- width 112) 36 100 90)))
       (kit:show desktop)

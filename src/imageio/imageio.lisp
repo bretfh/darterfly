@@ -81,6 +81,13 @@
     out))
 
 (defun icon (path size)
+  (let ((octets (file-octets path)))
+    (if (png-p octets)
+        (multiple-value-bind (pixels width height) (decode-png octets)
+          (scale-rgba pixels width height size))
+        (icns-icon path size))))
+
+(defun icns-icon (path size)
   (let* ((entries (remove-if-not (lambda (e) (png-p (cdr e))) (read-icns path)))
          (sized (mapcar (lambda (e) (multiple-value-list (decode-png (cdr e)))) entries))
          (best (or (first (sort (remove-if (lambda (s) (< (second s) size)) sized) #'< :key #'second))

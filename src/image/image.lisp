@@ -117,6 +117,26 @@
           :collect (list :file (format nil "System/Library/Fonts/~a.ttf" (pathname-name file))
                          (octets file)))))
 
+(defparameter *icons*
+  '(("places" "folder") ("mimetypes" "application-x-executable") ("mimetypes" "text-x-generic")
+    ("devices" "drive-harddisk")
+    ("legacy" "system-file-manager-symbolic") ("legacy" "utilities-terminal-symbolic")
+    ("legacy" "accessories-text-editor-symbolic")))
+
+(defun icons ()
+  (let ((theme (format nil "~a/share/icons/Adwaita/" (uiop:getenv "GUIX_ENVIRONMENT")))
+        (white (build-path "symbolic.css")))
+    (with-open-file (s white :direction :output :if-exists :supersede)
+      (write-line "* { fill: #ffffff !important; }" s))
+    (loop :for (kind name) :in *icons*
+          :for symbolic := (string= kind "legacy")
+          :for png := (build-path (format nil "~a.png" name))
+          :do (uiop:run-program (append (list "rsvg-convert" "-w" "128" "-h" "128" "-o" (uiop:native-namestring png))
+                                        (and symbolic (list "-s" (uiop:native-namestring white)))
+                                        (list (format nil "~a~:[scalable~;symbolic~]/~a/~a.svg" theme symbolic kind name)))
+                                :error-output *error-output*)
+          :collect (list :file (format nil "usr/share/icons/Adwaita/~a/~a.png" kind name) (octets png)))))
+
 (defparameter *tahoe-resources*
   '("System/Applications/Utilities/Terminal.app/Contents/Resources/Terminal.icns"
     "System/Library/CoreServices/Finder.app/Contents/Resources/Finder.icns"
@@ -171,6 +191,7 @@
          :collect (list :file path (text (format nil "#!finch ~a~%" program)) #o100755))
    (tahoe-daemons)
    (fonts)
+   (icons)
    (tahoe-resources)))
 
 (defun image ()

@@ -88,5 +88,7 @@
              "sbcl-zpb-ttf"
              "sbcl-cl-vectors"
              "sbcl-chipz"
-             "font-adwaita"))
+             "font-adwaita"
+             "adwaita-icon-theme"
+             "librsvg"))
   (list opencore lilu virtualsmc whatevergreen)))
