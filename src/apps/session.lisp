@@ -30,7 +30,7 @@
 (bsd:define-program "SystemUIServer" (argv envp)
   (let* ((context (ca:context-create))
          (width (screen-size))
-         (font (text:font "SFNS" 13))
+         (font (text:font "AdwaitaSans-Regular" 13))
          (bar (ca:make-layer :background-color #(0.96 0.96 0.96 0.92))))
     (setf (ca:layer-frame bar) (vector 0 0 width 24)
           (ca:context-layer context) bar)
@@ -62,7 +62,7 @@
     (let* ((context (ca:context-create))
            (tile 56) (gap 12)
            (dock-width (+ gap (* (length *dock-items*) (+ tile gap))))
-           (font (text:font "SFNS" 10))
+           (font (text:font "AdwaitaSans-Regular" 10))
            (dock (ca:make-layer :background-color #(0.85 0.85 0.88 0.85)
                                 :sublayers (loop :for (name nil color icns) :in *dock-items*
                                                  :for x :from gap :by (+ tile gap)

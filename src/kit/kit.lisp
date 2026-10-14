@@ -75,7 +75,7 @@
 (defclass text-field (view)
   ((string :initarg :string :initform "" :accessor string-value)
    (font-size :initarg :font-size :initform 13 :accessor font-size)
-   (font-name :initarg :font-name :initform "SFNS" :accessor font-name)
+   (font-name :initarg :font-name :initform "AdwaitaSans-Regular" :accessor font-name)
    (text-color :initarg :text-color :initform #(0.0 0.0 0.0) :accessor text-color)))
 
 (defmethod (setf string-value) :after (value (field text-field))
@@ -94,7 +94,7 @@
 
 (defmethod draw ((button button) bitmap)
   (let* ((w (view-width button)) (h (view-height button))
-         (font (text:font "SFNS" 13))
+         (font (text:font "AdwaitaSans-Regular" 13))
          (tw (text:string-width font (title button))))
     (text:fill-round-rect bitmap 0 0 w h 6 0.85 0.85 0.87)
     (text:fill-round-rect bitmap 1 1 (- w 2) (- h 2) 5 1.0 1.0 1.0)
@@ -139,7 +139,7 @@
           (let ((at (* 4 (+ x (* y size)))) (to (* 4 (+ x0 x (* y bw)))))
             (when (< (+ to 3) (length out))
               (dotimes (c 4) (setf (aref out (+ to c)) (aref pixels (+ at c)))))))))
-    (let* ((font (text:font "SFNS" 12))
+    (let* ((font (text:font "AdwaitaSans-Regular" 12))
            (label (label view))
            (c (label-color view)))
       (text:draw-string bitmap font label (max 0 (round (- w (text:string-width font label)) 2))
@@ -154,7 +154,7 @@
 
 (defmethod draw ((frame theme-frame) bitmap)
   (let* ((w (view-width frame))
-         (font (text:font "SFNS" 13))
+         (font (text:font "AdwaitaSans-Regular" 13))
          (title (title frame)))
     (text:fill-bitmap bitmap 0.93 0.93 0.93 1.0)
     (text:fill-rect bitmap 0 0 w +title-height+ 0.85 0.85 0.85)
@@ -246,7 +246,7 @@
    (dropdown :initform nil :accessor dropdown)))
 
 (defmethod draw ((view menu-bar-view) bitmap)
-  (let ((font (text:font "SFNS" +menu-font-size+)))
+  (let ((font (text:font "AdwaitaSans-Regular" +menu-font-size+)))
     (loop :for (title) :in (menus view) :for x :in (positions view)
           :do (text:draw-string bitmap font title x 17 0.0 0.0 0.0))))
 
@@ -255,7 +255,7 @@
    (bar :initarg :bar :reader bar)))
 
 (defmethod draw ((view menu-view) bitmap)
-  (let ((font (text:font "SFNS" 13)) (w (view-width view)))
+  (let ((font (text:font "AdwaitaSans-Regular" 13)) (w (view-width view)))
     (text:fill-round-rect bitmap 0 0 w (view-height view) 6 0.97 0.97 0.97)
     (loop :for item :in (items view)
           :for y :from 5 :by +item-height+
@@ -284,7 +284,7 @@
     (close-dropdown view)
     (when (and index (not was))
       (let* ((items (cdr (nth index (menus view))))
-             (font (text:font "SFNS" 13))
+             (font (text:font "AdwaitaSans-Regular" 13))
              (width (max 180 (+ 40 (reduce #'max (mapcar (lambda (i) (if (consp i) (text:string-width font (car i)) 0)) items)
                                        :initial-value 0))))
              (window (make-window :style :borderless :level :pop-up-menu :x (- (nth index (positions view)) 8) :y 24
@@ -298,7 +298,7 @@
   t)
 
 (defun menu-bar (menus)
-  (let* ((font (text:font "SFNS" +menu-font-size+))
+  (let* ((font (text:font "AdwaitaSans-Regular" +menu-font-size+))
          (positions (loop :with x := 14
                           :for (title) :in menus
                           :collect (prog1 x (incf x (+ 20 (round (text:string-width font title)))))))

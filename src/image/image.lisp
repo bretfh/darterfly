@@ -111,9 +111,9 @@
           (gethash "KeepAlive" job) t)
     (text (with-output-to-string (s) (finch/plist:write-plist job s)))))
 
-(defun tahoe-fonts ()
-  (let ((dir (asdf:system-relative-pathname :finch "tahoe/system/System/Library/Fonts/")))
-    (loop :for file :in (directory (merge-pathnames "*.ttf" dir))
+(defun fonts ()
+  (let ((dir (format nil "~a/share/fonts/truetype/" (uiop:getenv "GUIX_ENVIRONMENT"))))
+    (loop :for file :in (directory (format nil "~aAdwaita*.ttf" dir))
           :collect (list :file (format nil "System/Library/Fonts/~a.ttf" (pathname-name file))
                          (octets file)))))
 
@@ -170,7 +170,7 @@
    (loop :for (path program) :in *programs*
          :collect (list :file path (text (format nil "#!finch ~a~%" program)) #o100755))
    (tahoe-daemons)
-   (tahoe-fonts)
+   (fonts)
    (tahoe-resources)))
 
 (defun image ()

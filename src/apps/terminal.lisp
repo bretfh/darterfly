@@ -1,6 +1,6 @@
 (in-package #:finch/apps)
 
-(defparameter +terminal-font+ "SFNSMono")
+(defparameter +terminal-font+ "AdwaitaMono-Regular")
 (defparameter +terminal-size+ 13)
 (defparameter +line-height+ 17)
 

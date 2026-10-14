@@ -144,7 +144,7 @@
     (append (loop :for (path program) :in *programs*
                   :collect (list :file path (text (format nil "#!finch ~a~%" program)) #o755))
             (list (list :file "Library/LaunchDaemons/finch.gui.plist" (gui-job)))
-            (tahoe-daemons) (tahoe-fonts) (tahoe-resources))))
+            (tahoe-daemons) (fonts) (tahoe-resources))))
 
 (defun root-entries ()
   (let ((files (append (loop :for f :in *ramdisk-files*

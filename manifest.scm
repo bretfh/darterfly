@@ -87,5 +87,6 @@
              "linux-libre"
              "sbcl-zpb-ttf"
              "sbcl-cl-vectors"
-             "sbcl-chipz"))
+             "sbcl-chipz"
+             "font-adwaita"))
   (list opencore lilu virtualsmc whatevergreen)))

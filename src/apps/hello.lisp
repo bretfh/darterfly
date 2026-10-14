@@ -18,7 +18,7 @@
     layer))
 
 (defun window (x y width height title-color content-color &optional (title "") (body nil))
-  (let* ((title-label (label title (text:font "SFNS" 13) 0.2 0.2 0.2))
+  (let* ((title-label (label title (text:font "AdwaitaSans-Regular" 13) 0.2 0.2 0.2))
          (title (ca:make-layer :background-color title-color
                                :sublayers (list (place title-label
                                                        (floor (- width (aref (ca:layer-frame title-label) 2)) 2)
