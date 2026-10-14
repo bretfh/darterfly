@@ -42,7 +42,7 @@
   (let ((port (udp-bind 68))
         (xid (random (ash 1 32) (make-random-state t))))
     (unwind-protect
-         (dotimes (try tries (error "dhcp: no lease"))
+         (dotimes (try tries (net-fail :etimedout "dhcp: no lease"))
            (udp-send #xffffffff 68 67 (dhcp-message xid 1 nil))
            (multiple-value-bind (offer options) (dhcp-reply port xid 2 timeout)
              (when offer

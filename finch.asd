@@ -6,10 +6,10 @@
 
 (asdf:defsystem #:finch/bsd
   :description "Processes, signals and files"
-  :depends-on (#:finch/mach (:require #:sb-posix))
+  :depends-on (#:finch/mach #:finch/net (:require #:sb-posix))
   :serial t
   :pathname "src/bsd/"
-  :components ((:file "errno") (:file "proc") (:file "file") (:file "vfs") (:file "stdio") (:file "exec")))
+  :components ((:file "errno") (:file "proc") (:file "file") (:file "socket") (:file "vfs") (:file "stdio") (:file "exec")))
 
 (asdf:defsystem #:finch/xpc
   :description "XPC's wire"

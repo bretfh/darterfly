@@ -423,6 +423,67 @@
                  (sb-bsd-sockets:socket-close server))))
         (image:finish c 5)))))
 
+(defun tcp-exchange (port line)
+  (let ((s (make-instance 'sb-bsd-sockets:inet-socket :type :stream :protocol :tcp)))
+    (unwind-protect
+         (handler-case
+             (sb-sys:with-deadline (:seconds 15)
+               (sb-bsd-sockets:socket-connect s #(127 0 0 1) port)
+               (let ((stream (sb-bsd-sockets:socket-make-stream s :input t :output t :element-type 'character)))
+                 (write-line line stream)
+                 (finish-output stream)
+                 (read-line stream)))
+           (error (e) (princ-to-string e)))
+      (sb-bsd-sockets:socket-close s))))
+
+(test sockets-on-finch
+  (let* ((tcp (free-udp-port))
+         (c (image:bare-console :forwards (list (list :tcp tcp 8)))))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 90)
+             (ask "(finch/net:start-network)")
+             (is (search ":LISTENING" (ask "(let ((s (finch/bsd:socket finch/bsd:+af-inet+ finch/bsd:+sock-stream+))) (finch/bsd:bind s \"0.0.0.0\" 8) (finch/bsd:listen s) (sb-thread:make-thread (lambda () (loop (let ((c (finch/bsd:accept s))) (loop for d = (finch/bsd:recv c 4096) while (plusp (length d)) do (finch/bsd:send c d)) (finch/bsd:close c)))) :name \"bsd echo\") :listening)")))
+             (is (equal "through accept, recv and send" (tcp-exchange tcp "through accept, recv and send")))
+             (is (equal "a second connection" (tcp-exchange tcp "a second connection")))
+             (multiple-value-bind (server port) (host-listener)
+               (unwind-protect
+                    (let ((acceptor (sb-thread:make-thread
+                                     (lambda ()
+                                       (handler-case
+                                           (sb-sys:with-deadline (:seconds 20)
+                                             (let* ((conn (sb-bsd-sockets:socket-accept server))
+                                                    (st (sb-bsd-sockets:socket-make-stream conn :input t :output t :element-type 'character)))
+                                               (prog1 (read-line st)
+                                                 (write-line "hello finch/bsd" st)
+                                                 (finish-output st)
+                                                 (sb-bsd-sockets:socket-close conn))))
+                                         (error (e) (princ-to-string e)))))))
+                      (is (search "hello finch/bsd"
+                                  (ask (format nil "(let ((s (finch/bsd:socket finch/bsd:+af-inet+ finch/bsd:+sock-stream+))) (finch/bsd:connect s \"10.0.2.2\" ~d) (finch/bsd:send s (sb-ext:string-to-octets (format nil \"hello host, from connect~~%\"))) (prog1 (map 'string #'code-char (finch/bsd:recv s 100)) (finch/bsd:close s)))" port))))
+                      (is (equal "hello host, from connect" (sb-thread:join-thread acceptor :default nil :timeout 20))))
+                 (sb-bsd-sockets:socket-close server)))
+             (let ((u (make-instance 'sb-bsd-sockets:inet-socket :type :datagram :protocol :udp))
+                   (buf (make-array 100 :element-type '(unsigned-byte 8))))
+               (unwind-protect
+                    (progn
+                      (sb-bsd-sockets:socket-bind u #(127 0 0 1) 0)
+                      (let* ((port (nth-value 1 (sb-bsd-sockets:socket-name u)))
+                             (replier (sb-thread:make-thread
+                                       (lambda ()
+                                         (handler-case
+                                             (sb-sys:with-deadline (:seconds 20)
+                                               (multiple-value-bind (b n address from) (sb-bsd-sockets:socket-receive u buf nil)
+                                                 (sb-bsd-sockets:socket-send u (sb-ext:string-to-octets "datagram back") nil :address (list address from))
+                                                 (map 'string #'code-char (subseq b 0 n))))
+                                           (error (e) (princ-to-string e)))))))
+                        (is (search "(\"datagram back\" \"10.0.2.2\"" (ask (format nil "(let ((s (finch/bsd:socket finch/bsd:+af-inet+ finch/bsd:+sock-dgram+))) (finch/bsd:sendto s (sb-ext:string-to-octets \"datagram out\") \"10.0.2.2\" ~d) (prog1 (multiple-value-bind (d a p) (finch/bsd:recvfrom s 100) (list (map 'string #'code-char d) a p)) (finch/bsd:close s)))" port))))
+                        (is (equal "datagram out" (sb-thread:join-thread replier :default nil :timeout 20)))))
+                 (sb-bsd-sockets:socket-close u)))
+             (is (search "ECONNREFUSED" (ask "(handler-case (finch/bsd:connect (finch/bsd:socket finch/bsd:+af-inet+ finch/bsd:+sock-stream+) \"10.0.2.2\" 1) (finch/bsd:errno (e) (symbol-name (finch/bsd:errno-name e))))"))))
+        (image:finish c 5)))))
+
 (test xnu-checked-suites-pass-on-finch
   (let ((c (image:bare-console)))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 300)))

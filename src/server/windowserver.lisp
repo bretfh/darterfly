@@ -95,7 +95,7 @@
 (defconstant +main-menu-level+ 24)
 
 (defun key-window ()
-  (find-if (lambda (w) (and (ordered w) (<= (window-level w) 0))) *windows*))
+  (find-if (lambda (w) (and (ordered w) (<= (window-level w) 0))) (by-level *windows*)))
 
 (defun key-client ()
   (let ((window (key-window)))

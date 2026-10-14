@@ -2,7 +2,8 @@
   (:use #:cl)
   (:export #:start-network #:*interface* #:ping #:udp-bind #:udp-close #:udp-send #:udp-receive #:udp-echo
            #:ip-address #:address-string #:dhcp #:resolve-name
-           #:tcp-listen #:tcp-accept #:tcp-connect #:tcp-send #:tcp-receive #:tcp-close #:tcp-echo))
+           #:net-error #:net-errno #:listener #:connection #:port
+           #:tcp-listen #:tcp-unlisten #:tcp-peer #:tcp-reset-p #:tcp-accept #:tcp-connect #:tcp-send #:tcp-receive #:tcp-close #:tcp-echo))
 (in-package #:finch/net)
 
 (defstruct interface device mac (ip 0) (prefix 0) (gateway 0) dns lease
@@ -10,6 +11,14 @@
   (lock (sb-thread:make-mutex :name "net")) (changed (sb-thread:make-waitqueue)) (id 0) thread)
 
 (defvar *interface* nil)
+
+(define-condition net-error (error)
+  ((errno :initarg :errno :reader net-errno)
+   (message :initarg :message :reader net-message))
+  (:report (lambda (c s) (format s "~a: ~a" (net-errno c) (net-message c)))))
+
+(defun net-fail (errno control &rest args)
+  (error 'net-error :errno errno :message (apply #'format nil control args)))
 
 (defun ip-address (string)
   (reduce (lambda (a b) (logior (ash a 8) b)) (mapcar #'parse-integer (uiop:split-string string :separator "."))))
@@ -56,7 +65,7 @@
   (when (= ip #xffffffff) (return-from resolve +broadcast+))
   (let ((hop (if (on-link-p ip) ip (interface-gateway *interface*)))
         (if *interface*))
-    (dotimes (try 4 (error "arp: no answer from ~a" (address-string hop)))
+    (dotimes (try 4 (net-fail :ehostunreach "arp: no answer from ~a" (address-string hop)))
       (sb-thread:with-mutex ((interface-lock if))
         (let ((mac (gethash hop (interface-arp if))))
           (when mac (return mac))))
@@ -167,7 +176,7 @@
 (defun start-network (&key ip (prefix 24) gateway)
   (finch/iokit:start-iokit)
   (let ((device (first (finch/iokit:find-entries 'finch/iokit:apple-virtio-network))))
-    (unless device (error "no network device"))
+    (unless device (net-fail :enetdown "no network device"))
     (setf *interface* (make-interface :device device :mac (finch/iokit:network-mac device)))
     (setf (interface-thread *interface*) (sb-thread:make-thread #'input-loop :name "net input"))
     (if ip

@@ -29,9 +29,9 @@
 (defvar *dns-random* nil)
 
 (defun resolve-name (name &key (timeout 2) (tries 3))
-  (let ((server (or (first (interface-dns *interface*)) (error "dns: no server")))
+  (let ((server (or (first (interface-dns *interface*)) (net-fail :edestaddrreq "dns: no server")))
         (random (or *dns-random* (setf *dns-random* (make-random-state t)))))
-    (dotimes (try tries (error "dns: no answer for ~a" name))
+    (dotimes (try tries (net-fail :etimedout "dns: no answer for ~a" name))
       (let* ((id (random #x10000 random))
              (local (+ 49152 (random 16384 random)))
              (port (udp-bind local)))
@@ -45,5 +45,5 @@
                           (when rcode
                             (if (zerop rcode)
                                 (return-from resolve-name (mapcar #'address-string addresses))
-                                (error "dns: ~a: rcode ~d" name rcode))))))
+                                (net-fail :enoent "dns: ~a: rcode ~d" name rcode))))))
           (udp-close port))))))

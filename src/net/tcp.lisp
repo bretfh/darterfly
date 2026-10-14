@@ -168,6 +168,11 @@
   (sb-thread:with-recursive-lock (*tcp-lock*)
     (setf (gethash port *listeners*) (make-listener :port port))))
 
+(defun tcp-unlisten (listener)
+  (sb-thread:with-recursive-lock (*tcp-lock*)
+    (when (eq (gethash (listener-port listener) *listeners*) listener)
+      (remhash (listener-port listener) *listeners*))))
+
 (defun tcp-accept (listener &key timeout)
   (sb-thread:with-recursive-lock (*tcp-lock*)
     (when (tcp-wait (lambda () (listener-pending listener)) timeout)
@@ -184,8 +189,8 @@
       (setf (gethash (tcp-key local ip port) *connections*) c)
       (queue-segment c +syn+ #())
       (unless (tcp-wait (lambda () (or (eq (tcp-state c) :established) (tcp-reset c))) timeout)
-        (error "tcp: no answer from ~a:~d" (address-string ip) port))
-      (when (tcp-reset c) (error "tcp: ~a:~d refused the connection" (address-string ip) port))
+        (net-fail :etimedout "tcp: no answer from ~a:~d" (address-string ip) port))
+      (when (tcp-reset c) (net-fail :econnrefused "tcp: ~a:~d refused the connection" (address-string ip) port))
       c)))
 
 (defun tcp-send (c data)
@@ -193,18 +198,22 @@
     (sb-thread:with-recursive-lock (*tcp-lock*)
       (loop for start from 0 below (length data) by +mss+
             do (tcp-wait (lambda () (or (tcp-reset c) (< (seq- (tcp-snd-nxt c) (tcp-snd-una c)) (max +mss+ (tcp-snd-wnd c))))) nil)
-               (when (tcp-reset c) (error "tcp: connection reset"))
+               (when (tcp-reset c) (net-fail :econnreset "tcp: connection reset"))
                (queue-segment c (logior +ack+ +psh+) (subseq data start (min (length data) (+ start +mss+))))))
     (length data)))
 
 (defun tcp-receive (c &key timeout)
-  "Octets that have arrived, waiting for some; NIL at end of stream."
   (sb-thread:with-recursive-lock (*tcp-lock*)
     (tcp-wait (lambda () (or (plusp (length (tcp-received c))) (tcp-eof c) (tcp-reset c))) timeout)
-    (if (plusp (length (tcp-received c)))
-        (prog1 (coerce (tcp-received c) '(simple-array (unsigned-byte 8) (*)))
-          (setf (tcp-received c) (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0)))
-        nil)))
+    (cond ((plusp (length (tcp-received c)))
+           (prog1 (coerce (tcp-received c) '(simple-array (unsigned-byte 8) (*)))
+             (setf (tcp-received c) (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0))))
+          ((or (tcp-eof c) (tcp-reset c)) nil)
+          (t (make-array 0 :element-type '(unsigned-byte 8))))))
+
+(defun tcp-peer (c) (values (address-string (tcp-remote-ip c)) (tcp-remote-port c)))
+
+(defun tcp-reset-p (c) (and (tcp-reset c) t))
 
 (defun tcp-close (c)
   (sb-thread:with-recursive-lock (*tcp-lock*)
