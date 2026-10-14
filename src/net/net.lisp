@@ -171,11 +171,13 @@
             ((= type +ethertype-ip+) (receive-ip payload))))))
 
 (defun input-loop ()
-  (loop
-    (let ((frames (finch/iokit:network-receive (interface-device *interface*))))
-      (if frames
-          (dolist (f frames) (ignore-errors (receive-frame f)))
-          (sleep 0.002)))))
+  (let* ((device (interface-device *interface*))
+         (vector (finch/iokit:interrupt-vector device)))
+    (loop
+      (let ((frames (finch/iokit:network-receive device)))
+        (cond (frames (dolist (f frames) (ignore-errors (receive-frame f))))
+              (vector (finch/iokit:wait-for-interrupt (list vector)))
+              (t (sleep 0.002)))))))
 
 (defun start-network (&key ip (prefix 24) gateway)
   (finch/iokit:start-iokit)

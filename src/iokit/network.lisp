@@ -77,3 +77,5 @@
                  (post-event-buffer q id)))
       (when frames (mmio-write (virtqueue-notify q) 16 0))
       (nreverse frames))))
+
+(defmethod interrupt-vector ((net apple-virtio-network)) (virtqueue-vector (receive-queue net)))

@@ -318,7 +318,7 @@
                 (mapc #'pointer events)
                 (unless (equal before (list *cursor* (first *windows*) (and *drag* (window-x (first *drag*))) (and *drag* (window-y (first *drag*)))))
                   (render))))
-            (sleep 0.005)))))
+            (io:wait-for-events devices)))))
 
 (defun apply-commit (client octets)
   (dolist (command (getf (ca:decode-commit octets) :commands))

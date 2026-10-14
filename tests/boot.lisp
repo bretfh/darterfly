@@ -159,6 +159,7 @@
                          (ask "(map 'string #'code-char (subseq (iokit:read-blocks *b* 1000 100) (* 99 512) (+ (* 99 512) 17)))")))
              (ask "(iokit:write-blocks *b* 7 (let ((v (make-array 512 :element-type '(unsigned-byte 8) :initial-element 0))) (replace v (map 'vector #'char-code \"written by finch\")) v))")
              (is (search "\"written by finch\"" (ask "(map 'string #'code-char (subseq (iokit:read-blocks *b* 7 1) 0 16))")))
+             (is (search "(T T T)" (ask "(mapcar (lambda (s) (and (<= #x30 (iokit:interrupt-vector s) #x3f) t)) (list *b* (first (iokit:find-entries 'iokit:apple-virtio-input)) (first (iokit:find-entries 'iokit:apple-virtio-network))))")))
              (image:send c "(sb-ext:exit)")
              (image:expect c "exit(0)" :timeout 30))
         (image:finish c 5))

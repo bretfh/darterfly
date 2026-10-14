@@ -72,3 +72,5 @@
       (loop for done from 0 below count by per
             do (block-request b 1 (+ lba done) (min per (- count done)) vector (* done 512))))
     count))
+
+(defmethod interrupt-vector ((b apple-virtio-block-storage-device)) (virtqueue-vector (queue b)))

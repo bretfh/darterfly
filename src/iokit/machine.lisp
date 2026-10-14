@@ -13,6 +13,7 @@
    #:apple-virtio-block-storage-device #:block-count #:block-size #:read-blocks #:write-blocks
    #:io-block-storage-device #:io-media #:media-read #:media-write #:media-size #:io-guid-partition-scheme #:crc32
    #:acpi-table #:vm-page-grab #:ml-io-map #:boot-arg #:kernel-flags #:boot-video
+   #:wait-for-interrupt #:interrupt-vector
    #:apple-virtio-input #:input-events #:input-abs-range
    #:apple-virtio-network #:io-ethernet-interface #:network-send #:network-receive #:network-mac
    #:define-io-class #:add-personality #:personality #:publish-media #:io-partition-scheme
@@ -49,6 +50,19 @@
   (map 'string #'code-char (loop for i below n collect (ml-phys-read-8 (+ pa i)))))
 
 (defun io-sap (va) (sb-sys:int-sap va))
+
+(defun mmio-read (va width)
+  (let ((sap (io-sap va)))
+    (ecase width (8 (sb-sys:sap-ref-8 sap 0)) (16 (sb-sys:sap-ref-16 sap 0)) (32 (sb-sys:sap-ref-32 sap 0)))))
+
+(defun mmio-write (va width value)
+  (let ((sap (io-sap va)))
+    (ecase width
+      (8 (setf (sb-sys:sap-ref-8 sap 0) value))
+      (16 (setf (sb-sys:sap-ref-16 sap 0) value))
+      (32 (setf (sb-sys:sap-ref-32 sap 0) value)))))
+
+(defun ml-get-apicid () (machdep 13))
 
 (defun kernel-flags ()
   (let ((sap (sb-sys:sap+ (sb-sys:int-sap (boot-args)) 8)))

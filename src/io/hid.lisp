@@ -14,6 +14,16 @@
 
 (defmethod abs-range ((in finch/iokit:apple-virtio-input) axis) (finch/iokit:input-abs-range in axis))
 
+(defgeneric event-vector (device))
+(defmethod event-vector ((in finch/iokit:apple-virtio-input)) (finch/iokit:interrupt-vector in))
+(defmethod event-vector ((fd integer)) nil)
+
+(defun wait-for-events (devices)
+  (let ((vectors (mapcar #'event-vector devices)))
+    (if (and vectors (every #'identity vectors))
+        (finch/iokit:wait-for-interrupt vectors)
+        (sleep 0.005))))
+
 (defun input-devices ()
   (if (probe-file "/dev/input/")
       (loop for file in (directory "/dev/input/event*")

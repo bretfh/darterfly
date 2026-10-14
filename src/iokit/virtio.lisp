@@ -14,7 +14,9 @@
    (notify :initform nil :accessor notify-base)
    (notify-multiplier :initform 0 :accessor notify-multiplier)
    (isr :initform nil :accessor isr-cfg)
-   (device :initform nil :accessor device-cfg)))
+   (device :initform nil :accessor device-cfg)
+   (msi-x :initform nil :accessor msi-x-table)
+   (entries :initform 0 :accessor msi-x-entries)))
 
 (add-personality "IOClass" "AppleVirtIOPCITransport" "IOProviderClass" "IOPCIDevice"
                  "IOPCIPrimaryMatch" "0x00001af4&0x0000FFFF" "IOProbeScore" 10000)
@@ -23,17 +25,6 @@
   (let ((primary (gethash "IOVirtIOPrimaryMatch" table)))
     (or (null primary)
         (and (virtio-device-type tr) (id-matches-p primary (logior (ash (virtio-device-type tr) 16) #x1af4))))))
-
-(defun mmio-read (va width)
-  (let ((sap (io-sap va)))
-    (ecase width (8 (sb-sys:sap-ref-8 sap 0)) (16 (sb-sys:sap-ref-16 sap 0)) (32 (sb-sys:sap-ref-32 sap 0)))))
-
-(defun mmio-write (va width value)
-  (let ((sap (io-sap va)))
-    (ecase width
-      (8 (setf (sb-sys:sap-ref-8 sap 0) value))
-      (16 (setf (sb-sys:sap-ref-16 sap 0) value))
-      (32 (setf (sb-sys:sap-ref-32 sap 0) value)))))
 
 (defun common-read (tr offset width) (mmio-read (+ (common-cfg tr) offset) width))
 (defun common-write (tr offset width value) (mmio-write (+ (common-cfg tr) offset) width value))
@@ -66,6 +57,8 @@
   (when (common-cfg tr)
     (set-memory-enable d t)
     (set-bus-master-enable d t)
+    (multiple-value-bind (table entries) (enable-msi-x d)
+      (setf (msi-x-table tr) table (msi-x-entries tr) (or entries 0)))
     (let ((id (config-read-16 d 2)))
       (setf (virtio-device-type tr) (if (>= id #x1040) (- id #x1040) (config-read-16 d #x2e))))
     (setf (device-status tr) 0)
@@ -90,7 +83,7 @@
 
 (defun driver-ok (tr) (add-status tr 4))
 
-(defstruct virtqueue index size desc avail used notify free (last-used 0) (lock (sb-thread:make-mutex :name "virtqueue")))
+(defstruct virtqueue index size desc avail used notify free vector (last-used 0) (lock (sb-thread:make-mutex :name "virtqueue")))
 
 (defun setup-queue (tr index &optional (limit 128))
   (common-write tr 22 16 index)
@@ -102,6 +95,13 @@
     (common-write-64 tr 32 (virtqueue-desc q))
     (common-write-64 tr 40 (virtqueue-avail q))
     (common-write-64 tr 48 (virtqueue-used q))
+    (let ((vector (and (< index (msi-x-entries tr)) (allocate-vector))))
+      (when vector
+        (set-msi-x-vector (msi-x-table tr) index vector)
+        (common-write tr 26 16 index)
+        (if (= (common-read tr 26 16) index)
+            (setf (virtqueue-vector q) vector)
+            (free-vector vector))))
     (common-write tr 28 16 1)
     q))
 
@@ -122,7 +122,9 @@
         (ml-phys-write-16 (+ (virtqueue-avail q) 2) (ldb (byte 16 0) (1+ idx))))
       (mmio-write (virtqueue-notify q) 16 (virtqueue-index q))
       (loop while (= (ml-phys-read-16 (+ (virtqueue-used q) 2)) (virtqueue-last-used q))
-            do (sb-thread:thread-yield))
+            do (if (virtqueue-vector q)
+                   (wait-for-interrupt (list (virtqueue-vector q)) 1)
+                   (sb-thread:thread-yield)))
       (sb-thread:barrier (:read))
       (let* ((slot (+ (virtqueue-used q) 4 (* 8 (mod (virtqueue-last-used q) size))))
              (length (ml-phys-read-32 (+ slot 4))))

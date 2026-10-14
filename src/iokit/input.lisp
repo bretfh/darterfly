@@ -73,3 +73,5 @@
       (nreverse events))))
 
 (defun input-abs-range (in axis) (gethash axis (abs-ranges in)))
+
+(defmethod interrupt-vector ((in apple-virtio-input)) (virtqueue-vector (queue in)))
