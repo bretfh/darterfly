@@ -154,6 +154,8 @@
               (when (= (ldb (byte 7 0) (config-read-8 d #xe)) 1)
                 (probe-bus bridge (config-read-8 d #x19) d)))))))))
 
+(defvar *interface-units* 0)
+
 (defun start-iokit ()
   (or *registry-root* (%start-iokit)))
 
@@ -163,7 +165,7 @@
          (mcfg (acpi-table "MCFG"))
          (pci0 (attach (make-instance 'io-acpi-platform-device :name "PCI0") expert))
          (bridge (attach (make-instance 'apple-acpi-pci :ecam (ml-phys-read-64 (+ mcfg 44))) pci0)))
-    (setf *registry-root* root *bsd-units* 0)
+    (setf *registry-root* root *bsd-units* 0 *interface-units* 0)
     (probe-bus bridge (ml-phys-read-8 (+ mcfg 54)) bridge)
     (dolist (d (find-entries 'io-pci-device root))
       (register-service d))

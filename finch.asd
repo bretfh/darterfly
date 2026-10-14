@@ -78,7 +78,14 @@
   :depends-on (#:uiop)
   :serial t
   :pathname "src/iokit/"
-  :components ((:file "machine") (:file "registry") (:file "acpi") (:file "pci") (:file "virtio") (:file "storage") (:file "block") (:file "input")))
+  :components ((:file "machine") (:file "registry") (:file "acpi") (:file "pci") (:file "virtio") (:file "storage") (:file "block") (:file "input") (:file "network")))
+
+(asdf:defsystem #:finch/net
+  :description "Networking"
+  :depends-on (#:uiop #:finch/iokit)
+  :serial t
+  :pathname "src/net/"
+  :components ((:file "net")))
 
 (asdf:defsystem #:finch/vfs
   :description "The virtual file system"
@@ -171,11 +178,11 @@
 
 (asdf:defsystem #:finch
   :description "A Darwin in Common Lisp"
-  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/xpc #:finch/launchd #:finch/shell #:finch/io #:finch/text #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/iokit #:finch/vfs #:finch/apfs #:finch/kernel #:finch/image)
+  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/xpc #:finch/launchd #:finch/shell #:finch/io #:finch/text #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/iokit #:finch/vfs #:finch/apfs #:finch/net #:finch/kernel #:finch/image)
   :in-order-to ((asdf:test-op (asdf:test-op #:finch/test))))
 
 (asdf:defsystem #:finch/test
-  :depends-on (#:finch #:finch/tahoe #:fiveam (:require #:sb-posix) (:require #:sb-md5))
+  :depends-on (#:finch #:finch/tahoe #:fiveam (:require #:sb-posix) (:require #:sb-md5) (:require #:sb-bsd-sockets))
   :serial t
   :pathname "tests/"
   :components ((:file "suite") (:file "mach") (:file "plist") (:file "macho") (:file "dyld") (:file "objc") (:file "mig") (:file "server") (:file "ca") (:file "bsd") (:file "xpc") (:file "launchd") (:file "kernel") (:file "boot") (:file "apfs") (:file "tahoe"))

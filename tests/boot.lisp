@@ -352,6 +352,36 @@
                      "the answer appears")))
           (image:finish c 5)))))
 
+(defun free-udp-port ()
+  (let ((s (make-instance 'sb-bsd-sockets:inet-socket :type :datagram :protocol :udp)))
+    (unwind-protect (progn (sb-bsd-sockets:socket-bind s #(127 0 0 1) 0)
+                           (nth-value 1 (sb-bsd-sockets:socket-name s)))
+      (sb-bsd-sockets:socket-close s))))
+
+(test network-on-finch
+  (let* ((port (free-udp-port))
+         (c (image:bare-console :forwards (list (list :udp port 7)))))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 90)
+             (is (search "\"10.0.2.15\"" (ask "(progn (finch/net:start-network) (finch/net:udp-echo 7) (finch/net:address-string (finch/net::interface-ip finch/net:*interface*)))")))
+             (is (search "\"en0\"" (ask "(iokit:get-property (first (iokit:find-entries 'iokit:io-ethernet-interface)) \"BSD Name\")")))
+             (is (not (search "NIL" (ask "(finch/net:ping \"10.0.2.2\")"))) "the gateway answers a ping")
+             (let ((s (make-instance 'sb-bsd-sockets:inet-socket :type :datagram :protocol :udp))
+                   (buf (make-array 100 :element-type '(unsigned-byte 8))))
+               (unwind-protect
+                    (progn
+                      (sb-bsd-sockets:socket-connect s #(127 0 0 1) port)
+                      (sb-bsd-sockets:socket-send s (sb-ext:string-to-octets "hello finch over udp") nil)
+                      (is (equal "hello finch over udp"
+                                 (handler-case (sb-sys:with-deadline (:seconds 10)
+                                                 (multiple-value-bind (b n) (sb-bsd-sockets:socket-receive s buf nil)
+                                                   (map 'string #'code-char (subseq b 0 n))))
+                                   (error (e) (princ-to-string e))))))
+                 (sb-bsd-sockets:socket-close s))))
+        (image:finish c 5)))))
+
 (test xnu-checked-suites-pass-on-finch
   (let ((c (image:bare-console)))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 300)))

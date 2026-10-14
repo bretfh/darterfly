@@ -14,6 +14,7 @@
    #:io-block-storage-device #:io-media #:media-read #:media-write #:media-size #:io-guid-partition-scheme #:crc32
    #:acpi-table #:vm-page-grab #:ml-io-map #:boot-arg #:kernel-flags #:boot-video
    #:apple-virtio-input #:input-events #:input-abs-range
+   #:apple-virtio-network #:io-ethernet-interface #:network-send #:network-receive #:network-mac
    #:define-io-class #:add-personality #:personality #:publish-media #:io-partition-scheme
    #:media-device #:media-base #:next-bsd-unit #:bsd-client-class #:io-media-bsd-client))
 (in-package #:finch/iokit)

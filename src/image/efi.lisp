@@ -69,7 +69,7 @@
 (defun finch-sources ()
   (mapcar #'source '("src/mach/" "src/bsd/" "src/plist/" "src/macho/" "src/dyld/" "src/objc/" "src/mig/"
                      "src/server/" "src/ca/" "src/xpc/" "src/launchd/" "src/shell/" "src/io/" "src/text/"
-                     "src/imageio/" "src/kit/" "src/apps/" "src/iokit/" "src/vfs/" "src/apfs/" "src/kernel/" "src/tahoe/" "tests/" "src/image/")))
+                     "src/imageio/" "src/kit/" "src/apps/" "src/iokit/" "src/vfs/" "src/apfs/" "src/net/" "src/kernel/" "src/tahoe/" "tests/" "src/image/")))
 
 (defun finch-core ()
   (let ((core (build-path "finch.core")))
@@ -185,7 +185,7 @@
 (defun firmware (name)
   (format nil "~a/share/firmware/~a" (uiop:getenv "GUIX_ENVIRONMENT") name))
 
-(defun bare-qemu (esp &optional disks root)
+(defun bare-qemu (esp &optional disks root forwards)
   (let ((vars (build-path "OVMF_VARS.fd")))
     (unless (probe-file vars)
       (uiop:copy-file (firmware "ovmf_vars_x64.bin") vars)
@@ -196,13 +196,15 @@
           "-drive" (format nil "if=pflash,format=raw,readonly=on,file=~a" (firmware "ovmf_code_x64.bin"))
           "-drive" (format nil "if=pflash,format=raw,file=~a" (uiop:native-namestring vars))
           "-drive" (format nil "if=none,id=esp,format=raw,snapshot=on,file=fat:~a" (uiop:native-namestring esp))
-          "-device" "virtio-blk-pci,drive=esp")
+          "-device" "virtio-blk-pci,drive=esp,bootindex=0")
      (when root
        (list "-drive" (format nil "if=none,id=root,format=raw,~:[~;snapshot=on,~]file=~a" (eq (car root) :snapshot) (uiop:native-namestring (cdr root)))
              "-device" "virtio-blk-pci,drive=root"))
      (loop for disk in disks for i from 0
            append (list "-drive" (format nil "if=none,id=disk~d,format=raw,file=~a" i (uiop:native-namestring disk))
                         "-device" (format nil "virtio-blk-pci,drive=disk~d" i)))
+     (list "-netdev" (format nil "user,id=net0~{,hostfwd=~(~a~)::~d-:~d~}" (loop for (proto host guest) in forwards append (list proto host guest)))
+           "-device" "virtio-net-pci,netdev=net0,romfile=")
      (list "-device" "virtio-keyboard-pci" "-device" "virtio-tablet-pci"
            "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
           "-monitor" (format nil "unix:~a,server=on,wait=off" (monitor-path))
@@ -223,5 +225,5 @@
                     :input :interactive :output :interactive :error-output :interactive :ignore-error-status t)
   (values))
 
-(defun bare-console (&key (boot-args "") disks (root t))
-  (console :args (bare-qemu (esp :boot-args (root-boot-args boot-args root)) disks (root-drive root))))
+(defun bare-console (&key (boot-args "") disks (root t) forwards)
+  (console :args (bare-qemu (esp :boot-args (root-boot-args boot-args root)) disks (root-drive root) forwards)))
