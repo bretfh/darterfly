@@ -30,8 +30,7 @@
   '("src/osfmk/x86_64/start.s" "src/osfmk/x86_64/idt64.s" "src/osfmk/i386/i386_init.c"
     "src/osfmk/i386/mp_desc.c"
     "src/osfmk/x86_64/cswitch.s"
-    "src/bsd/dev/i386/systemcalls.c"
-    "src/osfmk/i386/mp.c"))
+    "src/bsd/dev/i386/systemcalls.c"))
 
 (defparameter *libsa-sources*
   '("syscall.c" "signal.c" "string.c" "stdio.c" "stdlib.c" "unistd.c" "time.c" "math.c" "misc.c"

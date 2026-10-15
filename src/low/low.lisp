@@ -4,7 +4,7 @@
   (:export #:define-low #:define-global #:low-object #:inb #:outb #:ref #:mem #:pause #:result #:while
            #:package-object #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:address
            #:rep-movsb #:rep-stosb #:&va #:va-next #:rdtsc #:return-address
-           #:invlpg #:set-cr3 #:cpuid-edx #:cpu-data #:fxsave #:fxrstor #:code-address #:call-pointer #:read-cr))
+           #:invlpg #:set-cr3 #:cpuid-edx #:cpu-data #:fxsave #:fxrstor #:code-address #:call-pointer #:read-cr #:set-cr #:fninit #:compare-and-swap))
 (in-package #:finch/low)
 
 (defvar *functions* (make-hash-table :test 'equal))
@@ -291,6 +291,19 @@
                    (out :byte))
              (pause (inst pause))
              (result (compile (first args)) (inst jmp *exit*))
+             (set-cr (compile (second args))
+                     (inst byte #x0F) (inst byte #x22)
+                     (inst byte (ecase (first args) (0 #xC0) (3 #xD8) (4 #xE0))))
+             (fninit (inst byte #xDB) (inst byte #xE3))
+             (compare-and-swap (compile (third args)) (inst push rax-tn)
+                               (compile (second args)) (inst push rax-tn)
+                               (compile (first args))
+                               (inst mov rdx-tn rax-tn)
+                               (inst pop rax-tn)
+                               (inst pop rcx-tn)
+                               (dolist (b '(#xF0 #x0F #xB1 #x0A)) (inst byte b))
+                               (inst set :e (reg :byte 0))
+                               (inst movzx '(:byte :dword) (reg :dword 0) (reg :byte 0)))
              (read-cr (inst byte #x0F) (inst byte #x20)
                       (inst byte (ecase (first args) (0 #xC0) (2 #xD0) (3 #xD8) (4 #xE0))))
              (t (let ((stacked (max 0 (- (length args) 6))))
