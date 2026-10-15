@@ -3,7 +3,8 @@
   (:shadow #:compile)
   (:export #:define-low #:define-global #:low-object #:inb #:outb #:ref #:mem #:pause #:result #:while
            #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:address
-           #:rep-movsb #:rep-stosb #:&va #:va-next #:rdtsc #:return-address))
+           #:rep-movsb #:rep-stosb #:&va #:va-next #:rdtsc #:return-address
+           #:invlpg #:set-cr3 #:cpuid-edx))
 (in-package #:finch/low)
 
 (defvar *functions* (make-hash-table :test 'equal))
@@ -251,6 +252,16 @@
                     (inst mov :dword (reg :dword 0) (reg :dword 0))
                     (inst or rax-tn rdx-tn))
              (return-address (inst mov rax-tn (ea 8 rbp-tn)))
+             (invlpg (compile (first args))
+                     (inst byte #x0F) (inst byte #x01) (inst byte #x38))
+             (set-cr3 (compile (first args))
+                      (inst byte #x0F) (inst byte #x22) (inst byte #xD8))
+             (cpuid-edx (compile (first args))
+                        (inst push rbx-tn)
+                        (inst xor :dword (reg :dword 1) (reg :dword 1))
+                        (inst byte #x0F) (inst byte #xA2)
+                        (inst pop rbx-tn)
+                        (inst mov :dword (reg :dword 0) (reg :dword 2)))
              (cli (inst byte #xFA))
              (sti (inst byte #xFB))
              (hlt (inst byte #xF4))
