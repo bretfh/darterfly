@@ -56,6 +56,4 @@
         (result 0)))))
 
 (defun pexpert-object ()
-  (low-object '(serial-init serial-put-polled serial-putc serial-tx-kick serial-tx-room serial-write
-                serial-enable-interrupts serial-interrupt serial-ready serial-getc
-                |PE_parse_boot_arg| |PE_parse_boot_argn| |PE_halt| |PE_incoming_interrupt| |PE_interrupt_wait|)))
+  (package-object "FINCH/PEXPERT"))

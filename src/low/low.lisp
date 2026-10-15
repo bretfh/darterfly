@@ -2,16 +2,16 @@
   (:use #:cl #:finch/asm)
   (:shadow #:compile)
   (:export #:define-low #:define-global #:low-object #:inb #:outb #:ref #:mem #:pause #:result #:while
-           #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:address
+           #:package-object #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:address
            #:rep-movsb #:rep-stosb #:&va #:va-next #:rdtsc #:return-address
-           #:invlpg #:set-cr3 #:cpuid-edx #:cpu-data))
+           #:invlpg #:set-cr3 #:cpuid-edx #:cpu-data #:fxsave #:fxrstor #:code-address))
 (in-package #:finch/low)
 
 (defvar *functions* (make-hash-table :test 'equal))
 (defvar *globals* (make-hash-table :test 'equal))
 
 (defstruct global name type count alignment extern export package)
-(defstruct low-function name args body)
+(defstruct low-function name args body package)
 
 (defun c-name (symbol)
   (let ((name (symbol-name symbol)))
@@ -26,7 +26,7 @@
 
 (defmacro define-low (name args &body body)
   `(setf (gethash (c-name ',name) *functions*)
-         (make-low-function :name (c-name ',name) :args ',args :body ',body)))
+         (make-low-function :name (c-name ',name) :args ',args :body ',body :package (package-name *package*))))
 
 (defun width (type) (ecase type (:u8 1) (:u16 2) (:u32 4) (:u64 8)))
 
@@ -252,6 +252,11 @@
                     (inst mov :dword (reg :dword 0) (reg :dword 0))
                     (inst or rax-tn rdx-tn))
              (return-address (inst mov rax-tn (ea 8 rbp-tn)))
+             (fxsave (compile (first args))
+                     (dolist (b '(#x48 #x0F #xAE #x00)) (inst byte b)))
+             (fxrstor (compile (first args))
+                      (dolist (b '(#x48 #x0F #xAE #x08)) (inst byte b)))
+             (code-address (inst lea rax-tn (data (c-name (first args)))))
              (cpu-data (dolist (b '(#x65 #x48 #x8B #x04 #x25 0 0 0 0)) (inst byte b)))
              (invlpg (compile (first args))
                      (inst byte #x0F) (inst byte #x01) (inst byte #x38))
@@ -332,6 +337,17 @@
             :do (sb-assem::emit-label label)
                 (loop :for b :across (sb-ext:string-to-octets text) :do (inst byte b))
                 (inst byte 0)))))
+
+(defun package-object (package &rest extra)
+  (let ((names (append (loop :for f :being :the :hash-values :of *functions*
+                             :when (string= (low-function-package f) package)
+                               :collect (low-function-name f))
+                       extra)))
+    (object (mapcar (lambda (n) (function-routine (gethash n *functions*))) (sort names #'string<))
+            :bss (loop :for g :being :the :hash-values :of *globals*
+                       :when (and (not (global-extern g)) (string= (global-package g) package))
+                         :collect (list (global-name g) (* (width (global-type g)) (global-count g))
+                                        (global-alignment g) (global-export g))))))
 
 (defun low-object (names)
   (let ((functions (mapcar (lambda (n) (or (gethash (c-name n) *functions*) (error "no low function ~s" n))) names))
