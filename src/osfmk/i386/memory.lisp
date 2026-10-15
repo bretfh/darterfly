@@ -124,4 +124,6 @@
                 page-down page-up insert-at delete-at clip vm-map-remove vm-map-reset vm-map-enter
                 vm-map-protect vm-map-find-space lookup vm-fault io-map ml-io-map ml-io-map-wcomb
                 kvtophys ptov table-page pte prot-bits pmap-enter pmap-protect pmap-remove pmap-enter-io
-                pmap-access-ok pmap-find-phys pmap-bootstrap)))
+                pmap-access-ok pmap-find-phys pmap-bootstrap
+                lapic ioapic-write pic-disable lapic-calibrate lapic-id lapic-send-ipi enable-lapic start-timer
+                lapic-init-slave lapic-init lapic-interrupt cpu-number i386-signal-cpu)))

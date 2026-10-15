@@ -4,7 +4,7 @@
   (:export #:define-low #:define-global #:low-object #:inb #:outb #:ref #:mem #:pause #:result #:while
            #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:address
            #:rep-movsb #:rep-stosb #:&va #:va-next #:rdtsc #:return-address
-           #:invlpg #:set-cr3 #:cpuid-edx))
+           #:invlpg #:set-cr3 #:cpuid-edx #:cpu-data))
 (in-package #:finch/low)
 
 (defvar *functions* (make-hash-table :test 'equal))
@@ -252,6 +252,7 @@
                     (inst mov :dword (reg :dword 0) (reg :dword 0))
                     (inst or rax-tn rdx-tn))
              (return-address (inst mov rax-tn (ea 8 rbp-tn)))
+             (cpu-data (dolist (b '(#x65 #x48 #x8B #x04 #x25 0 0 0 0)) (inst byte b)))
              (invlpg (compile (first args))
                      (inst byte #x0F) (inst byte #x01) (inst byte #x38))
              (set-cr3 (compile (first args))
