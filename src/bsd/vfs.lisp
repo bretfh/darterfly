@@ -31,6 +31,7 @@
 
 (defclass vnode (file)
   ((fd :initarg :fd :reader vfs-fd)
+   (access :initarg :access :initform 2 :reader file-access)
    (device :initarg :device :initform nil :reader device-p)))
 
 (defmethod file-read ((file vnode) count)
@@ -65,7 +66,7 @@
 (defun open (name flags &optional (mode #o644))
   (syscall
     (let ((fd (vfs (vfs:vfs-open (path name) (vfs-flags flags) mode))))
-      (fd-alloc (make-instance 'vnode :fd fd
+      (fd-alloc (make-instance 'vnode :fd fd :access (logand flags 3)
                                       :device (= (mode-type (vfs:vattr-mode (vfs (vfs:vfs-fstat fd)))) +s-ifchr+)
                                       :flags (logand flags +o-nonblock+))))))
 

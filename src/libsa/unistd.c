@@ -41,7 +41,6 @@ void _exit(int code) {
 
 
 
-int pipe(int fds[2]) { (void)fds; errno = ENOSYS; return -1; }
 pid_t getpid(void) { return 1; }
 pid_t getppid(void) { return 0; }
 pid_t getpgrp(void) { return 1; }

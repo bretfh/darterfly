@@ -15,7 +15,7 @@ enum {
   VFS_open = 1, VFS_close, VFS_read, VFS_write, VFS_pread, VFS_pwrite, VFS_lseek, VFS_stat, VFS_lstat, VFS_fstat,
   VFS_readlink, VFS_symlink, VFS_mkdir, VFS_rmdir, VFS_unlink, VFS_rename, VFS_chdir, VFS_fchdir, VFS_getcwd,
   VFS_realpath, VFS_chmod, VFS_fchmod, VFS_chown, VFS_fchown, VFS_truncate, VFS_ftruncate, VFS_dup, VFS_dup2,
-  VFS_fcntl, VFS_readdir, VFS_link, VFS_utimes, VFS_fsync, VFS_umask
+  VFS_fcntl, VFS_readdir, VFS_link, VFS_utimes, VFS_fsync, VFS_umask, VFS_pipe
 };
 
 typedef long (*vfs_entry)(long op, long a, long b, long c, long d);
@@ -198,6 +198,7 @@ int ftruncate(int fd, off_t len) { return (int)ret(call(VFS_ftruncate, fd, len, 
 int fsync(int fd) { return console(fd) ? 0 : (int)ret(call(VFS_fsync, fd, 0, 0, 0)); }
 int fdatasync(int fd) { return fsync(fd); }
 void sync(void) {}
+int pipe(int fds[2]) { return (int)ret(call(VFS_pipe, (long)fds, 0, 0, 0)); }
 int dup(int fd) { return (int)ret(call(VFS_dup, fd, 0, 0, 0)); }
 int dup2(int a, int b) { return (int)ret(call(VFS_dup2, a, b, 0, 0)); }
 

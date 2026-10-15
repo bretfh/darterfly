@@ -13,6 +13,8 @@
 (defgeneric file-read (file count))
 (defgeneric file-write (file octets))
 (defgeneric file-close (file))
+(defgeneric file-access (file)
+  (:method ((file file)) 2))
 
 (defmethod file-close ((file file)))
 
@@ -88,6 +90,9 @@
 
 (defclass read-end (pipe-end) ())
 (defclass write-end (pipe-end) ())
+
+(defmethod file-access ((file read-end)) 0)
+(defmethod file-access ((file write-end)) 1)
 
 (defun pipe ()
   (syscall

@@ -252,7 +252,13 @@
                     :input :interactive :output :interactive :error-output :interactive :ignore-error-status t)
   (values))
 
+(defun in-use-p (disk)
+  (not (zerop (nth-value 2 (uiop:run-program (list "qemu-io" "-f" "raw" "-c" "quit" (uiop:native-namestring disk))
+                                             :ignore-error-status t :output nil :error-output nil)))))
+
 (defun desktop (&key (disk (build-path "finch-hd.img")))
+  (when (and (probe-file disk) (in-use-p disk))
+    (error "~a is in use by a running finch; quit that one first" (uiop:native-namestring disk)))
   (let ((root (if (probe-file disk) (update-root disk) (root-disk disk (* 1024 1048576))))
         (esp (build-path "desktop/esp/")))
     (uiop:delete-directory-tree esp :validate t :if-does-not-exist :ignore)

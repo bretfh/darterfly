@@ -3,6 +3,7 @@
 (setf (symbol-value (find-symbol "*FINCH-ROOT*" "FINCH/TEST")) #p"/finch/")
 (push (lambda ()
         (funcall (find-symbol "VFS-START" "FINCH/VFS"))
+        (funcall (find-symbol "LIBSA-START" "FINCH/BSD"))
         (funcall (find-symbol "MOUNTROOT" "FINCH/APFS"))
         (setf sb-sys::*sbcl-homedir-pathname* (sb-impl::%sbcl-homedir-pathname))
         (when (funcall (find-symbol "BOOT-ARG" "FINCH/IOKIT") "launchd")

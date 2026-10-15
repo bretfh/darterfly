@@ -9,7 +9,7 @@
   :depends-on (#:finch/mach #:finch/net #:finch/vfs)
   :serial t
   :pathname "src/bsd/"
-  :components ((:file "errno") (:file "proc") (:file "file") (:file "socket") (:file "vfs") (:file "stdio") (:file "exec")))
+  :components ((:file "errno") (:file "proc") (:file "file") (:file "socket") (:file "vfs") (:file "stdio") (:file "exec") (:file "libsa")))
 
 (asdf:defsystem #:finch/xpc
   :description "XPC's wire"
@@ -92,7 +92,7 @@
   :depends-on (#:uiop (:require #:sb-posix))
   :serial t
   :pathname "src/vfs/"
-  :components ((:file "vfs") (:file "ramfs") (:file "libsa") (:file "host")))
+  :components ((:file "vfs") (:file "ramfs") (:file "start") (:file "host")))
 
 (asdf:defsystem #:finch/apfs
   :description "Apple File System"

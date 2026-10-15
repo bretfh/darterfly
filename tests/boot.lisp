@@ -318,6 +318,8 @@
              (is (search "DEV-NODE" (ask "(type-of (finch/vfs:namei \"/dev/console\"))")))
              (is (search ":LOADED" (ask "(progn (require :sb-rotate-byte) (require :sb-md5) :loaded)")) "contribs from SBCL_HOME")
              (is (search "#P\"/Users/finch/\"" (ask "(user-homedir-pathname)")))
+             (is (search "\"through a pipe\"" (ask "(multiple-value-bind (r w) (sb-posix:pipe) (let ((o (sb-sys:make-fd-stream w :output t)) (i (sb-sys:make-fd-stream r :input t))) (write-line \"through a pipe\" o) (close o) (prog1 (read-line i) (close i))))"))
+                 "an fd-stream over pipe()")
              (ask "(with-open-file (s \"/Users/finch/notes.txt\" :direction :output) (write-line \"kept across boots\" s))")
              (image:send c "(sb-ext:exit)")
              (image:expect c "exit(0)" :timeout 30))

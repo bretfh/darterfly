@@ -1,0 +1,58 @@
+(in-package #:finch/vfs)
+
+(defparameter +errno+
+  '((:eperm . 1) (:enoent . 2) (:esrch . 3) (:eintr . 4) (:eio . 5) (:enxio . 6) (:e2big . 7) (:enoexec . 8)
+    (:ebadf . 9) (:echild . 10) (:eagain . 11) (:enomem . 12) (:eacces . 13) (:efault . 14) (:ebusy . 16)
+    (:eexist . 17) (:exdev . 18) (:enodev . 19) (:enotdir . 20) (:eisdir . 21) (:einval . 22) (:enfile . 23)
+    (:emfile . 24) (:enotty . 25) (:efbig . 27) (:enospc . 28) (:espipe . 29) (:erofs . 30) (:emlink . 31)
+    (:epipe . 32) (:edom . 33) (:erange . 34) (:edeadlk . 35) (:enametoolong . 36) (:enosys . 38) (:enotempty . 39)
+    (:eloop . 40) (:enotsup . 95) (:eopnotsupp . 95) (:eafnosupport . 97) (:etimedout . 110)))
+
+(defun errno-code (errno) (or (cdr (assoc errno +errno+)) 5))
+
+(defun machdep-pair (n)
+  (let ((pair (sb-alien:make-alien (sb-alien:unsigned 64) 2)))
+    (unwind-protect
+         (progn
+           (sb-alien:alien-funcall
+            (sb-alien:extern-alien "__machdep" (function sb-alien:long sb-alien:long sb-alien:long sb-alien:long))
+            n (sb-sys:sap-int (sb-alien:alien-sap pair)) 0)
+           (values (sb-alien:deref pair 0) (sb-alien:deref pair 1)))
+      (sb-alien:free-alien pair))))
+
+(defvar *devfs* nil)
+
+(defun make-devfs ()
+  (or *devfs*
+      (let ((dev (make-ram-node :vdir #o755)))
+        (add-child dev "console" (make-instance 'dev-node :type :vchr :device :console :mode #o620))
+        (add-child dev "tty" (make-instance 'dev-node :type :vchr :device :console :mode #o666))
+        (add-child dev "null" (make-instance 'dev-node :type :vchr :device :null :mode #o666))
+        (setf *devfs* dev))))
+
+(defun make-kernel-dir ()
+  (let ((dir (make-ram-node :vdir #o755)))
+    (multiple-value-bind (address size) (machdep-pair 6)
+      (let ((k (vnop-create dir "kernel" #o555)))
+        (setf (node-external k) (sb-sys:int-sap address) (node-size k) size)))
+    dir))
+
+(defun vfs-mkdirs (path)
+  (let ((at ""))
+    (dolist (part (split-path path))
+      (setf at (format nil "~a/~a" at part))
+      (unless (lookup-or-nil at) (vfs-mkdir at #o755)))))
+
+(defun vfs-start ()
+  (let ((root (make-ram-node :vdir #o755)))
+    (vfs-mount root "/")
+    (add-child root "dev" (make-devfs))
+    (mkdirs root "/tmp")
+    (mkdirs root "/Volumes")
+    (setf (node-children (mkdirs root "/System/Library")) (list (cons "Kernels" (make-kernel-dir))))
+    (multiple-value-bind (address size) (machdep-pair 7)
+      (when (plusp address) (load-cpio root (sb-sys:int-sap address) size)))
+    (let ((console (vnop-lookup (make-devfs) "console")))
+      (dotimes (fd 3)
+        (setf (gethash fd *files*) (make-file :vnode console :flags (list :access :rdwr)))))
+    root))
