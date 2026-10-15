@@ -1,5 +1,6 @@
 #include "../../pexpert/i386/pexpert.h"
 #include "seg.h"
+#include "cpu_data.h"
 #include "../vm/vm.h"
 #include "../kern/thread.h"
 
@@ -90,7 +91,7 @@ void kernel_trap(x86_saved_state64_t *regs) {
   int user = (regs->cs & 3) == 3;
   if ((regs->trapno >= 0x20 && regs->trapno < 0x80) || regs->trapno >= 0xd0) {
     lapic_interrupt(regs->trapno);
-    if (user && regs->trapno == 0xDD) bsd_proftick();
+    if (regs->trapno == 0xDD && (user || current_thread() != current_cpu_datap()->cpu_idle_thread)) bsd_proftick();
     if (user) {
       sched_ast();
       bsd_ast(regs);

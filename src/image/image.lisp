@@ -206,7 +206,10 @@
   (case char
     (#\( "9") (#\) "0") (#\+ "equal") (#\* "8") (#\" "apostrophe") (#\Space "spc")
     (#\Newline "ret") (#\- "minus") (#\= "equal") (#\. "dot") (#\/ "slash")
-    (#\: "semicolon") (#\; "semicolon") (#\' "apostrophe")
+    (#\: "semicolon") (#\; "semicolon") (#\' "apostrophe") (#\, "comma") (#\< "comma") (#\> "dot")
+    (#\[ "bracket_left") (#\] "bracket_right") (#\{ "bracket_left") (#\} "bracket_right")
+    (#\\ "backslash") (#\| "backslash") (#\` "grave_accent") (#\~ "grave_accent")
+    (#\_ "minus") (#\? "slash") (#\! "1") (#\@ "2") (#\# "3") (#\$ "4") (#\% "5") (#\^ "6") (#\& "7")
     (t (string (char-downcase char)))))
 
 (defun send-keys (string)
