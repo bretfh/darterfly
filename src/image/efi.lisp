@@ -225,32 +225,28 @@
   (format nil "~a/share/firmware/~a" (uiop:getenv "GUIX_ENVIRONMENT") name))
 
 (defun bare-qemu (esp &optional disks root forwards)
-  (let ((vars (build-path "OVMF_VARS.fd")))
-    (unless (probe-file vars)
-      (uiop:copy-file (firmware "ovmf_vars_x64.bin") vars)
-      (run "chmod" "u+w" (uiop:native-namestring vars)))
-    (append
-     (list "qemu-system-x86_64" "-enable-kvm" "-cpu" "host" "-m" "4096" "-smp" "4"
-          "-machine" "q35"
-          "-drive" (format nil "if=pflash,format=raw,readonly=on,file=~a" (firmware "ovmf_code_x64.bin"))
-          "-drive" (format nil "if=pflash,format=raw,file=~a" (uiop:native-namestring vars))
-          "-drive" (if (equal (pathname-type esp) "img")
-                       (format nil "if=none,id=esp,format=raw,file=~a" (uiop:native-namestring esp))
-                       (format nil "if=none,id=esp,format=raw,snapshot=on,file=~a" (uiop:native-namestring (esp-image esp))))
-          "-device" "virtio-blk-pci,drive=esp,bootindex=0")
-     (when root
-       (list "-drive" (format nil "if=none,id=root,format=raw,~:[~;snapshot=on,~]file=~a" (eq (car root) :snapshot) (uiop:native-namestring (cdr root)))
-             "-device" "virtio-blk-pci,drive=root"))
-     (loop for disk in disks for i from 0
-           append (list "-drive" (format nil "if=none,id=disk~d,format=raw,file=~a" i (uiop:native-namestring disk))
-                        "-device" (format nil "virtio-blk-pci,drive=disk~d" i)))
-     (list "-netdev" (format nil "user,id=net0~{,hostfwd=~(~a~)::~d-:~d~}" (loop for (proto host guest) in forwards append (list proto host guest)))
-           "-device" "virtio-net-pci,netdev=net0,romfile=")
-     (list "-device" "virtio-keyboard-pci" "-device" "virtio-tablet-pci"
-           "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
-          "-monitor" (format nil "unix:~a,server=on,wait=off" (monitor-path))
-          "-qmp" (format nil "unix:~a,server=on,wait=off" (qmp-path))
-          "-display" "none" "-serial" "stdio" "-no-reboot"))))
+  (append
+   (list "qemu-system-x86_64" "-enable-kvm" "-cpu" "host" "-m" "4096" "-smp" "4"
+        "-machine" "q35"
+        "-drive" (format nil "if=pflash,format=raw,readonly=on,file=~a" (firmware "ovmf_code_x64.bin"))
+        "-drive" (format nil "if=pflash,format=raw,snapshot=on,file=~a" (firmware "ovmf_vars_x64.bin"))
+        "-drive" (if (equal (pathname-type esp) "img")
+                     (format nil "if=none,id=esp,format=raw,file=~a" (uiop:native-namestring esp))
+                     (format nil "if=none,id=esp,format=raw,snapshot=on,file=~a" (uiop:native-namestring (esp-image esp))))
+        "-device" "virtio-blk-pci,drive=esp,bootindex=0")
+   (when root
+     (list "-drive" (format nil "if=none,id=root,format=raw,~:[~;snapshot=on,~]file=~a" (eq (car root) :snapshot) (uiop:native-namestring (cdr root)))
+           "-device" "virtio-blk-pci,drive=root"))
+   (loop for disk in disks for i from 0
+         append (list "-drive" (format nil "if=none,id=disk~d,format=raw,file=~a" i (uiop:native-namestring disk))
+                      "-device" (format nil "virtio-blk-pci,drive=disk~d" i)))
+   (list "-netdev" (format nil "user,id=net0~{,hostfwd=~(~a~)::~d-:~d~}" (loop for (proto host guest) in forwards append (list proto host guest)))
+         "-device" "virtio-net-pci,netdev=net0,romfile=")
+   (list "-device" "virtio-keyboard-pci" "-device" "virtio-tablet-pci"
+         "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
+        "-monitor" (format nil "unix:~a,server=on,wait=off" (monitor-path))
+        "-qmp" (format nil "unix:~a,server=on,wait=off" (qmp-path))
+        "-display" "none" "-serial" "stdio" "-no-reboot")))
 
 (defun root-boot-args (boot-args root)
   (if root (format nil "rd=disk2s1 ~a" boot-args) boot-args))
