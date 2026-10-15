@@ -316,6 +316,8 @@
              (is (search "334" (ask "(length (uiop:read-file-lines \"/finch/tests/ports.txt\"))")))
              (is (search "#P\"/System/Library/Kernels/kernel\"" (ask "(probe-file \"/System/Library/Kernels/kernel\")")))
              (is (search "DEV-NODE" (ask "(type-of (finch/vfs:namei \"/dev/console\"))")))
+             (is (search ":LOADED" (ask "(progn (require :sb-rotate-byte) (require :sb-md5) :loaded)")) "contribs from SBCL_HOME")
+             (is (search "#P\"/Users/finch/\"" (ask "(user-homedir-pathname)")))
              (ask "(with-open-file (s \"/Users/finch/notes.txt\" :direction :output) (write-line \"kept across boots\" s))")
              (image:send c "(sb-ext:exit)")
              (image:expect c "exit(0)" :timeout 30))

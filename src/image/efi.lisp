@@ -144,10 +144,15 @@
                 :collect (list :file path (text (format nil "#!finch ~a~%" program)) #o755))
           (desktop-jobs) (fonts) (icons)))
 
+(defun contribs ()
+  (loop :for fasl :in (directory (merge-pathnames "obj/sbcl-home/contrib/*.fasl" (sbcl-tree)))
+        :collect (list :file (format nil "usr/lib/sbcl/contrib/~a.fasl" (pathname-name fasl)) (octets fasl))))
+
 (defun root-entries ()
   (let ((files (append (loop :for f :in *ramdisk-files*
                              :collect (list :file (concatenate 'string "finch/" f) (octets (source f))))
-                       (desktop-entries)))
+                       (desktop-entries)
+                       (contribs)))
         (dirs (list "tmp" "Users" "Users/finch" "dev" "Volumes" "System" "System/Library" "System/Library/Kernels")))
     (dolist (f files)
       (let ((path (second f)))

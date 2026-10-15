@@ -115,7 +115,7 @@ void *aligned_alloc(size_t align, size_t n) {
   return posix_memalign(&p, align, n) ? 0 : p;
 }
 
-static char *env_storage[64] = {"HOME=/", "PATH=/bin:/usr/bin", "TERM=dumb", "SBCL_HOME=/usr/lib/sbcl", 0};
+static char *env_storage[64] = {"HOME=/Users/finch", "PATH=/bin:/usr/bin", "TERM=dumb", "SBCL_HOME=/usr/lib/sbcl", 0};
 char **environ = env_storage;
 
 char *getenv(const char *name) {

@@ -4,6 +4,7 @@
 (push (lambda ()
         (funcall (find-symbol "VFS-START" "FINCH/VFS"))
         (funcall (find-symbol "MOUNTROOT" "FINCH/APFS"))
+        (setf sb-sys::*sbcl-homedir-pathname* (sb-impl::%sbcl-homedir-pathname))
         (when (funcall (find-symbol "BOOT-ARG" "FINCH/IOKIT") "launchd")
           (sb-thread:make-thread (find-symbol "LAUNCH" "FINCH/KERNEL") :name "load_init_program")))
       sb-ext:*init-hooks*)
