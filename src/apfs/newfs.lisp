@@ -224,8 +224,9 @@ data blocks as (block . octets), the next inode number and counts."
           (setf (gethash path ids) (prog1 next (incf next)))
           (push path (gethash (parent-of path) children))))
       (dolist (e entries)
-        (destructuring-bind (kind raw &optional content (mode #o644)) e
-          (let* ((path (string-trim "/" raw))
+        (destructuring-bind (kind raw &optional content (mode #o644) file-time) e
+          (let* ((time (or file-time time))
+                 (path (string-trim "/" raw))
                  (id (gethash path ids))
                  (parent (or (gethash (parent-of path) ids) (error "~a has no parent directory" raw)))
                  (name (leaf-of path)))

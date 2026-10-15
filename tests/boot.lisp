@@ -817,6 +817,53 @@
                    "the TinyCC finch built makes the same object again"))
           (image:finish c 5))))))
 
+(defun sbcl-phase (disk form marker)
+  (let ((c (image:bare-console :root disk)))
+    (unwind-protect
+         (progn
+           (image:expect c "* " :timeout 60)
+           (image:send c "(progn (uiop:chdir \"/usr/src/sbcl/\") (setf *default-pathname-defaults* #p\"/usr/src/sbcl/\") (load \"loader.lisp\") :ready)")
+           (image:expect c ":READY" :timeout 120)
+           (image:send c form)
+           (prog1 (ignore-errors (image:expect c marker :timeout 3600))
+             (image:send c "(progn (funcall (intern \"VFS-SYNC\" (or (find-package \"HOST-FINCH/VFS\") (find-package \"FINCH/VFS\")))) (format t \"~%SYNCED~%\"))")
+             (image:expect c "SYNCED" :timeout 300)
+             (image:send c "(funcall (intern \"EXIT\" (or (find-package \"HOST-SB-EXT\") (find-package \"SB-EXT\"))))")))
+      (image:finish c 30))))
+
+(defun disk-files (disk host-root guest-root relatives)
+  (let ((finch/vfs:*root* nil) (finch/vfs:*mounts* nil))
+    (finch/vfs:vfs-mount (finch/vfs:make-ram-node :vdir #o755) "/")
+    (finch/vfs:vfs-mkdir "/root" #o755)
+    (multiple-value-bind (read write) (finch/apfs:file-store disk)
+      (finch/apfs:mount-writable read write "/root"))
+    (loop :for rel :in relatives
+          :for path := (concatenate 'string "/root/" guest-root rel)
+          :unless (and (ignore-errors (finch/vfs:vfs-stat path))
+                       (equalp (image::octets (merge-pathnames rel host-root))
+                               (let ((fd (finch/vfs:vfs-open path (list :access :rdonly) 0)))
+                                 (unwind-protect (finch/vfs:vfs-read fd (finch/vfs:vattr-size (finch/vfs:vfs-stat path)))
+                                   (finch/vfs:vfs-close fd)))))
+            :collect rel)))
+
+(test finch-cross-compiles-sbcl
+  (let ((disk (merge-pathnames "sbcl-build.img" (finch-file "build/")))
+        (host (finch-file "build/sbcl-mt/")))
+    (uiop:delete-file-if-exists disk)
+    (finch/image::root-disk disk (* 512 1048576) (append (finch/image::root-entries) (finch/image::sbcl-source-entries)))
+    (is (sbcl-phase disk "(progn (cl-user::load-sbcl-file \"make-host-1.lisp\" nil) (format t \"~%HOST1-DONE~%\"))" "HOST1-DONE")
+        "make-host-1 builds the cross-compiler inside finch")
+    (is (sbcl-phase disk "(progn (push (lambda () (throw 'after-xc t)) sb-ext:*save-hooks*) (catch 'after-xc (cl-user::load-sbcl-file \"make-host-2.lisp\" nil)) (format t \"~%HOST2-DONE~%\"))" "HOST2-DONE")
+        "make-host-2 cross-compiles the target inside finch")
+    (is (sbcl-phase disk "(progn (cl-user::load-sbcl-file \"make-genesis-2.lisp\" nil) (format t \"~%GENESIS2-DONE~%\"))" "GENESIS2-DONE")
+        "make-genesis-2 writes the cold core inside finch")
+    (flet ((relatives (pattern) (mapcar (lambda (p) (enough-namestring p host)) (directory (merge-pathnames pattern host)))))
+      (let ((files (append (list "output/cold-sbcl.core")
+                           (relatives "output/genesis-2/*.h") (relatives "src/runtime/genesis/*.h")
+                           (relatives "obj/from-xc/**/*.lisp-obj"))))
+        (is (null (disk-files disk host "usr/src/sbcl/" files))
+            "finch's cold core, headers and target fasls are the host's byte for byte (~d files)" (length files))))))
+
 (test finch-saves-itself-and-boots-the-save
   (let ((esp (merge-pathnames "esp-save.img" (finch-file "build/"))))
     (uiop:delete-file-if-exists esp)

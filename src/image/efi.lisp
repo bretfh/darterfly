@@ -154,8 +154,19 @@
                     (sort (remove-duplicates dirs :test #'string=) #'< :key (lambda (d) (count #\/ d))))
             files)))
 
-(defun root-disk (&optional (path (build-path "root.img")) (size (* 128 1048576)))
-  (finch/apfs:newfs path :size size :volume-name "finch HD" :entries (root-entries)
+(defun sbcl-source-entries ()
+  (let ((tree (sbcl-tree)))
+    (append (tree-entries (format nil "~a/share/sbcl-source/" (uiop:getenv "GUIX_ENVIRONMENT")) "usr/src/sbcl"
+                          :skip '(".git" "version.lisp-expr"))
+            (list (list :dir "usr/src/sbcl/output"))
+            (loop :for file :in '("version.lisp-expr" "local-target-features.lisp-expr" "output/build-config" "output/build-id.inc"
+                                  "output/dynamic-space-size.txt" "output/prefix.def"
+                                  "output/stuff-groveled-from-headers.lisp")
+                  :collect (list :file (concatenate 'string "usr/src/sbcl/" file) (octets (merge-pathnames file tree)) #o644
+                                 (file-time (merge-pathnames file tree)))))))
+
+(defun root-disk (&optional (path (build-path "root.img")) (size (* 128 1048576)) (entries (root-entries)))
+  (finch/apfs:newfs path :size size :volume-name "finch HD" :entries entries
                          :container-uuid "F1C40000-0000-4000-8000-000000000001"
                          :volume-uuid "F1C40000-0000-4000-8000-000000000002"))
 
@@ -181,7 +192,8 @@
     (let ((at (format nil "/root/~a" (second entry))))
       (ecase (first entry)
         (:dir (unless (ignore-errors (finch/vfs:vfs-stat at)) (finch/vfs:vfs-mkdir at #o755)))
-        (:file (destructuring-bind (octets &optional (mode #o644)) (cddr entry)
+        (:file (destructuring-bind (octets &optional (mode #o644) time) (cddr entry)
+                 (declare (ignore time))
                  (unless (same-content-p at octets)
                    (let ((fd (finch/vfs:vfs-open at (list :access :wronly :creat t :trunc t) (logand mode #o7777))))
                      (unwind-protect (finch/vfs:vfs-write fd octets)
@@ -267,6 +279,8 @@
                     :input :interactive :output :interactive :error-output :interactive :ignore-error-status t)
   (values))
 
+(defun file-time (file) (* 1000000000 (- (file-write-date file) 2208988800)))
+
 (defun tree-entries (from to &key (skip '(".git")) (keep (constantly t)))
   (let ((entries (loop :for parent :in (parents (format nil "/~a" to)) :collect (list :dir parent))))
     (labels ((walk (dir at)
@@ -274,7 +288,8 @@
                (dolist (file (uiop:directory-files dir))
                  (unless (or (member (file-namestring file) skip :test #'string=) (not (funcall keep file)))
                    (push (list :file (format nil "~a/~a" at (file-namestring file)) (octets file)
-                               (if (logtest #o111 (sb-posix:stat-mode (sb-posix:stat (uiop:native-namestring file)))) #o755 #o644))
+                               (if (logtest #o111 (sb-posix:stat-mode (sb-posix:stat (uiop:native-namestring file)))) #o755 #o644)
+                               (file-time file))
                          entries)))
                (dolist (sub (uiop:subdirectories dir))
                  (let ((name (car (last (pathname-directory sub)))))

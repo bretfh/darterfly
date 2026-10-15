@@ -8,7 +8,7 @@
   (let ((source (format nil "~a/share/sbcl-source/" (uiop:getenv "GUIX_ENVIRONMENT")))
         (tree (sbcl-tree)))
     (uiop:delete-directory-tree tree :validate t :if-does-not-exist :ignore)
-    (run "cp" "-r" source (uiop:native-namestring (string-right-trim "/" (uiop:native-namestring tree))))
+    (run "cp" "-r" "--preserve=timestamps" source (uiop:native-namestring (string-right-trim "/" (uiop:native-namestring tree))))
     (run "chmod" "-R" "u+w" (uiop:native-namestring tree))
     (with-open-file (s (merge-pathnames "version.lisp-expr" tree) :direction :output :if-exists :supersede)
       (prin1 *sbcl-version* s)
