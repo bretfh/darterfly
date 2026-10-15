@@ -128,9 +128,16 @@
   :pathname "src/asm/"
   :components ((:file "asm")))
 
+(asdf:defsystem #:finch/low
+  :description "Lisp below the heap"
+  :depends-on (#:finch/asm)
+  :serial t
+  :pathname "src/low/"
+  :components ((:file "low")))
+
 (asdf:defsystem #:finch/pexpert
   :description "Serial console"
-  :depends-on (#:finch/asm)
+  :depends-on (#:finch/low)
   :serial t
   :pathname "src/pexpert/i386/"
   :components ((:file "serial")))
