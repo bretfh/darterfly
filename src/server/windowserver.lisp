@@ -302,25 +302,41 @@
 
 (defun hid-loop ()
   (let ((devices (hid-devices)))
+    (bsd:bsdthread-create (lambda () (collect-events devices)) "hid events")
     (loop
-      (handler-case (hid-step devices)
+      (handler-case (hid-step)
         (error (e)
           (ignore-errors
            (with-open-file (s "/tmp/WindowServer.err" :direction :output :if-exists :append :if-does-not-exist :create)
              (format s "~a~%" e)
              (sb-debug:print-backtrace :stream s :count 15))))))))
 
-(defun hid-step (devices)
-  (progn
-      (let ((events (drain devices)))
-        (if events
-            (sb-thread:with-mutex (*lock*)
-              (let ((before (list *cursor* (first *windows*) (and *drag* (window-x (first *drag*))) (and *drag* (window-y (first *drag*))))))
-                (mapc #'pointer events)
-                (mapc #'keyboard events)
-                (unless (equal before (list *cursor* (first *windows*) (and *drag* (window-x (first *drag*))) (and *drag* (window-y (first *drag*)))))
-                  (render))))
-            (io:wait-for-events devices)))))
+(defvar *pending* nil)
+(defvar *pending-lock* (sb-thread:make-mutex :name "hid events"))
+(defvar *pending-ready* (sb-thread:make-waitqueue))
+
+(defun collect-events (devices)
+  (loop
+    (let ((events (drain devices)))
+      (if events
+          (sb-thread:with-mutex (*pending-lock*)
+            (setf *pending* (nconc *pending* events))
+            (sb-thread:condition-broadcast *pending-ready*))
+          (io:wait-for-events devices)))))
+
+(defun take-events ()
+  (sb-thread:with-mutex (*pending-lock*)
+    (loop :until *pending* :do (sb-thread:condition-wait *pending-ready* *pending-lock*))
+    (shiftf *pending* nil)))
+
+(defun hid-step ()
+  (let ((events (take-events)))
+    (sb-thread:with-mutex (*lock*)
+      (let ((before (list *cursor* (first *windows*) (and *drag* (window-x (first *drag*))) (and *drag* (window-y (first *drag*))))))
+        (mapc #'pointer events)
+        (mapc #'keyboard events)
+        (unless (equal before (list *cursor* (first *windows*) (and *drag* (window-x (first *drag*))) (and *drag* (window-y (first *drag*)))))
+          (render))))))
 
 (defun apply-commit (client octets)
   (dolist (command (getf (ca:decode-commit octets) :commands))
