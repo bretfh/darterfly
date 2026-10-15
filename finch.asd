@@ -152,6 +152,13 @@
                (:file "systemcalls" :pathname "../../bsd/dev/i386/systemcalls")
                (:file "start" :pathname "../x86_64/start") (:file "init") (:file "stubs" :pathname "../x86_64/stubs") (:file "mp-desc") (:file "memory")))
 
+(asdf:defsystem #:finch/link
+  :description "Kernel linker"
+  :depends-on (#:uiop)
+  :serial t
+  :pathname "src/link/"
+  :components ((:file "link")))
+
 (asdf:defsystem #:finch/boot
   :description "boot.efi"
   :depends-on (#:finch/low)
@@ -168,7 +175,7 @@
 
 (asdf:defsystem #:finch/image
   :description "The bootable image"
-  :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io #:finch/apfs #:finch/fat #:finch/pexpert #:finch/osfmk #:finch/low #:finch/boot (:require #:sb-bsd-sockets))
+  :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io #:finch/apfs #:finch/fat #:finch/pexpert #:finch/osfmk #:finch/low #:finch/boot #:finch/link (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/image/"
   :components ((:file "image") (:file "runtime") (:file "efi")))

@@ -33,12 +33,6 @@
             (apply #'run "clang" (append flags (list "-c" name "-o" (uiop:native-namestring object))))
         :collect (uiop:native-namestring object)))
 
-(defun kernel-object ()
-  (let ((out (uiop:native-namestring (build-path "kernel.o"))))
-    (apply #'run "ld.lld" "-r" "-o" out (kernel-objects))
-    (run "llvm-objcopy" "--keep-global-symbol=_start" out)
-    out))
-
 (defun lisp-objects ()
   (setf finch/low:*build-date* (date))
   (loop :for (name make) :in (list (list "pexpert" #'finch/pexpert:pexpert-object)
@@ -88,16 +82,25 @@
 
 (defun kernel-inputs ()
   (append (mapcar #'source '("src/osfmk/" "src/bsd/dev/" "src/bsd/kern/" "src/pexpert/" "src/libsa/" "src/sbcl/" "src/image/"
-                                     "src/asm/" "src/low/"))
+                                     "src/asm/" "src/low/" "src/link/" "src/boot/"))
           (list (merge-pathnames "output/" (sbcl-tree)))))
 
 (defun mach-kernel ()
   (let ((out (build-path "kernel/kernel")))
     (when (and (probe-file out) (> (file-write-date out) (newest (kernel-inputs))))
       (return-from mach-kernel out))
-    (apply #'run "ld.lld" "-T" (source "src/osfmk/x86_64/kernel.ld") "-nostdlib" "-static" "--error-limit=0"
-           "-o" (uiop:native-namestring out)
-           (append (list (kernel-object)) (libsa-objects) (runtime-objects)))
+    (flet ((read-object (path region)
+             (finch/link:read-object (with-open-file (s path :element-type '(unsigned-byte 8))
+                                       (let ((v (make-array (file-length s) :element-type '(unsigned-byte 8))))
+                                         (read-sequence v s)
+                                         v))
+                                     path region)))
+      (let ((image (finch/link:link-kernel (mapcar (lambda (p) (read-object p :kernel)) (kernel-objects))
+                                           (mapcar (lambda (p) (read-object p :user))
+                                                   (append (libsa-objects) (runtime-objects))))))
+        (ensure-directories-exist out)
+        (with-open-file (s out :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
+          (write-sequence image s))))
     out))
 
 (defun boot-plist (boot-args)
