@@ -140,7 +140,14 @@
   :depends-on (#:finch/low)
   :serial t
   :pathname "src/pexpert/i386/"
-  :components ((:file "serial")))
+  :components ((:file "serial") (:file "init")))
+
+(asdf:defsystem #:finch/osfmk
+  :description "Kernel"
+  :depends-on (#:finch/low)
+  :serial t
+  :pathname "src/osfmk/i386/"
+  :components ((:file "mtrr")))
 
 (asdf:defsystem #:finch/kernel
   :description "The kernel, run as pid 1"
@@ -151,7 +158,7 @@
 
 (asdf:defsystem #:finch/image
   :description "The bootable image"
-  :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io #:finch/apfs #:finch/fat #:finch/pexpert (:require #:sb-bsd-sockets))
+  :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io #:finch/apfs #:finch/fat #:finch/pexpert #:finch/osfmk (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/image/"
   :components ((:file "image") (:file "runtime") (:file "efi")))

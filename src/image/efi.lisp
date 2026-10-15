@@ -34,8 +34,8 @@
     "src/osfmk/i386/lapic.c" "src/osfmk/kern/sched_prim.c" "src/osfmk/x86_64/cswitch.s"
     "src/bsd/kern/kern_sig.c"
     "src/bsd/dev/i386/systemcalls.c" "src/bsd/dev/i386/unix_signal.c"
-    "src/pexpert/i386/pe_init.c" "src/pexpert/i386/pe_interrupt.c" "src/osfmk/x86_64/loose_ends.c"
-    "src/osfmk/i386/mp.c" "src/osfmk/i386/mtrr.c"))
+    "src/osfmk/x86_64/loose_ends.c"
+    "src/osfmk/i386/mp.c"))
 
 (defparameter *libsa-sources*
   '("syscall.c" "signal.c" "string.c" "stdio.c" "stdlib.c" "unistd.c" "time.c" "math.c" "misc.c"
@@ -55,11 +55,13 @@
     out))
 
 (defun lisp-objects ()
-  (let ((serial (build-path "kernel/serial.o")))
-    (ensure-directories-exist serial)
-    (with-open-file (s serial :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
-      (write-sequence (finch/pexpert:serial-object) s))
-    (list (uiop:native-namestring serial))))
+  (loop :for (name make) :in (list (list "pexpert" #'finch/pexpert:pexpert-object)
+                                   (list "osfmk" #'finch/osfmk:osfmk-object))
+        :collect (let ((path (build-path (format nil "kernel/~a.o" name))))
+                   (ensure-directories-exist path)
+                   (with-open-file (s path :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
+                     (write-sequence (funcall make) s))
+                   (uiop:native-namestring path))))
 
 (defun kernel-objects ()
   (append (lisp-objects) (compile-objects (mapcar #'source *kernel-sources*) "kernel"
@@ -104,7 +106,8 @@
                         :maximize (newest (list sub)))))
 
 (defun kernel-inputs ()
-  (append (mapcar #'source '("src/osfmk/" "src/bsd/dev/" "src/bsd/kern/" "src/pexpert/" "src/libsa/" "src/sbcl/" "src/image/"))
+  (append (mapcar #'source '("src/osfmk/" "src/bsd/dev/" "src/bsd/kern/" "src/pexpert/" "src/libsa/" "src/sbcl/" "src/image/"
+                                     "src/asm/" "src/low/"))
           (list (merge-pathnames "output/" (sbcl-tree)))))
 
 (defun mach-kernel ()

@@ -1,6 +1,6 @@
 (defpackage #:finch/pexpert
   (:use #:cl #:finch/low)
-  (:export #:serial-object))
+  (:export #:pexpert-object))
 (in-package #:finch/pexpert)
 
 (defconstant +com1+ #x3F8)
@@ -89,6 +89,3 @@
             (incf tail)
             c))))
 
-(defun serial-object ()
-  (low-object '(serial-init serial-put-polled serial-putc serial-tx-kick serial-tx-room serial-write
-                serial-enable-interrupts serial-interrupt serial-ready serial-getc)))
