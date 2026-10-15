@@ -158,7 +158,9 @@
                              :collect (list :file (concatenate 'string "finch/" f) (octets (source f))))
                        (desktop-entries)
                        (contribs)
-                       (certificates)))
+                       (certificates)
+                       (tree-entries (asdf:system-relative-pathname :finch "") "usr/src/finch"
+                                     :skip '(".git" "build" "tahoe"))))
         (dirs (list "tmp" "Users" "Users/finch" "dev" "Volumes" "System" "System/Library" "System/Library/Kernels")))
     (dolist (f files)
       (let ((path (second f)))

@@ -667,3 +667,32 @@
                (is (= #xffd9d9d9 (image:pixel screen 130 90)) "finder's window ~x" (image:pixel screen 130 90))
                (is (/= #xffffffff (image:pixel screen 186 160)) "a folder in it ~x" (image:pixel screen 186 160))))
         (image:finish c 5)))))
+
+(test finch-edits-its-own-source
+  (let ((disk (merge-pathnames "self-edit.img" (finch-file "build/")))
+        (copy "(dolist (f (directory \"/usr/src/finch/**/*.*\")) (unless (uiop:directory-pathname-p f) (let ((to (concatenate 'string \"/Users/finch/src/finch/\" (subseq (namestring f) (length \"/usr/src/finch/\"))))) (ensure-directories-exist to) (uiop:copy-file f to))))")
+        (edit "(let* ((p \"/Users/finch/src/finch/src/apps/session.lisp\") (text (uiop:read-file-string p)) (at (search \"(defun clock ()\" text))) (with-open-file (s p :direction :output :if-exists :supersede) (write-string (subseq text 0 at) s) (format s \"(defun clock () \\\"edited inside finch\\\")~%(defun clock-before ()\") (write-string (subseq text (+ at (length \"(defun clock ()\"))) s)) :edited)")
+        (reload "(progn (handler-bind ((warning #'muffle-warning)) (asdf:load-system :finch/apps)) (list (namestring (asdf:system-source-file (asdf:find-system :finch/apps))) (finch/apps::clock)))"))
+    (uiop:delete-file-if-exists disk)
+    (let ((c (image:bare-console :root disk)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 60)
+               (is (search "\"/Users/finch/" (ask "(namestring (asdf:apply-output-translations \"/usr/src/finch/finch.asd\"))"))
+                   "fasls land in finch's home")
+               (ask copy)
+               (is (search ":EDITED" (ask edit)))
+               (ask "(finch-asdf)")
+               (is (search "(\"/Users/finch/src/finch/finch.asd\" \"edited inside finch\")" (ask reload)))
+               (image:send c "(sb-ext:exit)")
+               (image:expect c "exit(0)" :timeout 60))
+          (image:finish c 5))))
+    (let ((c (image:bare-console :root disk)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 60)
+               (is (search "(\"/Users/finch/src/finch/finch.asd\" \"edited inside finch\")" (ask reload))
+                   "the edit is there after a reboot"))
+          (image:finish c 5))))))
