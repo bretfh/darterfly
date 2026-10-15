@@ -3,13 +3,13 @@
   (:shadow #:compile)
   (:export #:define-low #:define-global #:low-object #:inb #:outb #:ref #:mem #:pause #:result #:while
            #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:address
-           #:rep-movsb #:rep-stosb #:&va #:va-next))
+           #:rep-movsb #:rep-stosb #:&va #:va-next #:rdtsc #:return-address))
 (in-package #:finch/low)
 
 (defvar *functions* (make-hash-table :test 'equal))
 (defvar *globals* (make-hash-table :test 'equal))
 
-(defstruct global name type count alignment extern package)
+(defstruct global name type count alignment extern export package)
 (defstruct low-function name args body)
 
 (defun c-name (symbol)
@@ -18,10 +18,10 @@
         (substitute #\_ #\- (string-downcase name))
         name)))
 
-(defmacro define-global (name type &key (count 1) (alignment 8) extern)
+(defmacro define-global (name type &key (count 1) (alignment 8) extern export)
   `(setf (gethash (c-name ',name) *globals*)
          (make-global :name (c-name ',name) :type ',type :count ,count :alignment ,alignment
-                      :extern ,extern :package (package-name *package*))))
+                      :extern ,extern :export ,export :package (package-name *package*))))
 
 (defmacro define-low (name args &body body)
   `(setf (gethash (c-name ',name) *functions*)
@@ -36,6 +36,7 @@
 
 (defvar *locals*)
 (defvar *exit*)
+(defvar *strings*)
 
 (defun global-of (symbol) (gethash (c-name symbol) *globals*))
 
@@ -108,6 +109,10 @@
 
 (defun compile (form)
   (cond ((integerp form) (inst mov rax-tn form))
+        ((stringp form)
+         (let ((label (sb-assem:gen-label)))
+           (push (cons label form) *strings*)
+           (inst lea rax-tn (rip-relative-ea label))))
         ((null form) (inst xor :dword (reg :dword 0) (reg :dword 0)))
         ((eq form t) (inst mov rax-tn 1))
         ((and (symbolp form) (not (local-of form)) (constantp form)) (compile (symbol-value form)))
@@ -241,6 +246,11 @@
               (inst byte #xF3)
               (inst byte (if (eq (find-symbol (symbol-name op) '#:finch/low) 'rep-movsb) #xA4 #xAA)))
              (wbinvd (inst byte #x0F) (inst byte #x09))
+             (rdtsc (inst byte #x0F) (inst byte #x31)
+                    (inst shl rdx-tn 32)
+                    (inst mov :dword (reg :dword 0) (reg :dword 0))
+                    (inst or rax-tn rdx-tn))
+             (return-address (inst mov rax-tn (ea 8 rbp-tn)))
              (cli (inst byte #xFA))
              (sti (inst byte #xFB))
              (hlt (inst byte #xF4))
@@ -266,6 +276,7 @@
 
 (defun function-routine (f)
   (let ((*locals* nil)
+        (*strings* nil)
         (*exit* (sb-assem:gen-label)))
     (routine (low-function-name f)
       (inst push rbp-tn)
@@ -304,7 +315,11 @@
       (sb-assem::emit-label *exit*)
       (inst mov rsp-tn rbp-tn)
       (inst pop rbp-tn)
-      (inst ret))))
+      (inst ret)
+      (loop :for (label . text) :in *strings*
+            :do (sb-assem::emit-label label)
+                (loop :for b :across (sb-ext:string-to-octets text) :do (inst byte b))
+                (inst byte 0)))))
 
 (defun low-object (names)
   (let ((functions (mapcar (lambda (n) (or (gethash (c-name n) *functions*) (error "no low function ~s" n))) names))
@@ -313,7 +328,7 @@
             :bss (loop :for g :being :the :hash-values :of *globals*
                        :when (and (not (global-extern g)) (string= (global-package g) package))
                          :collect (list (global-name g) (* (width (global-type g)) (global-count g))
-                                        (global-alignment g))))))
+                                        (global-alignment g) (global-export g))))))
 
 (define-low va-next (ap)
   (let ((gp (mem :u32 ap)))
