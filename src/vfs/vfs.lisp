@@ -131,7 +131,7 @@
 (defun stack-path (stack)
   (if (null (rest stack)) "/" (format nil "~{/~a~}" (reverse (mapcar #'car (butlast stack))))))
 
-(defstruct file vnode (offset 0) flags (refs 1) stack)
+(defstruct file vnode (offset 0) flags (refs 1) stack listing)
 
 (defvar *files* (make-hash-table))
 (defconstant +first-fd+ 3)
@@ -288,9 +288,13 @@
 
 (defun vfs-readdir (fd index)
   (with-vfs
-    (let ((v (file-vnode (fd-file fd))))
+    (let* ((f (fd-file fd))
+           (v (file-vnode f)))
       (unless (eq (vnode-type v) :vdir) (fail :enotdir))
-      (nth index (vnop-readdir v)))))
+      (when (or (zerop index) (null (file-listing f)))
+        (setf (file-listing f) (coerce (vnop-readdir v) 'vector)))
+      (when (< index (length (file-listing f)))
+        (aref (file-listing f) index)))))
 
 (defun vfs-dup (fd &optional (from +first-fd+))
   (with-vfs (install (fd-file fd) from)))
