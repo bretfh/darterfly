@@ -1,14 +1,5 @@
 (in-package #:finch/image)
 
-(defparameter *runtime-sources*
-  '("alloc.c" "arena.c" "backtrace.c" "breakpoint.c" "coalesce.c" "coreparse.c" "dynbind.c" "funcall.c"
-    "gc-common.c" "globals.c" "hopscotch.c" "interr.c" "interrupt.c" "largefile.c" "main.c" "math.c"
-    "monitor.c" "murmur_hash.c" "os-common.c" "parse.c" "perfecthash.c" "print.c" "time.c" "regnames.c"
-    "runtime.c" "safepoint.c" "save.c" "sc-offset.c" "search.c" "stringspace.c" "thread.c"
-    "stop-the-world.c" "validate.c" "var-io.c" "vars.c" "wrap.c" "run-program.c" "sprof.c"
-    "x86-64-arch.c" "fullcgc.c" "gencgc.c" "traceroot.c" "immobile-space.c" "tlsf.c"
-    "finch-os.c" "x86-64-finch-os.c" "x86-64-assem.S"))
-
 (defun sbcl-tree () (asdf:system-relative-pathname :finch "build/sbcl-mt/"))
 
 (defparameter *sbcl-version* "2.6.4.finch")
@@ -69,11 +60,6 @@
 
 (defun runtime-dir () (build-path "runtime/src/runtime/"))
 
-(defun runtime-object (name)
-  (if (eq *c-compiler* :clang)
-      (merge-pathnames (format nil "~a.o" (pathname-name name)) (runtime-dir))
-      (build-path (format nil "runtime-tcc/~a.o" (pathname-name name)))))
-
 (defun copy-into (from to)
   (ensure-directories-exist to)
   (uiop:copy-file from to))
@@ -112,16 +98,3 @@
           (list "-isystem" (source "src/libsa/include"))
           (freestanding)))
 
-(defun compile-runtime (&key (sources *runtime-sources*))
-  (let ((tree (runtime-tree))
-        (failures '()))
-    (dolist (name sources)
-      (let ((object (runtime-object name)))
-        (multiple-value-bind (out err code)
-            (uiop:run-program (c-compile (merge-pathnames name tree) object
-                                         :includes (list tree (build-path "runtime/tlsf-bsd/tlsf/"))
-                                         :clang-flags (runtime-flags))
-                              :output :string :error-output :output :ignore-error-status t)
-          (declare (ignore err))
-          (unless (zerop code) (push (cons name out) failures)))))
-    (nreverse failures)))

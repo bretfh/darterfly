@@ -489,7 +489,7 @@
   (let ((names (append (loop :for f :being :the :hash-values :of *functions*
                              :when (string= (low-function-package f) package)
                                :collect (low-function-name f))
-                       extra)))
+                       (copy-list extra))))
     (object (append routines (mapcar (lambda (n) (function-routine (gethash n *functions*))) (sort names #'string<)))
             :bss (loop :for g :being :the :hash-values :of *globals*
                        :when (and (not (global-extern g)) (string= (global-package g) package))

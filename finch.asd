@@ -115,6 +115,12 @@
   :pathname "src/fat/"
   :components ((:file "fat") (:file "vfs")))
 
+(asdf:defsystem #:finch/cc
+  :description "C through libtcc"
+  :depends-on (#:uiop)
+  :pathname "src/cc/"
+  :components ((:file "cc")))
+
 (asdf:defsystem #:finch/install
   :description "Generations"
   :depends-on (#:uiop #:finch/fat #:finch/low #:finch/pexpert #:finch/osfmk #:finch/link)
@@ -175,7 +181,7 @@
 
 (asdf:defsystem #:finch/image
   :description "The bootable image"
-  :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io #:finch/apfs #:finch/fat #:finch/install #:finch/pexpert #:finch/osfmk #:finch/low #:finch/boot #:finch/link (:require #:sb-bsd-sockets))
+  :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io #:finch/apfs #:finch/fat #:finch/install #:finch/cc #:finch/pexpert #:finch/osfmk #:finch/low #:finch/boot #:finch/link (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/image/"
   :components ((:file "image") (:file "tcc") (:file "runtime") (:file "efi")))

@@ -264,35 +264,6 @@ uintmax_t strtoumax(const char *s, char **end, int base) { return strtoull(s, en
 int atoi(const char *s) { return (int)strtol(s, 0, 10); }
 long atol(const char *s) { return strtol(s, 0, 10); }
 
-double strtod(const char *s, char **end) {
-  const char *p = s;
-  while (isspace((unsigned char)*p)) p++;
-  int neg = 0;
-  if (*p == '+' || *p == '-') neg = *p++ == '-';
-  double v = 0, scale = 1;
-  const char *digits = p;
-  while (isdigit((unsigned char)*p)) v = v * 10 + (*p++ - '0');
-  if (*p == '.') {
-    p++;
-    while (isdigit((unsigned char)*p)) v += (*p++ - '0') * (scale /= 10);
-  }
-  if (p == digits) {
-    if (end) *end = (char *)s;
-    return 0;
-  }
-  if (*p == 'e' || *p == 'E') {
-    char *e;
-    long x = strtol(p + 1, &e, 10);
-    if (e != p + 1) {
-      p = e;
-      while (x > 0) v *= 10, x--;
-      while (x < 0) v /= 10, x++;
-    }
-  }
-  if (end) *end = (char *)p;
-  return neg ? -v : v;
-}
-
 double atof(const char *s) { return strtod(s, 0); }
 int abs(int x) { return x < 0 ? -x : x; }
 long labs(long x) { return x < 0 ? -x : x; }

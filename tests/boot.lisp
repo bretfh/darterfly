@@ -780,6 +780,43 @@
                (is (search "\"gen-2\"" (ask "(finch/install:current)"))))
           (image:finish c 5))))))
 
+(defun md5-hex (path)
+  (string-downcase (format nil "~{~2,'0x~}" (coerce (sb-md5:md5sum-file path) 'list))))
+
+(test finch-builds-its-c-and-boots-it
+  (let* ((esp (merge-pathnames "esp-cc.img" (finch-file "build/")))
+         (disk (merge-pathnames "guest-cc.img" (finch-file "build/")))
+         (host (let ((image:*c-compiler* :tcc))
+                 (image:mach-kernel)
+                 (loop :for (name path) :in (finch/image::user-objects) :collect (cons name (md5-hex path)))))
+         (sums "(progn (require :sb-md5) (mapcar (lambda (name) (cons name (string-downcase (format nil \"~{~2,'0x~}\" (coerce (sb-md5:md5sum-file (concatenate 'string \"/Users/finch/objects/\" name)) 'list))))) (mapcar #'(lambda (u) (getf u :name)) (finch/cc:units))))"))
+    (uiop:delete-file-if-exists esp)
+    (uiop:delete-file-if-exists disk)
+    (let ((c (image:bare-console :esp esp :root disk)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 1200)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 60)
+               (is (search "NIL" (ask "(finch/cc:compile-units \"/Users/finch/objects/\")")) "every C unit compiles inside finch")
+               (let ((guest (read-from-string (ask sums))))
+                 (is (equal host guest) "finch's TinyCC makes the host's objects byte for byte: ~a"
+                     (set-difference guest host :test #'equal)))
+               (is (search "\"gen-2\"" (ask "(finch/install:install (finch/install:build-kernel :objects \"/Users/finch/objects/\") \"/Volumes/EFI/EFI/finch/gen-1/finch.core\")")))
+               (image:send c "(sb-ext:exit)")
+               (image:expect c "exit(0)" :timeout 60))
+          (image:finish c 5))))
+    (let ((c (image:bare-console :esp esp :root disk)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "boot.efi: generation gen-2"))
+               (image:expect c "* " :timeout 60)
+               (is (search "T" (ask "(finch/cc:compile-c \"src/libsa/string.c\" \"/tmp/string.o\" :directory \"/usr/src/finch/\")")))
+               (is (search (cdr (assoc "libsa/string.o" host :test #'string=))
+                           (ask "(progn (require :sb-md5) (string-downcase (format nil \"~{~2,'0x~}\" (coerce (sb-md5:md5sum-file \"/tmp/string.o\") 'list))))"))
+                   "the TinyCC finch built makes the same object again"))
+          (image:finish c 5))))))
+
 (test finch-saves-itself-and-boots-the-save
   (let ((esp (merge-pathnames "esp-save.img" (finch-file "build/"))))
     (uiop:delete-file-if-exists esp)

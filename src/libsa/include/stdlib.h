@@ -23,6 +23,8 @@ unsigned long strtoul(const char *, char **, int);
 long long strtoll(const char *, char **, int);
 unsigned long long strtoull(const char *, char **, int);
 double strtod(const char *, char **);
+float strtof(const char *, char **);
+long double strtold(const char *, char **);
 double atof(const char *);
 void qsort(void *, size_t, size_t, int (*)(const void *, const void *));
 void *bsearch(const void *, const void *, size_t, size_t, int (*)(const void *, const void *));

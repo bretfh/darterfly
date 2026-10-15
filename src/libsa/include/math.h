@@ -17,6 +17,7 @@ double exp(double), expm1(double), log(double), log10(double), log2(double), log
 double pow(double, double), sqrt(double), hypot(double, double), cbrt(double);
 double floor(double), ceil(double), trunc(double), round(double), fabs(double), fmod(double, double);
 double ldexp(double, int), frexp(double, int *), modf(double, double *), scalbn(double, int);
+long double ldexpl(long double, int);
 double copysign(double, double), nextafter(double, double), rint(double);
 long lrint(double);
 float sqrtf(float), fabsf(float), floorf(float), ceilf(float), truncf(float);

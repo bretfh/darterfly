@@ -5,7 +5,7 @@
 
 (defun run (&rest args)
   (multiple-value-bind (out err code)
-      (uiop:run-program args :output :string :error-output :output :ignore-error-status t)
+      (uiop:run-program args :output :string :error-output :output :ignore-error-status t :directory (source ""))
     (declare (ignore err))
     (unless (zerop code)
       (error "~a failed:~%~a" (first args) out))
@@ -21,21 +21,6 @@
     (with-open-file (s out :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
       (write-sequence (finch/boot:boot-image) s))
     out))
-
-(defparameter *libsa-sources*
-  '("syscall.c" "signal.c" "string.c" "stdio.c" "stdlib.c" "unistd.c" "time.c" "math.c" "misc.c"
-    "setjmp.s" "start.c" "pthread.c" "vfs.c"))
-
-(defun compile-objects (sources dir flags &key includes)
-  (loop :for name :in sources
-        :for object := (object-path dir name)
-        :do (apply #'run (c-compile name object :includes includes :clang-flags flags))
-        :collect (uiop:native-namestring object)))
-
-(defun libsa-objects ()
-  (compile-objects (mapcar (lambda (f) (source (concatenate 'string "src/libsa/" f))) *libsa-sources*) "libsa"
-                   (append (runtime-flags) (list "-fno-builtin" "-fno-math-errno"))
-                   :includes (list (source "src/libsa"))))
 
 (defun finch-sources ()
   (cons (source "tests/")
@@ -53,12 +38,32 @@
                    (uiop:native-namestring core))))
     core))
 
-(defun runtime-objects ()
-  (let ((failures (compile-runtime)))
+(defun host-units () (finch/cc:units :libtcc1 (eq *c-compiler* :tcc)))
+
+(defun unit-object (unit) (build-path (format nil "~a/~a" (object-dir "objects") (getf unit :name))))
+
+(defun unit-clang-flags (unit)
+  (let ((group (subseq (getf unit :name) 0 (position #\/ (getf unit :name)))))
+    (append (runtime-flags)
+            (cond ((string= group "libsa") (list "-fno-builtin" "-fno-math-errno"))
+                  ((string= group "libtcc") (list "-fno-builtin"))))))
+
+(defun c-objects ()
+  (runtime-tree)
+  (libtcc-tree)
+  (let ((failures
+          (loop :for unit :in (host-units)
+                :for out := (multiple-value-bind (out err code)
+                                (uiop:run-program (c-compile (getf unit :source) (unit-object unit)
+                                                             :includes (getf unit :includes) :defines (getf unit :defines)
+                                                             :compat (getf unit :compat t) :clang-flags (unit-clang-flags unit))
+                                                  :output :string :error-output :output :ignore-error-status t
+                                                  :directory (source ""))
+                              (declare (ignore err))
+                              (unless (zerop code) out))
+                :when out :collect (cons (getf unit :name) out))))
     (when failures
-      (error "runtime: ~{~a~^, ~} failed:~%~a" (mapcar #'car failures) (cdr (first failures)))))
-  (append (mapcar (lambda (name) (uiop:native-namestring (runtime-object name))) *runtime-sources*)
-          (libtcc1-objects)))
+      (error "C: ~{~a~^, ~} failed:~%~a" (mapcar #'car failures) (cdr (first failures))))))
 
 (defun newest (dirs)
   (loop :for dir :in dirs
@@ -69,26 +74,29 @@
 
 (defun kernel-inputs ()
   (append (mapcar #'source '("src/osfmk/" "src/bsd/dev/" "src/bsd/kern/" "src/pexpert/" "src/libsa/" "src/sbcl/" "src/image/"
-                                     "src/asm/" "src/low/" "src/link/" "src/boot/"))
+                                     "src/asm/" "src/low/" "src/link/" "src/boot/" "src/cc/" "src/install/"))
           (list (merge-pathnames "output/" (sbcl-tree)))))
 
 (defun user-objects ()
-  (append (mapcar (lambda (f) (list (format nil "libsa/~a.o" (pathname-name f)) (object-path "libsa" f))) *libsa-sources*)
-          (mapcar (lambda (f) (list (format nil "runtime/~a.o" (pathname-name f)) (runtime-object f))) *runtime-sources*)
-          (when (eq *c-compiler* :tcc)
-            (mapcar (lambda (f) (list (format nil "libtcc1/~a.o" (pathname-name f)) (libtcc1-object f))) *libtcc1-sources*))))
+  (mapcar (lambda (unit) (list (getf unit :name) (unit-object unit))) (host-units)))
 
 (defun mach-kernel ()
   (let ((out (build-path (if (eq *c-compiler* :clang) "kernel/kernel" "kernel/kernel-tcc"))))
     (when (and (probe-file out) (> (file-write-date out) (newest (kernel-inputs))))
       (return-from mach-kernel out))
-    (libsa-objects)
-    (runtime-objects)
+    (c-objects)
     (let ((image (finch/install:kernel-image (loop :for (name path) :in (user-objects) :collect (cons name (octets path))))))
       (ensure-directories-exist out)
       (with-open-file (s out :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
         (write-sequence image s)))
     out))
+
+(defun compiler-entries ()
+  (flet ((sources (file) (member (pathname-type file) '("c" "h" "S" "inc" "def") :test #'string=)))
+    (append (tree-entries (build-path "runtime/") "usr/src/finch/build/runtime" :keep #'sources)
+            (tree-entries (libtcc-tree) "usr/src/finch/build/tcc/finch-src")
+            (tree-entries (merge-pathnames "lib/" (tcc-stage 2)) "usr/src/finch/build/tcc/stage2/lib" :keep #'sources)
+            (tree-entries (merge-pathnames "include/" (tcc-stage 2)) "usr/lib/tcc/include"))))
 
 (defun object-entries ()
   (mach-kernel)
@@ -133,6 +141,7 @@
                        (contribs)
                        (certificates)
                        (object-entries)
+                       (compiler-entries)
                        (tree-entries (asdf:system-relative-pathname :finch "") "usr/src/finch"
                                      :skip '(".git" "build" "tahoe"))))
         (dirs (list "tmp" "Users" "Users/finch" "dev" "Volumes" "System" "System/Library" "System/Library/Kernels")))
@@ -258,12 +267,12 @@
                     :input :interactive :output :interactive :error-output :interactive :ignore-error-status t)
   (values))
 
-(defun tree-entries (from to &key (skip '(".git")))
+(defun tree-entries (from to &key (skip '(".git")) (keep (constantly t)))
   (let ((entries (loop :for parent :in (parents (format nil "/~a" to)) :collect (list :dir parent))))
     (labels ((walk (dir at)
                (push (list :dir at) entries)
                (dolist (file (uiop:directory-files dir))
-                 (unless (member (file-namestring file) skip :test #'string=)
+                 (unless (or (member (file-namestring file) skip :test #'string=) (not (funcall keep file)))
                    (push (list :file (format nil "~a/~a" at (file-namestring file)) (octets file)
                                (if (logtest #o111 (sb-posix:stat-mode (sb-posix:stat (uiop:native-namestring file)))) #o755 #o644))
                          entries)))

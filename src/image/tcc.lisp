@@ -47,45 +47,70 @@
     (unless (probe-file tcc) (build-tcc))
     (uiop:native-namestring tcc)))
 
-(defun tcc-flags (source &optional (compat t))
-  (let ((stage (uiop:native-namestring (tcc-stage 2)))
-        (asm (member (pathname-type source) '("S" "s") :test #'string=)))
-    (append (list (format nil "-B~a" stage) "-nostdinc" "-D__finch__"
-                  "-U__linux__" "-U__linux" "-U__unix__" "-U__unix")
-            (cond (asm (list "-fno-dollars-in-identifiers"))
-                  (compat (list "-include" (source "src/libsa/include/tinycc.h"))))
-            (list "-isystem" (source "src/libsa/include") "-isystem" (format nil "~ainclude" stage)))))
-
 (defvar *clang-files* nil)
 
 (defun source-key (source)
   (let ((path (uiop:native-namestring source)))
     (concatenate 'string (if (search "/libsa/" path) "libsa/" "runtime/") (file-namestring path))))
 
-(defun c-compile (source object &key includes clang-flags (compat t))
+(defun repo-relative (path)
+  (let ((path (uiop:native-namestring path)) (root (source "")))
+    (if (uiop:string-prefix-p root path) (subseq path (length root)) path)))
+
+(defun c-compile (source object &key includes clang-flags (compat t) defines)
   (ensure-directories-exist object)
   (let ((*c-compiler* (if (member (source-key source) *clang-files* :test #'string=) :clang *c-compiler*))
-        (source (uiop:native-namestring source))
+        (source (repo-relative source))
         (object (uiop:native-namestring object))
-        (includes (loop :for i :in includes :append (list "-I" (uiop:native-namestring i)))))
+        (includes (mapcar #'uiop:native-namestring includes)))
     (ecase *c-compiler*
-      (:clang (append (list "clang") clang-flags includes (list "-c" source "-o" object)))
-      (:tcc (append (list (tcc)) (tcc-flags source compat) includes (list "-c" source "-o" object))))))
+      (:clang (append (list "clang") clang-flags (mapcar (lambda (d) (format nil "-D~a" d)) defines)
+                      (loop :for i :in includes :append (list "-I" i)) (list "-c" source "-o" object)))
+      (:tcc (append (list (tcc))
+                    (finch/cc:arguments source :includes includes :defines defines :compat compat
+                                               :tcc-dir (uiop:native-namestring (tcc-stage 2)) :libsa-dir (source "src/libsa/"))
+                    (list "-c" source "-o" object))))))
 
 (defun object-dir (name)
   (if (eq *c-compiler* :clang) name (format nil "~a-tcc" name)))
 
-(defun object-path (dir source)
-  (build-path (format nil "~a/~a.o" (object-dir dir) (pathname-name source))))
 
-(defparameter *libtcc1-sources* '("libtcc1.c" "va_list.c" "stdatomic.c" "atomic.S" "builtin.c" "alloca.S"))
+(defparameter *libtcc-patches*
+  '(("tcc.h" "    && defined __APPLE__ == defined TCC_TARGET_MACHO
+" "    && defined __APPLE__ == defined TCC_TARGET_MACHO && !defined __finch__
+")))
 
-(defun libtcc1-object (source)
-  (build-path (format nil "tcc/finch-lib/~a.o" (pathname-name source))))
+(defparameter *libtcc-config*
+  "#define TCC_VERSION \"0.9.28rc\"
+#define CC_NAME CC_tcc
+#define GCC_MAJOR 0
+#define GCC_MINOR 928
+#define TCC_TARGET_X86_64 1
+#define CONFIG_TCC_SYSINCLUDEPATHS \"{B}/include\"
+#define CONFIG_TCC_LIBPATHS \"{B}\"
+#define CONFIG_TCC_CRTPREFIX \"{B}\"
+#define CONFIG_TCC_ELFINTERP \"-\"
+#define CONFIG_TCCDIR \"/usr/lib/tcc\"
+#define CONFIG_TCC_PREDEFS 1
+")
 
-(defun libtcc1-objects ()
-  (when (eq *c-compiler* :tcc)
-    (loop :for name :in *libtcc1-sources*
-          :for object := (libtcc1-object name)
-          :do (apply #'run (c-compile (merge-pathnames (concatenate 'string "lib/" name) (tcc-stage 2)) object :compat nil))
-          :collect (uiop:native-namestring object))))
+(defun libtcc-tree ()
+  (let ((tree (build-path "tcc/finch-src/")))
+    (unless (probe-file (merge-pathnames "config.h" tree))
+      (tcc)
+      (ensure-directories-exist tree)
+      (dolist (file (append (directory (concatenate 'string (tcc-source) "*.c"))
+                            (directory (concatenate 'string (tcc-source) "*.h"))
+                            (directory (concatenate 'string (tcc-source) "*.def"))
+                            (list (merge-pathnames "tccdefs_.h" (tcc-stage 2)))))
+        (uiop:copy-file file (merge-pathnames (file-namestring file) tree)))
+      (loop :for (file old new) :in *libtcc-patches*
+            :for path := (merge-pathnames file tree)
+            :for text := (uiop:read-file-string path)
+            :for at := (search old text)
+            :do (unless at (error "libtcc patch for ~a no longer applies" file))
+                (with-open-file (o path :direction :output :if-exists :supersede)
+                  (write-string (concatenate 'string (subseq text 0 at) new (subseq text (+ at (length old)))) o)))
+      (with-open-file (o (merge-pathnames "config.h" tree) :direction :output :if-exists :supersede)
+        (write-string *libtcc-config* o)))
+    tree))

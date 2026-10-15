@@ -175,6 +175,11 @@ double atanh(double x) { return 0.5 * log((1 + x) / (1 - x)); }
 double cbrt(double x) { return x < 0 ? -pow(-x, 1.0 / 3) : pow(x, 1.0 / 3); }
 double ldexp(double x, int e) { return x * (double)X87(exp2l_x87(e)); }
 double scalbn(double x, int e) { return ldexp(x, e); }
+long double ldexpl(long double x, int e) {
+  long double r;
+  __asm__("fildl %2\n\tfldt %1\n\tfscale\n\tfstp %%st(1)\n\tfstpt %0" : "=m"(r) : "m"(x), "m"(e));
+  return r;
+}
 
 double frexp(double x, int *e) {
   if (x == 0 || isnan(x) || isinf(x)) { *e = 0; return x; }
