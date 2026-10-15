@@ -71,7 +71,7 @@
   :depends-on (#:finch/ca #:finch/server #:finch/bsd #:finch/text #:finch/imageio #:finch/kit)
   :serial t
   :pathname "src/apps/"
-  :components ((:file "hello") (:file "terminal") (:file "session")))
+  :components ((:file "hello") (:file "terminal") (:file "listener") (:file "session")))
 
 (asdf:defsystem #:finch/iokit
   :description "IOKit: the registry, PCI and drivers"

@@ -70,6 +70,7 @@
   '(("sbin/launchd" "launchd") ("bin/launchctl" "launchctl") ("bin/sh" "sh")
     ("System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer" "WindowServer")
     ("Applications/Hello.app/Contents/MacOS/Hello" "Hello")
+    ("System/Applications/Listener.app/Contents/MacOS/Listener" "Listener")
     ("System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal" "Terminal")
     ("System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow" "loginwindow")
     ("System/Library/CoreServices/Dock.app/Contents/MacOS/Dock" "Dock")
@@ -113,7 +114,7 @@
   '(("places" "folder") ("mimetypes" "application-x-executable") ("mimetypes" "text-x-generic")
     ("devices" "drive-harddisk")
     ("legacy" "system-file-manager-symbolic") ("legacy" "utilities-terminal-symbolic")
-    ("legacy" "accessories-text-editor-symbolic")))
+    ("legacy" "accessories-text-editor-symbolic") ("actions" "system-run-symbolic")))
 
 (defun icons ()
   (let ((theme (format nil "~a/share/icons/Adwaita/" (uiop:getenv "GUIX_ENVIRONMENT")))
@@ -121,7 +122,7 @@
     (with-open-file (s white :direction :output :if-exists :supersede)
       (write-line "* { fill: #ffffff !important; }" s))
     (loop :for (kind name) :in *icons*
-          :for symbolic := (string= kind "legacy")
+          :for symbolic := (uiop:string-suffix-p name "-symbolic")
           :for png := (build-path (format nil "~a.png" name))
           :do (uiop:run-program (append (list "rsvg-convert" "-w" "128" "-h" "128" "-o" (uiop:native-namestring png))
                                         (and symbolic (list "-s" (uiop:native-namestring white)))
