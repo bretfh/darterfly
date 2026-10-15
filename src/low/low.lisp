@@ -4,7 +4,7 @@
   (:export #:define-low #:define-global #:low-object #:inb #:outb #:ref #:mem #:pause #:result #:while
            #:package-object #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:address
            #:rep-movsb #:rep-stosb #:&va #:va-next #:rdtsc #:return-address
-           #:invlpg #:set-cr3 #:cpuid-edx #:cpu-data #:fxsave #:fxrstor #:code-address))
+           #:invlpg #:set-cr3 #:cpuid-edx #:cpu-data #:fxsave #:fxrstor #:code-address #:call-pointer))
 (in-package #:finch/low)
 
 (defvar *functions* (make-hash-table :test 'equal))
@@ -257,6 +257,14 @@
              (fxrstor (compile (first args))
                       (dolist (b '(#x48 #x0F #xAE #x08)) (inst byte b)))
              (code-address (inst lea rax-tn (data (c-name (first args)))))
+             (call-pointer (when (> (length (rest args)) 6) (error "call-pointer: more than six arguments"))
+                           (dolist (a (reverse (rest args)))
+                             (compile a)
+                             (inst push rax-tn))
+                           (compile (first args))
+                           (inst mov r11-tn rax-tn)
+                           (loop :for r :in +argument-registers+ :repeat (length (rest args)) :do (inst pop r))
+                           (inst call r11-tn))
              (cpu-data (dolist (b '(#x65 #x48 #x8B #x04 #x25 0 0 0 0)) (inst byte b)))
              (invlpg (compile (first args))
                      (inst byte #x0F) (inst byte #x01) (inst byte #x38))
