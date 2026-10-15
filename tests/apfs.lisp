@@ -197,3 +197,22 @@
       (is (= 2000 (length (apfs:directory-entries v (apfs:lookup v "/many")))))
       (is (equal "second 1999" (funcall read "/many/f1999"))))
     (delete-file disk)))
+
+(test a-free-queue-too-big-for-one-node-carries-over
+  (let ((disk (merge-pathnames "carry.img" (finch-file "build/")))
+        (finch/vfs:*root* nil)
+        (finch/vfs:*mounts* nil))
+    (apfs:newfs disk :size (* 64 1048576) :volume-name "finch HD" :entries '((:dir "Users")))
+    (image:update-root disk (cons '(:dir "many") (loop :for i :below 2000
+                                                       :collect (list :file (format nil "many/f~d" i) (make-array 5000 :element-type '(unsigned-byte 8) :initial-element (mod i 256))))))
+    (finch/vfs:vfs-mount (finch/vfs:make-ram-node :vdir #o755) "/")
+    (finch/vfs:vfs-mkdir "/mnt" #o755)
+    (multiple-value-bind (r w) (apfs:file-store disk) (apfs:mount-writable r w "/mnt"))
+    (apfs:with-batch
+      (loop :for i :from 0 :below 2000 :by 2 :do (finch/vfs:vfs-unlink (format nil "/mnt/many/f~d" i))))
+    (image:update-root disk (list (list :file "many/after" (text "still writable"))))
+    (let* ((v (first (apfs:container-volumes (apfs:open-container (apfs:file-device disk)))))
+           (read (lambda (path) (map 'string #'code-char (apfs:read-file v (apfs:lookup v path))))))
+      (is (= 1001 (length (apfs:directory-entries v (apfs:lookup v "/many")))))
+      (is (equal "still writable" (funcall read "/many/after"))))
+    (delete-file disk)))

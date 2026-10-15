@@ -244,7 +244,7 @@
                 (if entry (put-dirent (car entry) (cdr entry) c) 0)))
     (:link (fail :enotsup))
     (:utimes (path-vnode a) 0)
-    (:fsync (fd-file a) 0)
+    (:fsync (fd-file a) (vfs:vfs-sync))
     (:umask (prog1 vfs:*umask* (setf vfs:*umask* (logand a #o777))))
     (:pipe (multiple-value-bind (read write) (pipe)
              (put-fds read write a)))

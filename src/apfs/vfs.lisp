@@ -77,11 +77,26 @@
                                                 (#o040000 :vdir) (#o120000 :vlnk) (#o100000 :vreg) (t :vchr))))))
 
 (defvar *batch* :none)
+(defvar *dirty* nil)
+(defvar *dirty-lock* (sb-thread:make-mutex :name "apfs dirty"))
+(defvar *syncer* nil)
+
+(defun sync-volumes ()
+  (vfs::with-vfs
+    (mapc #'wcommit (sb-thread:with-mutex (*dirty-lock*) (shiftf *dirty* nil)))))
+
+(defun start-syncer (&optional (interval 1))
+  (unless *syncer*
+    (push #'sync-volumes vfs:*syncers*)
+    (push #'vfs:vfs-sync sb-ext:*exit-hooks*)
+    (setf *syncer* (sb-thread:make-thread (lambda () (loop (sleep interval) (sync-volumes))) :name "apfs syncer"))))
 
 (defmacro with-commit ((w vnode) &body body)
   `(let ((,w (vnode-mount ,vnode)))
      (prog1 (progn ,@body)
-       (if (listp *batch*) (pushnew ,w *batch*) (wcommit ,w)))))
+       (cond ((listp *batch*) (pushnew ,w *batch*))
+             (*syncer* (sb-thread:with-mutex (*dirty-lock*) (pushnew ,w *dirty*)))
+             (t (wcommit ,w))))))
 
 (defmacro with-batch (&body body)
   `(let ((*batch* nil))

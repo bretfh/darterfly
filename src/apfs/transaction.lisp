@@ -4,7 +4,7 @@
   read write block-count sb xid next-oid
   desc-base desc-blocks desc-next data-base data-blocks data-next
   sm cib-paddr bitmap-paddrs bitmap ip-base ip-count ip-bm-base ip-bitmap
-  ip-fq main-fq fq-oids reaper
+  ip-fq main-fq fq-oids reaper carry
   omap-paddr omap-nodes omap-entries
   vol-oid vol-sb vol-paddr vol-omap-paddr vol-omap-nodes fs-records fs-nodes extent-records extent-nodes snap-node)
 
@@ -167,9 +167,16 @@
         (loop for b from (second e) below (+ (second e) (third e)) do (setf (bitmap-bit (nx-ip-bitmap nx) (- b (nx-ip-base nx))) 0)))
       (dolist (e (nx-main-fq nx))
         (loop for b from (second e) below (+ (second e) (third e)) do (setf (bitmap-bit (nx-bitmap nx) b) 0)))
-      (setf (nx-ip-fq nx) (coalesce xid (cons (nx-cib-paddr nx) (nx-bitmap-paddrs nx)))
-            (nx-main-fq nx) (coalesce xid (append (list (nx-omap-paddr nx) (nx-vol-paddr nx) (nx-vol-omap-paddr nx) (nx-snap-node nx))
-                                                  (nx-omap-nodes nx) (nx-vol-omap-nodes nx) (nx-fs-nodes nx) (nx-extent-nodes nx) also-free)))
+      (setf (nx-ip-fq nx) (coalesce xid (cons (nx-cib-paddr nx) (nx-bitmap-paddrs nx))))
+      (let ((main (coalesce xid (append (list (nx-omap-paddr nx) (nx-vol-paddr nx) (nx-vol-omap-paddr nx) (nx-snap-node nx))
+                                        (nx-omap-nodes nx) (nx-vol-omap-nodes nx) (nx-fs-nodes nx) (nx-extent-nodes nx)
+                                        also-free (shiftf (nx-carry nx) nil)))))
+        (loop :until (fits-p main t t 16 8)
+              :do (destructuring-bind (x start count) (car (last main))
+                    (declare (ignore x))
+                    (loop :for b :from start :below (+ start count) :do (push b (nx-carry nx)))
+                    (setf main (butlast main))))
+        (setf (nx-main-fq nx) main))
       (let* ((alloc (lambda () (alloc-block nx)))
              (virtual (nx-next-oid nx))
              (fs-nodes (pack-btree (sort-fs-records (nx-fs-records nx)) :info-flags #x42 :subtype #xe :xid xid

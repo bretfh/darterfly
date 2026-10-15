@@ -39,6 +39,7 @@
 
 (defun halt ()
   (drain)
+  (finch/vfs:vfs-sync)
   (reboot +rb-power-off+))
 
 (defun boot-args ()

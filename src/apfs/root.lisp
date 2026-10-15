@@ -13,6 +13,7 @@
                         (lambda (at octets) (iokit:media-write media at octets))
                         "/")
         (setf *root-media* media)
+        (start-syncer)
         (dolist (dir '("/dev" "/tmp" "/Volumes" "/System/Library/Kernels")) (vfs:vfs-mkdirs dir))
         (vfs:vfs-mount (vfs:make-devfs) "/dev")
         (vfs:vfs-mount (vfs:make-ram-node :vdir #o1777) "/tmp")

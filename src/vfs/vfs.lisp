@@ -9,7 +9,7 @@
    #:namei #:vfs-open #:vfs-close #:vfs-read #:vfs-write #:vfs-stat #:vfs-readdir #:vfs-readlink #:vfs-mkdir
    #:vfs-unlink #:vfs-rename #:vfs-chdir #:vfs-getcwd #:*root*
    #:vfs-symlink #:vfs-remove #:vfs-lseek #:vfs-fstat #:vfs-realpath #:make-ram-node
-   #:make-devfs #:make-kernel-dir #:vfs-mkdirs #:vfs-start #:make-host-root #:fd-vnode #:*umask* #:errno-code))
+   #:make-devfs #:make-kernel-dir #:vfs-mkdirs #:vfs-start #:make-host-root #:fd-vnode #:*umask* #:errno-code #:*syncers* #:vfs-sync))
 (in-package #:finch/vfs)
 
 (define-condition vfs-error (error)
@@ -76,6 +76,10 @@
   (with-vfs (setf *mounts* (remove path *mounts* :key #'mount-path :test #'string=))))
 
 (defvar *umask* #o022)
+
+(defvar *syncers* nil)
+
+(defun vfs-sync () (mapc #'funcall *syncers*) 0)
 
 (defun split-path (path)
   (remove "" (uiop:split-string path :separator "/") :test #'string=))
