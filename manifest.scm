@@ -84,7 +84,6 @@
              "curl"
              "tar"
              "gzip"
-             "linux-libre"
              "sbcl-zpb-ttf"
              "sbcl-cl-vectors"
              "sbcl-chipz"

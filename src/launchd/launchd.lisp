@@ -234,6 +234,7 @@
          (set (mach:mach-port-allocate mach:*task* :port-set)))
     (mach:mach-port-insert-right mach:*task* bootstrap bootstrap :make-send)
     (mach:task-set-special-port mach:*task* :bootstrap bootstrap)
+    (mach:task-set-special-port (bsd:proc-task bsd:*proc0*) :bootstrap bootstrap)
     (setf *notify* (mach:mach-port-allocate mach:*task* :receive))
     (mach:mach-port-move-member mach:*task* bootstrap set)
     (mach:mach-port-move-member mach:*task* *notify* set)

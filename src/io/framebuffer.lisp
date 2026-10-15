@@ -2,8 +2,8 @@
   (:use #:cl)
   (:export #:framebuffer #:open-framebuffer #:framebuffer-width #:framebuffer-height
            #:framebuffer-pixels #:flush #:fill-rect #:test-pattern
-           #:read-events #:wait-for-events #:open-hid #:hid-event #:event-type #:event-code #:event-value #:blend-rect
-           #:input-devices #:kextload #:load-kexts #:*kexts* #:modules-dir #:abs-range #:event-fd #:blit-image #:key-character #:shift-key-p #:virtual-keycode #:shadow-under #:save-corners #:restore-corners #:*clip*))
+           #:read-events #:wait-for-events #:hid-event #:event-type #:event-code #:event-value #:blend-rect
+           #:input-devices #:abs-range #:event-fd #:blit-image #:key-character #:shift-key-p #:virtual-keycode #:shadow-under #:save-corners #:restore-corners #:*clip*))
 (in-package #:finch/io)
 
 (defclass framebuffer ()
@@ -14,40 +14,12 @@
    (sap :initarg :sap :reader sap)
    (pixels :initarg :pixels :reader framebuffer-pixels)))
 
-(defun sysfs (name)
-  (string-trim '(#\Newline #\Space)
-               (uiop:read-file-string (format nil "/sys/class/graphics/fb0/~a" name))))
-
-(defconstant +kdsetmode+ #x4b3a)
-(defconstant +kd-graphics+ 1)
-
-(defun graphics-mode ()
-  (ignore-errors
-   (let ((fd (sb-posix:open "/dev/tty0" sb-posix:o-rdwr)))
-     (sb-posix:ioctl fd +kdsetmode+ +kd-graphics+)
-     fd)))
-
-(defun open-boot-framebuffer ()
+(defun open-framebuffer ()
   (destructuring-bind (&key row-bytes width height depth base) (finch/iokit:boot-video)
     (make-instance 'framebuffer :width width :height height :depth depth :stride row-bytes
                                 :sap (sb-sys:int-sap (finch/iokit:ml-io-map-wcomb base (* row-bytes height)))
                                 :pixels (make-array (* width height) :element-type '(unsigned-byte 32)
                                                                      :initial-element #xff000000))))
-
-(defun open-framebuffer (&optional (device "/dev/fb0"))
-  (unless (probe-file device)
-    (return-from open-framebuffer (open-boot-framebuffer)))
-  (graphics-mode)
-  (destructuring-bind (width height)
-      (mapcar #'parse-integer (uiop:split-string (sysfs "virtual_size") :separator ","))
-    (let* ((depth (parse-integer (sysfs "bits_per_pixel")))
-           (stride (parse-integer (sysfs "stride")))
-           (fd (sb-posix:open device sb-posix:o-rdwr))
-           (sap (sb-posix:mmap nil (* stride height) (logior sb-posix:prot-read sb-posix:prot-write)
-                               sb-posix:map-shared fd 0)))
-      (make-instance 'framebuffer :width width :height height :depth depth :stride stride :sap sap
-                                  :pixels (make-array (* width height) :element-type '(unsigned-byte 32)
-                                                                       :initial-element #xff000000)))))
 
 (defun flush (fb &key (x 0) (y 0) (width (framebuffer-width fb)) (height (framebuffer-height fb)))
   (declare (optimize (speed 3) (safety 0)))

@@ -1,6 +1,6 @@
 (defpackage #:finch/image
   (:use #:cl)
-  (:export #:core #:image #:boot #:check-boot #:write-cpio #:*build*
+  (:export #:write-cpio #:*build*
    #:console #:expect #:send #:transcript #:finish #:screendump #:pixel #:monitor #:pointer #:qmp #:send-keys
    #:boot-efi #:mach-kernel #:esp #:bare-console #:bare-boot #:send-char #:*screen-size* #:update-root #:desktop #:copy-in))
 (in-package #:finch/image)
@@ -10,33 +10,9 @@
 (defun build-path (name)
   (merge-pathnames name (ensure-directories-exist *build*)))
 
-(defun sh (&rest args)
-  (uiop:run-program args :output :string :error-output :output))
-
-(defun core ()
-  (let ((path (build-path "finch")))
-    (uiop:run-program
-     (list "sbcl" "--noinform" "--no-userinit" "--non-interactive"
-           "--eval" "(require :asdf)"
-           "--eval" "(mapc #'asdf:load-system '(:finch/kernel :finch/launchd :finch/shell :finch/io :finch/text :finch/imageio :finch/windowserver :finch/apps))"
-           "--eval" (format nil "(setf finch/kernel::*build-date* ~s)" (date))
-           "--eval" (format nil "(sb-ext:save-lisp-and-die ~s :executable t :save-runtime-options t :toplevel (lambda () (finch/kernel:start)))"
-                            (uiop:native-namestring path)))
-     :output *standard-output* :error-output *error-output*)
-    path))
-
 (defun date ()
   (multiple-value-bind (s m h d mo y) (decode-universal-time (get-universal-time) 0)
     (format nil "~d-~2,'0d-~2,'0d ~2,'0d:~2,'0d:~2,'0d UTC" y mo d h m s)))
-
-(defun libraries (executable)
-  (let ((out (uiop:run-program (list (uiop:native-namestring executable) "--version")
-                               :output :string :ignore-error-status t
-                               :environment (list "LD_TRACE_LOADED_OBJECTS=1"))))
-    (loop :for line :in (uiop:split-string out :separator '(#\Newline))
-          :for slash := (position #\/ line)
-          :when slash
-            :collect (subseq line slash (position #\Space line :start slash)))))
 
 (defun octets (path)
   (with-open-file (s path :element-type '(unsigned-byte 8))
@@ -110,10 +86,6 @@
   (list :file (format nil "Library/LaunchDaemons/~a.plist" label)
         (text (with-output-to-string (s) (finch/plist:write-plist (apply #'dict "Label" label pairs) s)))))
 
-(defun console-job ()
-  (job "finch.console" "ProgramArguments" (vector "/bin/sh") "KeepAlive" t
-       "StandardInPath" "/dev/console" "StandardOutPath" "/dev/console" "StandardErrorPath" "/dev/console"))
-
 (defun desktop-jobs ()
   (let ((hidden (dict "HideUntilCheckIn" t))
         (on-demand (dict "AfterInitialDemand" t "SuccessfulExit" nil)))
@@ -157,42 +129,6 @@
                                 :error-output *error-output*)
           :collect (list :file (format nil "usr/share/icons/Adwaita/~a/~a.png" kind name) (octets png)))))
 
-(defun kexts ()
-  (let ((dir (format nil "~a/lib/modules/" (uiop:getenv "GUIX_ENVIRONMENT"))))
-    (loop :for release :in (directory (format nil "~a*/" dir))
-          :for name := (car (last (pathname-directory release)))
-          :append (loop :for kext :in finch/io:*kexts*
-                        :collect (list :file (format nil "lib/modules/~a/~a" name kext)
-                                       (octets (format nil "~a~a" (uiop:native-namestring release) kext)))))))
-
-(defun root ()
-  (append
-   (kexts)
-   (list (list :dir "dev")
-         (list :char "dev/console" 5 1)
-         (list :char "dev/null" 1 3)
-         (list :dir "proc") (list :dir "sys") (list :dir "tmp")
-         (list :dir "System/Library/LaunchDaemons")
-         (console-job))
-   (loop :for (path program) :in *programs*
-         :collect (list :file path (text (format nil "#!finch ~a~%" program)) #o100755))
-   (desktop-jobs)
-   (fonts)
-   (icons)))
-
-(defun image ()
-  (let* ((core (core))
-         (libraries (libraries core)))
-    (write-cpio (build-path "finch.cpio")
-                (append
-                 (list (list :file "init" (octets core) #o100755))
-                 (root)
-                 (loop :for library :in libraries
-                       :collect (list :file (subseq library 1) (octets library) #o100755))))))
-
-(defun kernel ()
-  (format nil "~a/bzImage" (uiop:getenv "GUIX_ENVIRONMENT")))
-
 (defun monitor-path ()
   (uiop:native-namestring (build-path "monitor.sock")))
 
@@ -227,7 +163,7 @@
                                                      (and shift (list (key "shift" nil))))
                                              'vector)))))))
 
-(defvar *screen-size* '(1024 768))
+(defvar *screen-size* '(1280 800))
 
 (defun pointer (x y &optional (button nil button-p))
   (flet ((abs-event (axis value)
@@ -242,35 +178,10 @@
                                                                    "data" (finch/qmp:dict "button" "left"
                                                                                           "down" button)))))))))
 
-(defun qemu (&rest args)
-  (append (list "qemu-system-x86_64" "-enable-kvm" "-cpu" "host" "-m" "4096" "-smp" "4"
-                "-machine" "pc,vmport=off"
-                "-monitor" (format nil "unix:~a,server=on,wait=off" (monitor-path))
-                "-qmp" (format nil "unix:~a,server=on,wait=off" (qmp-path))
-                "-device" "virtio-tablet-pci"
-                "-device" "virtio-keyboard-pci"
-                "-kernel" (kernel)
-                "-initrd" (uiop:native-namestring (build-path "finch.cpio"))
-                "-no-reboot")
-          args))
-
-(defun boot (&optional (boot-args "vga=0x318"))
-  (uiop:run-program (qemu "-serial" "mon:stdio" "-append" (format nil "console=ttyS0 quiet ~a" boot-args))
-                    :input :interactive :output :interactive :error-output :interactive))
-
-(defun check-boot (&key (boot-args "halt") input)
-  (uiop:run-program (qemu "-display" "none" "-serial" "stdio"
-                          "-append" (format nil "console=ttyS0 quiet ~a" boot-args))
-                    :input (and input (make-string-input-stream input))
-                    :output :string :error-output :output))
-
 (defstruct (console (:constructor %console (process))) process (seen (make-string-output-stream)) (text ""))
 
-(defun console (&key (boot-args "vga=0x318") args)
-  (%console (uiop:launch-program (or args
-                                     (qemu "-display" "none" "-serial" "stdio"
-                                           "-append" (format nil "console=ttyS0 quiet ~a" boot-args)))
-                                 :input :stream :output :stream :error-output :output)))
+(defun console (&key args)
+  (%console (uiop:launch-program args :input :stream :output :stream :error-output :output)))
 
 (defun cpu-states ()
   (ignore-errors

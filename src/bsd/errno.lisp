@@ -2,7 +2,7 @@
   (:use #:cl)
   (:export
    #:errno #:errno-name #:errno-code
-   #:proc #:*proc* #:getpid #:getppid #:proc-task #:pfind #:task-pid
+   #:proc #:*proc* #:*proc0* #:getpid #:getppid #:proc-task #:pfind #:task-pid
    #:fork #:exit #:wait4 #:kill #:pause #:sigaction #:sigprocmask #:signo #:signame
    #:pipe #:read #:write #:close #:dup #:dup2 #:fcntl
    #:+o-nonblock+ #:+f-getfl+ #:+f-setfl+
