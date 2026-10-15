@@ -120,4 +120,5 @@
 
 (defun osfmk-object ()
   (low-object '(pat-init kalloc-init zone-of kalloc kfree vm-page-bootstrap vm-page-grab vm-page-free
-                vm-page-free-count memcpy memset memmove memcmp bzero)))
+                vm-page-free-count memcpy memset memmove memcmp bzero
+                digit put-digits put-unsigned vkprintf kprintf finch/low:va-next)))

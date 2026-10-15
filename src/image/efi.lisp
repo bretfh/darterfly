@@ -29,7 +29,7 @@
 (defparameter *kernel-sources*
   '("src/osfmk/x86_64/start.s" "src/osfmk/x86_64/idt64.s" "src/osfmk/i386/i386_init.c"
     "src/osfmk/i386/mp_desc.c" "src/osfmk/i386/pmap.c" "src/osfmk/i386/trap.c" "src/osfmk/i386/rtclock.c"
-    "src/osfmk/kern/printf.c" "src/osfmk/kern/debug.c"
+    "src/osfmk/kern/debug.c"
     "src/osfmk/vm/vm_map.c"
     "src/osfmk/i386/lapic.c" "src/osfmk/kern/sched_prim.c" "src/osfmk/x86_64/cswitch.s"
     "src/bsd/kern/kern_sig.c"

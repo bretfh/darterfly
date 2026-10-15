@@ -3,7 +3,7 @@
   (:shadow #:compile)
   (:export #:define-low #:define-global #:low-object #:inb #:outb #:ref #:mem #:pause #:result #:while
            #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:address
-           #:rep-movsb #:rep-stosb))
+           #:rep-movsb #:rep-stosb #:&va #:va-next))
 (in-package #:finch/low)
 
 (defvar *functions* (make-hash-table :test 'equal))
@@ -29,7 +29,10 @@
 
 (defun width (type) (ecase type (:u8 1) (:u16 2) (:u32 4) (:u64 8)))
 
-(defconstant +frame+ 256)
+(defconstant +frame+ 512)
+(defconstant +locals-limit+ -256)
+(defconstant +save-area+ -512)
+(defconstant +va-list+ -448)
 
 (defvar *locals*)
 (defvar *exit*)
@@ -164,7 +167,7 @@
                       (destructuring-bind (name value) binding
                         (compile value)
                         (let ((at (- (* 8 (1+ (length *locals*))))))
-                          (when (< at (- +frame+)) (error "too many locals"))
+                          (when (< at +locals-limit+) (error "too many locals"))
                           (inst mov (ea at rbp-tn) rax-tn)
                           (push (cons name at) *locals*))))
                     (compile-body (rest args))))
@@ -219,6 +222,13 @@
                        (inst pop rcx-tn)
                        (inst xor :dword (reg :dword 2) (reg :dword 2))
                        (inst div rcx-tn))
+             (rem (compile (second args))
+                  (inst push rax-tn)
+                  (compile (first args))
+                  (inst pop rcx-tn)
+                  (inst xor :dword (reg :dword 2) (reg :dword 2))
+                  (inst div rcx-tn)
+                  (inst mov rax-tn rdx-tn))
              ((rep-movsb rep-stosb)
               (compile (third args)) (inst push rax-tn)
               (compile (second args)) (inst push rax-tn)
@@ -261,7 +271,24 @@
       (inst push rbp-tn)
       (inst mov rbp-tn rsp-tn)
       (inst sub rsp-tn +frame+)
-      (loop :for arg :in (low-function-args f)
+      (let* ((args (low-function-args f))
+             (va (member '&va args :test (lambda (a b) (and (symbolp b) (string= (symbol-name a) (symbol-name b)))))))
+        (when va
+          (loop :for r :in +argument-registers+ :for i :from 0
+                :do (inst mov (ea (+ +save-area+ (* 8 i)) rbp-tn) r))
+          (inst mov :dword (ea +va-list+ rbp-tn) (* 8 (- (length args) (length va))))
+          (inst mov :dword (ea (+ +va-list+ 4) rbp-tn) 176)
+          (inst lea rax-tn (ea 16 rbp-tn))
+          (inst mov (ea (+ +va-list+ 8) rbp-tn) rax-tn)
+          (inst lea rax-tn (ea +save-area+ rbp-tn))
+          (inst mov (ea (+ +va-list+ 16) rbp-tn) rax-tn)
+          (inst lea rax-tn (ea +va-list+ rbp-tn))
+          (let ((at (- (* 8 (1+ (length *locals*))))))
+            (inst mov (ea at rbp-tn) rax-tn)
+            (push (cons (second va) at) *locals*))))
+      (loop :for arg :in (ldiff (low-function-args f)
+                               (member '&va (low-function-args f)
+                                       :test (lambda (a b) (and (symbolp b) (string= (symbol-name a) (symbol-name b))))))
             :for r :in +argument-registers+
             :do (destructuring-bind (name &optional (type :u64)) (if (listp arg) arg (list arg))
                   (let ((at (- (* 8 (1+ (length *locals*))))))
@@ -287,3 +314,13 @@
                        :when (and (not (global-extern g)) (string= (global-package g) package))
                          :collect (list (global-name g) (* (width (global-type g)) (global-count g))
                                         (global-alignment g))))))
+
+(define-low va-next (ap)
+  (let ((gp (mem :u32 ap)))
+    (if (< gp 48)
+        (progn
+          (setf (mem :u32 ap) (+ gp 8))
+          (mem :u64 (+ (mem :u64 (+ ap 16)) gp)))
+        (let ((p (mem :u64 (+ ap 8))))
+          (setf (mem :u64 (+ ap 8)) (+ p 8))
+          (mem :u64 p)))))
