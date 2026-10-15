@@ -108,6 +108,13 @@
   :pathname "src/apfs/"
   :components ((:file "apfs") (:file "iokit") (:file "newfs") (:file "transaction") (:file "write") (:file "vfs") (:file "root")))
 
+(asdf:defsystem #:finch/fat
+  :description "FAT32"
+  :depends-on (#:uiop #:finch/vfs)
+  :serial t
+  :pathname "src/fat/"
+  :components ((:file "fat") (:file "vfs")))
+
 (asdf:defsystem #:finch/kernel
   :description "The kernel, run as pid 1"
   :depends-on (#:finch/mach #:finch/bsd #:finch/io #:uiop)
@@ -117,7 +124,7 @@
 
 (asdf:defsystem #:finch/image
   :description "The bootable image"
-  :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io #:finch/apfs (:require #:sb-bsd-sockets))
+  :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io #:finch/apfs #:finch/fat (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/image/"
   :components ((:file "image") (:file "runtime") (:file "efi")))
@@ -185,7 +192,7 @@
 
 (asdf:defsystem #:finch
   :description "A live, hackable OS on SBCL"
-  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/xpc #:finch/launchd #:finch/shell #:finch/io #:finch/text #:finch/edit #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/iokit #:finch/vfs #:finch/apfs #:finch/net #:finch/kernel #:finch/image)
+  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/xpc #:finch/launchd #:finch/shell #:finch/io #:finch/text #:finch/edit #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/iokit #:finch/vfs #:finch/apfs #:finch/fat #:finch/net #:finch/kernel #:finch/image)
   :in-order-to ((asdf:test-op (asdf:test-op #:finch/test))))
 
 (asdf:defsystem #:finch/test

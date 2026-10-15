@@ -91,6 +91,8 @@
              "llvm"
              "python"
              "qemu"
+             "dosfstools"
+             "mtools"
              "ovmf-x86-64"
              "acpica"
              "openssh"

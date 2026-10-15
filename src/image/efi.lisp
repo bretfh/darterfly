@@ -209,6 +209,24 @@
       (finch/plist:write-plist (boot-plist boot-args) plist))
     root))
 
+(defun esp-image (esp &optional (image (build-path "esp.img")))
+  (let ((root (uiop:ensure-directory-pathname esp))
+        (entries nil))
+    (labels ((relative (p) (enough-namestring p root))
+             (walk (dir)
+               (dolist (sub (uiop:subdirectories dir))
+                 (push (list :dir (string-right-trim "/" (relative sub))) entries)
+                 (walk sub))
+               (dolist (f (uiop:directory-files dir))
+                 (push (list :file (relative f)
+                             (with-open-file (s f :element-type '(unsigned-byte 8))
+                               (let ((v (make-array (file-length s) :element-type '(unsigned-byte 8))))
+                                 (read-sequence v s)
+                                 v)))
+                       entries))))
+      (walk root))
+    (finch/fat:newfs image :size (* 256 1048576) :label "EFI" :entries (nreverse entries))))
+
 (defun firmware (name)
   (format nil "~a/share/firmware/~a" (uiop:getenv "GUIX_ENVIRONMENT") name))
 
@@ -222,7 +240,7 @@
           "-machine" "q35"
           "-drive" (format nil "if=pflash,format=raw,readonly=on,file=~a" (firmware "ovmf_code_x64.bin"))
           "-drive" (format nil "if=pflash,format=raw,file=~a" (uiop:native-namestring vars))
-          "-drive" (format nil "if=none,id=esp,format=raw,snapshot=on,file=fat:~a" (uiop:native-namestring esp))
+          "-drive" (format nil "if=none,id=esp,format=raw,snapshot=on,file=~a" (uiop:native-namestring (esp-image esp)))
           "-device" "virtio-blk-pci,drive=esp,bootindex=0")
      (when root
        (list "-drive" (format nil "if=none,id=root,format=raw,~:[~;snapshot=on,~]file=~a" (eq (car root) :snapshot) (uiop:native-namestring (cdr root)))
