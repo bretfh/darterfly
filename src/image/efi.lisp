@@ -28,22 +28,9 @@
 
 (defun compile-objects (sources dir flags &key includes)
   (loop :for name :in sources
-        :for object := (build-path (format nil "~a/~a.o" (object-dir dir) (pathname-name name)))
+        :for object := (object-path dir name)
         :do (apply #'run (c-compile name object :includes includes :clang-flags flags))
         :collect (uiop:native-namestring object)))
-
-(defun lisp-objects ()
-  (setf finch/low:*build-date* (date))
-  (loop :for (name make) :in (list (list "pexpert" #'finch/pexpert:pexpert-object)
-                                   (list "osfmk" #'finch/osfmk:osfmk-object))
-        :collect (let ((path (build-path (format nil "kernel/~a.o" name))))
-                   (ensure-directories-exist path)
-                   (with-open-file (s path :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
-                     (write-sequence (funcall make) s))
-                   (uiop:native-namestring path))))
-
-(defun kernel-objects ()
-  (lisp-objects))
 
 (defun libsa-objects ()
   (compile-objects (mapcar (lambda (f) (source (concatenate 'string "src/libsa/" f))) *libsa-sources*) "libsa"
@@ -85,23 +72,30 @@
                                      "src/asm/" "src/low/" "src/link/" "src/boot/"))
           (list (merge-pathnames "output/" (sbcl-tree)))))
 
+(defun user-objects ()
+  (append (mapcar (lambda (f) (list (format nil "libsa/~a.o" (pathname-name f)) (object-path "libsa" f))) *libsa-sources*)
+          (mapcar (lambda (f) (list (format nil "runtime/~a.o" (pathname-name f)) (runtime-object f))) *runtime-sources*)
+          (when (eq *c-compiler* :tcc)
+            (mapcar (lambda (f) (list (format nil "libtcc1/~a.o" (pathname-name f)) (libtcc1-object f))) *libtcc1-sources*))))
+
 (defun mach-kernel ()
   (let ((out (build-path (if (eq *c-compiler* :clang) "kernel/kernel" "kernel/kernel-tcc"))))
     (when (and (probe-file out) (> (file-write-date out) (newest (kernel-inputs))))
       (return-from mach-kernel out))
-    (flet ((read-object (path region)
-             (finch/link:read-object (with-open-file (s path :element-type '(unsigned-byte 8))
-                                       (let ((v (make-array (file-length s) :element-type '(unsigned-byte 8))))
-                                         (read-sequence v s)
-                                         v))
-                                     path region)))
-      (let ((image (finch/link:link-kernel (mapcar (lambda (p) (read-object p :kernel)) (kernel-objects))
-                                           (mapcar (lambda (p) (read-object p :user))
-                                                   (append (libsa-objects) (runtime-objects))))))
-        (ensure-directories-exist out)
-        (with-open-file (s out :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
-          (write-sequence image s))))
+    (libsa-objects)
+    (runtime-objects)
+    (let ((image (finch/install:kernel-image (loop :for (name path) :in (user-objects) :collect (cons name (octets path))))))
+      (ensure-directories-exist out)
+      (with-open-file (s out :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
+        (write-sequence image s)))
     out))
+
+(defun object-entries ()
+  (mach-kernel)
+  (let ((objects (user-objects)))
+    (cons (list :file "usr/lib/finch/objects/objects" (text (format nil "~{~a~%~}" (mapcar #'first objects))))
+          (loop :for (name path) :in objects
+                :collect (list :file (concatenate 'string "usr/lib/finch/objects/" name) (octets path))))))
 
 (defun boot-plist (boot-args)
   (let ((d (make-hash-table :test 'equal)))
@@ -138,6 +132,7 @@
                        (desktop-entries)
                        (contribs)
                        (certificates)
+                       (object-entries)
                        (tree-entries (asdf:system-relative-pathname :finch "") "usr/src/finch"
                                      :skip '(".git" "build" "tahoe"))))
         (dirs (list "tmp" "Users" "Users/finch" "dev" "Volumes" "System" "System/Library" "System/Library/Kernels")))

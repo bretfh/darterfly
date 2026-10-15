@@ -748,6 +748,38 @@
                                               :ignore-error-status t :output nil :error-output nil)))
         "fsck.fat passes the ESP finch wrote")))
 
+(test finch-builds-its-kernel-and-boots-it
+  (let ((esp (merge-pathnames "esp-kernel.img" (finch-file "build/")))
+        (disk (merge-pathnames "guest-kernel.img" (finch-file "build/")))
+        (copy "(dolist (f (directory \"/usr/src/finch/**/*.*\")) (unless (uiop:directory-pathname-p f) (let ((to (concatenate 'string \"/Users/finch/src/finch/\" (subseq (namestring f) (length \"/usr/src/finch/\"))))) (ensure-directories-exist to) (uiop:copy-file f to))))")
+        (edit "(let* ((p \"/Users/finch/src/finch/src/osfmk/i386/init.lisp\") (text (uiop:read-file-string p)) (at (search \"RELEASE_X86_64\" text))) (with-open-file (s p :direction :output :if-exists :supersede) (write-string (subseq text 0 at) s) (write-string \"BUILT_IN_FINCH\" s) (write-string (subseq text (+ at (length \"RELEASE_X86_64\"))) s)) :edited)")
+        (reload "(progn (handler-bind ((warning #'muffle-warning)) (asdf:load-system :finch/osfmk)) (namestring (asdf:system-source-file (asdf:find-system :finch/osfmk))))"))
+    (uiop:delete-file-if-exists esp)
+    (uiop:delete-file-if-exists disk)
+    (let ((c (image:bare-console :esp esp :root disk)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "root:finch/RELEASE_X86_64"))
+               (image:expect c "* " :timeout 60)
+               (ask copy)
+               (is (search ":EDITED" (ask edit)))
+               (ask "(finch-asdf)")
+               (is (search "\"/Users/finch/src/finch/finch.asd\"" (ask reload)))
+               (is (search "\"gen-2\"" (ask "(finch/install:install (finch/install:build-kernel) \"/Volumes/EFI/EFI/finch/gen-1/finch.core\")")))
+               (image:send c "(sb-ext:exit)")
+               (image:expect c "exit(0)" :timeout 60))
+          (image:finish c 5))))
+    (let ((c (image:bare-console :esp esp :root disk)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "boot.efi: generation gen-2"))
+               (is (image:expect c "root:finch/BUILT_IN_FINCH") "the kernel finch built is the one that boots")
+               (image:expect c "* " :timeout 60)
+               (is (search "\"gen-2\"" (ask "(finch/install:current)"))))
+          (image:finish c 5))))))
+
 (test finch-saves-itself-and-boots-the-save
   (let ((esp (merge-pathnames "esp-save.img" (finch-file "build/"))))
     (uiop:delete-file-if-exists esp)

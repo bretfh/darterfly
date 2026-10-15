@@ -10,10 +10,6 @@
 (defun build-path (name)
   (merge-pathnames name (ensure-directories-exist *build*)))
 
-(defun date ()
-  (multiple-value-bind (s m h d mo y) (decode-universal-time (get-universal-time) 0)
-    (format nil "~d-~2,'0d-~2,'0d ~2,'0d:~2,'0d:~2,'0d UTC" y mo d h m s)))
-
 (defun octets (path)
   (with-open-file (s path :element-type '(unsigned-byte 8))
     (let ((v (make-array (file-length s) :element-type '(unsigned-byte 8))))

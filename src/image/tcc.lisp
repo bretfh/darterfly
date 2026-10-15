@@ -75,11 +75,17 @@
 (defun object-dir (name)
   (if (eq *c-compiler* :clang) name (format nil "~a-tcc" name)))
 
+(defun object-path (dir source)
+  (build-path (format nil "~a/~a.o" (object-dir dir) (pathname-name source))))
+
 (defparameter *libtcc1-sources* '("libtcc1.c" "va_list.c" "stdatomic.c" "atomic.S" "builtin.c" "alloca.S"))
+
+(defun libtcc1-object (source)
+  (build-path (format nil "tcc/finch-lib/~a.o" (pathname-name source))))
 
 (defun libtcc1-objects ()
   (when (eq *c-compiler* :tcc)
     (loop :for name :in *libtcc1-sources*
-          :for object := (build-path (format nil "tcc/finch-lib/~a.o" (pathname-name name)))
+          :for object := (libtcc1-object name)
           :do (apply #'run (c-compile (merge-pathnames (concatenate 'string "lib/" name) (tcc-stage 2)) object :compat nil))
           :collect (uiop:native-namestring object))))
