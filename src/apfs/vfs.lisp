@@ -60,7 +60,8 @@
                (let ((media vol))
                  (mount-writable (lambda (at length) (iokit:media-read media at length))
                                  (lambda (at octets) (iokit:media-write media at octets))
-                                 path))
+                                 path
+                                 (lambda () (iokit:media-flush media))))
                (mount-volume v path))
         and collect path))
 
@@ -164,7 +165,7 @@
                   :owner (and uid (/= uid -1) uid) :group (and gid (/= gid -1) gid))
     0))
 
-(defun mount-writable (read write path)
-  (let ((w (make-wvolume (open-writable read write))))
+(defun mount-writable (read write path &optional flush)
+  (let ((w (make-wvolume (open-writable read write flush))))
     (vfs:vfs-mount (wvnode w +root-dir-ino-num+) path)
     w))

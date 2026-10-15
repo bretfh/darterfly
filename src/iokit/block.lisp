@@ -1,6 +1,7 @@
 (in-package #:finch/iokit)
 
 (defconstant +virtio-f-version-1+ (ash 1 32))
+(defconstant +virtio-blk-f-flush+ (ash 1 9))
 (defconstant +request-pages+ 8)
 
 (define-io-class apple-virtio-block-storage-device "AppleVirtIOBlockStorageDevice" (io-block-storage-device)
@@ -9,6 +10,7 @@
    (block-count :accessor block-count)
    (request :accessor request-page)
    (data :accessor data-pages)
+   (flushes :initform nil :accessor flushes)
    (lock :initform (sb-thread:make-mutex :name "virtio-blk") :reader device-lock)))
 
 (add-personality "IOClass" "AppleVirtIOBlockStorageDevice" "IOProviderClass" "AppleVirtIOTransport"
@@ -19,7 +21,8 @@
 (defmethod start ((b apple-virtio-block-storage-device) (tr apple-virtio-transport))
   (setf (transport b) tr)
   (when (and (logtest (device-features tr) +virtio-f-version-1+)
-             (set-driver-features tr +virtio-f-version-1+))
+             (set-driver-features tr (logior +virtio-f-version-1+ (logand (device-features tr) +virtio-blk-f-flush+))))
+    (setf (flushes b) (logtest (device-features tr) +virtio-blk-f-flush+))
     (setf (queue b) (setup-queue tr 0)
           (request-page b) (vm-page-grab)
           (data-pages b) (loop repeat +request-pages+ collect (vm-page-grab)))
@@ -72,5 +75,11 @@
       (loop for done from 0 below count by per
             do (block-request b 1 (+ lba done) (min per (- count done)) vector (* done 512))))
     count))
+
+(defun flush-blocks (b)
+  (when (flushes b)
+    (sb-thread:with-mutex ((device-lock b))
+      (block-request b 4 0 0 nil 0)))
+  t)
 
 (defmethod interrupt-vector ((b apple-virtio-block-storage-device)) (virtqueue-vector (queue b)))

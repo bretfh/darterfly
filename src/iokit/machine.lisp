@@ -11,7 +11,7 @@
    #:map-device-memory-with-index #:io-memory-map #:map-virtual-address #:map-physical-address #:map-length
    #:apple-virtio-transport #:apple-virtio-pci-transport #:virtio-device-type
    #:apple-virtio-block-storage-device #:block-count #:block-size #:read-blocks #:write-blocks
-   #:io-block-storage-device #:io-media #:media-read #:media-write #:media-size #:io-guid-partition-scheme #:crc32
+   #:io-block-storage-device #:io-media #:media-read #:media-write #:media-flush #:media-size #:io-guid-partition-scheme #:crc32
    #:acpi-table #:vm-page-grab #:ml-io-map #:ml-io-map-wcomb #:boot-arg #:kernel-flags #:boot-video
    #:wait-for-interrupt #:interrupt-vector
    #:apple-virtio-input #:input-events #:input-abs-range

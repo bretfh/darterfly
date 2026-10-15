@@ -4,7 +4,7 @@
   read write block-count sb xid next-oid
   desc-base desc-blocks desc-next data-base data-blocks data-next
   sm cib-paddr bitmap-paddrs bitmap ip-base ip-count ip-bm-base ip-bitmap
-  ip-fq main-fq fq-oids reaper carry (low 0)
+  ip-fq main-fq fq-oids reaper carry (low 0) flush
   omap-paddr omap-nodes omap-entries
   vol-oid vol-sb vol-paddr vol-omap-paddr vol-omap-nodes fs-records fs-nodes extent-records extent-nodes snap-node)
 
@@ -47,9 +47,9 @@
                         (declare (ignore ks))
                         (list (u64 block k) (u64 block (+ k 8)) (if (plusp vs) (u64 block v) 1))))))))
 
-(defun open-writable (read write)
+(defun open-writable (read write &optional flush)
   (multiple-value-bind (sb) (checkpoint-superblock read)
-    (let* ((nx (make-nx :read read :write write :sb (copy-seq sb) :xid (object-xid sb) :block-count (u64 sb 40)
+    (let* ((nx (make-nx :read read :write write :flush flush :sb (copy-seq sb) :xid (object-xid sb) :block-count (u64 sb 40)
                         :next-oid (u64 sb 88)
                         :desc-base (u64 sb 112) :desc-blocks (logand (u32 sb 104) #x7fffffff) :desc-next (u32 sb 128)
                         :data-base (u64 sb 120) :data-blocks (logand (u32 sb 108) #x7fffffff) :data-next (u32 sb 132)))
@@ -296,6 +296,8 @@
         (dolist (w (reverse writes)) (nx-put nx (car w) (cdr w)))
         (nx-put nx cpm-block cpm)
         (nx-put nx sb-block sb)
+        (when (nx-flush nx) (funcall (nx-flush nx)))
         (nx-put nx 0 sb)
+        (when (nx-flush nx) (funcall (nx-flush nx)))
         (setf (nx-xid nx) xid)))
     xid))

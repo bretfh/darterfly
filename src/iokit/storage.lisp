@@ -29,6 +29,8 @@
       (error "media-write: ~d bytes at ~d are not whole blocks" (length vector) at))
     (write-blocks (media-device media) (floor at 512) vector)))
 
+(defun media-flush (media) (flush-blocks (media-device media)))
+
 (defgeneric bsd-client-class (media)
   (:method ((media io-media)) 'io-media-bsd-client))
 

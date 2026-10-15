@@ -334,6 +334,8 @@
              (is (search "334" (ask "(length (uiop:read-file-lines \"/finch/tests/ports.txt\"))")))
              (is (search "#P\"/System/Library/Kernels/kernel\"" (ask "(probe-file \"/System/Library/Kernels/kernel\")")))
              (is (search "DEV-NODE" (ask "(type-of (finch/vfs:namei \"/dev/console\"))")))
+             (is (search "T" (ask "(finch/iokit::flushes (finch/iokit::media-device finch/apfs::*root-media*))"))
+                 "the root disk takes flushes")
              (is (search ":LOADED" (ask "(progn (require :sb-rotate-byte) (require :sb-md5) :loaded)")) "contribs from SBCL_HOME")
              (is (search "2.5d0" (ask "(progn (load \"/usr/lib/sbcl/contrib/sb-posix.fasl\") (sb-posix:strtod \"2.5\"))"))
                  "a fasl that calls C reaches the alien linkage table")

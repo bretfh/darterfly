@@ -11,7 +11,8 @@
           (return-from mountroot nil))
         (mount-writable (lambda (at length) (iokit:media-read media at length))
                         (lambda (at octets) (iokit:media-write media at octets))
-                        "/")
+                        "/"
+                        (lambda () (iokit:media-flush media)))
         (setf *root-media* media)
         (start-syncer)
         (dolist (dir '("/dev" "/proc" "/tmp" "/Volumes" "/System/Library/Kernels")) (vfs:vfs-mkdirs dir))
