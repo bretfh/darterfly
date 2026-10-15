@@ -4,7 +4,7 @@
   read write block-count sb xid next-oid
   desc-base desc-blocks desc-next data-base data-blocks data-next
   sm cib-paddr bitmap-paddrs bitmap ip-base ip-count ip-bm-base ip-bitmap
-  ip-fq main-fq fq-oids reaper carry
+  ip-fq main-fq fq-oids reaper carry (low 0)
   omap-paddr omap-nodes omap-entries
   vol-oid vol-sb vol-paddr vol-omap-paddr vol-omap-nodes fs-records fs-nodes extent-records extent-nodes snap-node)
 
@@ -95,9 +95,9 @@
 (defun (setf bitmap-bit) (v bitmap n) (setf (ldb (byte 1 (mod n 8)) (aref bitmap (floor n 8))) v))
 
 (defun alloc-block (nx)
-  (loop for n from 0 below (nx-block-count nx)
+  (loop for n from (nx-low nx) below (nx-block-count nx)
         when (zerop (bitmap-bit (nx-bitmap nx) n))
-          do (setf (bitmap-bit (nx-bitmap nx) n) 1) (return n)
+          do (setf (bitmap-bit (nx-bitmap nx) n) 1 (nx-low nx) (1+ n)) (return n)
         finally (fail "the container is full")))
 
 (defun alloc-ip-block (nx)
@@ -107,10 +107,15 @@
         finally (fail "the internal pool is full")))
 
 (defun alloc-extent (nx count)
-  (loop for start from 0 below (- (nx-block-count nx) count -1)
-        when (loop for n from start below (+ start count) always (zerop (bitmap-bit (nx-bitmap nx) n)))
-          do (loop for n from start below (+ start count) do (setf (bitmap-bit (nx-bitmap nx) n) 1))
-             (return start)
+  (loop with start = (nx-low nx)
+        while (<= (+ start count) (nx-block-count nx))
+        do (let ((used (loop for n from start below (+ start count)
+                             unless (zerop (bitmap-bit (nx-bitmap nx) n)) return n)))
+             (if used
+                 (setf start (1+ used))
+                 (progn (loop for n from start below (+ start count) do (setf (bitmap-bit (nx-bitmap nx) n) 1))
+                        (when (= start (nx-low nx)) (setf (nx-low nx) (+ start count)))
+                        (return start))))
         finally (fail "no ~d free blocks in a row" count)))
 
 (defun free-count (nx)
@@ -166,7 +171,8 @@
       (dolist (e (nx-ip-fq nx))
         (loop for b from (second e) below (+ (second e) (third e)) do (setf (bitmap-bit (nx-ip-bitmap nx) (- b (nx-ip-base nx))) 0)))
       (dolist (e (nx-main-fq nx))
-        (loop for b from (second e) below (+ (second e) (third e)) do (setf (bitmap-bit (nx-bitmap nx) b) 0)))
+        (loop for b from (second e) below (+ (second e) (third e)) do (setf (bitmap-bit (nx-bitmap nx) b) 0))
+        (setf (nx-low nx) (min (nx-low nx) (second e))))
       (setf (nx-ip-fq nx) (coalesce xid (cons (nx-cib-paddr nx) (nx-bitmap-paddrs nx))))
       (let ((main (coalesce xid (append (list (nx-omap-paddr nx) (nx-vol-paddr nx) (nx-vol-omap-paddr nx) (nx-snap-node nx))
                                         (nx-omap-nodes nx) (nx-vol-omap-nodes nx) (nx-fs-nodes nx) (nx-extent-nodes nx)
