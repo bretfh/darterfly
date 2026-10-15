@@ -145,8 +145,9 @@
           (desktop-jobs) (fonts) (icons)))
 
 (defun contribs ()
-  (loop :for fasl :in (directory (merge-pathnames "obj/sbcl-home/contrib/*.fasl" (sbcl-tree)))
-        :collect (list :file (format nil "usr/lib/sbcl/contrib/~a.fasl" (pathname-name fasl)) (octets fasl))))
+  (loop :for file :in (append (directory (merge-pathnames "obj/sbcl-home/contrib/*.fasl" (sbcl-tree)))
+                              (directory (merge-pathnames "obj/sbcl-home/contrib/*.asd" (sbcl-tree))))
+        :collect (list :file (format nil "usr/lib/sbcl/contrib/~a" (file-namestring file)) (octets file))))
 
 (defun root-entries ()
   (let ((files (append (loop :for f :in *ramdisk-files*

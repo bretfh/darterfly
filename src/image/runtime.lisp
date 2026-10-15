@@ -27,7 +27,21 @@
     return __libsa_spawn(program, argv, sin, sout, serr, search, envp, pwd);
 #endif
     pid = fork();
-    if (pid) {")))
+    if (pid) {")
+    ("x86-64-arch.c" "        ALIEN_LINKAGE_SPACE_START = (uword_t)addr - ALIEN_LINKAGE_SPACE_SIZE;
+    }
+    return addr;"
+     "        ALIEN_LINKAGE_SPACE_START = (uword_t)addr - ALIEN_LINKAGE_SPACE_SIZE;
+    }
+#if defined __finch__
+    if (space_id == STATIC_CORE_SPACE_ID && lisp_code_in_elf()) {
+        os_vm_address_t near = os_alloc_gc_space(ALIEN_LINKAGE_TABLE_CORE_SPACE_ID, NOT_MOVABLE,
+                                                 (os_vm_address_t)(0x100000000000UL - ALIEN_LINKAGE_SPACE_SIZE),
+                                                 ALIEN_LINKAGE_SPACE_SIZE);
+        if (near) ALIEN_LINKAGE_SPACE_START = (uword_t)near;
+    }
+#endif
+    return addr;")))
 
 (defun runtime-dir () (build-path "runtime/src/runtime/"))
 

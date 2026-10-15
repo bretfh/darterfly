@@ -317,6 +317,8 @@
              (is (search "#P\"/System/Library/Kernels/kernel\"" (ask "(probe-file \"/System/Library/Kernels/kernel\")")))
              (is (search "DEV-NODE" (ask "(type-of (finch/vfs:namei \"/dev/console\"))")))
              (is (search ":LOADED" (ask "(progn (require :sb-rotate-byte) (require :sb-md5) :loaded)")) "contribs from SBCL_HOME")
+             (is (search "2.5d0" (ask "(progn (load \"/usr/lib/sbcl/contrib/sb-posix.fasl\") (sb-posix:strtod \"2.5\"))"))
+                 "a fasl that calls C reaches the alien linkage table")
              (is (search "#P\"/Users/finch/\"" (ask "(user-homedir-pathname)")))
              (is (search "\"through a pipe\"" (ask "(multiple-value-bind (r w) (sb-posix:pipe) (let ((o (sb-sys:make-fd-stream w :output t)) (i (sb-sys:make-fd-stream r :input t))) (write-line \"through a pipe\" o) (close o) (prog1 (read-line i) (close i))))"))
                  "an fd-stream over pipe()")
