@@ -209,6 +209,12 @@ void machdep_syscall(x86_saved_state64_t *regs) {
     return ok(regs, 0);
   }
   case 8: return ok(regs, (uint64_t)PE_boot_args);
+  case 17: {
+    uint64_t *out = (uint64_t *)regs->rdi;
+    out[0] = PE_boot_args->coreStart ? (uint64_t)PHYSMAP_PTOV(PE_boot_args->coreStart) : 0;
+    out[1] = PE_boot_args->coreSize;
+    return ok(regs, 0);
+  }
   case 9: {
     uint64_t pa = vm_page_grab();
     if (!pa) return error(regs, 12);

@@ -26,12 +26,13 @@ static vfs_entry vfs;
 void __libsa_vfs_register(vfs_entry entry) { vfs = entry; }
 
 #define KERNEL_PATH "/System/Library/Kernels/kernel"
+#define CORE_PATH "/System/Library/Kernels/finch.core"
 #define KERNEL_FD 1000
 #define KERNEL_FDS 8
 
-static struct { int open; off_t off; } kfds[KERNEL_FDS];
-static const char *kernel;
-static size_t kernel_size;
+struct boot_file { const char *data; size_t size; };
+static struct boot_file kernel_file, core_file;
+static struct { int open; off_t off; struct boot_file *file; } kfds[KERNEL_FDS];
 
 static long ret(long r) {
   if (r < 0) {
@@ -49,20 +50,24 @@ static long call(int op, long a, long b, long c, long d) {
 static int console(int fd) { return fd >= 0 && fd <= 2; }
 static int kfd(int fd) { return fd >= KERNEL_FD && fd < KERNEL_FD + KERNEL_FDS && kfds[fd - KERNEL_FD].open; }
 
-static void load_kernel(void) {
-  if (kernel) return;
-  uint64_t k[2] = {0, 0};
-  __machdep(MACHDEP_kernel_file, (long)k, 0);
-  kernel = (const char *)k[0];
-  kernel_size = k[1];
+static struct boot_file *boot_file(const char *path) {
+  struct boot_file *f = !strcmp(path, KERNEL_PATH) ? &kernel_file : !strcmp(path, CORE_PATH) ? &core_file : 0;
+  if (!f) return 0;
+  if (!f->data) {
+    uint64_t k[2] = {0, 0};
+    __machdep(f == &kernel_file ? MACHDEP_kernel_file : MACHDEP_core_file, (long)k, 0);
+    f->data = (const char *)k[0];
+    f->size = k[1];
+  }
+  return f->data ? f : 0;
 }
 
-static int kernel_open(void) {
-  load_kernel();
+static int kernel_open(struct boot_file *file) {
   for (int i = 0; i < KERNEL_FDS; i++)
     if (!kfds[i].open) {
       kfds[i].open = 1;
       kfds[i].off = 0;
+      kfds[i].file = file;
       return KERNEL_FD + i;
     }
   errno = EMFILE;
@@ -70,18 +75,19 @@ static int kernel_open(void) {
 }
 
 static ssize_t kernel_read(int fd, void *buf, size_t n, off_t *off) {
-  if ((size_t)*off >= kernel_size) return 0;
-  if (n > kernel_size - *off) n = kernel_size - *off;
-  memcpy(buf, kernel + *off, n);
+  struct boot_file *f = kfds[fd - KERNEL_FD].file;
+  if ((size_t)*off >= f->size) return 0;
+  if (n > f->size - *off) n = f->size - *off;
+  memcpy(buf, f->data + *off, n);
   *off += n;
   return (ssize_t)n;
 }
 
-static void kernel_stat(struct stat *st) {
+static void kernel_stat(struct boot_file *f, struct stat *st) {
   memset(st, 0, sizeof *st);
   st->st_mode = S_IFREG | 0555;
   st->st_nlink = 1;
-  st->st_size = (off_t)kernel_size;
+  st->st_size = (off_t)f->size;
   st->st_blksize = 4096;
 }
 
@@ -98,7 +104,8 @@ int open(const char *path, int flags, ...) {
   va_start(ap, flags);
   mode_t mode = (flags & O_CREAT) ? va_arg(ap, mode_t) : 0;
   va_end(ap);
-  if (!vfs && !strcmp(path, KERNEL_PATH)) return kernel_open();
+  struct boot_file *file = vfs ? 0 : boot_file(path);
+  if (file) return kernel_open(file);
   return (int)ret(call(VFS_open, (long)path, flags, mode, 0));
 }
 
@@ -148,7 +155,7 @@ off_t lseek(int fd, off_t off, int whence) {
   if (console(fd)) return ret(-ESPIPE);
   if (kfd(fd)) {
     off_t *at = &kfds[fd - KERNEL_FD].off;
-    off_t base = whence == SEEK_SET ? 0 : whence == SEEK_CUR ? *at : (off_t)kernel_size;
+    off_t base = whence == SEEK_SET ? 0 : whence == SEEK_CUR ? *at : (off_t)kfds[fd - KERNEL_FD].file->size;
     if (base + off < 0) return ret(-EINVAL);
     return *at = base + off;
   }
@@ -156,9 +163,9 @@ off_t lseek(int fd, off_t off, int whence) {
 }
 
 int stat(const char *path, struct stat *st) {
-  if (!vfs && !strcmp(path, KERNEL_PATH)) {
-    load_kernel();
-    kernel_stat(st);
+  struct boot_file *file = vfs ? 0 : boot_file(path);
+  if (file) {
+    kernel_stat(file, st);
     return 0;
   }
   return (int)ret(call(VFS_stat, (long)path, (long)st, 0, 0));
@@ -175,7 +182,7 @@ int fstat(int fd, struct stat *st) {
     return 0;
   }
   if (kfd(fd)) {
-    kernel_stat(st);
+    kernel_stat(kfds[fd - KERNEL_FD].file, st);
     return 0;
   }
   return (int)ret(call(VFS_fstat, fd, (long)st, 0, 0));

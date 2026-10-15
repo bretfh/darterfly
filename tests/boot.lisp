@@ -20,7 +20,8 @@
     (unwind-protect
          (progn
            (is (image:expect c "finch boot.efi"))
-           (is (search "rsdp 0x" (image:expect c "boot-args \"halt\"")))
+           (is (search "boot.efi: Core " (image:expect c "rsdp 0x")) "boot.efi loads the core beside the kernel")
+           (is (image:expect c "boot-args \"halt -- --core /System/Library/Kernels/finch.core\""))
            (is (image:expect c "finch Kernel Version"))
            (is (image:expect c "boot_args: Revision 1 Version 2 efiMode 64"))
            (is (search "kslide 0x" (image:expect c "memory:")))

@@ -120,25 +120,35 @@ static int plist_string(const char *plist, const char *key, char *out, int max) 
   return 1;
 }
 
+static void boot_file(EFI_FILE_PROTOCOL *root, const char *plist, const char *name, uint64_t *start, uint64_t *size) {
+  char key[64] = "<key>", path[256];
+  int k = 5;
+  for (int i = 0; name[i] && k < 50; i++) key[k++] = name[i];
+  for (const char *t = "</key>"; *t; t++) key[k++] = *t;
+  key[k] = 0;
+  if (!plist_string(plist, key, path, sizeof path)) return;
+  CHAR16 wide[256];
+  int i = 0;
+  for (; path[i] && i < 255; i++) wide[i] = path[i] == '/' ? '\\' : (CHAR16)path[i];
+  wide[i] = 0;
+  UINTN n;
+  void *data = read_file(root, wide, &n);
+  if (!data) fail(name, 0);
+  *start = (uint64_t)data;
+  *size = n;
+  puts_serial("boot.efi: ");
+  puts_serial(name);
+  puts_serial(" ");
+  put_dec(n);
+  puts_serial(" bytes\n");
+}
+
 static void kernel_flags(EFI_FILE_PROTOCOL *root, boot_args *args) {
   UINTN size;
   const char *plist = read_file(root, L"\\Library\\Preferences\\SystemConfiguration\\com.apple.Boot.plist", &size);
   plist_string(plist, "<key>Kernel Flags</key>", args->CommandLine, BOOT_LINE_LENGTH);
-  char path[256];
-  if (plist_string(plist, "<key>RAMDisk</key>", path, sizeof path)) {
-    CHAR16 wide[256];
-    int i = 0;
-    for (; path[i] && i < 255; i++) wide[i] = path[i] == '/' ? '\\' : (CHAR16)path[i];
-    wide[i] = 0;
-    UINTN rsize;
-    void *ramdisk = read_file(root, wide, &rsize);
-    if (!ramdisk) fail("RAMDisk", 0);
-    args->ramdiskStart = (uint64_t)ramdisk;
-    args->ramdiskSize = rsize;
-    puts_serial("boot.efi: ramdisk ");
-    put_dec(rsize);
-    puts_serial(" bytes\n");
-  }
+  boot_file(root, plist, "RAMDisk", &args->ramdiskStart, &args->ramdiskSize);
+  boot_file(root, plist, "Core", &args->coreStart, &args->coreSize);
 }
 
 typedef struct {

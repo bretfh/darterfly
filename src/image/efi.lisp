@@ -82,20 +82,6 @@
                    (uiop:native-namestring core))))
     core))
 
-(defun split-core ()
-  (let* ((core (finch-core))
-         (asm (build-path "core/lisp.s"))
-         (object (build-path "core/lisp.o"))
-         (data (build-path "core/lisp-core.o")))
-    (ensure-directories-exist asm)
-    (unless (and (probe-file object) (> (file-write-date object) (file-write-date core)))
-      (run (uiop:native-namestring (merge-pathnames "run-sbcl.sh" (sbcl-tree)))
-           "--script" (uiop:native-namestring (merge-pathnames "tools-for-build/elftool.lisp" (sbcl-tree)))
-           "split" (uiop:native-namestring core) (uiop:native-namestring asm))
-      (run "clang" "-target" "x86_64-unknown-none-elf" "-c" (uiop:native-namestring asm)
-           "-o" (uiop:native-namestring object)))
-    (list (uiop:native-namestring object) (uiop:native-namestring data))))
-
 (defun runtime-objects ()
   (let ((failures (compile-runtime)))
     (when failures
@@ -112,8 +98,7 @@
 
 (defun kernel-inputs ()
   (append (mapcar #'source '("src/osfmk/" "src/bsd/dev/" "src/bsd/kern/" "src/pexpert/" "src/libsa/" "src/sbcl/" "src/image/"))
-          (list (merge-pathnames "output/" (sbcl-tree)))
-          (finch-sources)))
+          (list (merge-pathnames "output/" (sbcl-tree)))))
 
 (defun mach-kernel ()
   (let ((out (build-path "kernel/kernel")))
@@ -121,13 +106,14 @@
       (return-from mach-kernel out))
     (apply #'run "ld.lld" "-T" (source "src/osfmk/x86_64/kernel.ld") "-nostdlib" "-static" "--error-limit=0"
            "-o" (uiop:native-namestring out)
-           (append (list (kernel-object)) (libsa-objects) (runtime-objects) (split-core)))
+           (append (list (kernel-object)) (libsa-objects) (runtime-objects)))
     out))
 
 (defun boot-plist (boot-args)
   (let ((d (make-hash-table :test 'equal)))
-    (setf (gethash "Kernel Flags" d) boot-args
-          (gethash "RAMDisk" d) "/System/Library/RAMDisk/root.cpio")
+    (setf (gethash "Kernel Flags" d) (format nil "~a -- --core /System/Library/Kernels/finch.core" boot-args)
+          (gethash "RAMDisk" d) "/System/Library/RAMDisk/root.cpio"
+          (gethash "Core" d) "/System/Library/Kernels/finch.core")
     d))
 
 (defparameter *ramdisk-files*
@@ -215,6 +201,7 @@
         (put efi "EFI/BOOT/BOOTX64.EFI")
         (put efi "System/Library/CoreServices/boot.efi"))
       (put (mach-kernel) "System/Library/Kernels/kernel")
+      (put (finch-core) "System/Library/Kernels/finch.core")
       (put (ramdisk) "System/Library/RAMDisk/root.cpio"))
     (let ((plist (merge-pathnames "Library/Preferences/SystemConfiguration/com.apple.Boot.plist" root)))
       (ensure-directories-exist plist)

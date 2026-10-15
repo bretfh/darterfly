@@ -70,5 +70,6 @@ typedef struct boot_args {
   uint32_t kernelRegionCount, __pad;
   struct { uint64_t va, pa, size; } kernelRegions[8];
   uint64_t ramdiskStart, ramdiskSize;
-  uint32_t __reserved4[634];
+  uint64_t coreStart, coreSize;
+  uint32_t __reserved4[630];
 } boot_args;

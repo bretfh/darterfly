@@ -35,6 +35,7 @@
 #define MACHDEP_vm_page_grab 9
 #define MACHDEP_ml_io_map 10
 #define MACHDEP_boot_video 11
+#define MACHDEP_core_file 17
 
 long __syscall(long n, long a, long b, long c, long d, long e, long f);
 long __machdep(long n, long a, long b);
