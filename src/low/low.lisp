@@ -4,7 +4,7 @@
   (:export #:define-low #:define-global #:low-object #:inb #:outb #:ref #:mem #:pause #:result #:while
            #:package-object #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:address
            #:rep-movsb #:rep-stosb #:&va #:va-next #:rdtsc #:return-address
-           #:invlpg #:set-cr3 #:cpuid-edx #:cpu-data #:fxsave #:fxrstor #:code-address #:call-pointer))
+           #:invlpg #:set-cr3 #:cpuid-edx #:cpu-data #:fxsave #:fxrstor #:code-address #:call-pointer #:read-cr))
 (in-package #:finch/low)
 
 (defvar *functions* (make-hash-table :test 'equal))
@@ -291,12 +291,18 @@
                    (out :byte))
              (pause (inst pause))
              (result (compile (first args)) (inst jmp *exit*))
-             (t (when (> (length args) 6) (error "~s: more than six arguments" op))
-                (dolist (a (reverse args))
-                  (compile a)
-                  (inst push rax-tn))
-                (loop :for r :in +argument-registers+ :repeat (length args) :do (inst pop r))
-                (inst call (external (c-name op)))))))))
+             (read-cr (inst byte #x0F) (inst byte #x20)
+                      (inst byte (ecase (first args) (0 #xC0) (2 #xD0) (3 #xD8) (4 #xE0))))
+             (t (let ((stacked (max 0 (- (length args) 6))))
+                  (when (oddp stacked) (inst sub rsp-tn 8))
+                  (dolist (a (reverse args))
+                    (compile a)
+                    (inst push rax-tn))
+                  (loop :for r :in +argument-registers+ :repeat (length args) :do (inst pop r))
+                  (inst xor :dword (reg :dword 0) (reg :dword 0))
+                  (inst call (external (c-name op)))
+                  (when (plusp stacked)
+                    (inst add rsp-tn (* 8 (+ stacked (if (oddp stacked) 1 0))))))))))))
 
 
 (defun function-routine (f)

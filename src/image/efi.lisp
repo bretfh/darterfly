@@ -28,7 +28,7 @@
 
 (defparameter *kernel-sources*
   '("src/osfmk/x86_64/start.s" "src/osfmk/x86_64/idt64.s" "src/osfmk/i386/i386_init.c"
-    "src/osfmk/i386/mp_desc.c" "src/osfmk/i386/trap.c"
+    "src/osfmk/i386/mp_desc.c"
     "src/osfmk/x86_64/cswitch.s"
     "src/bsd/dev/i386/systemcalls.c"
     "src/osfmk/i386/mp.c"))

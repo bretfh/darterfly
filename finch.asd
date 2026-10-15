@@ -148,7 +148,7 @@
   :serial t
   :pathname "src/osfmk/i386/"
   :components ((:file "mtrr") (:file "printf") (:file "rtclock") (:file "vm-map") (:file "pmap") (:file "lapic") (:file "sched")
-               (:file "signal" :pathname "../../bsd/kern/signal") (:file "memory")))
+               (:file "signal" :pathname "../../bsd/kern/signal") (:file "trap") (:file "memory")))
 
 (asdf:defsystem #:finch/kernel
   :description "The kernel, run as pid 1"
