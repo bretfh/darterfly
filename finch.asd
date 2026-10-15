@@ -122,6 +122,19 @@
   :pathname "src/install/"
   :components ((:file "install")))
 
+(asdf:defsystem #:finch/asm
+  :description "x86-64 objects"
+  :serial t
+  :pathname "src/asm/"
+  :components ((:file "asm")))
+
+(asdf:defsystem #:finch/pexpert
+  :description "Serial console"
+  :depends-on (#:finch/asm)
+  :serial t
+  :pathname "src/pexpert/i386/"
+  :components ((:file "serial")))
+
 (asdf:defsystem #:finch/kernel
   :description "The kernel, run as pid 1"
   :depends-on (#:finch/mach #:finch/bsd #:finch/io #:uiop)
@@ -131,7 +144,7 @@
 
 (asdf:defsystem #:finch/image
   :description "The bootable image"
-  :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io #:finch/apfs #:finch/fat (:require #:sb-bsd-sockets))
+  :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io #:finch/apfs #:finch/fat #:finch/pexpert (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/image/"
   :components ((:file "image") (:file "runtime") (:file "efi")))

@@ -1,0 +1,137 @@
+(defpackage #:finch/asm
+  (:use #:cl)
+  (:import-from #:sb-assem #:inst)
+  (:import-from #:sb-vm #:ea #:rip-relative-ea
+                #:rax-tn #:rbx-tn #:rcx-tn #:rdx-tn #:rsi-tn #:rdi-tn #:rbp-tn #:rsp-tn
+                #:r8-tn #:r9-tn #:r10-tn #:r11-tn #:r12-tn #:r13-tn #:r14-tn #:r15-tn)
+  (:export #:routine #:reg #:data #:global #:external #:in #:out #:object #:write-object
+           #:inst #:ea #:rip-relative-ea
+           #:rax-tn #:rbx-tn #:rcx-tn #:rdx-tn #:rsi-tn #:rdi-tn #:rbp-tn #:rsp-tn
+           #:r8-tn #:r9-tn #:r10-tn #:r11-tn #:r12-tn #:r13-tn #:r14-tn #:r15-tn))
+(in-package #:finch/asm)
+
+(defstruct routine name code fixups)
+
+(defun reg (size n) (sb-x86-64-asm::get-gpr size n))
+
+(defun data (name) (rip-relative-ea (sb-c:make-fixup name :foreign-dataref)))
+
+(defun external (name) (sb-c:make-fixup name :foreign))
+
+(defmacro in (size) `(inst byte ,(ecase size (:byte #xEC) (:dword #xED))))
+
+(defmacro out (size) `(inst byte ,(ecase size (:byte #xEE) (:dword #xEF))))
+
+(defmacro routine (name &body body)
+  `(let ((section (sb-assem::make-section))
+         (segment (sb-assem:make-segment)))
+     (sb-assem:assemble (section) ,@body)
+     (sb-assem::%assemble segment section)
+     (make-routine :name ,name
+                   :code (sb-assem:segment-contents-as-vector segment)
+                   :fixups (mapcar (lambda (n)
+                                     (let ((f (sb-c::fixup-note-fixup n)))
+                                       (list (sb-c::fixup-note-kind n) (sb-c::fixup-note-position n)
+                                             (sb-c::fixup-name f) (sb-c::fixup-flavor f) (sb-c::fixup-offset f))))
+                                   (sb-assem::segment-fixup-notes segment)))))
+
+(defun octets (n) (make-array n :element-type '(unsigned-byte 8) :initial-element 0))
+
+(defun put (v at value n)
+  (dotimes (i n v) (setf (aref v (+ at i)) (ldb (byte 8 (* 8 i)) value))))
+
+(defun align (n to) (* to (ceiling n to)))
+
+(defun strings (names)
+  (let ((table (make-array 1 :element-type '(unsigned-byte 8) :fill-pointer 1 :adjustable t :initial-element 0))
+        (at (make-hash-table :test 'equal)))
+    (dolist (name names)
+      (unless (gethash name at)
+        (setf (gethash name at) (fill-pointer table))
+        (loop :for c :across (sb-ext:string-to-octets name) :do (vector-push-extend c table))
+        (vector-push-extend 0 table)))
+    (values (coerce table '(simple-array (unsigned-byte 8) (*))) at)))
+
+(defun object (routines &key bss)
+  (let* ((text (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0))
+         (placed (loop :for r :in routines
+                       :collect (let ((at (align (fill-pointer text) 16)))
+                                  (loop :while (< (fill-pointer text) at) :do (vector-push-extend #xCC text))
+                                  (loop :for b :across (routine-code r) :do (vector-push-extend b text))
+                                  (cons r at))))
+         (bss-at (let ((at 0))
+                   (loop :for (name size alignment) :in bss
+                         :collect (prog1 (list name (setf at (align at (or alignment 8))) size)
+                                    (incf at size)))))
+         (bss-size (let ((last (car (last bss-at)))) (if last (+ (second last) (third last)) 0)))
+         (defined (append (mapcar (lambda (p) (routine-name (car p))) placed) (mapcar #'first bss-at)))
+         (externals (remove-duplicates
+                     (loop :for (r . nil) :in placed
+                           :nconc (loop :for (nil nil name) :in (routine-fixups r)
+                                        :unless (member name defined :test #'string=) :collect name))
+                     :test #'string=))
+         (locals (mapcar #'first bss-at))
+         (globals (append (mapcar (lambda (p) (routine-name (car p))) placed) externals))
+         (symbols (append (list nil) locals globals))
+         (index (lambda (name) (position name symbols :test #'equal))))
+    (multiple-value-bind (strtab names) (strings (remove nil symbols))
+      (multiple-value-bind (shstrtab shnames)
+          (strings '(".text" ".bss" ".rela.text" ".symtab" ".strtab" ".shstrtab" ".note.GNU-stack"))
+        (let* ((symtab (octets (* 24 (length symbols))))
+               (relocs (loop :for (r . base) :in placed
+                             :nconc (loop :for (kind position name flavor offset) :in (routine-fixups r)
+                                          :collect (progn
+                                                     (assert (eq kind :rel32))
+                                                     (list (+ base position) (funcall index name)
+                                                           (if (eq flavor :foreign) 4 2) (- offset 4))))))
+               (rela (octets (* 24 (length relocs)))))
+          (loop :for name :in locals :for i :from 1
+                :for (nil at size) := (find name bss-at :key #'first :test #'string=)
+                :do (let ((s (* 24 i)))
+                      (put symtab s (gethash name names) 4)
+                      (setf (aref symtab (+ s 4)) 1)
+                      (put symtab (+ s 6) 2 2)
+                      (put symtab (+ s 8) at 8)
+                      (put symtab (+ s 16) size 8)))
+          (loop :for name :in globals :for i :from (1+ (length locals))
+                :for placement := (find name placed :key (lambda (p) (routine-name (car p))) :test #'string=)
+                :do (let ((s (* 24 i)))
+                      (put symtab s (gethash name names) 4)
+                      (setf (aref symtab (+ s 4)) (if placement #x12 #x10))
+                      (put symtab (+ s 6) (if placement 1 0) 2)
+                      (when placement
+                        (put symtab (+ s 8) (cdr placement) 8)
+                        (put symtab (+ s 16) (length (routine-code (car placement))) 8))))
+          (loop :for (offset sym type addend) :in relocs :for i :from 0
+                :do (put rela (* 24 i) offset 8)
+                    (put rela (+ (* 24 i) 8) (logior (ash sym 32) type) 8)
+                    (put rela (+ (* 24 i) 16) (ldb (byte 64 0) addend) 8))
+          (let* ((text (coerce text '(simple-array (unsigned-byte 8) (*))))
+                 (blobs (list text rela symtab strtab shstrtab))
+                 (offsets (let ((at 64))
+                            (mapcar (lambda (b) (prog1 (setf at (align at 16)) (incf at (length b)))) blobs)))
+                 (shoff (align (+ (car (last offsets)) (length shstrtab)) 8))
+                 (out (octets (+ shoff (* 64 8)))))
+            (replace out #(#x7F #x45 #x4C #x46 2 1 1))
+            (put out 16 1 2) (put out 18 62 2) (put out 20 1 4) (put out 40 shoff 8)
+            (put out 52 64 2) (put out 58 64 2) (put out 60 8 2) (put out 62 6 2)
+            (loop :for b :in blobs :for at :in offsets :do (replace out b :start1 at))
+            (flet ((section (i name type flags offset size &key (link 0) (info 0) (alignment 1) (entsize 0))
+                     (let ((s (+ shoff (* 64 i))))
+                       (put out s (gethash name shnames) 4) (put out (+ s 4) type 4) (put out (+ s 8) flags 8)
+                       (put out (+ s 24) offset 8) (put out (+ s 32) size 8) (put out (+ s 40) link 4)
+                       (put out (+ s 44) info 4) (put out (+ s 48) alignment 8) (put out (+ s 56) entsize 8))))
+              (destructuring-bind (text-at rela-at symtab-at strtab-at shstrtab-at) offsets
+                (section 1 ".text" 1 6 text-at (length text) :alignment 16)
+                (section 2 ".bss" 8 3 0 bss-size :alignment 64)
+                (section 3 ".rela.text" 4 #x40 rela-at (length rela) :link 4 :info 1 :alignment 8 :entsize 24)
+                (section 4 ".symtab" 2 0 symtab-at (length symtab) :link 5 :info (1+ (length locals)) :alignment 8 :entsize 24)
+                (section 5 ".strtab" 3 0 strtab-at (length strtab))
+                (section 6 ".shstrtab" 3 0 shstrtab-at (length shstrtab))
+                (section 7 ".note.GNU-stack" 1 0 shoff 0)))
+            out))))))
+
+(defun write-object (path routines &key bss)
+  (with-open-file (s path :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
+    (write-sequence (object routines :bss bss) s))
+  path)

@@ -34,7 +34,7 @@
     "src/osfmk/i386/lapic.c" "src/osfmk/kern/sched_prim.c" "src/osfmk/x86_64/cswitch.s"
     "src/bsd/kern/kern_sig.c"
     "src/bsd/dev/i386/systemcalls.c" "src/bsd/dev/i386/unix_signal.c"
-    "src/pexpert/i386/pe_serial.c" "src/pexpert/i386/pe_init.c" "src/pexpert/i386/pe_interrupt.c" "src/osfmk/x86_64/loose_ends.c"
+    "src/pexpert/i386/pe_init.c" "src/pexpert/i386/pe_interrupt.c" "src/osfmk/x86_64/loose_ends.c"
     "src/osfmk/i386/mp.c" "src/osfmk/i386/mtrr.c"))
 
 (defparameter *libsa-sources*
@@ -54,13 +54,20 @@
     (run "llvm-objcopy" "--keep-global-symbol=_start" out)
     out))
 
+(defun lisp-objects ()
+  (let ((serial (build-path "kernel/serial.o")))
+    (ensure-directories-exist serial)
+    (with-open-file (s serial :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
+      (write-sequence (finch/pexpert:serial-object) s))
+    (list (uiop:native-namestring serial))))
+
 (defun kernel-objects ()
-  (compile-objects (mapcar #'source *kernel-sources*) "kernel"
+  (append (lisp-objects) (compile-objects (mapcar #'source *kernel-sources*) "kernel"
                    (append (list "-target" "x86_64-unknown-none-elf" "-ffreestanding" "-mno-red-zone"
                                  "-mcmodel=kernel" "-fno-pie" "-fno-stack-protector" "-fno-builtin"
                                  "-mno-sse" "-mno-sse2" "-mno-mmx" "-mno-80387" "-nostdlib" "-O2" "-Wall"
                                  (format nil "-DBUILD_DATE=~s" (date)))
-                           (freestanding))))
+                           (freestanding)))))
 
 (defun libsa-objects ()
   (compile-objects (mapcar (lambda (f) (source (concatenate 'string "src/libsa/" f))) *libsa-sources*) "libsa"
