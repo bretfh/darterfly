@@ -79,6 +79,7 @@ void i386_init(boot_args *args) {
   kprintf("vm: %lu MB free\n", vm_page_free_count() * PAGE_SIZE / (1024 * 1024));
   if (PE_parse_boot_arg("vmtest")) vm_test();
   rtclock_init();
+  pat_init();
   lapic_init();
   thread_bootstrap(boot_kernel_stack_top());
   i386_start_cpus();

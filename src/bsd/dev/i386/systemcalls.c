@@ -220,6 +220,7 @@ void machdep_syscall(x86_saved_state64_t *regs) {
   case 11: return ok(regs, (uint64_t)&PE_boot_args->Video);
   case 12: return ok(regs, PE_interrupt_wait(regs->rdi, regs->rsi ? deadline_after((int64_t)(regs->rsi / 1000000), (int64_t)(regs->rsi % 1000000) * 1000) : 0));
   case 13: return ok(regs, cpu_datap(0)->cpu_phys_number);
+  case 14: return ok(regs, ml_io_map_wcomb(regs->rdi, regs->rsi));
   case 16: {
     uint8_t *out = (uint8_t *)regs->rdi;
     uint64_t n = regs->rsi;

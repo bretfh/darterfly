@@ -12,7 +12,7 @@
    #:apple-virtio-transport #:apple-virtio-pci-transport #:virtio-device-type
    #:apple-virtio-block-storage-device #:block-count #:block-size #:read-blocks #:write-blocks
    #:io-block-storage-device #:io-media #:media-read #:media-write #:media-size #:io-guid-partition-scheme #:crc32
-   #:acpi-table #:vm-page-grab #:ml-io-map #:boot-arg #:kernel-flags #:boot-video
+   #:acpi-table #:vm-page-grab #:ml-io-map #:ml-io-map-wcomb #:boot-arg #:kernel-flags #:boot-video
    #:wait-for-interrupt #:interrupt-vector
    #:apple-virtio-input #:input-events #:input-abs-range
    #:apple-virtio-network #:io-ethernet-interface #:network-send #:network-receive #:network-mac
@@ -30,6 +30,7 @@
 (defun boot-args () (machdep 8))
 (defun vm-page-grab () (machdep 9))
 (defun ml-io-map (pa size) (machdep 10 pa size))
+(defun ml-io-map-wcomb (pa size) (machdep 14 pa size))
 
 (defun boot-video ()
   (let ((sap (sb-sys:int-sap (machdep 11))))

@@ -25,8 +25,10 @@ void pmap_protect(uint64_t va, uint64_t len, int prot);
 void pmap_remove(uint64_t va, uint64_t len);
 uint64_t pmap_find_phys(uint64_t va);
 int pmap_access_ok(uint64_t va, uint64_t err);
-void pmap_enter_io(uint64_t va, uint64_t pa);
+void pmap_enter_io(uint64_t va, uint64_t pa, int wcomb);
 uint64_t ml_io_map(uint64_t pa, uint64_t size);
+uint64_t ml_io_map_wcomb(uint64_t pa, uint64_t size);
+void pat_init(void);
 
 int vm_map_enter(uint64_t start, uint64_t len, int prot);
 void vm_map_remove(uint64_t start, uint64_t len);

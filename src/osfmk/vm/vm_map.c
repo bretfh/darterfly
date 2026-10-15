@@ -93,11 +93,14 @@ int vm_fault(uint64_t va, uint64_t err) {
 
 #define IO_MAP_BASE 0xfffffe0000000000ull
 
-uint64_t ml_io_map(uint64_t pa, uint64_t size) {
+static uint64_t io_map(uint64_t pa, uint64_t size, int wcomb) {
   static uint64_t next = IO_MAP_BASE;
   uint64_t offset = pa & (PAGE_SIZE - 1), base = page_down(pa), len = page_up(size + offset);
   uint64_t va = next;
   next += len;
-  for (uint64_t off = 0; off < len; off += PAGE_SIZE) pmap_enter_io(va + off, base + off);
+  for (uint64_t off = 0; off < len; off += PAGE_SIZE) pmap_enter_io(va + off, base + off, wcomb);
   return va + offset;
 }
+
+uint64_t ml_io_map(uint64_t pa, uint64_t size) { return io_map(pa, size, 0); }
+uint64_t ml_io_map_wcomb(uint64_t pa, uint64_t size) { return io_map(pa, size, 1); }

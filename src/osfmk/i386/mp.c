@@ -149,6 +149,7 @@ void i386_init_slave(cpu_data_t *cdp) {
   mp_desc_init(cdp);
   cdp->cpu_active_thread = cdp->cpu_idle_thread;
   set_kernel_stack(cdp->cpu_idle_thread->kstack_top);
+  pat_init();
   lapic_init_slave();
   __atomic_store_n(&cdp->cpu_running, 1, __ATOMIC_RELEASE);
   funnel_lock();

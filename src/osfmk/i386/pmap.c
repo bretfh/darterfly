@@ -102,10 +102,11 @@ void pmap_remove(uint64_t va, uint64_t len) {
 
 #define INTEL_PTE_NCACHE 0x10ull
 #define INTEL_PTE_WTHRU 0x8ull
+#define INTEL_PTE_PAT 0x80ull
 
-void pmap_enter_io(uint64_t va, uint64_t pa) {
+void pmap_enter_io(uint64_t va, uint64_t pa, int wcomb) {
   *pte(va, 1) = (pa & PTE_PFN) | INTEL_PTE_VALID | INTEL_PTE_WRITE | INTEL_PTE_USER | INTEL_PTE_NX |
-                INTEL_PTE_NCACHE | INTEL_PTE_WTHRU;
+                (wcomb ? INTEL_PTE_PAT | INTEL_PTE_NCACHE : INTEL_PTE_NCACHE | INTEL_PTE_WTHRU);
   invlpg(va);
 }
 
