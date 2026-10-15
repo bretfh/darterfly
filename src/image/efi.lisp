@@ -149,11 +149,16 @@
                               (directory (merge-pathnames "obj/sbcl-home/contrib/*.asd" (sbcl-tree))))
         :collect (list :file (format nil "usr/lib/sbcl/contrib/~a" (file-namestring file)) (octets file))))
 
+(defun certificates ()
+  (list (list :file "etc/ssl/certs/ca-certificates.crt"
+              (octets (format nil "~a/etc/ssl/certs/ca-certificates.crt" (uiop:getenv "GUIX_ENVIRONMENT"))))))
+
 (defun root-entries ()
   (let ((files (append (loop :for f :in *ramdisk-files*
                              :collect (list :file (concatenate 'string "finch/" f) (octets (source f))))
                        (desktop-entries)
-                       (contribs)))
+                       (contribs)
+                       (certificates)))
         (dirs (list "tmp" "Users" "Users/finch" "dev" "Volumes" "System" "System/Library" "System/Library/Kernels")))
     (dolist (f files)
       (let ((path (second f)))

@@ -11,6 +11,7 @@
 #define SIGSEGV 11
 #define SIGALRM 14
 #define SIGSTOP 19
+#define SIGPROF 27
 #define SA_NODEFER 0x40000000
 #define SA_RESETHAND 0x80000000u
 #define SIG_IGN_VALUE 1
@@ -32,4 +33,6 @@ int issignal(void);
 int tsleep(int (*ready)(void), uint64_t event, uint64_t deadline);
 void getitimer_real(int64_t *out);
 void setitimer_real(const int64_t *in, int64_t *old);
+void getitimer_prof(int64_t *out);
+void setitimer_prof(const int64_t *in, int64_t *old);
 uint64_t deadline_after(int64_t sec, int64_t nsec);

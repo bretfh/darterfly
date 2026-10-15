@@ -8,6 +8,7 @@
         (setf sb-sys::*sbcl-homedir-pathname* (sb-impl::%sbcl-homedir-pathname))
         (funcall (find-symbol "CLEAR-OUTPUT-TRANSLATIONS" "ASDF"))
         (funcall (find-symbol "CLEAR-SOURCE-REGISTRY" "ASDF"))
+        (mapc (find-symbol "REGISTER-IMMUTABLE-SYSTEM" "ASDF") (funcall (find-symbol "ALREADY-LOADED-SYSTEMS" "ASDF")))
         (when (funcall (find-symbol "BOOT-ARG" "FINCH/IOKIT") "launchd")
           (sb-thread:make-thread (find-symbol "LAUNCH" "FINCH/KERNEL") :name "load_init_program")))
       sb-ext:*init-hooks*)

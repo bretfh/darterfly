@@ -88,6 +88,7 @@
              "sbcl-zpb-ttf"
              "sbcl-cl-vectors"
              "sbcl-chipz"
+             "nss-certs"
              "font-adwaita"
              "adwaita-icon-theme"
              "librsvg"))

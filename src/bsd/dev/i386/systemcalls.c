@@ -57,7 +57,18 @@ void unix_syscall(x86_saved_state64_t *regs) {
   case 4: {
     if (a != 1 && a != 2) return error(regs, EBADF);
     const char *buf = (const char *)b;
-    for (uint64_t i = 0; i < c; i++) serial_putc(buf[i]);
+    for (uint64_t i = 0; i < c; i++) {
+      if (!serial_tx_room()) {
+        serial_tx_kick();
+        int r = tsleep(serial_tx_room, (uint64_t)&serial_event, 0);
+        if (r) {
+          if (i) return ok(regs, i);
+          return error(regs, r);
+        }
+      }
+      serial_write(buf[i]);
+    }
+    serial_tx_kick();
     return ok(regs, c);
   }
   case 20: return ok(regs, 1);
@@ -121,12 +132,14 @@ void unix_syscall(x86_saved_state64_t *regs) {
     return ok(regs, 0);
   }
   case 83:
-    if (a != 0) return error(regs, EINVAL);
-    setitimer_real((const int64_t *)b, (int64_t *)c);
+    if (a == 0) setitimer_real((const int64_t *)b, (int64_t *)c);
+    else if (a == 2) setitimer_prof((const int64_t *)b, (int64_t *)c);
+    else return error(regs, EINVAL);
     return ok(regs, 0);
   case 86:
-    if (a != 0) return error(regs, EINVAL);
-    getitimer_real((int64_t *)b);
+    if (a == 0) getitimer_real((int64_t *)b);
+    else if (a == 2) getitimer_prof((int64_t *)b);
+    else return error(regs, EINVAL);
     return ok(regs, 0);
   case 230: {
     struct pollfd { int fd; short events, revents; } *fds = (void *)a;
@@ -207,6 +220,18 @@ void machdep_syscall(x86_saved_state64_t *regs) {
   case 11: return ok(regs, (uint64_t)&PE_boot_args->Video);
   case 12: return ok(regs, PE_interrupt_wait(regs->rdi, regs->rsi ? deadline_after((int64_t)(regs->rsi / 1000000), (int64_t)(regs->rsi % 1000000) * 1000) : 0));
   case 13: return ok(regs, cpu_datap(0)->cpu_phys_number);
+  case 16: {
+    uint8_t *out = (uint8_t *)regs->rdi;
+    uint64_t n = regs->rsi;
+    for (uint64_t i = 0; i < n; i += 8) {
+      uint64_t v = 0;
+      unsigned char got = 0;
+      for (int tries = 0; tries < 10 && !got; tries++) __asm__ volatile("rdrand %0; setc %1" : "=r"(v), "=qm"(got));
+      if (!got) return ok(regs, i);
+      for (int k = 0; k < 8 && i + k < n; k++) out[i + k] = (uint8_t)(v >> (8 * k));
+    }
+    return ok(regs, n);
+  }
   case 3: {
     uint64_t base = regs->rdi;
     current_thread()->fs_base = base;

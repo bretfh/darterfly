@@ -9,6 +9,9 @@ uint64_t sigtramp;
 int sigtrace = -1;
 
 static struct { uint64_t interval, deadline; } realtimer;
+static uint64_t profinterval, profnext[32];
+
+int cpu_number(void);
 
 static const uint64_t unblockable = sigmask(SIGKILL) | sigmask(SIGSTOP);
 
@@ -42,6 +45,15 @@ void bsd_hardclock(void) {
     psignal(SIGALRM);
     realtimer.deadline = realtimer.interval ? rdtsc() + realtimer.interval : 0;
   }
+}
+
+void bsd_proftick(void) {
+  if (!profinterval) return;
+  int cpu = cpu_number();
+  uint64_t now = rdtsc();
+  if (now < profnext[cpu]) return;
+  profnext[cpu] = now + profinterval;
+  psignal_thread(current_thread(), SIGPROF);
 }
 
 void bsd_console_interrupt_char(void) { psignal(SIGINT); }
@@ -95,6 +107,18 @@ void setitimer_real(const int64_t *in, int64_t *old) {
   realtimer.interval = usec_to_tsc(in[0], in[1]);
   uint64_t value = usec_to_tsc(in[2], in[3]);
   realtimer.deadline = value ? rdtsc() + value : 0;
+}
+
+void getitimer_prof(int64_t *out) {
+  tsc_to_timeval(profinterval, out);
+  tsc_to_timeval(profinterval, out + 2);
+}
+
+void setitimer_prof(const int64_t *in, int64_t *old) {
+  if (old) getitimer_prof(old);
+  uint64_t interval = usec_to_tsc(in[0], in[1]), value = usec_to_tsc(in[2], in[3]);
+  profinterval = value ? (interval ? interval : value) : 0;
+  for (int i = 0; i < 32; i++) profnext[i] = 0;
 }
 
 uint64_t deadline_after(int64_t sec, int64_t nsec) { return rdtsc() + usec_to_tsc(sec, nsec / 1000); }

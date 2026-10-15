@@ -122,6 +122,14 @@
   (declare (ignore offset))
   (ecase (node-device n)
     (:null (make-array 0 :element-type '(unsigned-byte 8)))
+    (:random
+     (let ((buffer (make-array count :element-type '(unsigned-byte 8))))
+       (when (/= count (sb-sys:with-pinned-objects (buffer)
+                       (sb-alien:alien-funcall
+                        (sb-alien:extern-alien "__machdep" (function sb-alien:long sb-alien:long sb-alien:long sb-alien:long))
+                        16 (sb-sys:sap-int (sb-sys:vector-sap buffer)) count)))
+         (fail :eio))
+       buffer))
     (:console
      (let ((buffer (make-array count :element-type '(unsigned-byte 8))))
        (let ((got (sb-sys:with-pinned-objects (buffer) (console-io 3 0 (sb-sys:vector-sap buffer) count))))
@@ -136,7 +144,7 @@
   (length octets))
 
 (defmethod vnop-getattr ((n dev-node))
-  (make-vattr :mode (logior #o020000 (node-mode n)) :rdev (if (eq (node-device n) :null) #x103 #x501)))
+  (make-vattr :mode (logior #o020000 (node-mode n)) :rdev (case (node-device n) (:null #x103) (:random #x109) (t #x501))))
 
 (defmethod vnop-truncate ((n dev-node) size) (declare (ignore size)) 0)
 

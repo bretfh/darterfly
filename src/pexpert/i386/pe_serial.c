@@ -13,15 +13,40 @@ void serial_init(void) {
   outb(COM1 + 4, 0x03);
 }
 
-void serial_putc(char c) {
-  if (c == '\n') serial_putc('\r');
+static char tx[65536];
+static unsigned txhead, txtail;
+static int interrupts_on;
+
+static void put_polled(char c) {
   while (!(inb(COM1 + 5) & 0x20)) {}
   outb(COM1, (uint8_t)c);
 }
 
+void serial_putc(char c) {
+  while (txhead != txtail) put_polled(tx[txtail++ % sizeof tx]);
+  if (c == '\n') put_polled('\r');
+  put_polled(c);
+}
+
+void serial_tx_kick(void) {
+  while (txhead != txtail && (inb(COM1 + 5) & 0x20))
+    for (int i = 0; i < 16 && txhead != txtail; i++) outb(COM1, (uint8_t)tx[txtail++ % sizeof tx]);
+  if (interrupts_on) outb(COM1 + 1, txhead != txtail ? 0x03 : 0x01);
+}
+
+int serial_tx_room(void) { return txhead - txtail < sizeof tx - 2; }
+
+void serial_write(char c) {
+  if (!interrupts_on) {
+    serial_putc(c);
+    return;
+  }
+  if (c == '\n') tx[txhead++ % sizeof tx] = '\r';
+  tx[txhead++ % sizeof tx] = c;
+}
+
 static char ring[4096];
 static unsigned head, tail;
-static int interrupts_on;
 
 void serial_enable_interrupts(void) {
   outb(COM1 + 1, 0x01);
@@ -40,6 +65,7 @@ void serial_interrupt(void) {
     }
     if (head - tail < sizeof ring) ring[head++ % sizeof ring] = c;
   }
+  serial_tx_kick();
 }
 
 int serial_ready(void) {

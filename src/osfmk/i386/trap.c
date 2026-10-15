@@ -80,6 +80,7 @@ static void user_trap(x86_saved_state64_t *regs) {
 
 void lapic_interrupt(uint64_t vector);
 void bsd_ast(x86_saved_state64_t *regs);
+void bsd_proftick(void);
 void mach_call(x86_saved_state64_t *regs);
 void sched_ast(void);
 
@@ -89,6 +90,7 @@ void kernel_trap(x86_saved_state64_t *regs) {
   int user = (regs->cs & 3) == 3;
   if ((regs->trapno >= 0x20 && regs->trapno < 0x80) || regs->trapno >= 0xd0) {
     lapic_interrupt(regs->trapno);
+    if (user && regs->trapno == 0xDD) bsd_proftick();
     if (user) {
       sched_ast();
       bsd_ast(regs);

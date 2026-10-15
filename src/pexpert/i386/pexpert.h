@@ -12,6 +12,9 @@ static inline uint8_t inb(uint16_t port) {
 
 void serial_init(void);
 void serial_putc(char c);
+void serial_write(char c);
+void serial_tx_kick(void);
+int serial_tx_room(void);
 int serial_getc(void);
 int serial_ready(void);
 void serial_interrupt(void);
