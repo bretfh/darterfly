@@ -3,7 +3,8 @@
              (guix gexp)
              (guix build-system copy)
              ((guix licenses) #:prefix license:)
-             (gnu packages compression))
+             (gnu packages compression)
+             (gnu packages lisp))
 
 (define (acidanthera repo name version hash plan)
   (package
@@ -51,6 +52,19 @@
                "15aw5vajw2k6b6yr8czhg48h9mq1phf15nq6fqiwxv4h0bad5z8v"
                ''(("WhateverGreen.kext" "share/opencore/Kexts/WhateverGreen.kext"))))
 
+(define sbcl-source
+  (package
+    (name "sbcl-source")
+    (version (package-version sbcl))
+    (source (package-source sbcl))
+    (build-system copy-build-system)
+    (arguments (list #:install-plan ''(("." "share/sbcl-source/"))))
+    (native-inputs (list zstd))
+    (home-page "https://www.sbcl.org/")
+    (synopsis "SBCL's source, which finch builds its Lisp from")
+    (description "SBCL's source as guix prepares it.")
+    (license license:public-domain)))
+
 (packages->manifest
  (append
   (map specification->package
@@ -91,4 +105,4 @@
              "font-adwaita"
              "adwaita-icon-theme"
              "librsvg"))
-  (list opencore lilu virtualsmc whatevergreen)))
+  (list opencore lilu virtualsmc whatevergreen sbcl-source)))

@@ -11,6 +11,24 @@
 
 (defun sbcl-tree () (asdf:system-relative-pathname :finch "build/sbcl-mt/"))
 
+(defparameter *sbcl-version* "2.6.4.finch")
+
+(defun build-sbcl ()
+  (let ((source (format nil "~a/share/sbcl-source/" (uiop:getenv "GUIX_ENVIRONMENT")))
+        (tree (sbcl-tree)))
+    (uiop:delete-directory-tree tree :validate t :if-does-not-exist :ignore)
+    (run "cp" "-r" source (uiop:native-namestring (string-right-trim "/" (uiop:native-namestring tree))))
+    (run "chmod" "-R" "u+w" (uiop:native-namestring tree))
+    (with-open-file (s (merge-pathnames "version.lisp-expr" tree) :direction :output :if-exists :supersede)
+      (prin1 *sbcl-version* s)
+      (terpri s))
+    (with-open-file (log (build-path "sbcl-mt-build.log") :direction :output :if-exists :supersede)
+      (uiop:run-program (list "env" "CC=gcc" "sh" "make.sh" "--xc-host=sbcl --no-userinit --no-sysinit")
+                        :directory tree :output log :error-output log))
+    (unless (probe-file (merge-pathnames "output/sbcl.core" tree))
+      (error "sbcl did not build; see ~a" (uiop:native-namestring (build-path "sbcl-mt-build.log"))))
+    tree))
+
 (defparameter *runtime-patches*
   '(("x86-64-arch.c" "#if defined __linux__
     /* KLUDGE" "#if defined __finch__
