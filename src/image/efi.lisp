@@ -26,11 +26,10 @@
   '("syscall.c" "signal.c" "string.c" "stdio.c" "stdlib.c" "unistd.c" "time.c" "math.c" "misc.c"
     "setjmp.s" "start.c" "pthread.c" "vfs.c"))
 
-(defun compile-objects (sources dir flags)
+(defun compile-objects (sources dir flags &key includes)
   (loop :for name :in sources
-        :for object := (build-path (format nil "~a/~a.o" dir (pathname-name name)))
-        :do (ensure-directories-exist object)
-            (apply #'run "clang" (append flags (list "-c" name "-o" (uiop:native-namestring object))))
+        :for object := (build-path (format nil "~a/~a.o" (object-dir dir) (pathname-name name)))
+        :do (apply #'run (c-compile name object :includes includes :clang-flags flags))
         :collect (uiop:native-namestring object)))
 
 (defun lisp-objects ()
@@ -48,7 +47,8 @@
 
 (defun libsa-objects ()
   (compile-objects (mapcar (lambda (f) (source (concatenate 'string "src/libsa/" f))) *libsa-sources*) "libsa"
-                   (append (runtime-flags) (list "-fno-builtin" "-fno-math-errno" "-I" (source "src/libsa")))))
+                   (append (runtime-flags) (list "-fno-builtin" "-fno-math-errno"))
+                   :includes (list (source "src/libsa"))))
 
 (defun finch-sources ()
   (cons (source "tests/")
@@ -70,8 +70,8 @@
   (let ((failures (compile-runtime)))
     (when failures
       (error "runtime: ~{~a~^, ~} failed:~%~a" (mapcar #'car failures) (cdr (first failures)))))
-  (mapcar (lambda (name) (uiop:native-namestring (merge-pathnames (format nil "~a.o" (pathname-name name)) (runtime-dir))))
-          *runtime-sources*))
+  (append (mapcar (lambda (name) (uiop:native-namestring (runtime-object name))) *runtime-sources*)
+          (libtcc1-objects)))
 
 (defun newest (dirs)
   (loop :for dir :in dirs
@@ -86,7 +86,7 @@
           (list (merge-pathnames "output/" (sbcl-tree)))))
 
 (defun mach-kernel ()
-  (let ((out (build-path "kernel/kernel")))
+  (let ((out (build-path (if (eq *c-compiler* :clang) "kernel/kernel" "kernel/kernel-tcc"))))
     (when (and (probe-file out) (> (file-write-date out) (newest (kernel-inputs))))
       (return-from mach-kernel out))
     (flet ((read-object (path region)

@@ -22,6 +22,6 @@ int prctl(int o, ...) { (void)o; return 0; }
 
 unsigned _os_cpu_number(void) {
   unsigned aux;
-  __asm__ volatile("rdtscp" : "=c"(aux)::"eax", "edx");
+  __asm__ volatile(".byte 0x0f, 0x01, 0xf9" : "=c"(aux)::"eax", "edx");
   return aux;
 }

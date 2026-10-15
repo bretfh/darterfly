@@ -1,4 +1,5 @@
 #include <math.h>
+#include <stdint.h>
 
 static inline unsigned short x87_enter(void) {
   unsigned short cw, masked;
@@ -20,20 +21,35 @@ static inline void x87_leave(unsigned short cw) { __asm__ volatile("fnclex; fldc
 
 #define X87_1(name, insn)                                       \
   double name(double x) {                                       \
-    long double r;                                              \
-    __asm__(insn : "=t"(r) : "0"((long double)x));              \
-    return (double)r;                                           \
+    double r;                                                   \
+    __asm__("fldl %1\n\t" insn "\n\tfstpl %0" : "=m"(r) : "m"(x)); \
+    return r;                                                   \
   }
 
 X87_1(sqrt_x87, "fsqrt")
 X87_1(sin_x87, "fsin")
 X87_1(cos_x87, "fcos")
 
-double sqrt(double x) { return __builtin_sqrt(x); }
-float sqrtf(float x) { return __builtin_sqrtf(x); }
-double fabs(double x) { return __builtin_fabs(x); }
-float fabsf(float x) { return __builtin_fabsf(x); }
-double copysign(double a, double b) { return __builtin_copysign(a, b); }
+double sqrt(double x) { return sqrt_x87(x); }
+float sqrtf(float x) { return (float)sqrt_x87(x); }
+
+double fabs(double x) {
+  union { double d; uint64_t u; } v = {x};
+  v.u &= ~(1ull << 63);
+  return v.d;
+}
+
+float fabsf(float x) {
+  union { float f; uint32_t u; } v = {x};
+  v.u &= ~(1u << 31);
+  return v.f;
+}
+
+double copysign(double a, double b) {
+  union { double d; uint64_t u; } x = {a}, y = {b};
+  x.u = (x.u & ~(1ull << 63)) | (y.u & (1ull << 63));
+  return x.d;
+}
 
 static double round_mode_raw(double x, unsigned short mode) {
   long double r;
@@ -41,7 +57,8 @@ static double round_mode_raw(double x, unsigned short mode) {
   __asm__ volatile("fnstcw %0" : "=m"(cw));
   ncw = (cw & ~0x0c00) | mode;
   __asm__ volatile("fldcw %0" ::"m"(ncw));
-  __asm__ volatile("frndint" : "=t"(r) : "0"((long double)x));
+  long double lx = x;
+  __asm__ volatile("fldt %1; frndint; fstpt %0" : "=m"(r) : "m"(lx));
   __asm__ volatile("fldcw %0" ::"m"(cw));
   return (double)r;
 }
@@ -61,7 +78,7 @@ long double truncl(long double x) {
   unsigned short cw = x87_enter(), t = (unsigned short)(cw | 0x0c00 | 0x3f);
   long double r;
   __asm__ volatile("fldcw %0" ::"m"(t));
-  __asm__ volatile("frndint" : "=t"(r) : "0"(x));
+  __asm__ volatile("fldt %1; frndint; fstpt %0" : "=m"(r) : "m"(x));
   x87_leave(cw);
   return r;
 }
@@ -70,14 +87,14 @@ double sin(double x) { return X87(sin_x87(x)); }
 double cos(double x) { return X87(cos_x87(x)); }
 
 static double tan_raw(double x) {
-  long double r, one;
-  __asm__("fptan" : "=t"(one), "=u"(r) : "0"((long double)x));
+  long double r, lx = x;
+  __asm__("fldt %1; fptan; fstp %%st(0); fstpt %0" : "=m"(r) : "m"(lx));
   return (double)r;
 }
 
 static double atan2_raw(double y, double x) {
-  long double r;
-  __asm__("fpatan" : "=t"(r) : "0"((long double)x), "u"((long double)y) : "st(1)");
+  long double r, lx = x, ly = y;
+  __asm__("fldt %1; fldt %2; fpatan; fstpt %0" : "=m"(r) : "m"(ly), "m"(lx));
   return (double)r;
 }
 
@@ -89,17 +106,20 @@ double acos(double x) { return atan2(sqrt((1 - x) * (1 + x)), x); }
 
 static long double log2l_x87(long double x) {
   long double r;
-  __asm__("fld1; fxch; fyl2x" : "=t"(r) : "0"(x));
+  __asm__("fld1; fldt %1; fyl2x; fstpt %0" : "=m"(r) : "m"(x));
   return r;
 }
 
 static long double exp2l_x87(long double x) {
   long double i, f, r;
-  __asm__("frndint" : "=t"(i) : "0"(x));
+  __asm__("fldt %1; frndint; fstpt %0" : "=m"(i) : "m"(x));
   f = x - i;
-  __asm__("f2xm1" : "=t"(r) : "0"(f));
+  __asm__("fldt %1; f2xm1; fstpt %0" : "=m"(r) : "m"(f));
   r += 1;
-  __asm__("fscale" : "=t"(r) : "0"(r), "u"(i));
+  {
+    long double m = r;
+    __asm__("fldt %2; fldt %1; fscale; fstp %%st(1); fstpt %0" : "=m"(r) : "m"(m), "m"(i));
+  }
   return r;
 }
 
@@ -133,7 +153,9 @@ double pow(double x, double y) {
 
 static double fmod_raw(double a, double b) {
   long double r;
-  __asm__("1: fprem; fnstsw %%ax; testb $4, %%ah; jnz 1b" : "=t"(r) : "0"((long double)a), "u"((long double)b) : "ax", "cc");
+  long double la = a, lb = b;
+  __asm__("fldt %2; fldt %1; 1: fprem; fnstsw %%ax; testb $4, %%ah; jnz 1b; fstp %%st(1); fstpt %0"
+          : "=m"(r) : "m"(la), "m"(lb) : "ax", "cc");
   return (double)r;
 }
 

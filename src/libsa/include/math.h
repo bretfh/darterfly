@@ -1,11 +1,15 @@
 #pragma once
 #define HUGE_VAL __builtin_huge_val()
-#define INFINITY __builtin_inff()
+#define INFINITY __builtin_huge_valf()
 #define NAN __builtin_nanf("")
-#define isnan(x) __builtin_isnan(x)
-#define isinf(x) __builtin_isinf(x)
-#define isfinite(x) __builtin_isfinite(x)
-#define signbit(x) __builtin_signbit(x)
+#define isnan(x) ((x) != (x))
+#define isinf(x) ((x) == __builtin_huge_val() || (x) == -__builtin_huge_val())
+#define isfinite(x) (!isnan(x) && !isinf(x))
+#define signbit(x) __libsa_signbit((double)(x))
+static inline int __libsa_signbit(double x) {
+  union { double d; unsigned long u; } v = {x};
+  return (int)(v.u >> 63);
+}
 #define M_PI 3.14159265358979323846
 double sin(double), cos(double), tan(double), asin(double), acos(double), atan(double), atan2(double, double);
 double sinh(double), cosh(double), tanh(double), asinh(double), acosh(double), atanh(double);

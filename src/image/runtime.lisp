@@ -30,7 +30,13 @@
     tree))
 
 (defparameter *runtime-patches*
-  '(("x86-64-arch.c" "#if defined __linux__
+  '(("x86-64-assem.S" "	Lea	(%rdx,%rcx), %r9" "	lea	(%rdx,%rcx), %r9")
+    ("x86-64-arch.c" "__asm__(\"xgetbv;\"" "__asm__(\".byte 0x0f, 0x01, 0xd0;\"")
+    ("x86-64-assem.S" "#if defined(LISP_FEATURE_DARWIN) || defined(LISP_FEATURE_WIN32)
+#define LOAD_PIC_VAR"
+     "#if defined __finch__ || defined(LISP_FEATURE_DARWIN) || defined(LISP_FEATURE_WIN32)
+#define LOAD_PIC_VAR")
+    ("x86-64-arch.c" "#if defined __linux__
     /* KLUDGE" "#if defined __finch__
 #   define CONTEXT_FLAGS(c) c->rflags
 #elif defined __linux__
@@ -62,6 +68,11 @@
     return addr;")))
 
 (defun runtime-dir () (build-path "runtime/src/runtime/"))
+
+(defun runtime-object (name)
+  (if (eq *c-compiler* :clang)
+      (merge-pathnames (format nil "~a.o" (pathname-name name)) (runtime-dir))
+      (build-path (format nil "runtime-tcc/~a.o" (pathname-name name)))))
 
 (defun copy-into (from to)
   (ensure-directories-exist to)
@@ -105,13 +116,11 @@
   (let ((tree (runtime-tree))
         (failures '()))
     (dolist (name sources)
-      (let ((object (merge-pathnames (format nil "~a.o" (pathname-name name)) tree)))
+      (let ((object (runtime-object name)))
         (multiple-value-bind (out err code)
-            (uiop:run-program (append (list "clang") (runtime-flags)
-                                      (list "-I" (uiop:native-namestring tree)
-                                            "-I" (uiop:native-namestring (build-path "runtime/tlsf-bsd/tlsf/"))
-                                            "-c" (uiop:native-namestring (merge-pathnames name tree))
-                                            "-o" (uiop:native-namestring object)))
+            (uiop:run-program (c-compile (merge-pathnames name tree) object
+                                         :includes (list tree (build-path "runtime/tlsf-bsd/tlsf/"))
+                                         :clang-flags (runtime-flags))
                               :output :string :error-output :output :ignore-error-status t)
           (declare (ignore err))
           (unless (zerop code) (push (cons name out) failures)))))

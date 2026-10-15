@@ -1,5 +1,6 @@
 (use-modules (guix packages)
              (guix download)
+             (guix git-download)
              (guix gexp)
              (guix build-system copy)
              ((guix licenses) #:prefix license:)
@@ -51,6 +52,24 @@
   (acidanthera "WhateverGreen" "WhateverGreen" "1.7.1"
                "15aw5vajw2k6b6yr8czhg48h9mq1phf15nq6fqiwxv4h0bad5z8v"
                ''(("WhateverGreen.kext" "share/opencore/Kexts/WhateverGreen.kext"))))
+
+(define tinycc-source
+  (package
+    (name "tinycc-source")
+    (version "0.9.28-43c7708")
+    (source (origin
+              (method git-fetch)
+              (uri (git-reference
+                    (url "https://repo.or.cz/tinycc.git")
+                    (commit "43c7708b85681a2fd4451c8a541af4494a8919b2")))
+              (file-name (git-file-name "tinycc" version))
+              (sha256 (base32 "1i0lgnamjyp8183dx2ijv1qr8h62cy727gvcw8r8ja4086ymfs6r"))))
+    (build-system copy-build-system)
+    (arguments (list #:install-plan ''(("." "share/tinycc-source/"))))
+    (home-page "https://repo.or.cz/tinycc.git")
+    (synopsis "TinyCC's source, which finch builds its C compiler from")
+    (description "TinyCC at a pinned mob revision.")
+    (license license:lgpl2.1+)))
 
 (define sbcl-source
   (package
@@ -107,4 +126,4 @@
              "font-adwaita"
              "adwaita-icon-theme"
              "librsvg"))
-  (list opencore lilu virtualsmc whatevergreen sbcl-source)))
+  (list opencore lilu virtualsmc whatevergreen sbcl-source tinycc-source)))
