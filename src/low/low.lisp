@@ -259,7 +259,7 @@
                      (dolist (b '(#x48 #x0F #xAE #x00)) (inst byte b)))
              (fxrstor (compile (first args))
                       (dolist (b '(#x48 #x0F #xAE #x08)) (inst byte b)))
-             (code-address (inst lea rax-tn (data (c-name (first args)))))
+             (code-address (inst lea rax-tn (data (if (stringp (first args)) (first args) (c-name (first args))))))
              (call-pointer (when (> (length (rest args)) 6) (error "call-pointer: more than six arguments"))
                            (dolist (a (reverse (rest args)))
                              (compile a)
@@ -380,12 +380,12 @@
                 (loop :for b :across (sb-ext:string-to-octets text) :do (inst byte b))
                 (inst byte 0)))))
 
-(defun package-object (package &rest extra)
+(defun package-object (package &key extra routines)
   (let ((names (append (loop :for f :being :the :hash-values :of *functions*
                              :when (string= (low-function-package f) package)
                                :collect (low-function-name f))
                        extra)))
-    (object (mapcar (lambda (n) (function-routine (gethash n *functions*))) (sort names #'string<))
+    (object (append routines (mapcar (lambda (n) (function-routine (gethash n *functions*))) (sort names #'string<)))
             :bss (loop :for g :being :the :hash-values :of *globals*
                        :when (and (not (global-extern g)) (string= (global-package g) package))
                          :collect (list (global-name g) (* (width (global-type g)) (global-count g))

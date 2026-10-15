@@ -117,4 +117,4 @@
   (memset d 0 n))
 
 (defun osfmk-object ()
-  (package-object "FINCH/OSFMK" "va_next"))
+  (package-object "FINCH/OSFMK" :extra '("va_next") :routines (stub-routines)))
