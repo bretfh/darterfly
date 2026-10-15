@@ -1,6 +1,6 @@
 (defpackage #:finch/apps
   (:use #:cl)
-  (:local-nicknames (#:ca #:finch/ca) (#:bsd #:finch/bsd) (#:text #:finch/text) (#:kit #:finch/kit)))
+  (:local-nicknames (#:ca #:finch/ca) (#:bsd #:finch/bsd) (#:text #:finch/text) (#:kit #:finch/kit) (#:edit #:finch/edit)))
 (in-package #:finch/apps)
 
 (defun label (string font r g b)

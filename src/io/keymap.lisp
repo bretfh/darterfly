@@ -8,14 +8,24 @@
     (30 #\a #\A) (31 #\s #\S) (32 #\d #\D) (33 #\f #\F) (34 #\g #\G) (35 #\h #\H) (36 #\j #\J)
     (37 #\k #\K) (38 #\l #\L) (39 #\; #\:) (40 #\' #\") (41 #\` #\~) (43 #\\ #\|)
     (44 #\z #\Z) (45 #\x #\X) (46 #\c #\C) (47 #\v #\V) (48 #\b #\B) (49 #\n #\N) (50 #\m #\M)
-    (51 #\, #\<) (52 #\. #\>) (53 #\/ #\?) (57 #\Space)))
+    (51 #\, #\<) (52 #\. #\>) (53 #\/ #\?) (57 #\Space)
+    (103 #.(code-char #xF700)) (108 #.(code-char #xF701)) (105 #.(code-char #xF702)) (106 #.(code-char #xF703))))
 
 (defconstant +key-leftshift+ 42)
 (defconstant +key-rightshift+ 54)
 
-(defun key-character (code shift)
-  (let ((entry (assoc code +keymap+)))
-    (and entry (if (and shift (third entry)) (third entry) (second entry)))))
+(defconstant +key-leftctrl+ 29)
+(defconstant +key-rightctrl+ 97)
+
+(defun key-character (code shift &optional control)
+  (let* ((entry (assoc code +keymap+))
+         (char (and entry (if (and shift (third entry)) (third entry) (second entry)))))
+    (if (and char control (char<= #\a (char-downcase char) #\z))
+        (code-char (- (char-code (char-downcase char)) 96))
+        char)))
+
+(defun control-key-p (code)
+  (member code (list +key-leftctrl+ +key-rightctrl+)))
 
 (defun shift-key-p (code)
   (member code (list +key-leftshift+ +key-rightshift+)))
@@ -26,7 +36,8 @@
     (4 . 20) (5 . 21) (7 . 22) (6 . 23) (13 . 24) (10 . 25) (8 . 26) (12 . 27) (9 . 28)
     (11 . 29) (27 . 30) (24 . 31) (22 . 32) (26 . 33) (23 . 34) (25 . 35) (28 . 36) (38 . 37)
     (36 . 38) (40 . 39) (37 . 40) (39 . 41) (43 . 42) (51 . 43) (53 . 44) (49 . 45) (50 . 46)
-    (52 . 47) (15 . 48) (57 . 49) (41 . 50) (14 . 51) (1 . 53)))
+    (52 . 47) (15 . 48) (57 . 49) (41 . 50) (14 . 51) (1 . 53)
+    (105 . 123) (106 . 124) (108 . 125) (103 . 126)))
 
 (defun virtual-keycode (code)
   (cdr (assoc code +virtual-keycodes+)))

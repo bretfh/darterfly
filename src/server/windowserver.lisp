@@ -270,6 +270,7 @@
                                                      :wx (- x (window-x window)) :wy (- y (window-y window)))))))
 
 (defvar *shift* nil)
+(defvar *control* nil)
 
 (defun post-event (client body)
   (when (and client (events client))
@@ -282,8 +283,9 @@
     (let ((code (io:event-code event))
           (value (io:event-value event)))
       (cond ((io:shift-key-p code) (setf *shift* (plusp value)))
+            ((io:control-key-p code) (setf *control* (plusp value)))
             ((plusp value)
-             (let ((char (io:key-character code *shift*)))
+             (let ((char (io:key-character code *shift* *control*)))
                (when char
                  (post-event (key-client)
                              (server:encode-event
@@ -314,8 +316,8 @@
         (if events
             (sb-thread:with-mutex (*lock*)
               (let ((before (list *cursor* (first *windows*) (and *drag* (window-x (first *drag*))) (and *drag* (window-y (first *drag*))))))
-                (mapc #'keyboard events)
                 (mapc #'pointer events)
+                (mapc #'keyboard events)
                 (unless (equal before (list *cursor* (first *windows*) (and *drag* (window-x (first *drag*))) (and *drag* (window-y (first *drag*)))))
                   (render))))
             (io:wait-for-events devices)))))

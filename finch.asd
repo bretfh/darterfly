@@ -45,6 +45,13 @@
   :pathname "src/text/"
   :components ((:file "text")))
 
+(asdf:defsystem #:finch/edit
+  :description "Buffers"
+  :depends-on (#:uiop)
+  :serial t
+  :pathname "src/edit/"
+  :components ((:file "package") (:file "buffer") (:file "lisp")))
+
 (asdf:defsystem #:finch/imageio
   :description "Images and icons"
   :depends-on (#:chipz)
@@ -68,10 +75,10 @@
 
 (asdf:defsystem #:finch/apps
   :description "Applications"
-  :depends-on (#:finch/ca #:finch/server #:finch/bsd #:finch/text #:finch/imageio #:finch/kit)
+  :depends-on (#:finch/ca #:finch/server #:finch/bsd #:finch/text #:finch/imageio #:finch/kit #:finch/edit)
   :serial t
   :pathname "src/apps/"
-  :components ((:file "hello") (:file "terminal") (:file "listener") (:file "session")))
+  :components ((:file "hello") (:file "terminal") (:file "listener") (:file "editor") (:file "session")))
 
 (asdf:defsystem #:finch/iokit
   :description "IOKit: the registry, PCI and drivers"
@@ -178,7 +185,7 @@
 
 (asdf:defsystem #:finch
   :description "A live, hackable OS on SBCL"
-  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/xpc #:finch/launchd #:finch/shell #:finch/io #:finch/text #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/iokit #:finch/vfs #:finch/apfs #:finch/net #:finch/kernel #:finch/image)
+  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/xpc #:finch/launchd #:finch/shell #:finch/io #:finch/text #:finch/edit #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/iokit #:finch/vfs #:finch/apfs #:finch/net #:finch/kernel #:finch/image)
   :in-order-to ((asdf:test-op (asdf:test-op #:finch/test))))
 
 (asdf:defsystem #:finch/test

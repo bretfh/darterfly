@@ -71,6 +71,7 @@
     ("System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer" "WindowServer")
     ("Applications/Hello.app/Contents/MacOS/Hello" "Hello")
     ("System/Applications/Listener.app/Contents/MacOS/Listener" "Listener")
+    ("System/Applications/Editor.app/Contents/MacOS/Editor" "Editor")
     ("System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal" "Terminal")
     ("System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow" "loginwindow")
     ("System/Library/CoreServices/Dock.app/Contents/MacOS/Dock" "Dock")
@@ -147,7 +148,13 @@
     (#\[ "bracket_left") (#\] "bracket_right") (#\{ "bracket_left") (#\} "bracket_right")
     (#\\ "backslash") (#\| "backslash") (#\` "grave_accent") (#\~ "grave_accent")
     (#\_ "minus") (#\? "slash") (#\! "1") (#\@ "2") (#\# "3") (#\$ "4") (#\% "5") (#\^ "6") (#\& "7")
-    (t (string (char-downcase char)))))
+    (#.(code-char #xF700) "up") (#.(code-char #xF701) "down") (#.(code-char #xF702) "left") (#.(code-char #xF703) "right")
+    (t (if (control-char-p char)
+           (string (code-char (+ 96 (char-code char))))
+           (string (char-downcase char))))))
+
+(defun control-char-p (char)
+  (and (<= 1 (char-code char) 26) (not (member char '(#\Backspace #\Tab #\Newline #\Return)))))
 
 (defun send-keys (string)
   (flet ((key (name down)
@@ -156,12 +163,13 @@
                                                   "key" (finch/qmp:dict "type" "qcode" "data" name)))))
     (loop :for char :across string
           :do (let* ((shift (or (find char "()+*\"!@#$%^&_{}|:<>?~") (upper-case-p char)))
+                     (held (cond (shift "shift") ((control-char-p char) "ctrl")))
                      (name (key-name char)))
                 (qmp "input-send-event"
                      (finch/qmp:dict "events"
-                                     (coerce (append (and shift (list (key "shift" t)))
+                                     (coerce (append (and held (list (key held t)))
                                                      (list (key name t) (key name nil))
-                                                     (and shift (list (key "shift" nil))))
+                                                     (and held (list (key held nil))))
                                              'vector)))))))
 
 (defvar *screen-size* '(1280 800))
