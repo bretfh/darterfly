@@ -15,7 +15,9 @@ enum {
   VFS_open = 1, VFS_close, VFS_read, VFS_write, VFS_pread, VFS_pwrite, VFS_lseek, VFS_stat, VFS_lstat, VFS_fstat,
   VFS_readlink, VFS_symlink, VFS_mkdir, VFS_rmdir, VFS_unlink, VFS_rename, VFS_chdir, VFS_fchdir, VFS_getcwd,
   VFS_realpath, VFS_chmod, VFS_fchmod, VFS_chown, VFS_fchown, VFS_truncate, VFS_ftruncate, VFS_dup, VFS_dup2,
-  VFS_fcntl, VFS_readdir, VFS_link, VFS_utimes, VFS_fsync, VFS_umask, VFS_pipe, VFS_spawn, VFS_waitpid
+  VFS_fcntl, VFS_readdir, VFS_link, VFS_utimes, VFS_fsync, VFS_umask, VFS_pipe, VFS_spawn, VFS_waitpid,
+  VFS_socket, VFS_bind, VFS_listen, VFS_accept, VFS_connect, VFS_getsockname, VFS_getpeername, VFS_shutdown,
+  VFS_recvfrom, VFS_sendto, VFS_resolve
 };
 
 typedef long (*vfs_entry)(long op, long a, long b, long c, long d);
@@ -204,6 +206,101 @@ int __libsa_spawn(char *program, char *argv[], int sin, int sout, int serr, int 
   long args[8] = {(long)program, (long)argv, sin, sout, serr, (long)envp, (long)pwd, search};
   return (int)ret(call(VFS_spawn, (long)args, 0, 0, 0));
 }
+
+int socket(int domain, int type, int protocol) { return (int)ret(call(VFS_socket, domain, type, protocol, 0)); }
+int bind(int fd, const void *addr, unsigned len) { return (int)ret(call(VFS_bind, fd, (long)addr, len, 0)); }
+int listen(int fd, int backlog) { return (int)ret(call(VFS_listen, fd, backlog, 0, 0)); }
+int accept(int fd, void *addr, unsigned *len) { return (int)ret(call(VFS_accept, fd, (long)addr, (long)len, 0)); }
+int connect(int fd, const void *addr, unsigned len) { return (int)ret(call(VFS_connect, fd, (long)addr, len, 0)); }
+int getsockname(int fd, void *addr, unsigned *len) { return (int)ret(call(VFS_getsockname, fd, (long)addr, (long)len, 0)); }
+int getpeername(int fd, void *addr, unsigned *len) { return (int)ret(call(VFS_getpeername, fd, (long)addr, (long)len, 0)); }
+int shutdown(int fd, int how) { return (int)ret(call(VFS_shutdown, fd, how, 0, 0)); }
+
+long recvfrom(int fd, void *buf, size_t n, int flags, void *addr, unsigned *len) {
+  long args[4] = {(long)buf, (long)n, (long)addr, (long)len};
+  return ret(call(VFS_recvfrom, fd, (long)args, flags, 0));
+}
+
+long sendto(int fd, const void *buf, size_t n, int flags, const void *addr, unsigned len) {
+  long args[4] = {(long)buf, (long)n, (long)addr, len};
+  return ret(call(VFS_sendto, fd, (long)args, flags, 0));
+}
+
+long recv(int fd, void *buf, size_t n, int flags) { return recvfrom(fd, buf, n, flags, 0, 0); }
+long send(int fd, const void *buf, size_t n, int flags) { return sendto(fd, buf, n, flags, 0, 0); }
+
+int setsockopt(int fd, int level, int name, const void *value, unsigned len) {
+  (void)fd; (void)level; (void)name; (void)value; (void)len;
+  return 0;
+}
+
+int getsockopt(int fd, int level, int name, void *value, unsigned *len) {
+  (void)fd; (void)level; (void)name;
+  if (value && len && *len >= sizeof(int)) {
+    *(int *)value = 0;
+    *len = sizeof(int);
+  }
+  return 0;
+}
+
+struct addrinfo {
+  int ai_flags, ai_family, ai_socktype, ai_protocol;
+  unsigned ai_addrlen;
+  unsigned char *ai_addr;
+  char *ai_canonname;
+  struct addrinfo *ai_next;
+};
+
+int getaddrinfo(const char *node, const char *service, const void *hints_, void **res) {
+  const struct addrinfo *hints = hints_;
+  int family = hints ? hints->ai_family : 0;
+  unsigned char addrs[8][16];
+  int families[8];
+  long n;
+  if (node) n = call(VFS_resolve, (long)node, (long)addrs, (long)families, 8 | (family << 8));
+  else {
+    n = 1;
+    families[0] = family == 10 ? 10 : 2;
+    memset(addrs[0], 0, 16);
+  }
+  if (n <= 0) return -2;
+  int port = service ? atoi(service) : 0;
+  struct addrinfo *head = 0, **tail = &head;
+  for (long i = 0; i < n; i++) {
+    struct addrinfo *ai = calloc(1, sizeof *ai);
+    unsigned char *sa = calloc(1, 28);
+    sa[0] = (unsigned char)families[i];
+    sa[2] = (unsigned char)(port >> 8);
+    sa[3] = (unsigned char)port;
+    if (families[i] == 2) {
+      memcpy(sa + 4, addrs[i], 4);
+      ai->ai_addrlen = 16;
+    } else {
+      memcpy(sa + 8, addrs[i], 16);
+      ai->ai_addrlen = 28;
+    }
+    ai->ai_family = families[i];
+    ai->ai_socktype = hints && hints->ai_socktype ? hints->ai_socktype : 1;
+    ai->ai_protocol = hints ? hints->ai_protocol : 0;
+    ai->ai_addr = sa;
+    *tail = ai;
+    tail = &ai->ai_next;
+  }
+  *res = head;
+  return 0;
+}
+
+void freeaddrinfo(void *p) {
+  struct addrinfo *ai = p;
+  while (ai) {
+    struct addrinfo *next = ai->ai_next;
+    free(ai->ai_addr);
+    free(ai);
+    ai = next;
+  }
+}
+
+const char *gai_strerror(int e) { return e == -2 ? "Name or service not known" : "Name resolution failed"; }
 
 pid_t waitpid(pid_t pid, int *status, int options) {
   return (pid_t)ret(call(VFS_waitpid, pid, (long)status, options, 0));

@@ -502,6 +502,24 @@
                                   (ask (format nil "(let ((s (finch/bsd:socket finch/bsd:+af-inet+ finch/bsd:+sock-stream+))) (finch/bsd:connect s \"10.0.2.2\" ~d) (finch/bsd:send s (sb-ext:string-to-octets (format nil \"hello host, from connect~~%\"))) (prog1 (map 'string #'code-char (finch/bsd:recv s 100)) (finch/bsd:close s)))" port))))
                       (is (equal "hello host, from connect" (sb-thread:join-thread acceptor :default nil :timeout 20))))
                  (sb-bsd-sockets:socket-close server)))
+             (multiple-value-bind (server port) (host-listener)
+               (unwind-protect
+                    (let ((acceptor (sb-thread:make-thread
+                                     (lambda ()
+                                       (handler-case
+                                           (sb-sys:with-deadline (:seconds 20)
+                                             (let* ((conn (sb-bsd-sockets:socket-accept server))
+                                                    (st (sb-bsd-sockets:socket-make-stream conn :input t :output t :element-type 'character)))
+                                               (prog1 (read-line st)
+                                                 (write-line "hello sb-bsd-sockets" st)
+                                                 (finish-output st)
+                                                 (sb-bsd-sockets:socket-close conn))))
+                                         (error (e) (princ-to-string e)))))))
+                      (is (search "\"hello sb-bsd-sockets\""
+                                  (ask (format nil "(let ((s (make-instance 'sb-bsd-sockets:inet-socket :type :stream :protocol :tcp))) (sb-bsd-sockets:socket-connect s #(10 0 2 2) ~d) (let ((st (sb-bsd-sockets:socket-make-stream s :input t :output t :element-type 'character))) (write-line \"from sbcl's own sockets\" st) (finish-output st) (prog1 (read-line st) (close st))))" port)))
+                          "sb-bsd-sockets over finch's tcp")
+                      (is (equal "from sbcl's own sockets" (sb-thread:join-thread acceptor :default nil :timeout 20))))
+                 (sb-bsd-sockets:socket-close server)))
              (let ((u (make-instance 'sb-bsd-sockets:inet-socket :type :datagram :protocol :udp))
                    (buf (make-array 100 :element-type '(unsigned-byte 8))))
                (unwind-protect

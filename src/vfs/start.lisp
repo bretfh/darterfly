@@ -6,7 +6,10 @@
     (:eexist . 17) (:exdev . 18) (:enodev . 19) (:enotdir . 20) (:eisdir . 21) (:einval . 22) (:enfile . 23)
     (:emfile . 24) (:enotty . 25) (:efbig . 27) (:enospc . 28) (:espipe . 29) (:erofs . 30) (:emlink . 31)
     (:epipe . 32) (:edom . 33) (:erange . 34) (:edeadlk . 35) (:enametoolong . 36) (:enosys . 38) (:enotempty . 39)
-    (:eloop . 40) (:enotsup . 95) (:eopnotsupp . 95) (:eafnosupport . 97) (:etimedout . 110)))
+    (:eloop . 40) (:enotsock . 88) (:edestaddrreq . 89) (:eprotonosupport . 93) (:enotsup . 95) (:eopnotsupp . 95)
+    (:eafnosupport . 97) (:eaddrinuse . 98) (:enetdown . 100) (:enetunreach . 101) (:econnreset . 104)
+    (:eisconn . 106) (:enotconn . 107) (:etimedout . 110) (:econnrefused . 111) (:ehostunreach . 113)
+    (:ealready . 114) (:einprogress . 115)))
 
 (defun errno-code (errno) (or (cdr (assoc errno +errno+)) 5))
 

@@ -26,7 +26,8 @@
 (defun ip-of (address)
   (etypecase address
     (string (finch/net:ip-address address))
-    (integer address)))
+    (integer address)
+    (vector address)))
 
 (defun net-wait (file thunk)
   (loop

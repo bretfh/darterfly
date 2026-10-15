@@ -338,22 +338,6 @@ int getprotobyname_r(const char *n, void *a, char *b, size_t l, void **r) { (voi
 int getprotobynumber_r(int n, void *a, char *b, size_t l, void **r) { (void)n; (void)a; (void)b; (void)l; *r = 0; return ENOENT; }
 const char *inet_ntop(int af, const void *s, char *d, unsigned n) { (void)af; (void)s; (void)d; (void)n; errno = EAFNOSUPPORT; return 0; }
 int inet_pton(int af, const char *s, void *d) { (void)af; (void)s; (void)d; errno = EAFNOSUPPORT; return -1; }
-ENOSYS_STUB(int, socket, (int a, int b, int c))
-ENOSYS_STUB(int, bind, (int a, const void *b, unsigned c))
-ENOSYS_STUB(int, listen, (int a, int b))
-ENOSYS_STUB(int, accept, (int a, void *b, unsigned *c))
-ENOSYS_STUB(int, getpeername, (int a, void *b, unsigned *c))
-ENOSYS_STUB(int, getsockname, (int a, void *b, unsigned *c))
-ENOSYS_STUB(int, connect, (int a, const void *b, unsigned c))
-ENOSYS_STUB(int, shutdown, (int a, int b))
-ENOSYS_STUB(long, recvfrom, (int a, void *b, size_t c, int d, void *e, unsigned *f))
-ENOSYS_STUB(long, send, (int a, const void *b, size_t c, int d))
-ENOSYS_STUB(long, sendto, (int a, const void *b, size_t c, int d, const void *e, unsigned f))
-ENOSYS_STUB(int, setsockopt, (int a, int b, int c, const void *d, unsigned e))
-ENOSYS_STUB(int, getsockopt, (int a, int b, int c, void *d, unsigned *e))
-int getaddrinfo(const char *a, const char *b, const void *c, void **d) { (void)a; (void)b; (void)c; (void)d; return -2; }
-void freeaddrinfo(void *a) { (void)a; }
-const char *gai_strerror(int e) { (void)e; return "no networking on finch yet"; }
 int getnameinfo(const void *a, unsigned b, char *c, unsigned d, char *e, unsigned f, int g) {
   (void)a; (void)b; (void)c; (void)d; (void)e; (void)f; (void)g;
   return -2;

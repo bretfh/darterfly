@@ -188,6 +188,11 @@ static const char *errors[] = {
     [ENOSPC] = "No space left on device", [ESPIPE] = "Illegal seek", [EROFS] = "Read-only file system",
     [EPIPE] = "Broken pipe", [ERANGE] = "Numerical result out of range", [ENOSYS] = "Function not implemented",
     [ENAMETOOLONG] = "File name too long", [ENOTEMPTY] = "Directory not empty", [ELOOP] = "Too many levels of symbolic links",
+    [ETIMEDOUT] = "Connection timed out", [ECONNREFUSED] = "Connection refused", [ECONNRESET] = "Connection reset by peer",
+    [ENOTCONN] = "Transport endpoint is not connected", [EISCONN] = "Transport endpoint is already connected",
+    [ENETDOWN] = "Network is down", [ENETUNREACH] = "Network is unreachable", [EHOSTUNREACH] = "No route to host",
+    [EADDRINUSE] = "Address already in use", [ENOTSOCK] = "Socket operation on non-socket",
+    [EAFNOSUPPORT] = "Address family not supported by protocol", [EOPNOTSUPP] = "Operation not supported",
 };
 
 char *strerror(int e) {
