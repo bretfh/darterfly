@@ -4,7 +4,7 @@
   (:export #:define-low #:define-global #:low-object #:inb #:outb #:ref #:mem #:pause #:result #:while
            #:package-object #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:address
            #:rep-movsb #:rep-stosb #:&va #:va-next #:rdtsc #:return-address
-           #:invlpg #:set-cr3 #:cpuid-edx #:cpu-data #:fxsave #:fxrstor #:code-address #:call-pointer #:read-cr #:set-cr #:fninit #:compare-and-swap #:rdrand #:int3 #:build-date #:*build-date*))
+           #:invlpg #:set-cr3 #:cpuid-edx #:cpu-data #:fxsave #:fxrstor #:code-address #:call-pointer #:read-cr #:set-cr #:fninit #:compare-and-swap #:rdrand #:int3 #:build-date #:*build-date* #:lidt #:ltr))
 (in-package #:finch/low)
 
 (defvar *functions* (make-hash-table :test 'equal))
@@ -299,6 +299,10 @@
                      (inst byte (ecase (first args) (0 #xC0) (3 #xD8) (4 #xE0))))
              (fninit (inst byte #xDB) (inst byte #xE3))
              (int3 (inst byte #xCC))
+             (lidt (compile (first args))
+                   (inst byte #x0F) (inst byte #x01) (inst byte #x18))
+             (ltr (compile (first args))
+                  (inst byte #x0F) (inst byte #x00) (inst byte #xD8))
              (build-date (compile *build-date*))
              (rdrand (compile (first args))
                      (inst mov rcx-tn rax-tn)

@@ -78,6 +78,7 @@
                            (+ |PE_boot_args| +command-line+)))
 
 (define-low i386-init (args)
+  (setf |real_ncpus| 1)
   (cpu-data-set-gs (cpu-datap 0))
   (funnel-lock)
   (setf |PE_boot_args| args)

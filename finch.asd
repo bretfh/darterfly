@@ -149,7 +149,7 @@
   :pathname "src/osfmk/i386/"
   :components ((:file "mtrr") (:file "printf") (:file "rtclock") (:file "vm-map") (:file "pmap") (:file "lapic") (:file "sched")
                (:file "signal" :pathname "../../bsd/kern/signal") (:file "trap") (:file "mp")
-               (:file "systemcalls" :pathname "../../bsd/dev/i386/systemcalls") (:file "init") (:file "memory")))
+               (:file "systemcalls" :pathname "../../bsd/dev/i386/systemcalls") (:file "init") (:file "mp-desc") (:file "memory")))
 
 (asdf:defsystem #:finch/kernel
   :description "The kernel, run as pid 1"
