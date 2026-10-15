@@ -9,7 +9,7 @@
    #:namei #:vfs-open #:vfs-close #:vfs-read #:vfs-write #:vfs-stat #:vfs-readdir #:vfs-readlink #:vfs-mkdir
    #:vfs-unlink #:vfs-rename #:vfs-chdir #:vfs-getcwd #:*root*
    #:vfs-symlink #:vfs-remove #:vfs-lseek #:vfs-fstat #:vfs-realpath #:make-ram-node
-   #:make-devfs #:make-kernel-dir #:vfs-mkdirs #:vfs-start))
+   #:make-devfs #:make-kernel-dir #:vfs-mkdirs #:vfs-start #:make-host-root #:fd-vnode))
 (in-package #:finch/vfs)
 
 (define-condition vfs-error (error)
@@ -138,6 +138,8 @@
         finally (fail :emfile)))
 
 (defun fd-file (fd) (or (gethash fd *files*) (fail :ebadf)))
+
+(defun fd-vnode (fd) (with-vfs (file-vnode (fd-file fd))))
 
 (defun lookup-or-nil (path &key (follow t))
   (handler-case (namei path :follow follow)

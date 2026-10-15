@@ -6,7 +6,7 @@
 
 (asdf:defsystem #:finch/bsd
   :description "Processes, signals and files"
-  :depends-on (#:finch/mach #:finch/net (:require #:sb-posix))
+  :depends-on (#:finch/mach #:finch/net #:finch/vfs)
   :serial t
   :pathname "src/bsd/"
   :components ((:file "errno") (:file "proc") (:file "file") (:file "socket") (:file "vfs") (:file "stdio") (:file "exec")))
@@ -89,10 +89,10 @@
 
 (asdf:defsystem #:finch/vfs
   :description "The virtual file system"
-  :depends-on (#:uiop)
+  :depends-on (#:uiop (:require #:sb-posix))
   :serial t
   :pathname "src/vfs/"
-  :components ((:file "vfs") (:file "ramfs") (:file "libsa")))
+  :components ((:file "vfs") (:file "ramfs") (:file "libsa") (:file "host")))
 
 (asdf:defsystem #:finch/apfs
   :description "Apple File System"

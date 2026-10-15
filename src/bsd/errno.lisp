@@ -12,7 +12,8 @@
    #:+o-excl+ #:+o-directory+ #:+s-ifmt+ #:+s-ifdir+ #:+s-ifreg+ #:+s-ififo+ #:+s-iflnk+
    #:socket #:bind #:listen #:accept #:connect #:send #:recv #:sendto #:recvfrom #:+af-inet+ #:+af-inet6+ #:+sock-stream+ #:+sock-dgram+
    #:wifexited #:wexitstatus #:wifsignaled #:wtermsig #:wifstopped #:wstopsig #:wifcontinued)
-  (:shadow #:read #:write #:close #:open #:listen))
+  (:shadow #:read #:write #:close #:open #:listen)
+  (:local-nicknames (#:vfs #:finch/vfs)))
 (in-package #:finch/bsd)
 
 (defparameter +errno+

@@ -25,12 +25,19 @@
 
 (defconstant +s-ixall+ #o111)
 
+(defun first-line (full)
+  (vfs (let ((fd (vfs:vfs-open full (list :access :rdonly) 0)))
+         (unwind-protect
+              (let ((octets (vfs:vfs-read fd 256)))
+                (map 'string #'code-char (subseq octets 0 (or (position 10 octets) (length octets)))))
+           (vfs:vfs-close fd)))))
+
 (defun program-of (name)
   (let* ((full (path name))
-         (mode (sb-posix:stat-mode (host (sb-posix:stat full)))))
+         (mode (vfs:vattr-mode (vfs (vfs:vfs-stat full)))))
     (unless (and (= (logand mode +s-ifmt+) +s-ifreg+) (logtest mode +s-ixall+))
       (fail :eacces))
-    (let ((line (with-open-file (s full :external-format :latin-1) (read-line s nil ""))))
+    (let ((line (first-line full)))
       (or (and (uiop:string-prefix-p "#!finch " line)
                (gethash (string-trim " " (subseq line 8)) *programs*))
           (fail :enoexec)))))

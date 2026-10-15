@@ -14,55 +14,37 @@
 (defconstant +s-ifreg+ #o100000)
 (defconstant +s-ififo+ #o010000)
 (defconstant +s-iflnk+ #o120000)
+(defconstant +s-ifchr+ #o020000)
 
-(defun host-errno (code)
-  (or (loop :for (name . nil) :in +errno+
-            :for host := (find-symbol (symbol-name name) :sb-posix)
-            :when (and host (boundp host) (= (symbol-value host) code))
-              :return name)
-      :eio))
+(defun ensure-root ()
+  (unless vfs:*root* (vfs:vfs-mount (vfs:make-host-root) "/")))
 
-(defmacro host (&body body)
-  `(handler-case (progn ,@body)
-     (sb-posix:syscall-error (e) (fail (host-errno (sb-posix:syscall-errno e))))))
+(defmacro vfs (&body body)
+  `(handler-case (progn (ensure-root) ,@body)
+     (vfs:vfs-error (e) (fail (vfs:vfs-errno e)))))
 
-(defun host-flags (flags)
-  (logior (ecase (logand flags 3) (0 sb-posix:o-rdonly) (1 sb-posix:o-wronly) (2 sb-posix:o-rdwr))
-          (loop :for (darwin . linux) :in (list (cons +o-append+ sb-posix:o-append)
-                                                (cons +o-creat+ sb-posix:o-creat)
-                                                (cons +o-trunc+ sb-posix:o-trunc)
-                                                (cons +o-excl+ sb-posix:o-excl)
-                                                (cons +o-nonblock+ sb-posix:o-nonblock)
-                                                (cons +o-directory+ sb-posix:o-directory))
-                :when (logtest flags darwin) :sum linux)))
+(defun vfs-flags (flags)
+  (list :access (ecase (logand flags 3) (0 :rdonly) (1 :wronly) (2 :rdwr))
+        :creat (logtest flags +o-creat+) :excl (logtest flags +o-excl+) :trunc (logtest flags +o-trunc+)
+        :append (logtest flags +o-append+) :nonblock (logtest flags +o-nonblock+)
+        :directory (logtest flags +o-directory+)))
 
 (defclass vnode (file)
-  ((fd :initarg :fd :reader host-fd)
+  ((fd :initarg :fd :reader vfs-fd)
    (device :initarg :device :initform nil :reader device-p)))
 
-(defun wait-readable (fd)
-  (loop
-    (let ((ready (progn (sb-thread:release-mutex *bsd*)
-                        (unwind-protect (sb-sys:wait-until-fd-usable fd :input 0.2)
-                          (sb-thread:grab-mutex *bsd*)))))
-      (when ready (return))
-      (when (and (plusp (deliverable *proc*)) (deliver *proc*))
-        (fail :eintr)))))
-
 (defmethod file-read ((file vnode) count)
-  (when (device-p file) (wait-readable (host-fd file)))
-  (let ((buffer (make-array count :element-type '(unsigned-byte 8))))
-    (let ((n (host (sb-sys:with-pinned-objects (buffer)
-                     (sb-posix:read (host-fd file) (sb-sys:vector-sap buffer) count)))))
-      (subseq buffer 0 n))))
+  (if (device-p file)
+      (progn (sb-thread:release-mutex *bsd*)
+             (unwind-protect (vfs (vfs:vfs-read (vfs-fd file) count))
+               (sb-thread:grab-mutex *bsd*)))
+      (vfs (vfs:vfs-read (vfs-fd file) count))))
 
 (defmethod file-write ((file vnode) octets)
-  (let ((buffer (coerce octets '(simple-array (unsigned-byte 8) (*)))))
-    (host (sb-sys:with-pinned-objects (buffer)
-            (sb-posix:write (host-fd file) (sb-sys:vector-sap buffer) (length buffer))))))
+  (vfs (vfs:vfs-write (vfs-fd file) octets)))
 
 (defmethod file-close ((file vnode))
-  (host (sb-posix:close (host-fd file))))
+  (vfs (vfs:vfs-close (vfs-fd file))))
 
 (defun absolute (name)
   (if (and (plusp (length name)) (char= (char name 0) #\/))
@@ -72,92 +54,83 @@
 (defun path (name)
   (format nil "~a~a" (string-right-trim "/" (proc-root *proc*)) (absolute name)))
 
-(defun unroot (host)
+(defun unroot (full)
   (let ((root (string-right-trim "/" (proc-root *proc*))))
-    (if (and (plusp (length root)) (uiop:string-prefix-p root host))
-        (let ((rest (subseq host (length root)))) (if (string= rest "") "/" rest))
-        host)))
+    (if (and (plusp (length root)) (uiop:string-prefix-p root full))
+        (let ((rest (subseq full (length root)))) (if (string= rest "") "/" rest))
+        full)))
 
-(defconstant +s-ifchr+ #o020000)
+(defun mode-type (mode) (logand mode +s-ifmt+))
 
 (defun open (name flags &optional (mode #o644))
   (syscall
-    (let ((fd (host (sb-posix:open (path name) (host-flags flags) mode))))
+    (let ((fd (vfs (vfs:vfs-open (path name) (vfs-flags flags) mode))))
       (fd-alloc (make-instance 'vnode :fd fd
-                                      :device (= (logand (sb-posix:stat-mode (sb-posix:fstat fd)) +s-ifmt+)
-                                                 +s-ifchr+)
+                                      :device (= (mode-type (vfs:vattr-mode (vfs (vfs:vfs-fstat fd)))) +s-ifchr+)
                                       :flags (logand flags +o-nonblock+))))))
 
 (defun lseek (fd offset whence)
   (syscall
     (let ((file (fd-file fd)))
       (unless (typep file 'vnode) (fail :espipe))
-      (host (sb-posix:lseek (host-fd file) offset
-                            (ecase whence (:set sb-posix:seek-set) (:cur sb-posix:seek-cur) (:end sb-posix:seek-end)))))))
+      (vfs (vfs:vfs-lseek (vfs-fd file) offset (ecase whence (:set 0) (:cur 1) (:end 2)))))))
 
-(defun stat-plist (stat)
-  (list :mode (sb-posix:stat-mode stat) :size (sb-posix:stat-size stat) :nlink (sb-posix:stat-nlink stat)
-        :ino (sb-posix:stat-ino stat) :mtime (sb-posix:stat-mtime stat)))
+(defun stat-plist (attr id)
+  (list :mode (vfs:vattr-mode attr) :size (vfs:vattr-size attr) :nlink (vfs:vattr-nlink attr)
+        :ino id :mtime (floor (vfs:vattr-mtime attr) 1000000000)))
 
-(defun stat (name)
-  (syscall (stat-plist (host (sb-posix:stat (path name))))))
+(defun stat-path (name follow)
+  (vfs (let ((v (vfs:namei (path name) :follow follow)))
+         (stat-plist (vfs:vnop-getattr v) (vfs:vnode-id v)))))
 
-(defun lstat (name)
-  (syscall (stat-plist (host (sb-posix:lstat (path name))))))
+(defun stat (name) (syscall (stat-path name t)))
+(defun lstat (name) (syscall (stat-path name nil)))
 
 (defun fstat (fd)
   (syscall
     (let ((file (fd-file fd)))
       (if (typep file 'vnode)
-          (stat-plist (host (sb-posix:fstat (host-fd file))))
+          (vfs (let ((v (vfs:fd-vnode (vfs-fd file)))) (stat-plist (vfs:vnop-getattr v) (vfs:vnode-id v))))
           (list :mode +s-ififo+ :size 0 :nlink 1 :ino 0 :mtime 0)))))
 
 (defun mkdir (name &optional (mode #o755))
-  (syscall (host (sb-posix:mkdir (path name) mode)) 0))
+  (syscall (vfs (vfs:vfs-mkdir (path name) mode)) 0))
 
 (defun rmdir (name)
-  (syscall (host (sb-posix:rmdir (path name))) 0))
+  (syscall (vfs (vfs:vfs-remove (path name) t)) 0))
 
 (defun unlink (name)
   (syscall
-    (handler-case (host (sb-posix:unlink (path name)))
+    (handler-case (vfs (vfs:vfs-remove (path name) nil))
       (errno (e) (fail (if (eq (errno-name e) :eisdir) :eperm (errno-name e)))))
     0))
 
 (defun rename (from to)
-  (syscall (host (sb-posix:rename (path from) (path to))) 0))
+  (syscall (vfs (vfs:vfs-rename (path from) (path to))) 0))
 
 (defun symlink (target name)
-  (syscall (host (sb-posix:symlink target (path name))) 0))
+  (syscall (vfs (vfs:vfs-symlink target (path name))) 0))
+
+(defun directory-vnode (name)
+  (vfs (let ((v (vfs:namei (path name))))
+         (unless (eq (vfs:vnode-type v) :vdir) (fail :enotdir))
+         v)))
 
 (defun readdir (name)
-  (syscall
-    (let ((dir (host (sb-posix:opendir (path name)))))
-      (unwind-protect
-           (loop :for entry := (sb-posix:readdir dir)
-                 :until (sb-alien:null-alien entry)
-                 :for entry-name := (sb-posix:dirent-name entry)
-                 :unless (member entry-name '("." "..") :test #'string=)
-                   :collect entry-name)
-        (sb-posix:closedir dir)))))
+  (syscall (mapcar #'car (vfs (vfs:vnop-readdir (directory-vnode name))))))
 
 (defun chdir (name)
   (syscall
-    (let* ((full (path name))
-           (mode (sb-posix:stat-mode (host (sb-posix:stat full)))))
-      (unless (= (logand mode +s-ifmt+) +s-ifdir+) (fail :enotdir))
-      (let ((true (string-right-trim "/" (sb-ext:native-namestring
-                                         (truename (sb-ext:parse-native-namestring (format nil "~a/" full)))))))
-        (setf (proc-cwd *proc*) (unroot (if (string= true "") "/" true))))
-      0)))
+    (directory-vnode name)
+    (setf (proc-cwd *proc*) (unroot (vfs (vfs:vfs-realpath (path name)))))
+    0))
 
 (defun chroot (name)
   (syscall
-    (let ((full (string-right-trim "/" (sb-ext:native-namestring
-                                        (truename (sb-ext:parse-native-namestring (format nil "~a/" (path name))))))))
-      (setf (proc-root *proc*) (if (string= full "") "/" full)
-            (proc-cwd *proc*) "/")
-      0)))
+    (directory-vnode name)
+    (setf (proc-root *proc*) (vfs (vfs:vfs-realpath (path name)))
+          (proc-cwd *proc*) "/")
+    0))
 
 (defun getcwd ()
   (proc-cwd *proc*))
