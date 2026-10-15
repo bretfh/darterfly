@@ -71,7 +71,10 @@
                                  (let ((new (open path flags mode)))
                                    (unless (= new fd) (dup2 new fd) (close new)))))
                         (:dup2 (apply #'dup2 args))
-                        (:close (apply #'close args))))
+                        (:close (apply #'close args))
+                        (:closefrom (loop :for fd :from (first args) :below (length (proc-fds *proc*))
+                                          :when (aref (proc-fds *proc*) fd) :do (close fd)))
+                        (:chdir (apply #'chdir args))))
             (execve name argv envp)))))
 
 (defvar *reboot* nil)

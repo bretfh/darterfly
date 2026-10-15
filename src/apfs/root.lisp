@@ -15,5 +15,6 @@
         (setf *root-media* media)
         (dolist (dir '("/dev" "/tmp" "/Volumes" "/System/Library/Kernels")) (vfs:vfs-mkdirs dir))
         (vfs:vfs-mount (vfs:make-devfs) "/dev")
+        (vfs:vfs-mount (vfs:make-ram-node :vdir #o1777) "/tmp")
         (vfs:vfs-mount (vfs:make-kernel-dir) "/System/Library/Kernels")
         rd))))

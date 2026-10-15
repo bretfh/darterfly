@@ -3,7 +3,7 @@
 (defparameter +libsa-ops+
   #(nil :open :close :read :write :pread :pwrite :lseek :stat :lstat :fstat :readlink :symlink :mkdir :rmdir
     :unlink :rename :chdir :fchdir :getcwd :realpath :chmod :fchmod :chown :fchown :truncate :ftruncate :dup :dup2
-    :fcntl :readdir :link :utimes :fsync :umask :pipe))
+    :fcntl :readdir :link :utimes :fsync :umask :pipe :spawn :waitpid))
 
 (defun c-string (address)
   (let* ((sap (sb-sys:int-sap address))
@@ -89,6 +89,39 @@
         (sb-sys:sap-ref-32 (sb-sys:int-sap address) 4) write)
   0)
 
+(defun c-strings (address)
+  (unless (zerop address)
+    (loop :for at :from address :by 8
+          :for p := (sb-sys:sap-ref-64 (sb-sys:int-sap at) 0)
+          :until (zerop p)
+          :collect (c-string p))))
+
+(defun search-path (program)
+  (if (find #\/ program)
+      program
+      (or (loop :for dir :in '("/bin" "/usr/bin" "/sbin" "/usr/sbin")
+                :for full := (format nil "~a/~a" dir program)
+                :when (ignore-errors (stat full)) :return full)
+          program)))
+
+(defun libsa-spawn (address)
+  (flet ((word (i) (sb-sys:sap-ref-64 (sb-sys:int-sap address) (* 8 i))))
+    (let ((program (c-string (word 0)))
+          (pwd (unless (zerop (word 6)) (c-string (word 6)))))
+      (posix-spawn (if (plusp (word 7)) (search-path program) program) (c-strings (word 1)) (c-strings (word 5))
+                   :file-actions (append (loop :for i :from 2 :to 4
+                                               :for from := (signed (word i))
+                                               :when (>= from 0) :collect (list :dup2 from (- i 2)))
+                                         (list (list :closefrom 3))
+                                         (when pwd (list (list :chdir pwd))))))))
+
+(defun libsa-waitpid (pid address options)
+  (multiple-value-bind (reaped status)
+      (wait4 pid :nohang (logtest options 1) :untraced (logtest options 2) :continued (logtest options 8))
+    (when (and status (not (zerop address)))
+      (setf (sb-sys:signed-sap-ref-32 (sb-sys:int-sap address) 0) status))
+    reaped))
+
 (defun libsa-call (op a b c d)
   (ecase op
     (:open (let ((fd (open (c-string a) (from-libsa-flags b) c)))
@@ -136,7 +169,9 @@
     (:fsync (fd-file a) 0)
     (:umask (prog1 vfs:*umask* (setf vfs:*umask* (logand a #o777))))
     (:pipe (multiple-value-bind (read write) (pipe)
-             (put-fds read write a)))))
+             (put-fds read write a)))
+    (:spawn (libsa-spawn a))
+    (:waitpid (libsa-waitpid (signed a) b c))))
 
 (defun libsa-entry (op a b c d)
   (sb-sys:without-interrupts

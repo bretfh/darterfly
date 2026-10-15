@@ -74,7 +74,6 @@ int execv(const char *p, char *const a[]) { (void)p; (void)a; errno = ENOSYS; re
 int execve(const char *p, char *const a[], char *const e[]) { (void)p; (void)a; (void)e; errno = ENOSYS; return -1; }
 int execvp(const char *p, char *const a[]) { (void)p; (void)a; errno = ENOSYS; return -1; }
 pid_t wait(int *s) { (void)s; errno = ECHILD; return -1; }
-pid_t waitpid(pid_t p, int *s, int o) { (void)p; (void)s; (void)o; errno = ECHILD; return -1; }
 
 int gethostname(char *b, size_t n) {
   strncpy(b, "finch", n);

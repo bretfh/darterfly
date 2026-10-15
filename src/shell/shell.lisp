@@ -54,7 +54,11 @@
   (:use #:cl #:finch/shell))
 
 (bsd:define-program "sh" (argv envp)
-  (let ((*package* (find-package :finch/shell-user)))
+  (let ((*package* (find-package :finch/shell-user))
+        (command (second (member "-c" argv :test #'string=))))
+    (when command
+      (bsd:exit (handler-case (progn (eval (read-from-string command)) 0)
+                  (error (e) (format *error-output* "~a~%" e) 1))))
     (loop
       (format t "# ")
       (finish-output)

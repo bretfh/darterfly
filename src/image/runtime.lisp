@@ -18,7 +18,16 @@
 #elif defined __linux__
     /* KLUDGE")
     ("x86-64-assem.S" "#if defined __linux__  || defined LISP_FEATURE_HAIKU"
-     "#if defined __finch__ || defined __linux__  || defined LISP_FEATURE_HAIKU")))
+     "#if defined __finch__ || defined __linux__  || defined LISP_FEATURE_HAIKU")
+    ("run-program.c" "    pid = fork();
+    if (pid) {"
+     "#if defined __finch__
+    extern int __libsa_spawn(char *, char **, int, int, int, int, char **, char *);
+    (void)sset; (void)failure_code; (void)pty_name; (void)dont_close;
+    return __libsa_spawn(program, argv, sin, sout, serr, search, envp, pwd);
+#endif
+    pid = fork();
+    if (pid) {")))
 
 (defun runtime-dir () (build-path "runtime/src/runtime/"))
 
