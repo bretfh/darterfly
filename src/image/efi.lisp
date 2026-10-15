@@ -26,9 +26,6 @@
          (format nil "/out:~a" (uiop:native-namestring out)) (uiop:native-namestring object))
     out))
 
-(defparameter *kernel-sources*
-  '())
-
 (defparameter *libsa-sources*
   '("syscall.c" "signal.c" "string.c" "stdio.c" "stdlib.c" "unistd.c" "time.c" "math.c" "misc.c"
     "setjmp.s" "start.c" "pthread.c" "vfs.c"))
@@ -57,12 +54,7 @@
                    (uiop:native-namestring path))))
 
 (defun kernel-objects ()
-  (append (lisp-objects) (compile-objects (mapcar #'source *kernel-sources*) "kernel"
-                   (append (list "-target" "x86_64-unknown-none-elf" "-ffreestanding" "-mno-red-zone"
-                                 "-mcmodel=kernel" "-fno-pie" "-fno-stack-protector" "-fno-builtin"
-                                 "-mno-sse" "-mno-sse2" "-mno-mmx" "-mno-80387" "-nostdlib" "-O2" "-Wall"
-                                 (format nil "-DBUILD_DATE=~s" (date)))
-                           (freestanding)))))
+  (lisp-objects))
 
 (defun libsa-objects ()
   (compile-objects (mapcar (lambda (f) (source (concatenate 'string "src/libsa/" f))) *libsa-sources*) "libsa"
