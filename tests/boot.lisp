@@ -748,7 +748,17 @@
                (click 400 500)
                (type-slowly (format nil "(+ 2 3)~%"))
                (let ((text (transcript "/tmp/Listener.txt" "> 5")))
-                 (is (search "> 5" text) "the listener goes on after the restart: ~s" text)))
+                 (is (search "> 5" text) "the listener goes on after the restart: ~s" text))
+               (type-slowly (format nil "(defun boom (x) (error \"boom ~~a\" (* x 2)))~%"))
+               (transcript "/tmp/Listener.txt" "> BOOM")
+               (type-slowly (format nil "(boom 21)~%"))
+               (let ((text (transcript "/tmp/Listener.txt" "frame: (BOOM 21)")))
+                 (is (search ">   frame: (BOOM 21)" text) "the error shows its frames: ~s" text))
+               (let ((index (ask (format nil "(finch/test::listener-line \"/tmp/Listener.txt\" \">   frame: (BOOM 21)\")"))))
+                 (click 260 (line-y (parse-integer index :junk-allowed t :start (position-if #'digit-char-p index)))))
+               (let ((text (transcript "/tmp/Inspector.txt" "arg 0: 21")))
+                 (is (search ">   arg 0: 21" text) "clicking a frame inspects its arguments: ~s" text)
+                 (is (search "function: BOOM" text))))
           (image:finish c 5))))))
 
 (test editor-on-finch

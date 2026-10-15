@@ -80,6 +80,32 @@
   (list (cons "report" (princ-to-string object))
         (cons "type" (type-of object))))
 
+(defun frame-text (frame)
+  (multiple-value-bind (name args) (sb-debug::frame-call frame)
+    (printed (cons name args))))
+
+(defmethod parts ((frame sb-di:frame))
+  (let ((location (sb-di:frame-code-location frame)))
+    (multiple-value-bind (name args) (sb-debug::frame-call frame)
+      (append (list (cons "function" name))
+              (loop :for arg :in args :for i :from 0 :collect (cons (format nil "arg ~d" i) arg))
+              (ignore-errors
+               (loop :for var :in (coerce (sb-di::debug-fun-debug-vars (sb-di:frame-debug-fun frame)) 'list)
+                     :when (eq (sb-di:debug-var-validity var location) :valid)
+                       :collect (cons (string-downcase (sb-di:debug-var-symbol var))
+                                      (sb-di:debug-var-value var frame))))))))
+
+(defun backtrace-frames ()
+  (let ((frames nil))
+    (sb-debug:map-backtrace (lambda (frame) (push frame frames)) :count 60)
+    (let* ((frames (nreverse frames))
+           (names (mapcar #'sb-debug::frame-call frames))
+           (from (let ((at (position-if (lambda (name) (member name '(error cerror sb-kernel::internal-error)))
+                                        names :from-end t)))
+                   (if at (1+ at) 0)))
+           (to (or (position 'eval names :start from) (length frames))))
+      (subseq frames from (min to (+ from 8))))))
+
 (defun inspect-window (object)
   (let* ((window (kit:make-window :title (format nil "Inspector — ~(~a~)" (type-of object))
                                   :x 520 :y 140 :width 600 :height 420))
@@ -120,6 +146,8 @@
         (let ((values (handler-bind
                           ((error (lambda (e)
                                     (show (format nil "error: ~a" e) e)
+                                    (dolist (frame (backtrace-frames))
+                                      (show (format nil "  frame: ~a" (frame-text frame)) frame))
                                     (dolist (r (compute-restarts e))
                                       (show (format nil "  restart: ~a" r) (make-choice r)))
                                     (invoke-restart-interactively (await-restart view)))))
