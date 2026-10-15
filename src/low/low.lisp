@@ -4,7 +4,7 @@
   (:export #:define-low #:define-global #:low-object #:inb #:outb #:ref #:mem #:pause #:result #:while
            #:package-object #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:address
            #:rep-movsb #:rep-stosb #:&va #:va-next #:rdtsc #:return-address
-           #:invlpg #:set-cr3 #:cpuid-edx #:cpu-data #:fxsave #:fxrstor #:code-address #:call-pointer #:read-cr #:set-cr #:fninit #:compare-and-swap))
+           #:invlpg #:set-cr3 #:cpuid-edx #:cpu-data #:fxsave #:fxrstor #:code-address #:call-pointer #:read-cr #:set-cr #:fninit #:compare-and-swap #:rdrand))
 (in-package #:finch/low)
 
 (defvar *functions* (make-hash-table :test 'equal))
@@ -295,6 +295,12 @@
                      (inst byte #x0F) (inst byte #x22)
                      (inst byte (ecase (first args) (0 #xC0) (3 #xD8) (4 #xE0))))
              (fninit (inst byte #xDB) (inst byte #xE3))
+             (rdrand (compile (first args))
+                     (inst mov rcx-tn rax-tn)
+                     (dolist (b '(#x48 #x0F #xC7 #xF0)) (inst byte b))
+                     (inst mov (ea 0 rcx-tn) rax-tn)
+                     (inst set :c (reg :byte 0))
+                     (inst movzx '(:byte :dword) (reg :dword 0) (reg :byte 0)))
              (compare-and-swap (compile (third args)) (inst push rax-tn)
                                (compile (second args)) (inst push rax-tn)
                                (compile (first args))
