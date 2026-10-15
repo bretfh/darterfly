@@ -41,8 +41,46 @@ extern void _libsa_start(const char *cmdline);
 
 uint64_t boot_kernel_stack_top(void);
 #include "../kern/thread.h"
+#include "../../bsd/kern/kern_sig.h"
 
-static void load_init_program(void) {
+uint64_t restart_core, restart_core_size;
+
+typedef struct {
+  uint32_t p_type, p_flags;
+  uint64_t p_offset, p_vaddr, p_paddr, p_filesz, p_memsz, p_align;
+} elf_phdr;
+
+static void reset_user_image(void) {
+  uint8_t *file = PHYSMAP_PTOV(PE_boot_args->kernelFileStart);
+  uint64_t phoff = *(uint64_t *)(file + 32);
+  uint16_t phnum = *(uint16_t *)(file + 56);
+  elf_phdr *ph = (elf_phdr *)(file + phoff);
+  for (int i = 0; i < phnum; i++)
+    if (ph[i].p_type == 1 && (ph[i].p_flags & 2) && ph[i].p_vaddr < 0xffff800000000000ull) {
+      uint8_t *to = (uint8_t *)ph[i].p_vaddr;
+      for (uint64_t k = 0; k < ph[i].p_filesz; k++) to[k] = file[ph[i].p_offset + k];
+      for (uint64_t k = ph[i].p_filesz; k < ph[i].p_memsz; k++) to[k] = 0;
+    }
+}
+
+void load_init_program(void);
+
+int restart_user(uint64_t core, uint64_t size) {
+  thread_t self = current_thread();
+  for (thread_t t = all_threads; t; t = t->all_next)
+    if (t != self && t->state != TH_TERMINATE) return 0;
+  vm_map_reset(core, size);
+  reset_user_image();
+  restart_core = core;
+  restart_core_size = size;
+  self->sigmask = self->siglist = 0;
+  p_siglist = 0;
+  kprintf("restart: core 0x%lx size %lu\n", core, size);
+  load_init_program();
+  return 1;
+}
+
+void load_init_program(void) {
   vm_map_enter(USER_STACK_TOP - USER_STACK_SIZE, USER_STACK_SIZE, VM_PROT_READ | VM_PROT_WRITE);
   kprintf("load_init_program: sbcl\n");
   uint64_t entry;

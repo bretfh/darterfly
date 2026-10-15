@@ -67,9 +67,9 @@
                    (append (runtime-flags) (list "-fno-builtin" "-fno-math-errno" "-I" (source "src/libsa")))))
 
 (defun finch-sources ()
-  (mapcar #'source '("src/mach/" "src/bsd/" "src/plist/" "src/macho/" "src/dyld/" "src/objc/" "src/mig/"
-                     "src/server/" "src/ca/" "src/xpc/" "src/launchd/" "src/shell/" "src/io/" "src/text/"
-                     "src/imageio/" "src/kit/" "src/apps/" "src/iokit/" "src/vfs/" "src/apfs/" "src/net/" "src/kernel/" "src/tahoe/" "tests/" "src/image/")))
+  (cons (source "tests/")
+        (remove-if-not (lambda (dir) (uiop:directory-files dir "*.lisp"))
+                       (uiop:subdirectories (source "src/")))))
 
 (defun finch-core ()
   (let ((core (build-path "finch.core")))
@@ -240,7 +240,9 @@
           "-machine" "q35"
           "-drive" (format nil "if=pflash,format=raw,readonly=on,file=~a" (firmware "ovmf_code_x64.bin"))
           "-drive" (format nil "if=pflash,format=raw,file=~a" (uiop:native-namestring vars))
-          "-drive" (format nil "if=none,id=esp,format=raw,snapshot=on,file=~a" (uiop:native-namestring (esp-image esp)))
+          "-drive" (if (equal (pathname-type esp) "img")
+                       (format nil "if=none,id=esp,format=raw,file=~a" (uiop:native-namestring esp))
+                       (format nil "if=none,id=esp,format=raw,snapshot=on,file=~a" (uiop:native-namestring (esp-image esp))))
           "-device" "virtio-blk-pci,drive=esp,bootindex=0")
      (when root
        (list "-drive" (format nil "if=none,id=root,format=raw,~:[~;snapshot=on,~]file=~a" (eq (car root) :snapshot) (uiop:native-namestring (cdr root)))
@@ -310,5 +312,9 @@
                       :output :interactive :error-output :interactive :ignore-error-status t)
     (values)))
 
-(defun bare-console (&key (boot-args "") disks (root t) forwards)
-  (console :args (bare-qemu (esp :boot-args (root-boot-args boot-args root)) disks (root-drive root) forwards)))
+(defun bare-console (&key (boot-args "") disks (root t) forwards esp)
+  (let ((dir (unless (and esp (probe-file esp)) (esp :boot-args (root-boot-args boot-args root)))))
+    (console :args (bare-qemu (cond ((null esp) dir)
+                                    ((probe-file esp) esp)
+                                    (t (esp-image dir esp)))
+                              disks (root-drive root) forwards))))

@@ -29,7 +29,11 @@
 
 
 
+int __libsa_saved_core(uint64_t *core, uint64_t *size);
+
 void _exit(int code) {
+  uint64_t core, size;
+  if (code == 0 && __libsa_saved_core(&core, &size)) __machdep(MACHDEP_restart, (long)core, (long)size);
   __syscall(SYS_exit, code, 0, 0, 0, 0, 0);
   for (;;) {}
 }
@@ -140,16 +144,23 @@ int posix_spawn_file_actions_addclose(posix_spawn_file_actions_t *f, int fd) { (
 int posix_spawn_file_actions_addclosefrom_np(posix_spawn_file_actions_t *f, int fd) { (void)f; (void)fd; return 0; }
 
 static char dl_error[] = "no dynamic loading on finch";
+static int dl_failed;
 static int runtime_handle;
 
 void *dlopen(const char *p, int f) {
   (void)f;
   if (!p || !strcmp(p, KERNEL_PATH)) return &runtime_handle;
+  dl_failed = 1;
   return 0;
 }
 
 int dlclose(void *h) { (void)h; return 0; }
-char *dlerror(void) { return dl_error; }
+
+char *dlerror(void) {
+  if (!dl_failed) return 0;
+  dl_failed = 0;
+  return dl_error;
+}
 
 static const Elf64_Sym *symbols;
 static const char *symbol_names;
@@ -171,12 +182,16 @@ static void load_symbols(void) {
 }
 
 void *dlsym(void *h, const char *name) {
-  if (h && h != &runtime_handle) return 0;
+  if (h && h != &runtime_handle) {
+    dl_failed = 1;
+    return 0;
+  }
   if (!symbols) load_symbols();
   for (size_t i = 0; i < nsymbols; i++)
     if (symbols[i].st_shndx != SHN_UNDEF && (symbols[i].st_info >> 4) == STB_GLOBAL &&
         !strcmp(symbol_names + symbols[i].st_name, name))
       return (void *)symbols[i].st_value;
+  dl_failed = 1;
   return 0;
 }
 

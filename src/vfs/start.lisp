@@ -52,6 +52,10 @@
     (multiple-value-bind (address size) (machdep-pair 6)
       (let ((k (vnop-create dir "kernel" #o555)))
         (setf (node-external k) (sb-sys:int-sap address) (node-size k) size)))
+    (multiple-value-bind (address size) (machdep-pair 17)
+      (when (plusp address)
+        (let ((k (vnop-create dir "finch.core" #o444)))
+          (setf (node-external k) (sb-sys:int-sap address) (node-size k) size))))
     dir))
 
 (defun vfs-mkdirs (path)

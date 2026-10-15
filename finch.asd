@@ -110,10 +110,17 @@
 
 (asdf:defsystem #:finch/fat
   :description "FAT32"
-  :depends-on (#:uiop #:finch/vfs)
+  :depends-on (#:uiop #:finch/vfs #:finch/iokit)
   :serial t
   :pathname "src/fat/"
   :components ((:file "fat") (:file "vfs")))
+
+(asdf:defsystem #:finch/install
+  :description "Generations"
+  :depends-on (#:uiop #:finch/fat)
+  :serial t
+  :pathname "src/install/"
+  :components ((:file "install")))
 
 (asdf:defsystem #:finch/kernel
   :description "The kernel, run as pid 1"
@@ -192,7 +199,7 @@
 
 (asdf:defsystem #:finch
   :description "A live, hackable OS on SBCL"
-  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/xpc #:finch/launchd #:finch/shell #:finch/io #:finch/text #:finch/edit #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/iokit #:finch/vfs #:finch/apfs #:finch/fat #:finch/net #:finch/kernel #:finch/image)
+  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/xpc #:finch/launchd #:finch/shell #:finch/io #:finch/text #:finch/edit #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/iokit #:finch/vfs #:finch/apfs #:finch/fat #:finch/install #:finch/net #:finch/kernel #:finch/image)
   :in-order-to ((asdf:test-op (asdf:test-op #:finch/test))))
 
 (asdf:defsystem #:finch/test

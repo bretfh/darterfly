@@ -21,3 +21,10 @@
         (vfs:vfs-mount (vfs:make-ram-node :vdir #o1777) "/tmp")
         (vfs:vfs-mount (vfs:make-kernel-dir) "/System/Library/Kernels")
         rd))))
+
+(pushnew 'forget-mounts sb-ext:*save-hooks*)
+
+(defun forget-mounts ()
+  (setf *root-media* nil *syncer* nil)
+  (clrhash *vnodes*)
+  (clrhash *wvnodes*))

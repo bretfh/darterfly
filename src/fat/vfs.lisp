@@ -93,6 +93,28 @@
     (vfs:vfs-mount (root-vnode v) path)
     v))
 
+(defun fat-media-p (media)
+  (let ((boot (iokit:media-read media 0 +sector+)))
+    (and (= (u boot 510 2) #xAA55) (string= (map 'string #'code-char (subseq boot 82 90)) "FAT32   "))))
+
+(defun whole-blocks (read write)
+  (lambda (at octets)
+    (let ((first (* +sector+ (floor at +sector+)))
+          (end (* +sector+ (ceiling (+ at (length octets)) +sector+))))
+      (if (and (= first at) (= end (+ at (length octets))))
+          (funcall write at octets)
+          (let ((blocks (funcall read first (- end first))))
+            (replace blocks octets :start1 (- at first))
+            (funcall write first blocks))))))
+
+(defun mount-esp (&optional (path "/Volumes/EFI"))
+  (let ((media (find-if (lambda (m) (and (iokit:get-property m "Whole") (fat-media-p m)))
+                        (iokit:find-entries 'iokit:io-media))))
+    (when media
+      (vfs:vfs-mkdirs path)
+      (let ((read (lambda (at length) (iokit:media-read media at length))))
+        (mount read (whole-blocks read (lambda (at octets) (iokit:media-write media at octets))) path)))))
+
 (defun put-entries (v entries)
   (dolist (e entries v)
     (destructuring-bind (kind path &optional octets) e
@@ -111,3 +133,7 @@
     (let ((v (format-volume read write size label)))
       (with-volume (v) (put-entries v entries))
       path)))
+
+(pushnew 'forget-vnodes sb-ext:*save-hooks*)
+
+(defun forget-vnodes () (clrhash *vnodes*))

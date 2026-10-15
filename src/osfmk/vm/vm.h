@@ -32,6 +32,7 @@ void pat_init(void);
 
 int vm_map_enter(uint64_t start, uint64_t len, int prot);
 void vm_map_remove(uint64_t start, uint64_t len);
+void vm_map_reset(uint64_t keep, uint64_t len);
 void vm_map_protect(uint64_t start, uint64_t len, int prot);
 uint64_t vm_map_find_space(uint64_t len);
 int vm_fault(uint64_t va, uint64_t err);

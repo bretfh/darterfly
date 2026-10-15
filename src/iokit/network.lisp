@@ -79,3 +79,9 @@
       (nreverse frames))))
 
 (defmethod interrupt-vector ((net apple-virtio-network)) (virtqueue-vector (receive-queue net)))
+
+(pushnew 'forget-hardware sb-ext:*save-hooks*)
+
+(defun forget-hardware ()
+  (setf *registry-root* nil *bsd-units* 0 *interface-units* 0
+        *free-vectors* (loop for v from #x30 below #x40 collect v)))

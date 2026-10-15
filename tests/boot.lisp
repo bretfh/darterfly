@@ -721,6 +721,59 @@
                    "the edit is there after a reboot"))
           (image:finish c 5))))))
 
+(test finch-installs-a-generation-and-boots-it
+  (let ((esp (merge-pathnames "esp-keep.img" (finch-file "build/"))))
+    (uiop:delete-file-if-exists esp)
+    (let ((c (image:bare-console :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "boot.efi: generation gen-1"))
+               (image:expect c "* " :timeout 60)
+               (is (search "(\"gen-1\")" (ask "(finch/install:generations)")))
+               (is (search "\"gen-2\"" (ask "(finch/install:install \"/Volumes/EFI/EFI/finch/gen-1/kernel\" \"/Volumes/EFI/EFI/finch/gen-1/finch.core\")")))
+               (is (search "(\"gen-1\" \"gen-2\")" (ask "(finch/install:generations)")))
+               (image:send c "(sb-ext:exit)")
+               (image:expect c "exit(0)" :timeout 60))
+          (image:finish c 5))))
+    (let ((c (image:bare-console :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "boot.efi: generation gen-2") "boot.efi boots what finch installed")
+               (image:expect c "* " :timeout 60)
+               (is (search "\"gen-2\"" (ask "(finch/install:current)"))))
+          (image:finish c 5))))
+    (is (zerop (nth-value 2 (uiop:run-program (list "fsck.fat" "-n" (uiop:native-namestring esp))
+                                              :ignore-error-status t :output nil :error-output nil)))
+        "fsck.fat passes the ESP finch wrote")))
+
+(test finch-saves-itself-and-boots-the-save
+  (let ((esp (merge-pathnames "esp-save.img" (finch-file "build/"))))
+    (uiop:delete-file-if-exists esp)
+    (let ((c (image:bare-console :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 60)
+               (ask "(defvar cl-user::*made-in-finch* :made-in-finch)")
+               (image:send c "(finch/install:save)")
+               (is (image:expect c "restart: core " :timeout 300) "the save restarts the runtime on it")
+               (image:expect c "* " :timeout 120)
+               (is (search ":MADE-IN-FINCH" (ask "cl-user::*made-in-finch*")) "the restarted image is the saved one")
+               (is (search "\"gen-2\"" (ask "(finch/install:install \"/System/Library/Kernels/kernel\" \"/System/Library/Kernels/finch.core\")")))
+               (image:send c "(sb-ext:exit)")
+               (image:expect c "exit(0)" :timeout 60))
+          (image:finish c 5))))
+    (let ((c (image:bare-console :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "boot.efi: generation gen-2"))
+               (image:expect c "* " :timeout 60)
+               (is (search ":MADE-IN-FINCH" (ask "cl-user::*made-in-finch*")) "gen-2 is the image finch saved"))
+          (image:finish c 5))))))
+
 (defun listener-line (file prefix)
   (position-if (lambda (line) (uiop:string-prefix-p prefix line))
                (uiop:split-string (or (ignore-errors (uiop:read-file-string file)) "") :separator '(#\Newline))))

@@ -337,3 +337,8 @@
                     (tcp-close c))
                   :name "tcp echo connection")))))
      :name (format nil "tcp echo ~d" port))))
+
+(pushnew 'forget-interface sb-ext:*save-hooks*)
+
+(defun forget-interface ()
+  (setf *interface* nil *tcp-timer* nil))

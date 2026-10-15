@@ -46,6 +46,18 @@ void vm_map_remove(uint64_t start, uint64_t len) {
       i++;
 }
 
+void vm_map_reset(uint64_t keep, uint64_t len) {
+  uint64_t s = page_down(keep), e = page_up(keep + len);
+  clip(s);
+  clip(e);
+  for (int i = 0; i < nentries;)
+    if ((entries[i].start >= s && entries[i].end <= e) || entries[i].start >= 0x0000800000000000ull) i++;
+    else {
+      pmap_remove(entries[i].start, entries[i].end - entries[i].start);
+      delete_at(i);
+    }
+}
+
 int vm_map_enter(uint64_t start, uint64_t len, int prot) {
   uint64_t s = page_down(start), e = page_up(start + len);
   vm_map_remove(s, e - s);

@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/time.h>
+#include <sys/mman.h>
 #include <time.h>
 #include "libsa.h"
 
@@ -27,11 +28,15 @@ void __libsa_vfs_register(vfs_entry entry) { vfs = entry; }
 
 #define KERNEL_PATH "/System/Library/Kernels/kernel"
 #define CORE_PATH "/System/Library/Kernels/finch.core"
+#define SAVE_PATH "/System/Library/Kernels/saved.core"
+#define SAVE_BASE 0x0000300000000000ul
+#define SAVE_SPACE (16ul << 30)
 #define KERNEL_FD 1000
 #define KERNEL_FDS 8
 
 struct boot_file { const char *data; size_t size; };
-static struct boot_file kernel_file, core_file;
+static struct boot_file kernel_file, core_file, saved_file;
+static int saving;
 static struct { int open; off_t off; struct boot_file *file; } kfds[KERNEL_FDS];
 
 static long ret(long r) {
@@ -60,6 +65,13 @@ static struct boot_file *boot_file(const char *path) {
     f->size = k[1];
   }
   return f->data ? f : 0;
+}
+
+int __libsa_saved_core(uint64_t *core, uint64_t *size) {
+  if (!saved_file.size || saving) return 0;
+  *core = (uint64_t)saved_file.data;
+  *size = saved_file.size;
+  return 1;
 }
 
 static int kernel_open(struct boot_file *file) {
@@ -104,6 +116,16 @@ int open(const char *path, int flags, ...) {
   va_start(ap, flags);
   mode_t mode = (flags & O_CREAT) ? va_arg(ap, mode_t) : 0;
   va_end(ap);
+  if (!strcmp(path, SAVE_PATH)) {
+    if (!saved_file.data) {
+      void *at = mmap((void *)SAVE_BASE, SAVE_SPACE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON | MAP_FIXED, -1, 0);
+      if (at == MAP_FAILED) return -1;
+      saved_file.data = at;
+    }
+    saved_file.size = 0;
+    saving++;
+    return kernel_open(&saved_file);
+  }
   struct boot_file *file = vfs ? 0 : boot_file(path);
   if (file) return kernel_open(file);
   return (int)ret(call(VFS_open, (long)path, flags, mode, 0));
@@ -123,6 +145,7 @@ int creat(const char *path, mode_t mode) { return open(path, O_WRONLY | O_CREAT 
 int close(int fd) {
   if (console(fd)) return 0;
   if (kfd(fd)) {
+    if (kfds[fd - KERNEL_FD].file == &saved_file) saving--;
     kfds[fd - KERNEL_FD].open = 0;
     return 0;
   }
@@ -135,8 +158,18 @@ ssize_t read(int fd, void *buf, size_t n) {
   return ret(call(VFS_read, fd, (long)buf, (long)n, 0));
 }
 
+static ssize_t saved_write(int fd, const void *buf, size_t n, off_t *off) {
+  if ((size_t)*off + n > SAVE_SPACE) return ret(-ENOSPC);
+  memcpy((char *)saved_file.data + *off, buf, n);
+  *off += n;
+  if ((size_t)*off > saved_file.size) saved_file.size = *off;
+  (void)fd;
+  return (ssize_t)n;
+}
+
 ssize_t write(int fd, const void *buf, size_t n) {
   if (console(fd)) return __syscall(SYS_write, 1, (long)buf, (long)n, 0, 0, 0);
+  if (kfd(fd) && kfds[fd - KERNEL_FD].file == &saved_file) return saved_write(fd, buf, n, &kfds[fd - KERNEL_FD].off);
   return ret(call(VFS_write, fd, (long)buf, (long)n, 0));
 }
 
@@ -148,6 +181,7 @@ ssize_t pread(int fd, void *buf, size_t n, off_t off) {
 
 ssize_t pwrite(int fd, const void *buf, size_t n, off_t off) {
   if (console(fd)) return ret(-ESPIPE);
+  if (kfd(fd) && kfds[fd - KERNEL_FD].file == &saved_file) return saved_write(fd, buf, n, &off);
   return ret(call(VFS_pwrite, fd, (long)buf, (long)n, off));
 }
 

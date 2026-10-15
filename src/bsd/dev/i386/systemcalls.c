@@ -6,6 +6,7 @@
 
 #define EBADF 9
 #define ENOMEM 12
+#define EBUSY 16
 #define EINVAL 22
 #define ENOSYS 38
 
@@ -211,8 +212,14 @@ void machdep_syscall(x86_saved_state64_t *regs) {
   case 8: return ok(regs, (uint64_t)PE_boot_args);
   case 17: {
     uint64_t *out = (uint64_t *)regs->rdi;
-    out[0] = PE_boot_args->coreStart ? (uint64_t)PHYSMAP_PTOV(PE_boot_args->coreStart) : 0;
-    out[1] = PE_boot_args->coreSize;
+    extern uint64_t restart_core, restart_core_size;
+    out[0] = restart_core ? restart_core : PE_boot_args->coreStart ? (uint64_t)PHYSMAP_PTOV(PE_boot_args->coreStart) : 0;
+    out[1] = restart_core ? restart_core_size : PE_boot_args->coreSize;
+    return ok(regs, 0);
+  }
+  case 19: {
+    int restart_user(uint64_t core, uint64_t size);
+    if (!restart_user(regs->rdi, regs->rsi)) return error(regs, EBUSY);
     return ok(regs, 0);
   }
   case 9: {
