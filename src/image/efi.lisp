@@ -16,14 +16,10 @@
         (format nil "~a/include" (string-trim '(#\Newline) (run "clang" "-print-resource-dir")))))
 
 (defun boot-efi ()
-  (let ((object (build-path "efi/boot.o"))
-        (out (build-path "efi/boot.efi")))
-    (ensure-directories-exist object)
-    (apply #'run "clang" "-target" "x86_64-unknown-windows" "-ffreestanding" "-fshort-wchar" "-mno-red-zone"
-         "-fno-stack-protector" "-fno-builtin" "-nostdlib" "-O2" "-Wall"
-         "-c" (source "src/boot/boot.c") "-o" (uiop:native-namestring object) (freestanding))
-    (run "lld-link" "/subsystem:efi_application" "/entry:efi_main" "/nodefaultlib"
-         (format nil "/out:~a" (uiop:native-namestring out)) (uiop:native-namestring object))
+  (let ((out (build-path "efi/boot.efi")))
+    (ensure-directories-exist out)
+    (with-open-file (s out :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
+      (write-sequence (finch/boot:boot-image) s))
     out))
 
 (defparameter *libsa-sources*

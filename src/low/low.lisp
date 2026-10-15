@@ -4,14 +4,15 @@
   (:export #:define-low #:define-global #:low-object #:inb #:outb #:ref #:mem #:pause #:result #:while
            #:package-object #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:address
            #:rep-movsb #:rep-stosb #:&va #:va-next #:rdtsc #:return-address
-           #:invlpg #:set-cr3 #:cpuid-edx #:cpu-data #:fxsave #:fxrstor #:code-address #:call-pointer #:read-cr #:set-cr #:fninit #:compare-and-swap #:rdrand #:int3 #:build-date #:*build-date* #:lidt #:ltr))
+           #:invlpg #:set-cr3 #:cpuid-edx #:cpu-data #:fxsave #:fxrstor #:code-address #:call-pointer #:read-cr #:set-cr #:fninit #:compare-and-swap #:rdrand #:int3 #:build-date #:*build-date* #:lidt #:ltr
+           #:efi-call #:wide #:define-efi-entry #:package-image))
 (in-package #:finch/low)
 
 (defvar *functions* (make-hash-table :test 'equal))
 (defvar *globals* (make-hash-table :test 'equal))
 
 (defstruct global name type count alignment extern export package)
-(defstruct low-function name args body package)
+(defstruct low-function name args body package abi)
 
 (defun c-name (symbol)
   (let ((name (symbol-name symbol)))
@@ -26,6 +27,10 @@
              (make-global :name (c-name ',name) :type ',type :count ,count :alignment ,alignment
                           :extern ,extern :export ,export :package (package-name *package*))))))
 
+(defmacro define-efi-entry (name args &body body)
+  `(setf (gethash (c-name ',name) *functions*)
+         (make-low-function :name (c-name ',name) :args ',args :body ',body :package (package-name *package*) :abi :ms)))
+
 (defmacro define-low (name args &body body)
   `(setf (gethash (c-name ',name) *functions*)
          (make-low-function :name (c-name ',name) :args ',args :body ',body :package (package-name *package*))))
@@ -36,6 +41,8 @@
 (defconstant +locals-limit+ -256)
 (defconstant +save-area+ -512)
 (defconstant +va-list+ -448)
+(defconstant +ms-saves+ -264)
+(defconstant +efi-rsp+ -296)
 
 (defvar *locals*)
 (defvar *exit*)
@@ -115,7 +122,7 @@
   (cond ((integerp form) (inst mov rax-tn form))
         ((stringp form)
          (let ((label (sb-assem:gen-label)))
-           (push (cons label form) *strings*)
+           (push (cons label (sb-ext:string-to-octets form :null-terminate t)) *strings*)
            (inst lea rax-tn (rip-relative-ea label))))
         ((null form) (inst xor :dword (reg :dword 0) (reg :dword 0)))
         ((eq form t) (inst mov rax-tn 1))
@@ -195,7 +202,34 @@
              (decf (compile `(setf ,(first args) (- ,(first args) ,(or (second args) 1)))))
              ((ref mem) (load-into-rax (address-of form)))
              (lognot (compile (first args)) (inst not rax-tn))
-             (address (let ((g (global-of (first args))))
+             (wide (let ((label (sb-assem:gen-label)))
+                     (push (cons label (sb-ext:string-to-octets (first args) :external-format :utf-16le :null-terminate t))
+                           *strings*)
+                     (inst lea rax-tn (rip-relative-ea label))))
+             (efi-call (let ((n (length (rest args))))
+                         (dolist (a (reverse (rest args)))
+                           (compile a)
+                           (inst push rax-tn))
+                         (compile (first args))
+                         (inst push rax-tn)
+                         (inst mov r11-tn rsp-tn)
+                         (inst mov (ea +efi-rsp+ rbp-tn) r11-tn)
+                         (inst sub rsp-tn (+ 32 (* 8 (max 0 (- n 4)))))
+                         (inst and rsp-tn -16)
+                         (loop :for i :from 5 :to n
+                               :do (inst mov rax-tn (ea (* 8 i) r11-tn))
+                                   (inst mov (ea (+ 32 (* 8 (- i 5))) rsp-tn) rax-tn))
+                         (loop :for r :in (list rcx-tn rdx-tn r8-tn r9-tn) :for i :from 1 :to (min n 4)
+                               :do (inst mov r (ea (* 8 i) r11-tn)))
+                         (inst mov rax-tn (ea 0 r11-tn))
+                         (inst call rax-tn)
+                         (inst mov rsp-tn (ea +efi-rsp+ rbp-tn))
+                         (inst add rsp-tn (* 8 (1+ n)))))
+             (address (let ((at (and (symbolp (first args)) (local-of (first args)))))
+                        (when at
+                          (inst lea rax-tn (ea at rbp-tn))
+                          (return-from compile)))
+                      (let ((g (global-of (first args))))
                         (unless g (error "~s is not a global" (first args)))
                         (inst lea rax-tn (data (global-name g)))))
              (the (compile (second args))
@@ -341,6 +375,10 @@
       (inst push rbp-tn)
       (inst mov rbp-tn rsp-tn)
       (inst sub rsp-tn +frame+)
+      (when (eq (low-function-abi f) :ms)
+        (inst mov (ea +ms-saves+ rbp-tn) rdi-tn)
+        (inst mov (ea (- +ms-saves+ 8) rbp-tn) rsi-tn)
+        (inst mov (ea (- +ms-saves+ 16) rbp-tn) rbx-tn))
       (let* ((args (low-function-args f))
              (va (member '&va args :test (lambda (a b) (and (symbolp b) (string= (symbol-name a) (symbol-name b)))))))
         (when va
@@ -359,7 +397,7 @@
       (loop :for arg :in (ldiff (low-function-args f)
                                (member '&va (low-function-args f)
                                        :test (lambda (a b) (and (symbolp b) (string= (symbol-name a) (symbol-name b))))))
-            :for r :in +argument-registers+
+            :for r :in (if (eq (low-function-abi f) :ms) (list rcx-tn rdx-tn r8-tn r9-tn) +argument-registers+)
             :do (destructuring-bind (name &optional (type :u64)) (if (listp arg) arg (list arg))
                   (let ((at (- (* 8 (1+ (length *locals*))))))
                     (inst mov rax-tn r)
@@ -372,13 +410,16 @@
                     (push (cons name at) *locals*))))
       (compile-body (low-function-body f))
       (sb-assem::emit-label *exit*)
+      (when (eq (low-function-abi f) :ms)
+        (inst mov rdi-tn (ea +ms-saves+ rbp-tn))
+        (inst mov rsi-tn (ea (- +ms-saves+ 8) rbp-tn))
+        (inst mov rbx-tn (ea (- +ms-saves+ 16) rbp-tn)))
       (inst mov rsp-tn rbp-tn)
       (inst pop rbp-tn)
       (inst ret)
-      (loop :for (label . text) :in *strings*
+      (loop :for (label . octets) :in *strings*
             :do (sb-assem::emit-label label)
-                (loop :for b :across (sb-ext:string-to-octets text) :do (inst byte b))
-                (inst byte 0)))))
+                (loop :for b :across octets :do (inst byte b))))))
 
 (defun package-object (package &key extra routines)
   (let ((names (append (loop :for f :being :the :hash-values :of *functions*
@@ -409,3 +450,15 @@
         (let ((p (mem :u64 (+ ap 8))))
           (setf (mem :u64 (+ ap 8)) (+ p 8))
           (mem :u64 p)))))
+
+(defun package-image (package entry)
+  (let ((names (sort (loop :for f :being :the :hash-values :of *functions*
+                           :when (string= (low-function-package f) package)
+                             :collect (low-function-name f))
+                     #'string<)))
+    (pe-image (mapcar (lambda (n) (function-routine (gethash n *functions*)))
+                      (cons entry (remove entry names :test #'string=)))
+              :bss (loop :for g :being :the :hash-values :of *globals*
+                         :when (and (not (global-extern g)) (string= (global-package g) package))
+                           :collect (list (global-name g) (* (width (global-type g)) (global-count g))
+                                          (global-alignment g))))))

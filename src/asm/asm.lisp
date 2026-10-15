@@ -4,7 +4,7 @@
   (:import-from #:sb-vm #:ea #:rip-relative-ea
                 #:rax-tn #:rbx-tn #:rcx-tn #:rdx-tn #:rsi-tn #:rdi-tn #:rbp-tn #:rsp-tn
                 #:r8-tn #:r9-tn #:r10-tn #:r11-tn #:r12-tn #:r13-tn #:r14-tn #:r15-tn)
-  (:export #:routine #:reg #:data #:global #:external #:in #:out #:object #:write-object #:quad
+  (:export #:routine #:reg #:data #:global #:external #:in #:out #:object #:write-object #:quad #:pe-image
            #:inst #:ea #:rip-relative-ea
            #:rax-tn #:rbx-tn #:rcx-tn #:rdx-tn #:rsi-tn #:rdi-tn #:rbp-tn #:rsp-tn
            #:r8-tn #:r9-tn #:r10-tn #:r11-tn #:r12-tn #:r13-tn #:r14-tn #:r15-tn))
@@ -152,3 +152,58 @@
   (with-open-file (s path :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
     (write-sequence (object routines :bss bss) s))
   path)
+
+(defun pe-image (routines &key bss (entry (routine-name (first routines))))
+  (let* ((text (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0))
+         (placed (loop :for r :in routines
+                       :collect (let ((at (align (fill-pointer text) 16)))
+                                  (loop :while (< (fill-pointer text) at) :do (vector-push-extend #xCC text))
+                                  (loop :for b :across (routine-code r) :do (vector-push-extend b text))
+                                  (cons r at))))
+         (text-rva #x1000)
+         (data-rva (+ text-rva (align (max 1 (fill-pointer text)) #x1000)))
+         (bss-at (let ((at 0))
+                   (loop :for (name size alignment) :in bss
+                         :collect (prog1 (list name (setf at (align at (or alignment 8))) size)
+                                    (incf at size)))))
+         (data-size (max 1 (let ((last (car (last bss-at)))) (if last (+ (second last) (third last)) 0))))
+         (reloc-rva (+ data-rva (align data-size #x1000)))
+         (image-size (+ reloc-rva #x1000))
+         (symbols (make-hash-table :test 'equal)))
+    (loop :for (r . at) :in placed :do (setf (gethash (routine-name r) symbols) (+ text-rva at)))
+    (loop :for (name at) :in bss-at :do (setf (gethash name symbols) (+ data-rva at)))
+    (loop :for (r . base) :in placed
+          :do (loop :for (kind position name nil offset) :in (routine-fixups r)
+                    :for target := (or (gethash name symbols) (error "pe-image: ~a is not defined" name))
+                    :for field := (+ base position)
+                    :do (ecase kind
+                          (:rel32 (put text field (ldb (byte 32 0) (- (+ target offset) (+ text-rva field 4))) 4)))))
+    (let* ((text-raw (align (fill-pointer text) #x200))
+           (out (octets (+ #x400 text-raw #x200))))
+      (replace out (map 'vector #'char-code "MZ"))
+      (put out #x3C #x40 4)
+      (replace out (map 'vector #'char-code "PE") :start1 #x40)
+      (let ((c #x44))
+        (put out c #x8664 2) (put out (+ c 2) 3 2) (put out (+ c 16) 240 2) (put out (+ c 18) #x22 2))
+      (let ((o #x58))
+        (put out o #x20B 2) (put out (+ o 2) 14 1)
+        (put out (+ o 4) text-raw 4) (put out (+ o 8) #x200 4) (put out (+ o 12) (align data-size #x1000) 4)
+        (put out (+ o 16) (gethash entry symbols) 4) (put out (+ o 20) text-rva 4)
+        (put out (+ o 24) #x10000000 8) (put out (+ o 32) #x1000 4) (put out (+ o 36) #x200 4)
+        (put out (+ o 56) image-size 4) (put out (+ o 60) #x400 4) (put out (+ o 68) 10 2)
+        (put out (+ o 72) #x100000 8) (put out (+ o 80) #x1000 8) (put out (+ o 88) #x100000 8) (put out (+ o 96) #x1000 8)
+        (put out (+ o 108) 16 4)
+        (put out (+ o 112 (* 5 8)) reloc-rva 4) (put out (+ o 112 (* 5 8) 4) 8 4))
+      (flet ((section (i name virtual-size rva raw-size raw-at characteristics)
+               (let ((at (+ #x148 (* 40 i))))
+                 (replace out (map 'vector #'char-code name) :start1 at)
+                 (put out (+ at 8) virtual-size 4) (put out (+ at 12) rva 4)
+                 (put out (+ at 16) raw-size 4) (put out (+ at 20) raw-at 4)
+                 (put out (+ at 36) characteristics 4))))
+        (section 0 ".text" (fill-pointer text) text-rva text-raw #x400 #x60000020)
+        (section 1 ".data" data-size data-rva 0 0 #xC0000080)
+        (section 2 ".reloc" 8 reloc-rva #x200 (+ #x400 text-raw) #x42000040))
+      (replace out text :start1 #x400)
+      (put out (+ #x400 text-raw) text-rva 4)
+      (put out (+ #x400 text-raw 4) 8 4)
+      out)))

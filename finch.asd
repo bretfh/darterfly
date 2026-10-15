@@ -152,6 +152,13 @@
                (:file "systemcalls" :pathname "../../bsd/dev/i386/systemcalls")
                (:file "start" :pathname "../x86_64/start") (:file "init") (:file "stubs" :pathname "../x86_64/stubs") (:file "mp-desc") (:file "memory")))
 
+(asdf:defsystem #:finch/boot
+  :description "boot.efi"
+  :depends-on (#:finch/low)
+  :serial t
+  :pathname "src/boot/"
+  :components ((:file "boot")))
+
 (asdf:defsystem #:finch/kernel
   :description "The kernel, run as pid 1"
   :depends-on (#:finch/mach #:finch/bsd #:finch/io #:uiop)
@@ -161,7 +168,7 @@
 
 (asdf:defsystem #:finch/image
   :description "The bootable image"
-  :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io #:finch/apfs #:finch/fat #:finch/pexpert #:finch/osfmk #:finch/low (:require #:sb-bsd-sockets))
+  :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io #:finch/apfs #:finch/fat #:finch/pexpert #:finch/osfmk #:finch/low #:finch/boot (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/image/"
   :components ((:file "image") (:file "runtime") (:file "efi")))
