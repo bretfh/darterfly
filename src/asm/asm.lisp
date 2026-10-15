@@ -4,7 +4,7 @@
   (:import-from #:sb-vm #:ea #:rip-relative-ea
                 #:rax-tn #:rbx-tn #:rcx-tn #:rdx-tn #:rsi-tn #:rdi-tn #:rbp-tn #:rsp-tn
                 #:r8-tn #:r9-tn #:r10-tn #:r11-tn #:r12-tn #:r13-tn #:r14-tn #:r15-tn)
-  (:export #:routine #:reg #:data #:global #:external #:in #:out #:object #:write-object
+  (:export #:routine #:reg #:data #:global #:external #:in #:out #:object #:write-object #:quad
            #:inst #:ea #:rip-relative-ea
            #:rax-tn #:rbx-tn #:rcx-tn #:rdx-tn #:rsi-tn #:rdi-tn #:rbp-tn #:rsp-tn
            #:r8-tn #:r9-tn #:r10-tn #:r11-tn #:r12-tn #:r13-tn #:r14-tn #:r15-tn))
@@ -22,18 +22,30 @@
 
 (defmacro out (size) `(inst byte ,(ecase size (:byte #xEE) (:dword #xEF))))
 
+(defvar *quads*)
+
+(defun quad (name)
+  (let ((label (sb-assem:gen-label)))
+    (push (cons label name) *quads*)
+    (sb-assem::emit-label label)
+    (dotimes (i 8) (inst byte 0))))
+
 (defmacro routine (name &body body)
   `(let ((section (sb-assem::make-section))
-         (segment (sb-assem:make-segment)))
+         (segment (sb-assem:make-segment))
+         (*quads* nil))
      (sb-assem:assemble (section) ,@body)
      (sb-assem::%assemble segment section)
      (make-routine :name ,name
                    :code (sb-assem:segment-contents-as-vector segment)
-                   :fixups (mapcar (lambda (n)
-                                     (let ((f (sb-c::fixup-note-fixup n)))
-                                       (list (sb-c::fixup-note-kind n) (sb-c::fixup-note-position n)
-                                             (sb-c::fixup-name f) (sb-c::fixup-flavor f) (sb-c::fixup-offset f))))
-                                   (sb-assem::segment-fixup-notes segment)))))
+                   :fixups (append
+                            (mapcar (lambda (n)
+                                      (let ((f (sb-c::fixup-note-fixup n)))
+                                        (list (sb-c::fixup-note-kind n) (sb-c::fixup-note-position n)
+                                              (sb-c::fixup-name f) (sb-c::fixup-flavor f) (sb-c::fixup-offset f))))
+                                    (sb-assem::segment-fixup-notes segment))
+                            (mapcar (lambda (q) (list :abs64 (sb-assem::label-position (car q)) (cdr q) :foreign 0))
+                                    *quads*)))))
 
 (defun octets (n) (make-array n :element-type '(unsigned-byte 8) :initial-element 0))
 
@@ -81,10 +93,10 @@
         (let* ((symtab (octets (* 24 (length symbols))))
                (relocs (loop :for (r . base) :in placed
                              :nconc (loop :for (kind position name flavor offset) :in (routine-fixups r)
-                                          :collect (progn
-                                                     (assert (eq kind :rel32))
-                                                     (list (+ base position) (funcall index name)
-                                                           (if (eq flavor :foreign) 4 2) (- offset 4))))))
+                                          :collect (ecase kind
+                                                     (:rel32 (list (+ base position) (funcall index name)
+                                                                   (if (eq flavor :foreign) 4 2) (- offset 4)))
+                                                     (:abs64 (list (+ base position) (funcall index name) 1 offset))))))
                (rela (octets (* 24 (length relocs)))))
           (loop :for name :in locals :for i :from 1
                 :for (nil at size) := (find name bss-at :key #'first :test #'string=)

@@ -27,7 +27,7 @@
     out))
 
 (defparameter *kernel-sources*
-  '("src/osfmk/x86_64/start.s"))
+  '())
 
 (defparameter *libsa-sources*
   '("syscall.c" "signal.c" "string.c" "stdio.c" "stdlib.c" "unistd.c" "time.c" "math.c" "misc.c"
