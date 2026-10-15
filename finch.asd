@@ -147,7 +147,7 @@
   :depends-on (#:finch/low)
   :serial t
   :pathname "src/osfmk/i386/"
-  :components ((:file "mtrr")))
+  :components ((:file "mtrr") (:file "memory")))
 
 (asdf:defsystem #:finch/kernel
   :description "The kernel, run as pid 1"

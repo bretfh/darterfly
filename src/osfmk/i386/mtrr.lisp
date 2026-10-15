@@ -14,6 +14,3 @@
     (wbinvd)
     (wrmsr +ia32-cr-pat+ pat)
     (wbinvd)))
-
-(defun osfmk-object ()
-  (low-object '(pat-init)))
