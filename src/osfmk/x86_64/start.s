@@ -88,3 +88,9 @@ slave_cpu:
 slave_entry:
 	.quad	0
 slave_boot_end:
+
+	.section .rodata
+	.p2align 3
+	.globl	libsa_start_address
+libsa_start_address:
+	.quad	_libsa_start

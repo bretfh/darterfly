@@ -4,7 +4,7 @@
   (:export #:define-low #:define-global #:low-object #:inb #:outb #:ref #:mem #:pause #:result #:while
            #:package-object #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:address
            #:rep-movsb #:rep-stosb #:&va #:va-next #:rdtsc #:return-address
-           #:invlpg #:set-cr3 #:cpuid-edx #:cpu-data #:fxsave #:fxrstor #:code-address #:call-pointer #:read-cr #:set-cr #:fninit #:compare-and-swap #:rdrand))
+           #:invlpg #:set-cr3 #:cpuid-edx #:cpu-data #:fxsave #:fxrstor #:code-address #:call-pointer #:read-cr #:set-cr #:fninit #:compare-and-swap #:rdrand #:int3 #:build-date #:*build-date*))
 (in-package #:finch/low)
 
 (defvar *functions* (make-hash-table :test 'equal))
@@ -20,9 +20,11 @@
         name)))
 
 (defmacro define-global (name type &key (count 1) (alignment 8) extern export)
-  `(setf (gethash (c-name ',name) *globals*)
-         (make-global :name (c-name ',name) :type ',type :count ,count :alignment ,alignment
-                      :extern ,extern :export ,export :package (package-name *package*))))
+  `(let ((existing (gethash (c-name ',name) *globals*)))
+     (unless (and ,extern existing (not (global-extern existing)))
+       (setf (gethash (c-name ',name) *globals*)
+             (make-global :name (c-name ',name) :type ',type :count ,count :alignment ,alignment
+                          :extern ,extern :export ,export :package (package-name *package*))))))
 
 (defmacro define-low (name args &body body)
   `(setf (gethash (c-name ',name) *functions*)
@@ -37,6 +39,7 @@
 
 (defvar *locals*)
 (defvar *exit*)
+(defvar *build-date* "")
 (defvar *strings*)
 
 (defun global-of (symbol) (gethash (c-name symbol) *globals*))
@@ -295,6 +298,8 @@
                      (inst byte #x0F) (inst byte #x22)
                      (inst byte (ecase (first args) (0 #xC0) (3 #xD8) (4 #xE0))))
              (fninit (inst byte #xDB) (inst byte #xE3))
+             (int3 (inst byte #xCC))
+             (build-date (compile *build-date*))
              (rdrand (compile (first args))
                      (inst mov rcx-tn rax-tn)
                      (dolist (b '(#x48 #x0F #xC7 #xF0)) (inst byte b))

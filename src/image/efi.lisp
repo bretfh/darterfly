@@ -27,7 +27,7 @@
     out))
 
 (defparameter *kernel-sources*
-  '("src/osfmk/x86_64/start.s" "src/osfmk/x86_64/idt64.s" "src/osfmk/i386/i386_init.c"
+  '("src/osfmk/x86_64/start.s" "src/osfmk/x86_64/idt64.s"
     "src/osfmk/i386/mp_desc.c"
     "src/osfmk/x86_64/cswitch.s"))
 
@@ -49,6 +49,7 @@
     out))
 
 (defun lisp-objects ()
+  (setf finch/low:*build-date* (date))
   (loop :for (name make) :in (list (list "pexpert" #'finch/pexpert:pexpert-object)
                                    (list "osfmk" #'finch/osfmk:osfmk-object))
         :collect (let ((path (build-path (format nil "kernel/~a.o" name))))

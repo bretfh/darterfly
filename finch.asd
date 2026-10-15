@@ -149,7 +149,7 @@
   :pathname "src/osfmk/i386/"
   :components ((:file "mtrr") (:file "printf") (:file "rtclock") (:file "vm-map") (:file "pmap") (:file "lapic") (:file "sched")
                (:file "signal" :pathname "../../bsd/kern/signal") (:file "trap") (:file "mp")
-               (:file "systemcalls" :pathname "../../bsd/dev/i386/systemcalls") (:file "memory")))
+               (:file "systemcalls" :pathname "../../bsd/dev/i386/systemcalls") (:file "init") (:file "memory")))
 
 (asdf:defsystem #:finch/kernel
   :description "The kernel, run as pid 1"
@@ -160,7 +160,7 @@
 
 (asdf:defsystem #:finch/image
   :description "The bootable image"
-  :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io #:finch/apfs #:finch/fat #:finch/pexpert #:finch/osfmk (:require #:sb-bsd-sockets))
+  :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io #:finch/apfs #:finch/fat #:finch/pexpert #:finch/osfmk #:finch/low (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/image/"
   :components ((:file "image") (:file "runtime") (:file "efi")))
