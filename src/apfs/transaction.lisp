@@ -125,6 +125,8 @@
     (nreverse runs)))
 
 (defun fq-tree (oid xid entries)
+  (unless (fits-p entries t t 16 8)
+    (fail "free queue of ~d ranges is more than one node holds" (length entries)))
   (btree-node oid xid (logior +obj-ephemeral+ 2) 9
               (mapcar (lambda (e) (cons (octets (le (first e) 8) (le (second e) 8)) (le (third e) 8))) entries)
               :fixed t :key-size 16 :value-size 8 :info-flags #xe :leaf t :root t))

@@ -183,3 +183,17 @@
       (is (equal "new system" (funcall read "/System/name")))
       (is (equal "added" (funcall read "/System/Library/added")))
       (is (= #o100755 (apfs:inode-mode (apfs:inode v (apfs:lookup v "/System/Library/added"))))))))
+
+(test update-root-rewrites-many-files-in-one-transaction
+  (let ((disk (merge-pathnames "update-many.img" (finch-file "build/")))
+        (files (lambda (tag) (cons '(:dir "many")
+                                   (loop :for i :below 2000
+                                         :collect (list :file (format nil "many/f~d" i) (text (format nil "~a ~d" tag i))))))))
+    (apfs:newfs disk :size (* 64 1048576) :volume-name "finch HD" :entries '((:dir "Users")))
+    (image:update-root disk (funcall files "first"))
+    (image:update-root disk (funcall files "second"))
+    (let* ((v (first (apfs:container-volumes (apfs:open-container (apfs:file-device disk)))))
+           (read (lambda (path) (map 'string #'code-char (apfs:read-file v (apfs:lookup v path))))))
+      (is (= 2000 (length (apfs:directory-entries v (apfs:lookup v "/many")))))
+      (is (equal "second 1999" (funcall read "/many/f1999"))))
+    (delete-file disk)))

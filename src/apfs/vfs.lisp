@@ -76,9 +76,17 @@
                                         :type (case (logand (inode-field w id 80 2) #o170000)
                                                 (#o040000 :vdir) (#o120000 :vlnk) (#o100000 :vreg) (t :vchr))))))
 
+(defvar *batch* :none)
+
 (defmacro with-commit ((w vnode) &body body)
   `(let ((,w (vnode-mount ,vnode)))
-     (prog1 (progn ,@body) (wcommit ,w))))
+     (prog1 (progn ,@body)
+       (if (listp *batch*) (pushnew ,w *batch*) (wcommit ,w)))))
+
+(defmacro with-batch (&body body)
+  `(let ((*batch* nil))
+     (multiple-value-prog1 (progn ,@body)
+       (mapc #'wcommit *batch*))))
 
 (defmethod vfs:vnop-lookup ((dir apfs-wvnode) name)
   (let* ((w (vnode-mount dir)) (id (wlookup w (vfs:vnode-id dir) name)))
