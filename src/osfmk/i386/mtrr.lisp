@@ -3,6 +3,9 @@
   (:export #:osfmk-object))
 (in-package #:finch/osfmk)
 
+(defconstant +page-size+ 4096)
+(defconstant +physmap-base+ #xFFFF800000000000)
+
 (defconstant +ia32-cr-pat+ #x277)
 (defconstant +pat-write-combined+ 1)
 

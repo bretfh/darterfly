@@ -1,7 +1,5 @@
 (in-package #:finch/osfmk)
 
-(defconstant +page-size+ 4096)
-(defconstant +physmap-base+ #xFFFF800000000000)
 (defconstant +kalloc-base+ #xFFFFFF0000000000)
 (defconstant +kalloc-size+ (ash 64 30))
 (defconstant +read-write+ 3)
@@ -122,4 +120,6 @@
   (low-object '(pat-init kalloc-init zone-of kalloc kfree vm-page-bootstrap vm-page-grab vm-page-free
                 vm-page-free-count memcpy memset memmove memcmp bzero
                 digit put-digits put-unsigned vkprintf kprintf finch/low:va-next
-                tsc-calibrate cmos bcd days-before rtc-epoch rtclock-init panic)))
+                tsc-calibrate cmos bcd days-before rtc-epoch rtclock-init panic
+                page-down page-up insert-at delete-at clip vm-map-remove vm-map-reset vm-map-enter
+                vm-map-protect vm-map-find-space lookup vm-fault io-map ml-io-map ml-io-map-wcomb)))
