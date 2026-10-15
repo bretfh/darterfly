@@ -120,22 +120,15 @@ static int plist_string(const char *plist, const char *key, char *out, int max) 
   return 1;
 }
 
-static void boot_file(EFI_FILE_PROTOCOL *root, const char *plist, const char *name, uint64_t *start, uint64_t *size) {
-  char key[64] = "<key>", path[256];
-  int k = 5;
-  for (int i = 0; name[i] && k < 50; i++) key[k++] = name[i];
-  for (const char *t = "</key>"; *t; t++) key[k++] = *t;
-  key[k] = 0;
-  if (!plist_string(plist, key, path, sizeof path)) return;
+static void *read_path(EFI_FILE_PROTOCOL *root, const char *path, UINTN *size) {
   CHAR16 wide[256];
   int i = 0;
   for (; path[i] && i < 255; i++) wide[i] = path[i] == '/' ? '\\' : (CHAR16)path[i];
   wide[i] = 0;
-  UINTN n;
-  void *data = read_file(root, wide, &n);
-  if (!data) fail(name, 0);
-  *start = (uint64_t)data;
-  *size = n;
+  return read_file(root, wide, size);
+}
+
+static void loaded(const char *name, UINTN n) {
   puts_serial("boot.efi: ");
   puts_serial(name);
   puts_serial(" ");
@@ -143,12 +136,27 @@ static void boot_file(EFI_FILE_PROTOCOL *root, const char *plist, const char *na
   puts_serial(" bytes\n");
 }
 
-static void kernel_flags(EFI_FILE_PROTOCOL *root, boot_args *args) {
+static void boot_file(EFI_FILE_PROTOCOL *root, const char *plist, const char *name, uint64_t *start, uint64_t *size) {
+  char key[64] = "<key>", path[256];
+  int k = 5;
+  for (int i = 0; name[i] && k < 50; i++) key[k++] = name[i];
+  for (const char *t = "</key>"; *t; t++) key[k++] = *t;
+  key[k] = 0;
+  if (!plist_string(plist, key, path, sizeof path)) return;
+  UINTN n;
+  void *data = read_path(root, path, &n);
+  if (!data) fail(name, 0);
+  *start = (uint64_t)data;
+  *size = n;
+  loaded(name, n);
+}
+
+static const char *kernel_flags(EFI_FILE_PROTOCOL *root, boot_args *args) {
   UINTN size;
   const char *plist = read_file(root, L"\\Library\\Preferences\\SystemConfiguration\\com.apple.Boot.plist", &size);
   plist_string(plist, "<key>Kernel Flags</key>", args->CommandLine, BOOT_LINE_LENGTH);
   boot_file(root, plist, "RAMDisk", &args->ramdiskStart, &args->ramdiskSize);
-  boot_file(root, plist, "Core", &args->coreStart, &args->coreSize);
+  return plist;
 }
 
 typedef struct {
@@ -197,12 +205,13 @@ static void page_tables(void) {
   }
 }
 
-static uint64_t load_kernel(EFI_FILE_PROTOCOL *root, boot_args *args) {
-  UINTN size;
-  uint8_t *image = read_file(root, L"\\System\\Library\\Kernels\\kernel", &size);
-  if (!image) fail("kernel", 0);
+static int elf_p(uint8_t *image, UINTN size) {
   Elf64_Ehdr *eh = (Elf64_Ehdr *)image;
-  if (eh->e_ident[0] != 0x7f || eh->e_ident[1] != 'E' || eh->e_machine != 62) fail("kernel is not x86_64 ELF", 0);
+  return image && size >= sizeof *eh && eh->e_ident[0] == 0x7f && eh->e_ident[1] == 'E' && eh->e_machine == 62;
+}
+
+static uint64_t load_kernel(uint8_t *image, UINTN size, boot_args *args) {
+  Elf64_Ehdr *eh = (Elf64_Ehdr *)image;
   Elf64_Phdr *ph = (Elf64_Phdr *)(image + eh->e_phoff);
   page_tables();
   int n = 0;
@@ -286,8 +295,45 @@ EFI_STATUS efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *system_table) {
   args->efiSystemTable = (uint32_t)(uintptr_t)ST;
 
   EFI_FILE_PROTOCOL *root = volume(image);
-  kernel_flags(root, args);
-  uint64_t entry = load_kernel(root, args);
+  const char *plist = kernel_flags(root, args);
+  uint64_t entry = 0;
+  for (const char *const *link = (const char *const[]){"/EFI/finch/current", "/EFI/finch/previous", 0}; *link && !entry; link++) {
+    UINTN n;
+    char *name = read_path(root, *link, &n), path[256];
+    if (!name) continue;
+    int len = 0;
+    while (len < 64 && name[len] > ' ') len++;
+    name[len] = 0;
+    puts_serial("boot.efi: generation ");
+    puts_serial(name);
+    int at = 0;
+    for (const char *t = "/EFI/finch/"; *t; t++) path[at++] = *t;
+    for (int i = 0; i < len; i++) path[at++] = name[i];
+    for (const char *t = "/kernel"; *t; t++) path[at++] = *t;
+    path[at] = 0;
+    UINTN ksize, csize;
+    uint8_t *kernel = read_path(root, path, &ksize);
+    at -= 6;
+    for (const char *t = "finch.core"; *t; t++) path[at++] = *t;
+    path[at] = 0;
+    uint8_t *core = elf_p(kernel, ksize) ? read_path(root, path, &csize) : 0;
+    if (!core) {
+      puts_serial(" will not boot\n");
+      continue;
+    }
+    puts_serial("\n");
+    args->coreStart = (uint64_t)core;
+    args->coreSize = csize;
+    loaded("Core", csize);
+    entry = load_kernel(kernel, ksize, args);
+  }
+  if (!entry) {
+    UINTN ksize;
+    uint8_t *kernel = read_path(root, "/System/Library/Kernels/kernel", &ksize);
+    if (!elf_p(kernel, ksize)) fail("kernel is not x86_64 ELF", 0);
+    boot_file(root, plist, "Core", &args->coreStart, &args->coreSize);
+    entry = load_kernel(kernel, ksize, args);
+  }
   video(args);
 
   puts_serial("boot.efi: kernel ");

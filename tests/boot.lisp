@@ -29,6 +29,23 @@
            (is (image:expect c (format nil "~%halt"))))
       (image:finish c 5))))
 
+(test boot-efi-falls-back-to-the-previous-generation
+  (let ((esp (image:esp :boot-args "halt")))
+    (flet ((put (path text)
+             (let ((at (merge-pathnames path esp)))
+               (ensure-directories-exist at)
+               (with-open-file (s at :direction :output :if-exists :supersede) (write-line text s)))))
+      (put "EFI/finch/gen-2/kernel" "not a kernel")
+      (put "EFI/finch/current" "gen-2")
+      (put "EFI/finch/previous" "gen-1"))
+    (let ((c (image::console :args (image::bare-qemu esp))))
+      (unwind-protect
+           (progn
+             (is (image:expect c "boot.efi: generation gen-2 will not boot"))
+             (is (image:expect c "boot.efi: generation gen-1"))
+             (is (image:expect c (format nil "~%halt"))))
+        (image:finish c 5)))))
+
 (test the-kernel-owns-the-machine
   (let ((c (image:bare-console :boot-args "trap halt" :root nil)))
     (unwind-protect
