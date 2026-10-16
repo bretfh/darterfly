@@ -98,7 +98,9 @@
     (append (tree-entries (build-path "runtime/") "usr/src/finch/build/runtime" :keep #'sources)
             (tree-entries (libtcc-tree) "usr/src/finch/build/tcc/finch-src")
             (tree-entries (merge-pathnames "lib/" (tcc-stage 2)) "usr/src/finch/build/tcc/stage2/lib" :keep #'sources)
-            (tree-entries (merge-pathnames "include/" (tcc-stage 2)) "usr/lib/tcc/include"))))
+            (tree-entries (merge-pathnames "include/" (tcc-stage 2)) "usr/lib/tcc/include")
+            (list (list :file "usr/lib/tcc/libc.a" (text (format nil "!<arch>~%")))
+                  (list :file "usr/lib/tcc/libtcc1.a" (text (format nil "!<arch>~%")))))))
 
 (defun object-entries ()
   (mach-kernel)

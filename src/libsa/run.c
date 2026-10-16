@@ -26,11 +26,12 @@ struct record {
     result, exit_code;
 };
 
-struct node { char *path; char *data; size_t size, cap; uint32_t mode; int64_t mtime; int dead, written; };
-struct ofile { int open, flags; struct node *node; size_t off; };
+struct node { char *path; char *data; size_t size, cap; uint32_t mode; int64_t mtime; int dead, written; uint64_t ino; };
+struct entry { char *name; unsigned char type; };
+struct ofile { int open, flags; struct node *node; size_t off; struct entry *entries; size_t nentries; };
 
 static struct record *record;
-static struct node *nodes;
+static struct node **nodes;
 static size_t nnodes, cap_nodes;
 static struct ofile fds[RUN_FDS];
 static char cwd[1024] = "/";
@@ -72,7 +73,7 @@ static void normalize(const char *in, char *out) {
 
 static struct node *find(const char *path) {
   for (size_t i = nnodes; i-- > 0;)
-    if (!strcmp(nodes[i].path, path)) return nodes[i].dead ? 0 : &nodes[i];
+    if (!strcmp(nodes[i]->path, path)) return nodes[i]->dead ? 0 : nodes[i];
   return 0;
 }
 
@@ -81,8 +82,9 @@ static struct node *add(const char *path, uint32_t mode) {
     cap_nodes = cap_nodes ? cap_nodes * 2 : 1024;
     nodes = realloc(nodes, cap_nodes * sizeof *nodes);
   }
-  struct node *n = &nodes[nnodes++];
-  memset(n, 0, sizeof *n);
+  struct node *n = calloc(1, sizeof *n);
+  nodes[nnodes++] = n;
+  n->ino = nnodes + 1;
   n->path = strdup(path);
   n->mode = mode;
   return n;
@@ -94,7 +96,7 @@ static int is_dir(const char *path) {
   if (!strcmp(path, "/")) return 1;
   size_t len = strlen(path);
   for (size_t i = 0; i < nnodes; i++)
-    if (!nodes[i].dead && !strncmp(nodes[i].path, path, len) && nodes[i].path[len] == '/') return 1;
+    if (!nodes[i]->dead && !strncmp(nodes[i]->path, path, len) && nodes[i]->path[len] == '/') return 1;
   return 0;
 }
 
@@ -134,7 +136,7 @@ static long fill_stat(struct node *n, const char *path, struct stat *st) {
     st->st_mode = n->mode;
     st->st_size = (off_t)n->size;
     st->st_mtim.tv_sec = n->mtime;
-    st->st_ino = (ino_t)(n - nodes) + 2;
+    st->st_ino = (ino_t)n->ino;
   } else if (is_dir(path)) {
     st->st_mode = S_IFDIR | 0755;
     st->st_ino = 1;
@@ -205,35 +207,50 @@ static long run_rw(struct ofile *f, char *buf, size_t len, size_t *at, int writi
   return (long)len;
 }
 
-static long run_readdir(struct ofile *f, long index, struct dirent *ent) {
-  char dir[2048];
-  strcpy(dir, f->node->path);
-  size_t len = strlen(dir);
+static void list_dir(struct ofile *f) {
+  const char *dir = f->node->path;
+  size_t len = strlen(dir), cap = 0;
   if (len == 1) len = 0;
-  long seen = 0;
   for (size_t i = 0; i < nnodes; i++) {
-    struct node *n = &nodes[i];
-    if (n->dead || strncmp(n->path, dir, len) || n->path[len] != '/') continue;
+    struct node *n = nodes[i];
+    if (n->dead || strncmp(n->path, dir, len) || n->path[len] != '/' || find(n->path) != n) continue;
     const char *rest = n->path + len + 1;
     const char *slash = strchr(rest, '/');
     size_t namelen = slash ? (size_t)(slash - rest) : strlen(rest);
     int dup = 0;
-    for (size_t j = 0; j < i && !dup; j++) {
-      struct node *m = &nodes[j];
-      if (!m->dead && !strncmp(m->path, dir, len) && m->path[len] == '/' && !strncmp(m->path + len + 1, rest, namelen) &&
-          (m->path[len + 1 + namelen] == '/' || !m->path[len + 1 + namelen]))
-        dup = 1;
+    for (size_t j = 0; j < f->nentries && !dup; j++)
+      dup = strlen(f->entries[j].name) == namelen && !strncmp(f->entries[j].name, rest, namelen);
+    if (dup) continue;
+    if (f->nentries == cap) {
+      cap = cap ? cap * 2 : 64;
+      f->entries = realloc(f->entries, cap * sizeof *f->entries);
     }
-    if (dup || find(n->path) != n) continue;
-    if (seen++ == index) {
-      memset(ent, 0, sizeof *ent);
-      memcpy(ent->d_name, rest, namelen < 255 ? namelen : 255);
-      ent->d_type = slash || (n->mode & S_IFMT) == S_IFDIR ? DT_DIR : DT_REG;
-      ent->d_ino = i + 2;
-      return 1;
-    }
+    char *name = malloc(namelen + 1);
+    memcpy(name, rest, namelen);
+    name[namelen] = 0;
+    f->entries[f->nentries].name = name;
+    f->entries[f->nentries++].type = slash || (n->mode & S_IFMT) == S_IFDIR ? DT_DIR : DT_REG;
   }
-  return 0;
+}
+
+static void drop_entries(struct ofile *f) {
+  for (size_t i = 0; i < f->nentries; i++) free(f->entries[i].name);
+  free(f->entries);
+  f->entries = 0;
+  f->nentries = 0;
+}
+
+static long run_readdir(struct ofile *f, long index, struct dirent *ent) {
+  if (index == 0) {
+    drop_entries(f);
+    list_dir(f);
+  }
+  if ((size_t)index >= f->nentries) return 0;
+  memset(ent, 0, sizeof *ent);
+  strncpy(ent->d_name, f->entries[index].name, 255);
+  ent->d_type = f->entries[index].type;
+  ent->d_ino = (ino_t)index + 2;
+  return 1;
 }
 
 static long run_vfs(long op, long a, long b, long c, long d) {
@@ -246,6 +263,7 @@ static long run_vfs(long op, long a, long b, long c, long d) {
   case VFS_open: return run_open((const char *)a, (int)b, (int)c);
   case VFS_close:
     if (!(f = ofile(a))) return -EBADF;
+    drop_entries(f);
     f->open = 0;
     return 0;
   case VFS_read:
@@ -416,18 +434,20 @@ void __libsa_run_finish(int code) {
   char *p = (char *)(out + 1);
   char *archive = p;
   for (size_t i = 0; i < nnodes; i++) {
-    struct node *n = &nodes[i];
+    struct node *n = nodes[i];
     if (n->dead || !n->written || find(n->path) != n) continue;
     p = put_entry(p, n->path, n->data, (n->mode & S_IFMT) == S_IFDIR ? 0 : n->size, n->mode, n->mtime, i + 1);
   }
   p = put_entry(p, "TRAILER!!!", 0, 0, 0, 0, 0);
+  char *core = (char *)(((uint64_t)p + 4095) & ~4095ull);
+  memcpy(core, (const void *)record->back_core, record->back_size);
   memset(out, 0, sizeof *out);
   out->magic = RUN_MAGIC;
-  out->core = record->back_core;
+  out->core = (uint64_t)core;
   out->core_size = record->back_size;
   out->archive = (uint64_t)archive;
   out->archive_size = (uint64_t)(p - archive);
   out->result = 1;
   out->exit_code = (uint64_t)(unsigned)code;
-  __machdep(MACHDEP_restart, (long)out, (long)(p - (char *)out));
+  __machdep(MACHDEP_restart, (long)out, (long)(core + record->back_size - (char *)out));
 }

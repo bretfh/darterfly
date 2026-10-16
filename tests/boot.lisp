@@ -849,6 +849,49 @@
                                    (finch/vfs:vfs-close fd)))))
             :collect rel)))
 
+(test finch-runs-a-core-and-keeps-its-files
+  (let ((esp (merge-pathnames "esp-run.img" (finch-file "build/")))
+        (disk (merge-pathnames "run.img" (finch-file "build/")))
+        (stress "(progn (ensure-directories-exist \"/work/f/\") (with-open-file (keep \"/work/keep.txt\" :direction :output) (dotimes (i 3000) (with-open-file (o (format nil \"/work/f/~d.txt\" i) :direction :output) (print i o))) (write-string \"kept\" keep)) (rename-file \"/work/f/0.txt\" \"/work/renamed.txt\") (with-open-file (o \"/work/count.txt\" :direction :output) (princ (length (directory \"/work/f/*.txt\")) o)))"))
+    (uiop:delete-file-if-exists esp)
+    (uiop:delete-file-if-exists disk)
+    (finch/image::root-disk disk (* 256 1048576)
+                            (append (finch/image::root-entries)
+                                    (list (list :file "usr/lib/sbcl/sbcl.core" (image::octets (finch-file "build/sbcl-mt/output/sbcl.core"))))))
+    (let ((c (image:bare-console :esp esp :root disk)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600))
+             (run-in-core (code)
+               (image:send c (format nil "(finch/run:run-core \"/usr/lib/sbcl/sbcl.core\" '~s :cwd \"/\")"
+                                     (list "/System/Library/Kernels/kernel" "--core" "/System/Library/Kernels/finch.core"
+                                           "--no-sysinit" "--no-userinit" "--disable-debugger" "--eval" code "--quit")))
+               (image:expect c "restart: core" :timeout 300)
+               (image:expect c "restart: core" :timeout 600)
+               (image:expect c "* " :timeout 120)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 60)
+               (image:send c "(finch/install:save)")
+               (is (image:expect c "restart: core " :timeout 300) "finch runs from a saved core")
+               (image:expect c "* " :timeout 120)
+               (ask "(progn (with-open-file (s \"/tmp/good.c\" :direction :output :if-exists :supersede) (write-line \"int good(void) { return 1; }\" s)) (with-open-file (s \"/tmp/bad.c\" :direction :output :if-exists :supersede) (write-line \"int bad(void) { return }\" s)) (ensure-directories-exist \"/tmp/u/\") (with-open-file (s \"/tmp/u/bad.o\" :direction :output :if-exists :supersede) (write-line \"stale\" s)) :written)")
+               (ask "(with-open-file (s \"/tmp/hello.c\" :direction :output :if-exists :supersede) (write-line \"#include <stdio.h>\" s) (write-line \"int main(int argc, char **argv) { printf(\\\"hello %d %s\\\\n\\\", 6 * 7, argv[1]); return 3; }\" s))")
+               (is (search "(3 \"hello 42 finch"
+                           (ask "(list (finch/cc:run-c \"/tmp/hello.c\" :args '(\"finch\") :output \"/tmp/hello.out\") (uiop:read-file-string \"/tmp/hello.out\"))"))
+                   "TinyCC runs a C program inside finch")
+               (is (search "(\"bad.o\")" (ask "(finch/cc:compile-units \"/tmp/u/\" :directory \"/tmp/\" :units '((:name \"good.o\" :source \"good.c\") (:name \"bad.o\" :source \"bad.c\")))"))
+                   "the failed unit is reported")
+               (is (search "(T NIL NIL)" (ask "(list (and (probe-file \"/tmp/u/good.o\") t) (probe-file \"/tmp/u/bad.o\") (probe-file \"/tmp/u/objects\"))"))
+                   "a failed build leaves no stale object and no link list")
+               (run-in-core stress)
+               (is (search "(:EXIT 0 :FILES 3002)" (ask "(finch/run:collect)")) "every file the run wrote comes back")
+               (is (search "(\"kept\" \"2999\" T)"
+                           (ask "(list (uiop:read-file-string \"/work/keep.txt\") (uiop:read-file-string \"/work/count.txt\") (and (probe-file \"/work/renamed.txt\") t))"))
+                   "an open file, a rename and a directory listing survive 3000 new files")
+               (run-in-core "(progn (with-open-file (o \"/work/failed.txt\" :direction :output) (write-string \"partial\" o)) (sb-ext:exit :code 3))")
+               (is (search "(:EXIT 3 :FILES 0 :REJECTED 1)" (ask "(finch/run:collect)")) "a failed run's files are rejected")
+               (is (search "NIL" (ask "(probe-file \"/work/failed.txt\")")) "and never reach the disk"))
+          (image:finish c 5))))))
+
 (defvar *run-wait* 1800)
 
 (defun sbcl-run (disk core argv &key stdin script (files t))

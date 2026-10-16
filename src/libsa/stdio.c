@@ -386,6 +386,24 @@ FILE *fopen(const char *path, const char *mode) {
   return fdopen(fd, mode);
 }
 
+FILE *freopen(const char *path, const char *mode, FILE *fp) {
+  int fd = open(path, mode_flags(mode), 0666);
+  if (fd < 0) return 0;
+  if (fp->fd > 2) close(fp->fd);
+  *fp = (FILE){fd, 0, 0, -1};
+  return fp;
+}
+
+int __libsa_redirect_stdout(const char *path) {
+  if (stdout->fd > 2) close(stdout->fd);
+  *stdout = (FILE){1, 0, 0, -1};
+  if (!path) return 0;
+  int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+  if (fd < 0) return -1;
+  stdout->fd = fd;
+  return 0;
+}
+
 FILE *tmpfile(void) {
   errno = ENOSYS;
   return 0;

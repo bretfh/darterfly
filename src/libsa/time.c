@@ -1,6 +1,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <sys/select.h>
+#include <sys/times.h>
 #include <errno.h>
 #include <string.h>
 #include "libsa.h"
@@ -58,6 +59,11 @@ time_t time(time_t *t) {
 }
 
 clock_t clock(void) { return (clock_t)(nanos_since_boot() / 1000); }
+
+clock_t times(struct tms *t) {
+  if (t) *t = (struct tms){0, 0, 0, 0};
+  return (clock_t)(nanos_since_boot() / 10000000);
+}
 
 int nanosleep(const struct timespec *req, struct timespec *rem) {
   uint64_t end = nanos_since_boot() + (uint64_t)req->tv_sec * 1000000000u + (uint64_t)req->tv_nsec;

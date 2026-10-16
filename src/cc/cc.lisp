@@ -1,6 +1,6 @@
 (defpackage #:finch/cc
   (:use #:cl)
-  (:export #:arguments #:compile-c #:units #:compile-units))
+  (:export #:arguments #:compile-c #:run-c #:units #:compile-units))
 (in-package #:finch/cc)
 
 (defun arguments (source &key includes defines (compat t) tcc-dir libsa-dir)
@@ -27,10 +27,12 @@
     (unwind-protect
          (sb-int:with-float-traps-masked (:overflow :invalid :divide-by-zero :inexact :underflow)
            (when directory (uiop:chdir directory))
-           (and (zerop (tcc "tcc_set_options" sb-alien:int (sb-sys:system-area-pointer state) (sb-alien:c-string options)))
+           (uiop:delete-file-if-exists object)
+           (or (and (zerop (tcc "tcc_set_options" sb-alien:int (sb-sys:system-area-pointer state) (sb-alien:c-string options)))
                 (zerop (tcc "tcc_set_output_type" sb-alien:int (sb-sys:system-area-pointer state) (sb-alien:int 3)))
                 (zerop (tcc "tcc_add_file" sb-alien:int (sb-sys:system-area-pointer state) (sb-alien:c-string source)))
-                (zerop (tcc "tcc_output_file" sb-alien:int (sb-sys:system-area-pointer state) (sb-alien:c-string object)))))
+                (zerop (tcc "tcc_output_file" sb-alien:int (sb-sys:system-area-pointer state) (sb-alien:c-string object))))
+               (progn (uiop:delete-file-if-exists object) nil)))
       (when was (uiop:chdir was))
       (tcc "tcc_delete" sb-alien:void (sb-sys:system-area-pointer state)))))
 
@@ -57,7 +59,7 @@
                                       :includes '("build/runtime/src/runtime/" "build/runtime/tlsf-bsd/tlsf/")))
                     *runtime-sources*)
             (list (unit "libtcc" "build/tcc/finch-src/" "libtcc.c" :includes '("build/tcc/finch-src/" "src/libsa/")
-                        :defines '("ONE_SOURCE=1" "TCC_TARGET_X86_64=1")))
+                        :defines '("ONE_SOURCE=1" "TCC_TARGET_X86_64=1" "CONFIG_TCC_BACKTRACE=0")))
             (when libtcc1
               (mapcar (lambda (f) (unit "libtcc1" "build/tcc/stage2/lib/" f :compat nil)) *libtcc1-sources*)))))
 
@@ -69,6 +71,36 @@
                                          :includes (getf unit :includes) :defines (getf unit :defines)
                                          :compat (getf unit :compat t))
                         :collect (getf unit :name))))
-    (with-open-file (s (concatenate 'string out "objects") :direction :output :if-exists :supersede)
-      (format s "~{~a~%~}" (mapcar (lambda (unit) (getf unit :name)) units)))
+    (if failed
+        (uiop:delete-file-if-exists (concatenate 'string out "objects"))
+        (with-open-file (s (concatenate 'string out "objects") :direction :output :if-exists :supersede)
+          (format s "~{~a~%~}" (mapcar (lambda (unit) (getf unit :name)) units))))
     failed))
+
+(defun run-c (source &key args output includes defines (compat t) directory
+                          (tcc-dir "/usr/lib/tcc/") (libsa-dir "/usr/src/finch/src/libsa/"))
+  (let ((options (format nil "~{~a~^ ~}" (arguments source :includes includes :defines defines :compat compat
+                                                                       :tcc-dir tcc-dir :libsa-dir libsa-dir)))
+        (state (tcc "tcc_new" sb-sys:system-area-pointer))
+        (was (when directory (namestring (uiop:getcwd)))))
+    (unwind-protect
+         (sb-int:with-float-traps-masked (:overflow :invalid :divide-by-zero :inexact :underflow)
+           (when directory (uiop:chdir directory))
+           (when (and (zerop (tcc "tcc_set_options" sb-alien:int (sb-sys:system-area-pointer state) (sb-alien:c-string options)))
+                      (zerop (tcc "tcc_set_output_type" sb-alien:int (sb-sys:system-area-pointer state) (sb-alien:int 1)))
+                      (zerop (tcc "tcc_add_file" sb-alien:int (sb-sys:system-area-pointer state) (sb-alien:c-string source)))
+                      (<= 0 (tcc "tcc_relocate" sb-alien:int (sb-sys:system-area-pointer state))))
+             (let ((main (tcc "tcc_get_symbol" sb-sys:system-area-pointer (sb-sys:system-area-pointer state) (sb-alien:c-string "main"))))
+               (unless (zerop (sb-sys:sap-int main))
+                 (let* ((argv (cons source args))
+                        (vector (sb-alien:make-alien sb-alien:c-string (1+ (length argv)))))
+                   (loop :for arg :in argv :for i :from 0 :do (setf (sb-alien:deref vector i) arg))
+                   (setf (sb-alien:deref vector (length argv)) nil)
+                   (when output (tcc "__libsa_redirect_stdout" sb-alien:int (sb-alien:c-string output)))
+                   (unwind-protect
+                        (sb-alien:alien-funcall
+                         (sb-alien:sap-alien main (function sb-alien:int sb-alien:int (* sb-alien:c-string)))
+                         (length argv) vector)
+                     (when output (tcc "__libsa_redirect_stdout" sb-alien:int (sb-alien:c-string nil)))))))))
+      (when was (uiop:chdir was))
+      (tcc "tcc_delete" sb-alien:void (sb-sys:system-area-pointer state)))))

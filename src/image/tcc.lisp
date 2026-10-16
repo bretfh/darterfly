@@ -75,11 +75,6 @@
   (if (eq *c-compiler* :clang) name (format nil "~a-tcc" name)))
 
 
-(defparameter *libtcc-patches*
-  '(("tcc.h" "    && defined __APPLE__ == defined TCC_TARGET_MACHO
-" "    && defined __APPLE__ == defined TCC_TARGET_MACHO && !defined __finch__
-")))
-
 (defparameter *libtcc-config*
   "#define TCC_VERSION \"0.9.28rc\"
 #define CC_NAME CC_tcc
@@ -104,13 +99,6 @@
                             (directory (concatenate 'string (tcc-source) "*.def"))
                             (list (merge-pathnames "tccdefs_.h" (tcc-stage 2)))))
         (uiop:copy-file file (merge-pathnames (file-namestring file) tree)))
-      (loop :for (file old new) :in *libtcc-patches*
-            :for path := (merge-pathnames file tree)
-            :for text := (uiop:read-file-string path)
-            :for at := (search old text)
-            :do (unless at (error "libtcc patch for ~a no longer applies" file))
-                (with-open-file (o path :direction :output :if-exists :supersede)
-                  (write-string (concatenate 'string (subseq text 0 at) new (subseq text (+ at (length old)))) o)))
       (with-open-file (o (merge-pathnames "config.h" tree) :direction :output :if-exists :supersede)
         (write-string *libtcc-config* o)))
     tree))

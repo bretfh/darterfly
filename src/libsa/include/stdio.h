@@ -40,6 +40,7 @@ size_t fwrite(const void *, size_t, size_t, FILE *);
 int fflush(FILE *);
 FILE *fopen(const char *, const char *);
 FILE *fdopen(int, const char *);
+FILE *freopen(const char *, const char *, FILE *);
 FILE *tmpfile(void);
 int fclose(FILE *);
 int fseek(FILE *, long, int);
