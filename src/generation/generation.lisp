@@ -1,6 +1,6 @@
 (defpackage #:finch/generation
   (:use #:cl)
-  (:export #:resume #:contrib-steps #:*state*))
+  (:export #:resume #:contrib-steps #:core-steps #:*state*))
 (in-package #:finch/generation)
 
 (defvar *state* "/Users/finch/generation.state")
@@ -92,3 +92,19 @@
         (list "sb-bsd-sockets-c" :run (third (contrib-step root core "sb-bsd-sockets")))
         (grovel-step root "sb-bsd-sockets")
         (contrib-step root core "sb-bsd-sockets")))
+
+(defun core-steps (root out &optional (core (concatenate 'string root "output/sbcl.core")))
+  (list (list "finch.core" :run
+              (lambda ()
+                (finch/run:run-core
+                 core
+                 (list *kernel* "--core" *run-core* "--noinform" "--disable-debugger" "--no-sysinit" "--no-userinit"
+                       "--eval" (format nil "(setf sb-sys::*sbcl-homedir-pathname* #p~s)" (concatenate 'string root "obj/sbcl-home/"))
+                       "--eval" "(require :asdf)"
+                       "--eval" "(asdf:initialize-source-registry '(:source-registry (:tree \"/usr/src/finch/\") (:tree \"/usr/share/common-lisp/sbcl/\") :ignore-inherited-configuration))"
+                       "--eval" (format nil "(ensure-directories-exist ~s)" out)
+                       "--load" "/usr/src/finch/src/image/finch-core.lisp" out)
+                 :cwd "/Users/finch"
+                 :files (append (finch/run:tree-files "/usr/src/finch/")
+                                (finch/run:tree-files "/usr/share/common-lisp/sbcl/")
+                                (finch/run:tree-files (concatenate 'string root "obj/sbcl-home/"))))))))

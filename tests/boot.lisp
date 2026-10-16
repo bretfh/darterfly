@@ -1040,6 +1040,7 @@
       (declare (ignore seen))
       (when (string= found "RESUMED ")
         (let ((result (read-from-string (image:expect c (string #\Newline) :timeout 60))))
+          (image:expect c "* " :timeout 60)
           (unless (eq :done (first result))
             (format t "~&generation-resume: ~s; console ends:~%~a~%" result (let ((s (image:transcript c))) (subseq s (max 0 (- (length s) 6000))))))
           (return result)))
@@ -1088,6 +1089,38 @@
     (is (equal "(\"3.3.1\" #(192 65 240 164 75 149 198 213 199 195 255 71 232 234 151 51) T #(10 0 2 2))"
                (let ((out (disk-octets disk "usr/src/sbcl/contribs.txt"))) (and out (map 'string #'code-char out))))
         "finch's sbcl.core loads the contribs finch built, and they work")))
+
+(test finch-builds-its-core-and-boots-it
+  (let ((disk (merge-pathnames "sbcl-build.img" (finch-file "build/")))
+        (esp (merge-pathnames "esp-native.img" (finch-file "build/")))
+        (compiled-from "(sb-di::debug-source-namestring (sb-di::code-location-debug-source (sb-di:debug-fun-start-location (sb-di:fun-debug-fun #'finch/install:install))))"))
+    (is (disk-octets disk "usr/src/sbcl/obj/sbcl-home/contrib/sb-posix.fasl") "finch-builds-its-contribs left finch's own contribs")
+    (uiop:delete-file-if-exists esp)
+    (let ((c (image:bare-console :root disk :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 60)
+               (ask "(progn (uiop:delete-file-if-exists finch/generation:*state*) (uiop:delete-file-if-exists \"/Users/finch/generation/finch.core\"))")
+               (let ((result (generation-resume c "(finch/generation:core-steps \"/usr/src/sbcl/\" \"/Users/finch/generation/finch.core\")")))
+                 (is (eq :done (first result)) "finch's sbcl.core builds finch.core: ~s" result))
+               (is (search "\"gen-2\"" (ask "(finch/install:install \"/System/Library/Kernels/kernel\" \"/Users/finch/generation/finch.core\")")))
+               (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
+               (image:expect c "exit(0)" :timeout 120))
+          (image:finish c 30))))
+    (let ((c (image:bare-console :root disk :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "boot.efi: generation gen-2" :timeout 60))
+               (image:expect c "* " :timeout 120)
+               (is (search "\"/usr/src/finch/src/install/install.lisp\"" (ask compiled-from))
+                   "the running core was compiled inside finch")
+               (let ((counts (ask "(let ((r (let ((*standard-output* (make-broadcast-stream))) (append (5am:run 'finch/test::mach) (5am:run 'finch/test::bsd))))) (list (count-if-not (lambda (x) (typep x 'it.bese.fiveam::test-passed)) r) (length r)))")))
+                 (is (search "(0 " counts) "finch's own core passes the mach and bsd suites: ~a" counts))
+               (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
+               (image:expect c "exit(0)" :timeout 120))
+          (image:finish c 30))))))
 
 (test finch-saves-itself-and-boots-the-save
   (let ((esp (merge-pathnames "esp-save.img" (finch-file "build/"))))

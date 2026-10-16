@@ -134,6 +134,10 @@
                               (directory (merge-pathnames "obj/sbcl-home/contrib/*.asd" (sbcl-tree))))
         :collect (list :file (format nil "usr/lib/sbcl/contrib/~a" (file-namestring file)) (octets file))))
 
+(defun library-entries ()
+  (loop :for dir :in (uiop:subdirectories (format nil "~a/share/common-lisp/sbcl/" (uiop:getenv "GUIX_ENVIRONMENT")))
+        :append (tree-entries dir (format nil "usr/share/common-lisp/sbcl/~a" (car (last (pathname-directory dir)))))))
+
 (defun certificates ()
   (list (list :file "etc/ssl/certs/ca-certificates.crt"
               (octets (format nil "~a/etc/ssl/certs/ca-certificates.crt" (uiop:getenv "GUIX_ENVIRONMENT"))))))
@@ -144,6 +148,7 @@
                        (desktop-entries)
                        (contribs)
                        (certificates)
+                       (library-entries)
                        (object-entries)
                        (compiler-entries)
                        (tree-entries (asdf:system-relative-pathname :finch "") "usr/src/finch"
