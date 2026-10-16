@@ -24,8 +24,11 @@
   (finch/apfs:mountroot)
   (setf sb-sys::*sbcl-homedir-pathname* (sb-impl::%sbcl-homedir-pathname))
   (finch-asdf)
-  (when (finch/iokit:boot-arg "launchd")
-    (sb-thread:make-thread #'finch/kernel:launch :name "load_init_program")))
+  (unless (finch/run:in-run-p)
+    (when (ignore-errors (finch/generation:pending-build))
+      (finch/generation:resume-build))
+    (when (finch/iokit:boot-arg "launchd")
+      (sb-thread:make-thread #'finch/kernel:launch :name "load_init_program"))))
 
 (push 'finch-boot sb-ext:*init-hooks*)
 (sb-ext:enable-debugger)

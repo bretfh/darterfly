@@ -1,6 +1,6 @@
 (defpackage #:finch/install
   (:use #:cl)
-  (:export #:install #:generations #:current #:save #:stop-threads #:kernel-image #:build-kernel))
+  (:export #:install #:generations #:current #:select #:manifest #:save #:stop-threads #:kernel-image #:build-kernel))
 (in-package #:finch/install)
 
 (defvar *esp* "/Volumes/EFI/")
@@ -23,15 +23,29 @@
   (esp)
   (string-trim '(#\Newline #\Space) (uiop:read-file-string (esp-path "current"))))
 
+(defun manifest (name)
+  (let ((path (esp-path (format nil "~a/manifest" name))))
+    (when (probe-file path)
+      (with-open-file (s path) (with-standard-io-syntax (let ((*read-eval* nil)) (read s)))))))
+
 (defun put-line (name text)
   (with-open-file (s (esp-path name) :direction :output :if-exists :supersede)
     (write-line text s)))
 
-(defun stop-threads ()
+(defun select (name)
+  (unless (member name (generations) :test #'string=)
+    (error "no generation ~a" name))
+  (let ((was (current)))
+    (unless (string= was name)
+      (put-line "previous" was)
+      (put-line "current" name)))
+  name)
+
+(defun stop-threads (&optional keep)
   (finch/vfs:vfs-sync)
   (flet ((others ()
            (remove-if (lambda (th) (or (eq th sb-thread:*current-thread*) (sb-thread::thread-ephemeral-p th)
-                                       (not (sb-thread:thread-alive-p th))))
+                                       (member th keep) (not (sb-thread:thread-alive-p th))))
                       (sb-thread:list-all-threads))))
     (mapc #'sb-thread:terminate-thread (others))
     (loop :repeat 200 :while (others) :do (sleep 0.05))

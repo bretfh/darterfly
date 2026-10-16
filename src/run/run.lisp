@@ -1,6 +1,6 @@
 (defpackage #:finch/run
   (:use #:cl)
-  (:export #:run-core #:collect #:tree-files))
+  (:export #:run-core #:collect #:tree-files #:in-run-p))
 (in-package #:finch/run)
 
 (defconstant +magic+ #x4e555248434e4946)
@@ -89,7 +89,7 @@
            (back-at (page-up (+ (car (last offsets)) (length (car (last parts))))))
            (size (+ back-at (aref back 1))))
       (finch/vfs:vfs-sync)
-      (let ((left (finch/install:stop-threads)))
+      (let ((left (finch/install:stop-threads (list (sb-thread:main-thread)))))
         (when left (error "threads still running: ~a" left)))
       (sb-impl::finalizer-thread-stop)
       (let ((region (libsa "mmap" sb-alien:unsigned (sb-alien:unsigned +base+) (sb-alien:unsigned size)
@@ -119,6 +119,9 @@
                          (sb-alien:long image-at) (sb-alien:long (length image-octets)) (sb-alien:long entry))
                   (sleep 0.05)))
       (error "run: the kernel would not restart; threads ~a" (sb-thread:list-all-threads)))))
+
+(defun in-run-p ()
+  (/= 0 (libsa "__libsa_run_active" sb-alien:int)))
 
 (defun count-entries (address size)
   (let ((sap (sb-sys:int-sap address)) (at 0) (n 0))

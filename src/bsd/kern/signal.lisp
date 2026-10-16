@@ -106,6 +106,7 @@
   (while 1
     (when (and ready (the :u32 (call-pointer ready))) (result 0))
     (when (issignal) (result +eintr+))
+    (when (terminating) (result +eintr+))
     (when (and deadline (>= (rdtsc) deadline)) (result +etimedout+))
     (let ((r (the :u32 (thread-wait event deadline))))
       (when (and (= r +thread-interrupted+) (issignal)) (result +eintr+))

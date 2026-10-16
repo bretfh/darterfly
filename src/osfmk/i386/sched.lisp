@@ -222,6 +222,9 @@
         (setf th (mem :u64 (+ th +t-all-next+))))))
   (when runq-head (setf (mem :u32 (+ (cpu-data) +c-pending-ast+)) 1)))
 
+(define-low terminating ()
+  (logand (mem :u32 (+ (current-thread) +t-sched-flags+)) +terminate-requested+))
+
 (define-low thread-terminate (th)
   (setf (mem :u32 (+ th +t-sched-flags+)) (logior (mem :u32 (+ th +t-sched-flags+)) +terminate-requested+))
   (thread-abort-safely th))
