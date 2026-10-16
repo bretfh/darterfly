@@ -11,6 +11,14 @@
 
 (defvar *contrib-script* "/usr/src/finch/src/generation/contrib.lisp")
 
+(defvar *runtime* nil)
+
+(defun on-runtime (kernel steps)
+  (mapcar (lambda (step)
+            (destructuring-bind (name kind thunk . rest) step
+              (list* name kind (lambda () (let ((*runtime* kernel)) (funcall thunk))) rest)))
+          steps))
+
 (defun state ()
   (when (probe-file *state*)
     (with-open-file (s *state*)
@@ -64,6 +72,7 @@
 
 (defun sbcl-run (root core cwd &rest args)
   (finch/run:run-core core (list* *kernel* "--core" *run-core* "--noinform" "--disable-debugger" "--no-sysinit" "--no-userinit" args)
+                      :kernel *runtime*
                       :cwd (concatenate 'string root cwd) :files (contrib-files root)))
 
 (defun asdf-step (root core name)
@@ -126,6 +135,7 @@
                        "--eval" (format nil "(ensure-directories-exist ~s)" out)
                        "--load" "/usr/src/finch/src/image/finch-core.lisp" out)
                  :cwd "/Users/finch"
+                 :kernel *runtime*
                  :files (append (finch/run:tree-files "/usr/src/finch/")
                                 (finch/run:tree-files "/usr/share/common-lisp/sbcl/")
                                 (finch/run:tree-files (concatenate 'string root "obj/sbcl-home/")))))
@@ -158,6 +168,15 @@
          (at (search "${devel}" body)))
     (concatenate 'string (subseq body 0 at) (subseq body (+ at 8)))))
 
+(defun source-build-id (sbcl finch)
+  (let ((trees (list (finch/build:digest-tree (concatenate 'string sbcl "src/")
+                                              :keep (lambda (f) (not (or (search "/runtime/genesis/" (namestring f))
+                                                                         (member (pathname-type f) '("o" "d") :test #'equal)))))
+                     (finch/build:digest-tree (concatenate 'string finch "src/sbcl/"))
+                     (finch/build:digest-tree (concatenate 'string finch "src/libsa/"))
+                     (finch/build:digest (concatenate 'string finch "src/build/build.lisp")))))
+    (format nil "finch-~(~{~2,'0x~}~)" (coerce (subseq (sb-md5:md5sum-string (prin1-to-string trees)) 0 8) 'list))))
+
 (defun runtime-build-id ()
   (let ((sap (sb-sys:int-sap (sb-sys:find-foreign-symbol-address "build_id"))))
     (map 'string #'code-char (loop :for i :from 0 :for b := (sb-sys:sap-ref-8 sap i) :until (zerop b) :collect b))))
@@ -173,13 +192,14 @@
   (flet ((in (root path) (concatenate 'string root path)))
     (let ((cold (in sbcl "output/cold-sbcl.core"))
           (runtime (in finch "build/runtime/"))
-          (objects (in out "objects/")))
+          (objects (in out "objects/"))
+          (kernel (in out "kernel")))
       (flet ((runtime-tree ()
                (finch/build:runtime-tree sbcl (in finch "src/sbcl/") runtime)))
         (append
          (list (list "config" :lisp
                      (lambda ()
-                       (let ((id (runtime-build-id)))
+                       (let ((id (source-build-id sbcl finch)))
                          (finch/build:write-files sbcl (finch/build:sbcl-config id))
                          id)))
                (phase-step "make-host-1" sbcl "(cl-user::load-sbcl-file \"make-host-1.lisp\" nil)")
@@ -191,24 +211,9 @@
                                               :output (in sbcl "output/stuff-groveled-from-headers.lisp")))))
                (phase-step "make-host-2" sbcl "(progn (push (lambda () (throw 'after-xc t)) sb-ext:*save-hooks*) (catch 'after-xc (cl-user::load-sbcl-file \"make-host-2.lisp\" nil)))")
                (phase-step "make-genesis-2" sbcl "(cl-user::load-sbcl-file \"make-genesis-2.lisp\" nil)" cold)
-               (list "warm" :run
+               (list "objects" :lisp
                      (lambda ()
-                       (finch/run:run-core cold (list *kernel* "--core" *run-core* "--lose-on-corruption" "--no-sysinit" "--no-userinit"
-                                                      "--eval" "(sb-fasl::!warm-load \"src/cold/warm.lisp\")" "--quit")
-                                           :cwd (string-right-trim "/" sbcl) :files (target-files sbcl))))
-               (list "sbcl.core" :run
-                     (lambda ()
-                       (let ((stdin (in sbcl "output/target-2-dump.lisp")))
-                         (with-open-file (s stdin :direction :output :if-exists :supersede)
-                           (write-string (dump-script sbcl) s))
-                         (finch/run:run-core cold (list *kernel* "--noinform" "--core" *run-core* "--lose-on-corruption"
-                                                        "--no-sysinit" "--no-userinit" "--noprint")
-                                             :cwd (string-right-trim "/" sbcl) :files (target-files sbcl) :stdin stdin)))
-                     :outputs (list (in sbcl "output/sbcl.core"))))
-         (contrib-steps sbcl)
-         (core-steps sbcl (in out "finch.core"))
-         (list (list "objects" :lisp
-                     (lambda ()
+                       (ensure-directories-exist out)
                        (runtime-tree)
                        (let ((tccdefs (in out "tccdefs_.h")))
                          (finch/cc:run-c "conftest.c" :directory tinycc :defines '("C2STR")
@@ -216,8 +221,29 @@
                          (finch/build:libtcc-tree tinycc (in finch "build/tcc/finch-src/") tccdefs))
                        (null (finch/cc:compile-units objects :directory finch))))
                (list "kernel" :lisp
-                     (lambda () (finch/install:build-kernel :objects objects :out (in out "kernel"))))
-               (list "boot.efi" :lisp
+                     (lambda () (finch/install:build-kernel :objects objects :out kernel))
+                     :outputs (list kernel)))
+         (on-runtime
+          kernel
+          (append
+           (list (list "warm" :run
+                       (lambda ()
+                         (finch/run:run-core cold (list *kernel* "--core" *run-core* "--lose-on-corruption" "--no-sysinit" "--no-userinit"
+                                                        "--eval" "(sb-fasl::!warm-load \"src/cold/warm.lisp\")" "--quit")
+                                             :cwd (string-right-trim "/" sbcl) :files (target-files sbcl) :kernel *runtime*)))
+                 (list "sbcl.core" :run
+                       (lambda ()
+                         (let ((stdin (in sbcl "output/target-2-dump.lisp")))
+                           (with-open-file (s stdin :direction :output :if-exists :supersede)
+                             (write-string (dump-script sbcl) s))
+                           (finch/run:run-core cold (list *kernel* "--noinform" "--core" *run-core* "--lose-on-corruption"
+                                                          "--no-sysinit" "--no-userinit" "--noprint")
+                                               :cwd (string-right-trim "/" sbcl) :files (target-files sbcl) :stdin stdin
+                                               :kernel *runtime*)))
+                       :outputs (list (in sbcl "output/sbcl.core"))))
+           (contrib-steps sbcl)
+           (core-steps sbcl (in out "finch.core"))))
+         (list (list "boot.efi" :lisp
                      (lambda () (write-octets (in out "boot.efi") (finch/boot:boot-image))))
                (list "manifest" :lisp
                      (lambda ()
@@ -229,9 +255,9 @@
                          :sources (list (list "finch" (in finch "src/")) (list "sbcl" (in sbcl "src/"))
                                         (list "contrib" (in sbcl "contrib/")) (list "tinycc" tinycc)
                                         (list "libraries" "/usr/share/common-lisp/sbcl/"))
-                         :outputs (list (list "kernel" (in out "kernel")) (list "finch.core" (in out "finch.core"))
+                         :outputs (list (list "kernel" kernel) (list "finch.core" (in out "finch.core"))
                                         (list "boot.efi" (in out "boot.efi")))))))
                (list "install" :lisp
                      (lambda ()
-                       (finch/install:install (in out "kernel") (in out "finch.core")
+                       (finch/install:install kernel (in out "finch.core")
                                               :loader (in out "boot.efi") :manifest (in out "manifest"))))))))))
