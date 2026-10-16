@@ -2,13 +2,24 @@
 
 (define-global commpage :u64 :count 3 :alignment 4096 :export t)
 
+(define-low tsc-from-cpuid ()
+  (when (< (the :u32 (cpuid 0 :eax)) #x15) (result 0))
+  (let ((denominator (the :u32 (cpuid #x15 :eax)))
+        (numerator (the :u32 (cpuid #x15 :ebx)))
+        (crystal (the :u32 (cpuid #x15 :ecx))))
+    (if (and denominator numerator crystal)
+        (truncate (* crystal numerator) denominator)
+        0)))
+
 (define-low tsc-calibrate ()
+  (let ((reported (tsc-from-cpuid)))
+    (when reported (result reported)))
   (outb #x61 (logior (logand (inb #x61) (lognot 2)) 1))
   (outb #x43 #xB0)
   (outb #x42 (logand 11932 #xFF))
   (outb #x42 (ash 11932 -8))
   (let ((t0 (rdtsc)))
-    (while (= (logand (inb #x61) #x20) 0))
+    (while (and (= (logand (inb #x61) #x20) 0) (< (- (rdtsc) t0) 100000000000)))
     (* (- (rdtsc) t0) 100)))
 
 (define-low cmos ((reg :u8))

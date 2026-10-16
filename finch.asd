@@ -159,12 +159,17 @@
   :pathname "src/low/"
   :components ((:file "low")))
 
+(asdf:defsystem #:finch/gpt
+  :description "GUID partition tables"
+  :pathname "src/gpt/"
+  :components ((:file "gpt")))
+
 (asdf:defsystem #:finch/pexpert
   :description "Serial console"
   :depends-on (#:finch/low)
   :serial t
   :pathname "src/pexpert/i386/"
-  :components ((:file "serial") (:file "init")))
+  :components ((:file "serial") (:file "init") (:file "font") (:file "console")))
 
 (asdf:defsystem #:finch/osfmk
   :description "Kernel"
@@ -199,7 +204,7 @@
 
 (asdf:defsystem #:finch/image
   :description "The bootable image"
-  :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io #:finch/apfs #:finch/fat #:finch/install #:finch/cc #:finch/build #:finch/pexpert #:finch/osfmk #:finch/low #:finch/boot #:finch/link (:require #:sb-bsd-sockets))
+  :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io #:finch/apfs #:finch/fat #:finch/gpt #:finch/install #:finch/cc #:finch/build #:finch/pexpert #:finch/osfmk #:finch/low #:finch/boot #:finch/link (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/image/"
   :components ((:file "image") (:file "tcc") (:file "runtime") (:file "efi")))

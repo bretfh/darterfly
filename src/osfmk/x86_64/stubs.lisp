@@ -2,7 +2,7 @@
 
 (defparameter +error-vectors+ '(8 10 11 12 13 14 17 21 29 30))
 (defparameter +trap-vectors+
-  (append (loop :for v :below 32 :collect v) '(#x80 #x81 #x82 #x24)
+  (append (loop :for v :below 32 :collect v) '(#x80 #x81 #x82 #x24 #x25)
           (loop :for v :from #x30 :below #x40 :collect v) '(#xDA #xDD #xDE)))
 
 (defun trap-name (vector)

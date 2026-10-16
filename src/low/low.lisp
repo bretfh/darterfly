@@ -4,7 +4,7 @@
   (:export #:define-low #:define-global #:low-object #:inb #:outb #:ref #:mem #:pause #:result #:while
            #:package-object #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:address
            #:rep-movsb #:rep-stosb #:&va #:va-next #:rdtsc #:return-address
-           #:invlpg #:set-cr3 #:cpuid-edx #:cpu-data #:fxsave #:fxrstor #:code-address #:call-pointer #:read-cr #:set-cr #:fninit #:compare-and-swap #:rdrand #:int3 #:build-date #:*build-date* #:lidt #:ltr
+           #:invlpg #:set-cr3 #:cpuid-edx #:cpuid #:cpu-data #:fxsave #:fxrstor #:code-address #:call-pointer #:read-cr #:set-cr #:fninit #:compare-and-swap #:rdrand #:int3 #:build-date #:*build-date* #:lidt #:ltr
            #:efi-call #:wide #:define-efi-entry #:package-image
            #:signed< #:signed<= #:signed> #:signed>= #:sar #:sign-extend #:signed-truncate #:signed-rem))
 (in-package #:finch/low)
@@ -138,6 +138,10 @@
         ((stringp form)
          (let ((label (sb-assem:gen-label)))
            (push (cons label (sb-ext:string-to-octets form :null-terminate t)) *strings*)
+           (inst lea rax-tn (rip-relative-ea label))))
+        ((vectorp form)
+         (let ((label (sb-assem:gen-label)))
+           (push (cons label (coerce form '(simple-array (unsigned-byte 8) (*)))) *strings*)
            (inst lea rax-tn (rip-relative-ea label))))
         ((null form) (inst xor :dword (reg :dword 0) (reg :dword 0)))
         ((eq form t) (inst mov rax-tn 1))
@@ -360,6 +364,16 @@
                         (inst byte #x0F) (inst byte #xA2)
                         (inst pop rbx-tn)
                         (inst mov :dword (reg :dword 0) (reg :dword 2)))
+             (cpuid (compile (first args))
+                    (inst push rbx-tn)
+                    (inst xor :dword (reg :dword 1) (reg :dword 1))
+                    (inst byte #x0F) (inst byte #xA2)
+                    (ecase (second args)
+                      (:eax)
+                      (:ebx (inst mov :dword (reg :dword 0) (reg :dword 3)))
+                      (:ecx (inst mov :dword (reg :dword 0) (reg :dword 1)))
+                      (:edx (inst mov :dword (reg :dword 0) (reg :dword 2))))
+                    (inst pop rbx-tn))
              (cli (inst byte #xFA))
              (sti (inst byte #xFB))
              (hlt (inst byte #xF4))

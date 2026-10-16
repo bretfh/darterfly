@@ -181,6 +181,7 @@
 ")
   (vm-page-bootstrap args)
   (pmap-bootstrap args)
+  (console-init)
   (kalloc-init)
   (kprintf "vm: %lu MB free
 " (truncate (* (vm-page-free-count) +page-size+) (* 1024 1024)))

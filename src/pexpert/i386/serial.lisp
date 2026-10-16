@@ -33,7 +33,8 @@
     (serial-put-polled (ref tx (logand txtail #xFFFF)))
     (incf txtail))
   (when (= c 10) (serial-put-polled 13))
-  (serial-put-polled c))
+  (serial-put-polled c)
+  (console-putc c))
 
 (define-low serial-tx-kick ()
   (while (and (/= txhead txtail) (/= (logand (inb +lsr+) #x20) 0))
@@ -56,7 +57,8 @@
           (setf (ref tx (logand txhead #xFFFF)) 13)
           (incf txhead))
         (setf (ref tx (logand txhead #xFFFF)) c)
-        (incf txhead))))
+        (incf txhead)
+        (console-putc c))))
 
 (define-low serial-enable-interrupts ()
   (outb +ier+ #x01)
