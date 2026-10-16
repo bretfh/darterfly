@@ -1033,6 +1033,17 @@
                   (t (put (subseq octets i)) (return)))))))
     (coerce out '(simple-array (unsigned-byte 8) (*)))))
 
+(defun generated-date-blanked (octets)
+  (let ((octets (copy-seq octets))
+        (name (sb-ext:string-to-octets "GENERATED-CONSTANTS.LISP.NEWEST")))
+    (loop :for at := (search name octets) :then (search name octets :start2 (1+ at))
+          :while at
+          :do (let ((date (subseq octets (+ at (length name) 2) (+ at (length name) 6))))
+                (loop :for d := (search date octets) :then (search date octets :start2 (1+ d))
+                      :while d
+                      :do (fill octets 0 :start d :end (+ d 4)))))
+    octets))
+
 (defun generation-resume (c steps)
   (loop
     (image:send c (format nil "(format t \"~~%RESUME~~a ~~s~~%\" \"D\" (finch/generation:resume ~a))" steps))
@@ -1074,13 +1085,11 @@
     (let ((built (remove-if-not (lambda (name) (disk-octets disk (format nil "usr/src/sbcl/obj/sbcl-home/contrib/~a.fasl" name))) fasls)))
       (is (equal fasls built) "finch built ~a" built)
       (flet ((differing (name)
-               (let ((h (host-build-octets (merge-pathnames (format nil "obj/sbcl-home/contrib/~a.fasl" name) host) host))
-                     (g (disk-octets disk (format nil "usr/src/sbcl/obj/sbcl-home/contrib/~a.fasl" name))))
+               (let ((h (generated-date-blanked (host-build-octets (merge-pathnames (format nil "obj/sbcl-home/contrib/~a.fasl" name) host) host)))
+                     (g (generated-date-blanked (disk-octets disk (format nil "usr/src/sbcl/obj/sbcl-home/contrib/~a.fasl" name)))))
                  (if (= (length h) (length g)) (count nil (map 'list #'= h g)) :length))))
-        (dolist (name '("uiop" "asdf" "sb-rotate-byte" "sb-md5"))
-          (is (eql 0 (differing name)) "~a.fasl is the host's byte for byte, but for where each runtime and source tree lives" name))
-        (dolist (name '("sb-posix" "sb-bsd-sockets"))
-          (is (eql 4 (differing name)) "~a.fasl is the host's but for its generated constants' build date" name))))
+        (dolist (name fasls)
+          (is (eql 0 (differing name)) "~a.fasl is the host's byte for byte, but for where each runtime and source tree lives and when its constants were grovelled" name))))
     (sbcl-run disk "/usr/src/sbcl/output/sbcl.core"
               (list "/System/Library/Kernels/kernel" "--core" "/System/Library/Kernels/finch.core" "--no-sysinit" "--no-userinit" "--disable-debugger" "--eval"
                     "(progn (setf sb-sys::*sbcl-homedir-pathname* #p\"/usr/src/sbcl/obj/sbcl-home/\") (require :asdf) (require :sb-md5) (require :sb-posix) (require :sb-bsd-sockets))"
@@ -1118,6 +1127,44 @@
                    "the running core was compiled inside finch")
                (let ((counts (ask "(let ((r (let ((*standard-output* (make-broadcast-stream))) (append (5am:run 'finch/test::mach) (5am:run 'finch/test::bsd))))) (list (count-if-not (lambda (x) (typep x 'it.bese.fiveam::test-passed)) r) (length r)))")))
                  (is (search "(0 " counts) "finch's own core passes the mach and bsd suites: ~a" counts))
+               (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
+               (image:expect c "exit(0)" :timeout 120))
+          (image:finish c 30))))))
+
+(test finch-builds-a-generation
+  (let ((disk (merge-pathnames "generation.img" (finch-file "build/")))
+        (esp (merge-pathnames "esp-generation.img" (finch-file "build/")))
+        (compiled-from "(sb-di::debug-source-namestring (sb-di::code-location-debug-source (sb-di:debug-fun-start-location (sb-di:fun-debug-fun #'finch/install:install))))"))
+    (uiop:delete-file-if-exists disk)
+    (uiop:delete-file-if-exists esp)
+    (finch/image::root-disk disk (* 1024 1048576)
+                            (append (finch/image::root-entries) (finch/image::sbcl-source-entries)
+                                    (finch/image::tree-entries (finch/image::tcc-source) "usr/src/tinycc")))
+    (let ((c (image:bare-console :root disk :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 60)
+               (let ((result (generation-resume c "(finch/generation:generation-steps)")))
+                 (is (eq :done (first result)) "finch builds a whole generation from source: ~s" result))
+               (is (search "(\"gen-1\" \"gen-2\")" (ask "(finch/install:generations)")))
+               (is (search "T" (ask "(equalp (finch/install::read-octets \"/Users/finch/generation/boot.efi\") (finch/boot:boot-image))"))
+                   "the loader finch built is the one its running code makes")
+               (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
+               (image:expect c "exit(0)" :timeout 120))
+          (image:finish c 30))))
+    (let ((c (image:bare-console :root disk :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "boot.efi: generation gen-2" :timeout 60))
+               (image:expect c "* " :timeout 120)
+               (is (search "\"/usr/src/finch/src/install/install.lisp\"" (ask compiled-from))
+                   "generation 2 runs a core compiled inside finch")
+               (is (search "T" (ask "(equal (progn (finch/install::esp) (getf (with-open-file (s \"/Volumes/EFI/EFI/finch/gen-2/manifest\") (read s)) :build-id)) (finch/generation::runtime-build-id))"))
+                   "generation 2's runtime carries the build id its manifest records")
+               (let ((counts (ask "(let ((r (let ((*standard-output* (make-broadcast-stream))) (append (5am:run 'finch/test::mach) (5am:run 'finch/test::bsd))))) (list (count-if-not (lambda (x) (typep x 'it.bese.fiveam::test-passed)) r) (length r)))")))
+                 (is (search "(0 " counts) "generation 2 passes the mach and bsd suites: ~a" counts))
                (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
                (image:expect c "exit(0)" :timeout 120))
           (image:finish c 30))))))

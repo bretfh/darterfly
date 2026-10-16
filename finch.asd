@@ -135,7 +135,7 @@
 
 (asdf:defsystem #:finch/generation
   :description "Builds a generation"
-  :depends-on (#:uiop #:finch/vfs #:finch/run #:finch/cc)
+  :depends-on (#:uiop #:finch/vfs #:finch/run #:finch/cc #:finch/build #:finch/install #:finch/boot)
   :pathname "src/generation/"
   :components ((:file "generation")))
 

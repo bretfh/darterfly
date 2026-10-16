@@ -42,12 +42,18 @@
     (when left (error "threads still running: ~a" left)))
   (sb-ext:save-lisp-and-die "/System/Library/Kernels/saved.core"))
 
-(defun install (kernel core)
+(defun install (kernel core &key loader manifest)
   (let* ((was (current))
          (name (format nil "gen-~d" (1+ (reduce #'max (generations) :key (lambda (g) (parse-integer g :start 4)) :initial-value 0)))))
     (ensure-directories-exist (esp-path (format nil "~a/" name)))
     (uiop:copy-file kernel (esp-path (format nil "~a/kernel" name)))
     (uiop:copy-file core (esp-path (format nil "~a/finch.core" name)))
+    (when manifest
+      (uiop:copy-file manifest (esp-path (format nil "~a/manifest" name))))
+    (when loader
+      (uiop:copy-file loader (esp-path (format nil "~a/boot.efi" name)))
+      (dolist (to '("EFI/BOOT/BOOTX64.EFI" "System/Library/CoreServices/boot.efi"))
+        (uiop:copy-file loader (concatenate 'string *esp* to))))
     (put-line "previous" was)
     (put-line "current" name)
     name))
