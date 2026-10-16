@@ -66,3 +66,8 @@ int close_range(unsigned, unsigned, int);
 int getdtablesize(void);
 int setpgrp(pid_t, pid_t);
 int tcsetpgrp(int, pid_t);
+#define F_ULOCK 0
+#define F_LOCK 1
+#define F_TLOCK 2
+#define F_TEST 3
+#define _POSIX_VDISABLE 0

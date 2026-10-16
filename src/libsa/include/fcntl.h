@@ -29,3 +29,14 @@ int open(const char *, int, ...);
 int openat(int, const char *, int, ...);
 int creat(const char *, mode_t);
 int fcntl(int, int, ...);
+#define O_DSYNC 010000
+#define O_SYNC 04010000
+#define O_RSYNC 04010000
+#define O_ASYNC 020000
+#define O_DIRECT 040000
+#define F_SETOWN 8
+#define F_GETOWN 9
+#define F_RDLCK 0
+#define F_WRLCK 1
+#define F_UNLCK 2
+struct flock { short l_type; short l_whence; off_t l_start; off_t l_len; pid_t l_pid; };

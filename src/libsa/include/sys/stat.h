@@ -54,3 +54,6 @@ int chmod(const char *, mode_t);
 int fchmod(int, mode_t);
 mode_t umask(mode_t);
 int mkfifo(const char *, mode_t);
+#define S_ISUID 04000
+#define S_ISGID 02000
+#define S_ISVTX 01000

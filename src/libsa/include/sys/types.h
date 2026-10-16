@@ -4,6 +4,7 @@
 typedef long ssize_t;
 typedef long off_t;
 typedef long off64_t;
+typedef unsigned long ino64_t;
 typedef int pid_t;
 typedef unsigned uid_t;
 typedef unsigned gid_t;
@@ -26,3 +27,4 @@ typedef unsigned char u_char;
 typedef long register_t;
 typedef int id_t;
 typedef int key_t;
+#include <sys/select.h>

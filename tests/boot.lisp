@@ -1007,6 +1007,88 @@
           (unwind-protect (finch/vfs:vfs-read fd (finch/vfs:vattr-size (finch/vfs:vfs-stat path)))
             (finch/vfs:vfs-close fd)))))))
 
+(defun host-build-octets (path host)
+  (let* ((octets (image::octets path))
+         (runtime (sb-ext:string-to-octets (namestring (merge-pathnames "src/runtime/sbcl" host))))
+         (tree (sb-ext:string-to-octets (namestring host)))
+         (out (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0)))
+    (flet ((put (v) (loop :for b :across v :do (vector-push-extend b out))))
+      (let ((i 0))
+        (loop
+          (let ((r (search runtime octets :start2 i))
+                (s (search tree octets :start2 i)))
+            (cond ((and r (or (null s) (<= r s)))
+                   (put (subseq octets i r))
+                   (put (sb-ext:string-to-octets "/System/Library/Kernels/kernel"))
+                   (setf i (+ r (length runtime))))
+                  (s
+                   (let* ((length (aref octets (1- s)))
+                          (path (sb-ext:string-to-octets
+                                 (concatenate 'string "/usr/src/sbcl/"
+                                              (sb-ext:octets-to-string (subseq octets (+ s (length tree)) (+ s length)))))))
+                     (put (subseq octets i (1- s)))
+                     (vector-push-extend (length path) out)
+                     (put path)
+                     (setf i (+ s length))))
+                  (t (put (subseq octets i)) (return)))))))
+    (coerce out '(simple-array (unsigned-byte 8) (*)))))
+
+(defun generation-resume (c steps)
+  (loop
+    (image:send c (format nil "(format t \"~~%RESUME~~a ~~s~~%\" \"D\" (finch/generation:resume ~a))" steps))
+    (multiple-value-bind (seen found) (image:expect c (list "RESUMED " "restart: core") :timeout 1200)
+      (declare (ignore seen))
+      (when (string= found "RESUMED ")
+        (let ((result (read-from-string (image:expect c (string #\Newline) :timeout 60))))
+          (unless (eq :done (first result))
+            (format t "~&generation-resume: ~s; console ends:~%~a~%" result (let ((s (image:transcript c))) (subseq s (max 0 (- (length s) 6000))))))
+          (return result)))
+      (unless (ignore-errors (image:expect c "restart: core" :timeout *run-wait*))
+        (format t "~&generation-resume: no return; console ends:~%~a~%" (let ((s (image:transcript c))) (subseq s (max 0 (- (length s) 3000)))))
+        (return nil))
+      (image:expect c "* " :timeout 120))))
+
+(test finch-builds-its-contribs
+  (let ((disk (merge-pathnames "sbcl-build.img" (finch-file "build/")))
+        (host (finch-file "build/sbcl-mt/"))
+        (fasls '("uiop" "asdf" "sb-rotate-byte" "sb-md5" "sb-posix" "sb-bsd-sockets")))
+    (is (disk-octets disk "usr/src/sbcl/output/sbcl.core") "finch-bootstraps-sbcl left finch's own sbcl.core")
+    (let ((c (image:bare-console :root disk)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 60)
+               (ask "(uiop:delete-file-if-exists finch/generation:*state*)")
+               (ask "(progn (mapc #'delete-file (directory \"/usr/src/sbcl/obj/sbcl-home/contrib/*.*\")) (uiop:delete-directory-tree #p\"/usr/src/sbcl/obj/from-self/\" :validate t :if-does-not-exist :ignore))")
+               (is (search "NIL" (ask "(append (directory \"/usr/src/sbcl/obj/sbcl-home/contrib/*.*\") (directory \"/usr/src/sbcl/obj/from-self/**/*.*\"))")) "no contrib output is left from before")
+               (let ((result (generation-resume c "(finch/generation:contrib-steps \"/usr/src/sbcl/\")")))
+                 (is (eq :done (first result)) "every contrib step finishes: ~s" result))
+               (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
+               (image:expect c "exit(0)" :timeout 120))
+          (image:finish c 30))))
+    (dolist (name '("sb-posix" "sb-bsd-sockets"))
+      (let ((rel (format nil "obj/from-self/contrib/~a/generated-constants.lisp" name)))
+        (is (equalp (image::octets (merge-pathnames rel host)) (disk-octets disk (concatenate 'string "usr/src/sbcl/" rel)))
+            "~a's grovel output in finch is the host's byte for byte" name)))
+    (let ((built (remove-if-not (lambda (name) (disk-octets disk (format nil "usr/src/sbcl/obj/sbcl-home/contrib/~a.fasl" name))) fasls)))
+      (is (equal fasls built) "finch built ~a" built)
+      (flet ((differing (name)
+               (let ((h (host-build-octets (merge-pathnames (format nil "obj/sbcl-home/contrib/~a.fasl" name) host) host))
+                     (g (disk-octets disk (format nil "usr/src/sbcl/obj/sbcl-home/contrib/~a.fasl" name))))
+                 (if (= (length h) (length g)) (count nil (map 'list #'= h g)) :length))))
+        (dolist (name '("uiop" "asdf" "sb-rotate-byte" "sb-md5"))
+          (is (eql 0 (differing name)) "~a.fasl is the host's byte for byte, but for where each runtime and source tree lives" name))
+        (dolist (name '("sb-posix" "sb-bsd-sockets"))
+          (is (eql 4 (differing name)) "~a.fasl is the host's but for its generated constants' build date" name))))
+    (sbcl-run disk "/usr/src/sbcl/output/sbcl.core"
+              (list "/System/Library/Kernels/kernel" "--core" "/System/Library/Kernels/finch.core" "--no-sysinit" "--no-userinit" "--disable-debugger" "--eval"
+                    "(progn (setf sb-sys::*sbcl-homedir-pathname* #p\"/usr/src/sbcl/obj/sbcl-home/\") (require :asdf) (require :sb-md5) (require :sb-posix) (require :sb-bsd-sockets))"
+                    "--eval" "(with-open-file (o \"/usr/src/sbcl/contribs.txt\" :direction :output :if-exists :supersede) (write (list (asdf:asdf-version) (sb-md5:md5sum-string \"finch\") (integerp (sb-posix:getpid)) (sb-bsd-sockets:make-inet-address \"10.0.2.2\")) :stream o :pretty nil))"
+                    "--quit"))
+    (is (equal "(\"3.3.1\" #(192 65 240 164 75 149 198 213 199 195 255 71 232 234 151 51) T #(10 0 2 2))"
+               (let ((out (disk-octets disk "usr/src/sbcl/contribs.txt"))) (and out (map 'string #'code-char out))))
+        "finch's sbcl.core loads the contribs finch built, and they work")))
+
 (test finch-saves-itself-and-boots-the-save
   (let ((esp (merge-pathnames "esp-save.img" (finch-file "build/"))))
     (uiop:delete-file-if-exists esp)

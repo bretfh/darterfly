@@ -198,15 +198,22 @@
                  when (or (search "CPU#" line) (search "RIP=" line) (search "RSP=" line) (search "RAX=" line))
                    do (write-line line out))))))))
 
+(defun first-match (texts string)
+  (let ((best nil) (found nil))
+    (dolist (text (if (listp texts) texts (list texts)) (values best found))
+      (let ((at (search text string)))
+        (when (and at (or (null best) (< at best)))
+          (setf best at found text))))))
+
 (defun expect (console text &key (timeout 30))
   (let* ((out (uiop:process-info-output (console-process console)))
          (deadline (+ (get-internal-real-time) (* timeout internal-time-units-per-second))))
     (loop
-      (let ((at (search text (console-text console))))
+      (multiple-value-bind (at found) (first-match text (console-text console))
         (when at
-          (let ((seen (subseq (console-text console) 0 (+ at (length text)))))
-            (setf (console-text console) (subseq (console-text console) (+ at (length text))))
-            (return seen))))
+          (let ((seen (subseq (console-text console) 0 (+ at (length found)))))
+            (setf (console-text console) (subseq (console-text console) (+ at (length found))))
+            (return (values seen found)))))
       (when (> (get-internal-real-time) deadline)
         (error "console: no ~s after ~a s, saw ~s~@[~%cpus:~%~a~]" text timeout (console-text console) (cpu-states)))
       (if (listen out)

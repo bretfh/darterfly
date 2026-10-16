@@ -18,3 +18,10 @@ struct dirent *readdir(DIR *);
 int closedir(DIR *);
 struct dirent *readdir64(DIR *);
 int dirfd(DIR *);
+struct dirent64 {
+  ino64_t d_ino;
+  off64_t d_off;
+  unsigned short d_reclen;
+  unsigned char d_type;
+  char d_name[256];
+};

@@ -27,3 +27,5 @@ int mprotect(void *, size_t, int);
 int madvise(void *, size_t, int);
 int msync(void *, size_t, int);
 int mlock(const void *, size_t);
+#define MCL_CURRENT 1
+#define MCL_FUTURE 2
