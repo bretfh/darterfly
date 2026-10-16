@@ -26,6 +26,7 @@
   (finch-asdf)
   (unless (finch/run:in-run-p)
     (ignore-errors (finch/install:confirm))
+    (sb-thread:make-thread (lambda () (ignore-errors (finch/devices:start-devices) (finch/devices:restore-brightness))) :name "brightness")
     (when (ignore-errors (finch/generation:pending-build))
       (finch/generation:resume-build))
     (when (stringp (finch/devices:boot-arg "nrepl-key"))
