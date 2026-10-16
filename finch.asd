@@ -117,7 +117,7 @@
 
 (asdf:defsystem #:finch/fat
   :description "FAT32"
-  :depends-on (#:uiop #:finch/vfs #:finch/iokit)
+  :depends-on (#:uiop #:finch/vfs #:finch/iokit #:finch/gpt)
   :serial t
   :pathname "src/fat/"
   :components ((:file "fat") (:file "vfs")))

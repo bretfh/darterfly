@@ -1721,6 +1721,7 @@
                (is (image:expect c "launchd: pid 1" :timeout 120) "launchd starts from the NVMe root")
                (is (search "NVME" (ask "(string-upcase (type-of (finch/iokit:media-device finch/apfs::*root-media*)))"))
                    "the root is on the NVMe")
+               (is (search "(\"gen-1\")" (ask "(finch/install:generations)")) "the installed system finds its own ESP")
                (is (search "T" (ask "(progn (with-open-file (s \"/Users/finch/kept\" :direction :output :if-exists :supersede) (write-line \"kept\" s)) (finch/vfs:vfs-sync) (probe-file \"/Users/finch/kept\") t)")))
                (let ((screen (screen-until (lambda (s) (= #xff2e5c8f (image:pixel s 5 300))) 60)))
                  (is (= #xff2e5c8f (image:pixel screen 5 300)) "the desktop comes up from the installed disk"))

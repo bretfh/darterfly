@@ -108,7 +108,9 @@
             (funcall write first blocks))))))
 
 (defun mount-esp (&optional (path "/Volumes/EFI"))
-  (let ((media (find-if (lambda (m) (and (iokit:get-property m "Whole") (fat-media-p m)))
+  (let ((media (find-if (lambda (m) (and (or (iokit:get-property m "Whole")
+                                              (equal (iokit:get-property m "Content") finch/gpt:+esp-type+))
+                                          (fat-media-p m)))
                         (iokit:find-entries 'iokit:io-media))))
     (when media
       (vfs:vfs-mkdirs path)
