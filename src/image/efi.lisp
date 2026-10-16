@@ -249,7 +249,15 @@
       (walk root))
     (finch/fat:newfs image :size size :label "EFI" :entries (nreverse entries))))
 
-(defun usb-image (&key (path (build-path "finch-usb.img")) (boot-args "rd=ram launchd"))
+(defun nrepl-key ()
+  (let ((file (build-path "nrepl.key")))
+    (unless (probe-file file)
+      (with-open-file (s file :direction :output)
+        (let ((state (make-random-state t)))
+          (format s "~{~(~8,'0x~)~}~%" (loop repeat 4 collect (random (ash 1 32) state))))))
+    (with-open-file (s file) (read-line s))))
+
+(defun usb-image (&key (path (build-path "finch-usb.img")) (boot-args (format nil "rd=ram launchd nrepl-key=~a" (nrepl-key))))
   (let ((fat (esp-image (esp :boot-args boot-args :root-image (root-disk (build-path "usb-root.img")))
                         (build-path "usb-esp.img") (* 512 1048576))))
     (finch/gpt:write-disk path (list (list finch/gpt:+esp-type+ "F1C40000-0000-4000-8000-000000000011" "EFI" fat)))

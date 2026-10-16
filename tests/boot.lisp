@@ -1593,3 +1593,22 @@
                (let ((screen (screen-until (lambda (s) (= #xffffffff (image:pixel s 500 300))) 30)))
                  (is (= #xffffffff (image:pixel screen 500 300)) "the USB mouse clicks the terminal open ~x" (image:pixel screen 500 300))))
           (image:finish c 5))))))
+
+(test nrepl-on-finch
+  (let* ((port (free-udp-port))
+         (c (image:bare-console :forwards (list (list :tcp port 4011)))))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60))
+           (client (key code)
+             (multiple-value-bind (out err)
+                 (uiop:run-program (list "sbcl" "--script" (namestring (finch-file "tools/nrepl.lisp"))
+                                         "eval" "--new" "--host" "127.0.0.1" "--port" (princ-to-string port) "--key" key code)
+                                   :output :string :error-output :string :ignore-error-status t)
+               (concatenate 'string out err))))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 90)
+             (is (search "10.0.2.15:4011" (ask "(finch/nrepl:start :key \"test-key\")")))
+             (is (search "=> 3" (client "test-key" "(+ 1 2)")) "the host evaluates a form on finch")
+             (is (search "=> \"10.0.2.15\"" (client "test-key" "(finch/net:address-string (finch/net::interface-ip finch/net:*interface*))")) "in finch's own image")
+             (is (not (search "=>" (client "wrong" "(+ 1 2)"))) "and a wrong key evaluates nothing"))
+        (image:finish c 5)))))
