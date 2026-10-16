@@ -1,0 +1,47 @@
+(in-package #:finch/image)
+
+(defun deployment ()
+  (append (loop for entry in (root-entries)
+                when (eq (first entry) :file)
+                  collect (destructuring-bind (path octets &optional (mode #o644) &rest more) (rest entry)
+                            (declare (ignore more))
+                            (list "file" path octets mode)))
+          (list (list "gen" "kernel" (octets (kernel-file)) #o644)
+                (list "gen" "finch.core" (octets (finch-core)) #o644)
+                (list "gen" "boot.efi" (octets (boot-efi)) #o644))))
+
+(defun serve-deployment (entries port)
+  (let ((listener (make-instance 'sb-bsd-sockets:inet-socket :type :stream :protocol :tcp)))
+    (setf (sb-bsd-sockets:sockopt-reuse-address listener) t)
+    (sb-bsd-sockets:socket-bind listener #(0 0 0 0) port)
+    (sb-bsd-sockets:socket-listen listener 1)
+    (sb-thread:make-thread
+     (lambda ()
+       (unwind-protect
+            (let* ((socket (sb-bsd-sockets:socket-accept listener))
+                   (stream (sb-bsd-sockets:socket-make-stream socket :output t :element-type '(unsigned-byte 8) :buffering :full)))
+              (unwind-protect
+                   (progn
+                     (loop for (kind path octets mode) in entries
+                           do (write-sequence (text (format nil "~a ~d ~o ~a~%" kind (length octets) mode path)) stream)
+                              (write-sequence octets stream))
+                     (write-sequence (text (format nil "end~%")) stream)
+                     (finish-output stream))
+                (sb-bsd-sockets:socket-close socket)))
+         (sb-bsd-sockets:socket-close listener)))
+     :name "deployment")))
+
+(defun device-eval (host code &key (timeout 600) (nrepl-port 4011))
+  (uiop:run-program (list "timeout" (princ-to-string timeout) "sbcl" "--script" (uiop:native-namestring (source "tools/nrepl.lisp"))
+                          "eval" "--new" "--host" host "--port" (princ-to-string nrepl-port) "--key" (nrepl-key) code)
+                    :output :string :error-output :string :ignore-error-status t))
+
+(defun deploy (host &key (from "10.42.0.1") (port 47100) (nrepl-port 4011) (restart t))
+  (let* ((entries (deployment))
+         (receiver (uiop:read-file-string (source "src/install/deploy.lisp")))
+         (server (serve-deployment entries port))
+         (result (device-eval host (format nil "(progn (with-input-from-string (s ~s) (let ((*package* (find-package \"FINCH/INSTALL\"))) (loop for f = (read s nil s) until (eq f s) do (eval f)))) (let ((r (finch/install::receive-deployment ~s ~d))) (when ~a (finch/install::restart-soon)) r))"
+                                           receiver from port (and restart t))
+                              :nrepl-port nrepl-port)))
+    (sb-thread:join-thread server :default nil :timeout 5)
+    result))

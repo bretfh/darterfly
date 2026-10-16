@@ -1581,12 +1581,14 @@
         (image:*network-device* "usb-net,netdev=net0,bus=xhci.0"))
     (nrepl-check :status t)))
 
+(defvar *stick-netdev* "user,id=net0")
+
 (defun stick-machine (&rest devices)
   (image:console :args (append (list "qemu-system-x86_64" "-enable-kvm" "-cpu" "host" "-m" "4096" "-smp" "4" "-machine" "q35"
                                      "-drive" (format nil "if=pflash,format=raw,readonly=on,file=~a" (finch/image::firmware "ovmf_code_x64.bin"))
                                      "-drive" (format nil "if=pflash,format=raw,snapshot=on,file=~a" (finch/image::firmware "ovmf_vars_x64.bin"))
                                      "-device" "qemu-xhci,id=xhci"
-                                     "-netdev" "user,id=net0" "-device" "usb-net,netdev=net0,bus=xhci.0")
+                                     "-netdev" *stick-netdev* "-device" "usb-net,netdev=net0,bus=xhci.0")
                                devices
                                (list "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
                                      "-monitor" (format nil "unix:~a,server=on,wait=off" (finch/image::monitor-path))
@@ -1644,6 +1646,50 @@
                (is (image:expect c "boot.efi: generation gen-2" :timeout 60) "the firmware boots the generation it installed")
                (is (image:expect c "init: pid 1" :timeout 120))
                (is (search "(\"gen-1\" \"gen-2\")" (ask "(finch/install:generations)"))))
+          (image:finish c 5))))))
+
+(test deploy-updates-an-installed-system
+  (let* ((stick (image:usb-image))
+         (disk (merge-pathnames "deploy-nvme.img" (finch-file "build/")))
+         (port (free-udp-port)))
+    (with-open-file (s disk :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
+      (file-position s (1- (* 4096 1048576)))
+      (write-byte 0 s))
+    (let ((c (stick-machine "-drive" (format nil "if=none,id=stick,format=raw,snapshot=on,file=~a" (uiop:native-namestring stick))
+                            "-device" "usb-storage,bus=xhci.0,drive=stick,bootindex=0"
+                            "-drive" (format nil "if=none,id=disk,format=raw,file=~a" (uiop:native-namestring disk))
+                            "-device" "nvme,serial=disk,drive=disk")))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "init: pid 1" :timeout 120))
+               (is (search "\"" (ask "(finch/install:install-disk)")))
+               (image:send c "(sb-ext:exit)")
+               (image:expect c "exit(0)" :timeout 120))
+          (image:finish c 5))))
+    (let* ((*stick-netdev* (format nil "user,id=net0,hostfwd=tcp::~d-:4011" port))
+           (c (stick-machine "-drive" (format nil "if=none,id=disk,format=raw,file=~a" (uiop:native-namestring disk))
+                             "-device" "nvme,serial=disk,drive=disk,bootindex=0")))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "init: pid 1" :timeout 120))
+               (ask "(progn (loop :repeat 100 :until finch/nrepl::*thread* :do (sleep 0.1)) :ready)")
+               (ask "(with-open-file (s \"/Users/finch/kept\" :direction :output :if-exists :supersede) (write-line \"kept\" s))")
+               (let ((result (image:deploy "127.0.0.1" :from "10.0.2.2" :nrepl-port port)))
+                 (is (search ":GENERATION \"gen-2\"" result) "~a" result))
+               (is (loop :repeat 1200 :unless (uiop:process-alive-p (image::console-process c)) :return t :do (sleep 0.1))
+                   "the deploy restarts the machine"))
+          (image:finish c 5))))
+    (let ((c (stick-machine "-drive" (format nil "if=none,id=disk,format=raw,file=~a" (uiop:native-namestring disk))
+                            "-device" "nvme,serial=disk,drive=disk,bootindex=0")))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "boot.efi: generation gen-2" :timeout 60) "the deployed generation boots")
+               (is (image:expect c "init: pid 1" :timeout 120))
+               (is (search "\"kept\"" (ask "(with-open-file (s \"/Users/finch/kept\") (read-line s))")) "user files survive")
+               (is (search "T" (ask "(and (probe-file \"/usr/src/finch/src/install/deploy.lisp\") t)"))))
           (image:finish c 5))))))
 
 (test install-from-the-desktop

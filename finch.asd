@@ -142,10 +142,10 @@
 
 (asdf:defsystem #:finch/install
   :description "Generations"
-  :depends-on (#:uiop #:finch/fat #:finch/low #:finch/platform #:finch/kern #:finch/link #:finch/gpt #:finch/apfs #:finch/devices #:finch/vfs)
+  :depends-on (#:uiop #:finch/fat #:finch/low #:finch/platform #:finch/kern #:finch/link #:finch/gpt #:finch/apfs #:finch/devices #:finch/vfs (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/install/"
-  :components ((:file "install") (:file "disk")))
+  :components ((:file "install") (:file "disk") (:file "deploy")))
 
 (asdf:defsystem #:finch/asm
   :description "x86-64 objects"
@@ -208,7 +208,7 @@
   :depends-on (#:uiop #:finch/qmp #:finch/io #:finch/apfs #:finch/fat #:finch/gpt #:finch/install #:finch/cc #:finch/build #:finch/platform #:finch/kern #:finch/low #:finch/boot #:finch/link (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/image/"
-  :components ((:file "image") (:file "tcc") (:file "runtime") (:file "efi")))
+  :components ((:file "image") (:file "tcc") (:file "runtime") (:file "efi") (:file "deploy")))
 
 (asdf:defsystem #:finch/server
   :description "The window server"

@@ -1,7 +1,7 @@
 (defpackage #:finch/devices
   (:use #:cl)
   (:nicknames #:devices)
-  (:export
+  (:export #:machdep
    #:start-devices #:device-tree #:*registry-root*
    #:entry #:entry-name #:entry-location #:entry-parent #:entry-children
    #:get-property #:set-property #:find-entries
