@@ -1726,7 +1726,20 @@
                (let ((screen (screen-until (lambda (s) (= #xff2e5c8f (image:pixel s 5 300))) 60)))
                  (is (= #xff2e5c8f (image:pixel screen 5 300)) "the desktop comes up from the installed disk"))
                (is (search "10.0.2.15" (ask "(progn (loop :repeat 100 :until finch/nrepl::*thread* :do (sleep 0.1)) (and finch/nrepl::*thread* (finch/net:address-string (finch/net::interface-ip finch/net:*interface*))))"))
-                   "and nrepl starts with the stick's key"))
+                   "and nrepl starts with the stick's key")
+               (is (search "\"gen-2\"" (ask "(finch/install:install \"/System/Library/Kernels/kernel\" \"/System/Library/Kernels/finch.core\")"))
+                   "it installs a generation onto its own ESP partition")
+               (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
+               (image:expect c "exit(0)" :timeout 120))
+          (image:finish c 5))))
+    (let ((c (stick-machine "-drive" (format nil "if=none,id=disk,format=raw,file=~a" (uiop:native-namestring disk))
+                            "-device" "nvme,serial=disk,drive=disk,bootindex=0")))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "boot.efi: generation gen-2" :timeout 60) "the firmware boots the generation it installed")
+               (is (image:expect c "launchd: pid 1" :timeout 120))
+               (is (search "(\"gen-1\" \"gen-2\")" (ask "(finch/install:generations)"))))
           (image:finish c 5))))))
 
 (test install-from-the-desktop
