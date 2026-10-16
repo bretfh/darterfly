@@ -1628,3 +1628,93 @@
   (let ((image:*input-devices* '("qemu-xhci,id=xhci" "virtio-keyboard-pci" "virtio-tablet-pci"))
         (image:*network-device* "usb-net,netdev=net0,bus=xhci.0"))
     (nrepl-check :status t)))
+
+(defun stick-machine (&rest devices)
+  (image:console :args (append (list "qemu-system-x86_64" "-enable-kvm" "-cpu" "host" "-m" "4096" "-smp" "4" "-machine" "q35"
+                                     "-drive" (format nil "if=pflash,format=raw,readonly=on,file=~a" (finch/image::firmware "ovmf_code_x64.bin"))
+                                     "-drive" (format nil "if=pflash,format=raw,snapshot=on,file=~a" (finch/image::firmware "ovmf_vars_x64.bin"))
+                                     "-device" "qemu-xhci,id=xhci"
+                                     "-netdev" "user,id=net0" "-device" "usb-net,netdev=net0,bus=xhci.0")
+                               devices
+                               (list "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
+                                     "-monitor" (format nil "unix:~a,server=on,wait=off" (finch/image::monitor-path))
+                                     "-qmp" (format nil "unix:~a,server=on,wait=off" (finch/image::qmp-path))
+                                     "-display" "none" "-serial" "stdio" "-no-reboot"))))
+
+(test install-on-nvme
+  (let* ((stick (image:usb-image))
+         (disk (merge-pathnames "install-nvme.img" (finch-file "build/")))
+         (image:*screen-size* '(1280 800))
+         (junk (make-array 1048576 :element-type '(unsigned-byte 8) :initial-element #xA5)))
+    (with-open-file (s disk :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
+      (dolist (mb '(0 1 2 3 1024 1025 1026 1027))
+        (file-position s (* mb 1048576))
+        (write-sequence junk s))
+      (file-position s (1- (* 4096 1048576)))
+      (write-byte 0 s))
+    (let ((c (stick-machine "-drive" (format nil "if=none,id=stick,format=raw,snapshot=on,file=~a" (uiop:native-namestring stick))
+                            "-device" "usb-storage,bus=xhci.0,drive=stick,bootindex=0"
+                            "-drive" (format nil "if=none,id=disk,format=raw,file=~a" (uiop:native-namestring disk))
+                            "-device" "nvme,serial=disk,drive=disk")))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "launchd: pid 1" :timeout 120))
+               (is (search "\"" (ask "(finch/install:install-disk)")) "the installer writes the NVMe")
+               (image:send c "(sb-ext:exit)")
+               (image:expect c "exit(0)" :timeout 120))
+          (image:finish c 5))))
+    (let ((c (stick-machine "-drive" (format nil "if=none,id=disk,format=raw,file=~a" (uiop:native-namestring disk))
+                            "-device" "nvme,serial=disk,drive=disk,bootindex=0")))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "boot.efi: generation gen-1" :timeout 60) "the firmware boots the NVMe")
+               (is (image:expect c "launchd: pid 1" :timeout 120) "launchd starts from the NVMe root")
+               (is (search "NVME" (ask "(string-upcase (type-of (finch/iokit:media-device finch/apfs::*root-media*)))"))
+                   "the root is on the NVMe")
+               (is (search "T" (ask "(progn (with-open-file (s \"/Users/finch/kept\" :direction :output :if-exists :supersede) (write-line \"kept\" s)) (finch/vfs:vfs-sync) (probe-file \"/Users/finch/kept\") t)")))
+               (let ((screen (screen-until (lambda (s) (= #xff2e5c8f (image:pixel s 5 300))) 60)))
+                 (is (= #xff2e5c8f (image:pixel screen 5 300)) "the desktop comes up from the installed disk"))
+               (is (search "10.0.2.15" (ask "(progn (loop :repeat 100 :until finch/nrepl::*thread* :do (sleep 0.1)) (and finch/nrepl::*thread* (finch/net:address-string (finch/net::interface-ip finch/net:*interface*))))"))
+                   "and nrepl starts with the stick's key"))
+          (image:finish c 5))))))
+
+(test install-from-the-desktop
+  (let* ((stick (image:usb-image))
+         (disk (merge-pathnames "install-ui.img" (finch-file "build/")))
+         (image:*screen-size* '(1280 800)))
+    (with-open-file (s disk :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
+      (file-position s (1- (* 4096 1048576)))
+      (write-byte 0 s))
+    (let ((c (stick-machine "-drive" (format nil "if=none,id=stick,format=raw,snapshot=on,file=~a" (uiop:native-namestring stick))
+                            "-device" "usb-storage,bus=xhci.0,drive=stick,bootindex=0" "-device" "usb-mouse,bus=xhci.0"
+                            "-drive" (format nil "if=none,id=disk,format=raw,file=~a" (uiop:native-namestring disk))
+                            "-device" "nvme,serial=disk,drive=disk")))
+      (labels ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120))
+               (rel (dx dy) (image:qmp "input-send-event"
+                                       (finch/qmp:dict "events" (vector (finch/qmp:dict "type" "rel" "data" (finch/qmp:dict "axis" "x" "value" dx))
+                                                                        (finch/qmp:dict "type" "rel" "data" (finch/qmp:dict "axis" "y" "value" dy))))))
+               (button (down) (image:qmp "input-send-event"
+                                         (finch/qmp:dict "events" (vector (finch/qmp:dict "type" "btn" "data" (finch/qmp:dict "button" "left" "down" down))))))
+               (click (x y)
+                 (dotimes (i 40) (rel -100 -100) (sleep 0.01))
+                 (loop :with at-x := 0 :with at-y := 0
+                       :until (and (>= at-x x) (>= at-y y))
+                       :do (let ((dx (min 50 (- x at-x))) (dy (min 50 (- y at-y))))
+                             (rel dx dy) (incf at-x dx) (incf at-y dy) (sleep 0.02)))
+                 (sleep 0.5)
+                 (button t) (sleep 0.05) (button nil) (sleep 1)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "launchd: pid 1" :timeout 120))
+               (screen-until (lambda (s) (= #xffffffff (image:pixel s 480 236))) 60)
+               (sleep 2)
+               (click 654 236)
+               (click 654 236)
+               (is (search "\"EFI PART\"" (ask "(loop :repeat 600 :until (equal \"EFI PART\" (map 'string #'code-char (finch/iokit:media-read (finch/install:internal-disk) 512 8))) :do (sleep 0.5) :finally (return (map 'string #'code-char (finch/iokit:media-read (finch/install:internal-disk) 512 8))))"))
+                   "Install... then Erase and Install writes the disk")
+               (sleep 20)
+               (image:screendump)
+               (uiop:copy-file (finch/image::build-path "screen.ppm") (finch-file "build/install-done.ppm")))
+          (image:finish c 5))))))

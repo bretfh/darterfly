@@ -1,0 +1,107 @@
+(in-package #:finch/install)
+
+(defparameter *boot-payload* "/usr/lib/finch/boot/")
+(defparameter *skipped* '("/dev" "/proc" "/tmp" "/Volumes" "/System/Library/Kernels"))
+
+(defun internal-disk ()
+  (find-if (lambda (m) (and (finch/iokit:get-property m "Whole")
+                            (typep (finch/iokit:media-device m) 'finch/iokit::io-nvme-block-storage-device)))
+           (finch/iokit:find-entries 'finch/iokit:io-media)))
+
+(defun file-octets (path)
+  (let ((fd (finch/vfs:vfs-open path (list :access :rdonly) 0)))
+    (unwind-protect (finch/vfs:vfs-read fd (finch/vfs:vattr-size (finch/vfs:vfs-fstat fd)))
+      (finch/vfs:vfs-close fd))))
+
+(defun children (dir)
+  (let ((fd (finch/vfs:vfs-open dir (list :access :rdonly) 0)))
+    (unwind-protect (loop for i from 0
+                          for entry = (finch/vfs:vfs-readdir fd i)
+                          while entry
+                          unless (member (car entry) '("." "..") :test #'string=)
+                            collect (car entry))
+      (finch/vfs:vfs-close fd))))
+
+(defun tree-entries (root &key skip)
+  (let ((entries nil))
+    (labels ((walk (dir rel)
+               (dolist (name (sort (children dir) #'string<))
+                 (let* ((path (concatenate 'string (string-right-trim "/" dir) "/" name))
+                        (rel (if (string= rel "") name (concatenate 'string rel "/" name)))
+                        (mode (finch/vfs:vattr-mode (finch/vfs:vfs-stat path :follow nil))))
+                   (unless (member path skip :test #'string=)
+                     (case (logand mode #o170000)
+                       (#o040000 (push (list :dir rel) entries) (walk path rel))
+                       (#o100000 (push (list :file rel (file-octets path) (logand mode #o7777)) entries))
+                       (#o120000 (push (list :symlink rel (finch/vfs:vfs-readlink path)) entries))))))))
+      (walk root ""))
+    (nreverse entries)))
+
+(defun new-uuid ()
+  (let ((state (make-random-state t)))
+    (format nil "~:@(~8,'0x-~4,'0x-4~3,'0x-~4,'0x-~12,'0x~)"
+            (random (ash 1 32) state) (random (ash 1 16) state) (random (ash 1 12) state)
+            (logior #x8000 (random (ash 1 14) state)) (random (ash 1 48) state))))
+
+(defun boot-plist (boot-args)
+  (format nil "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
+<plist version=\"1.0\">
+<dict>
+	<key>Kernel Flags</key>
+	<string>~a -- --core /System/Library/Kernels/finch.core</string>
+	<key>RAMDisk</key>
+	<string>/System/Library/RAMDisk/root.cpio</string>
+</dict>
+</plist>
+" boot-args))
+
+(defun esp-entries (boot-args)
+  (flet ((payload (name) (file-octets (concatenate 'string *boot-payload* name))))
+    (let ((loader (payload "boot.efi")))
+      (list (list :dir "EFI") (list :dir "EFI/BOOT") (list :file "EFI/BOOT/BOOTX64.EFI" loader)
+            (list :dir "EFI/finch") (list :dir "EFI/finch/gen-1")
+            (list :file "EFI/finch/gen-1/kernel" (payload "kernel"))
+            (list :file "EFI/finch/gen-1/finch.core" (payload "finch.core"))
+            (list :file "EFI/finch/current" (sb-ext:string-to-octets (format nil "gen-1~%")))
+            (list :dir "System") (list :dir "System/Library") (list :dir "System/Library/CoreServices")
+            (list :file "System/Library/CoreServices/boot.efi" loader)
+            (list :dir "System/Library/RAMDisk")
+            (list :file "System/Library/RAMDisk/root.cpio" (payload "root.cpio"))
+            (list :dir "Library") (list :dir "Library/Preferences") (list :dir "Library/Preferences/SystemConfiguration")
+            (list :file "Library/Preferences/SystemConfiguration/com.apple.Boot.plist"
+                  (sb-ext:string-to-octets (boot-plist boot-args)))))))
+
+(defun install-disk (&key (disk (internal-disk)) (esp-size (* 1024 1048576)) (root-size (* 1024 1048576))
+                          (progress (lambda (step) (declare (ignore step)))))
+  (unless disk (error "install: no internal disk"))
+  (let* ((sectors (floor (finch/iokit:get-property disk "Size") 512))
+         (esp-first 2048)
+         (esp-last (+ esp-first (floor esp-size 512) -1))
+         (root-first (* 2048 (ceiling (1+ esp-last) 2048)))
+         (root-last (- sectors 34))
+         (uuid (new-uuid))
+         (key (finch/iokit:boot-arg "nrepl-key"))
+         (boot-args (format nil "rd=uuid:~a launchd~@[ nrepl-key=~a~]" uuid (and (stringp key) key))))
+    (when (< (* (- root-last root-first) 512) root-size) (error "install: the disk is too small"))
+    (finch/vfs:vfs-sync)
+    (funcall progress "Reading the system")
+    (let ((root (tree-entries "/" :skip *skipped*))
+          (esp (esp-entries boot-args)))
+      (flet ((at (offset) (lambda (at octets) (finch/iokit:media-write disk (+ offset at) octets)))
+             (from (offset) (lambda (at length) (finch/iokit:media-read disk (+ offset at) length))))
+        (funcall progress "Partitioning")
+        (finch/gpt:write-table (at 0) sectors
+                               (list (list finch/gpt:+esp-type+ (new-uuid) "EFI" esp-first esp-last)
+                                     (list finch/gpt:+apfs-type+ (new-uuid) "finch" root-first root-last)))
+        (funcall progress "Writing the boot partition")
+        (let* ((offset (* esp-first 512))
+               (write (finch/fat::whole-blocks (from offset) (at offset)))
+               (v (finch/fat::format-volume (from offset) write esp-size "EFI")))
+          (finch/fat::with-volume (v) (finch/fat::put-entries v esp)))
+        (funcall progress "Writing the system")
+        (finch/apfs:newfs (at (* root-first 512)) :size root-size :volume-name "finch" :volume-uuid uuid
+                                                  :container-uuid (new-uuid) :entries root)
+        (finch/iokit:media-flush disk)
+        (funcall progress "Done")
+        uuid))))

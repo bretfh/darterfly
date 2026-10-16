@@ -1,9 +1,10 @@
 (defpackage #:finch/gpt
   (:use #:cl)
-  (:export #:write-disk #:+esp-type+))
+  (:export #:write-disk #:write-table #:+esp-type+ #:+apfs-type+))
 (in-package #:finch/gpt)
 
 (defparameter +esp-type+ "C12A7328-F81F-11D2-BA4B-00A0C93EC93B")
+(defparameter +apfs-type+ "7C3457EF-0000-11AA-AA11-00306543ECAC")
 (defconstant +sector+ 512)
 (defconstant +entries+ 128)
 (defconstant +entry-size+ 128)
@@ -45,16 +46,10 @@
     (put h 16 (crc32 h :end 92) 4)
     h))
 
-(defun write-disk (path partitions &key (disk-guid "F1C40000-0000-4000-8000-000000000010"))
-  (let* ((at +first-usable+)
-         (placed (loop :for (type guid name file) :in partitions
-                       :for sectors := (ceiling (with-open-file (s file :element-type '(unsigned-byte 8)) (file-length s)) +sector+)
-                       :collect (list type guid name file at (+ at sectors -1))
-                       :do (setf at (* 2048 (ceiling (+ at sectors) 2048)))))
-         (sectors (+ at 1 +entry-sectors+))
-         (entries (make-array (* +entries+ +entry-size+) :element-type '(unsigned-byte 8) :initial-element 0))
-         (mbr (make-array +sector+ :element-type '(unsigned-byte 8) :initial-element 0)))
-    (loop :for (type guid name nil first last) :in placed
+(defun table (sectors placed disk-guid)
+  (let ((entries (make-array (* +entries+ +entry-size+) :element-type '(unsigned-byte 8) :initial-element 0))
+        (mbr (make-array +sector+ :element-type '(unsigned-byte 8) :initial-element 0)))
+    (loop :for (type guid name first last) :in placed
           :for e :from 0 :by +entry-size+
           :do (put-guid entries e type)
               (put-guid entries (+ e 16) guid)
@@ -65,16 +60,30 @@
     (put mbr 458 (min (1- sectors) #xFFFFFFFF) 4)
     (setf (aref mbr 446) 0 (aref mbr 447) 0 (aref mbr 448) 2 (aref mbr 449) 0 (aref mbr 451) #xFF (aref mbr 452) #xFF (aref mbr 453) #xFF)
     (let ((crc (crc32 entries)))
+      (values (concatenate '(vector (unsigned-byte 8)) mbr (header disk-guid sectors crc 1 (1- sectors) 2) entries)
+              (concatenate '(vector (unsigned-byte 8)) entries (header disk-guid sectors crc (1- sectors) 1 (- sectors 1 +entry-sectors+)))))))
+
+(defun write-table (write sectors partitions &key (disk-guid "F1C40000-0000-4000-8000-000000000010"))
+  (multiple-value-bind (primary backup) (table sectors partitions disk-guid)
+    (funcall write 0 primary)
+    (funcall write (* (- sectors 1 +entry-sectors+) +sector+) backup)
+    partitions))
+
+(defun write-disk (path partitions &key (disk-guid "F1C40000-0000-4000-8000-000000000010"))
+  (let* ((at +first-usable+)
+         (placed (loop :for (type guid name file) :in partitions
+                       :for sectors := (ceiling (with-open-file (s file :element-type '(unsigned-byte 8)) (file-length s)) +sector+)
+                       :collect (list type guid name at (+ at sectors -1) file)
+                       :do (setf at (* 2048 (ceiling (+ at sectors) 2048)))))
+         (sectors (+ at 1 +entry-sectors+)))
+    (multiple-value-bind (primary backup) (table sectors placed disk-guid)
       (with-open-file (s path :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
-        (write-sequence mbr s)
-        (write-sequence (header disk-guid sectors crc 1 (1- sectors) 2) s)
-        (write-sequence entries s)
-        (loop :for (nil nil nil file first) :in placed
+        (write-sequence primary s)
+        (loop :for (nil nil nil first nil file) :in placed
               :do (file-position s (* first +sector+))
                   (with-open-file (in file :element-type '(unsigned-byte 8))
                     (let ((buffer (make-array 1048576 :element-type '(unsigned-byte 8))))
                       (loop :for n := (read-sequence buffer in) :while (plusp n) :do (write-sequence buffer s :end n)))))
         (file-position s (* (- sectors 1 +entry-sectors+) +sector+))
-        (write-sequence entries s)
-        (write-sequence (header disk-guid sectors crc (1- sectors) 1 (- sectors 1 +entry-sectors+)) s)))
+        (write-sequence backup s)))
     path))

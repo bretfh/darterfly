@@ -25,6 +25,8 @@
 (bsd:define-program "loginwindow" (argv envp)
   (dolist (label '("finch.finder" "finch.systemuiserver" "finch.dock"))
     (finch/launchd:kickstart label))
+  (when (equal (finch/iokit:boot-arg "rd") "ram")
+    (ignore-errors (bsd:posix-spawn "/System/Applications/Install.app/Contents/MacOS/Install" (list "Install") nil)))
   (loop (bsd:pause)))
 
 (defun battery-layer (battery)

@@ -257,8 +257,16 @@
           (format s "~{~(~8,'0x~)~}~%" (loop repeat 4 collect (random (ash 1 32) state))))))
     (with-open-file (s file) (read-line s))))
 
+(defun boot-payload ()
+  (flet ((file (name path) (list :file (concatenate 'string "usr/lib/finch/boot/" name) (octets path))))
+    (list (list :dir "usr/lib/finch/boot")
+          (file "boot.efi" (boot-efi)) (file "kernel" (mach-kernel))
+          (file "finch.core" (finch-core)) (file "root.cpio" (ramdisk)))))
+
 (defun usb-image (&key (path (build-path "finch-usb.img")) (boot-args (format nil "rd=ram launchd nrepl-key=~a" (nrepl-key))))
-  (let ((fat (esp-image (esp :boot-args boot-args :root-image (root-disk (build-path "usb-root.img")))
+  (let ((fat (esp-image (esp :boot-args boot-args
+                             :root-image (root-disk (build-path "usb-root.img") (* 256 1048576)
+                                                    (append (root-entries) (boot-payload))))
                         (build-path "usb-esp.img") (* 512 1048576))))
     (finch/gpt:write-disk path (list (list finch/gpt:+esp-type+ "F1C40000-0000-4000-8000-000000000011" "EFI" fat)))
     (delete-file fat)

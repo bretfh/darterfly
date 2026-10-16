@@ -78,7 +78,7 @@
   :depends-on (#:finch/ca #:finch/server #:finch/bsd #:finch/text #:finch/imageio #:finch/kit #:finch/edit #:finch/install #:finch/generation #:finch/iokit #:finch/net)
   :serial t
   :pathname "src/apps/"
-  :components ((:file "hello") (:file "terminal") (:file "listener") (:file "editor") (:file "generations") (:file "session") (:file "fetch")))
+  :components ((:file "hello") (:file "terminal") (:file "listener") (:file "editor") (:file "generations") (:file "session") (:file "fetch") (:file "install")))
 
 (asdf:defsystem #:finch/iokit
   :description "IOKit: the registry, PCI and drivers"
@@ -148,10 +148,10 @@
 
 (asdf:defsystem #:finch/install
   :description "Generations"
-  :depends-on (#:uiop #:finch/fat #:finch/low #:finch/pexpert #:finch/osfmk #:finch/link)
+  :depends-on (#:uiop #:finch/fat #:finch/low #:finch/pexpert #:finch/osfmk #:finch/link #:finch/gpt #:finch/apfs #:finch/iokit #:finch/vfs)
   :serial t
   :pathname "src/install/"
-  :components ((:file "install")))
+  :components ((:file "install") (:file "disk")))
 
 (asdf:defsystem #:finch/asm
   :description "x86-64 objects"
