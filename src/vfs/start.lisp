@@ -35,6 +35,16 @@
         (add-child dev "urandom" (make-instance 'dev-node :type :vchr :device :random :mode #o666))
         (setf *devfs* dev))))
 
+(defun core-range ()
+  (let ((pair (sb-alien:make-alien (sb-alien:unsigned 64) 2)))
+    (unwind-protect
+         (if (zerop (sb-alien:alien-funcall
+                     (sb-alien:extern-alien "__libsa_core_range" (function sb-alien:int sb-alien:long sb-alien:long))
+                     (sb-sys:sap-int (sb-alien:alien-sap pair)) (+ 8 (sb-sys:sap-int (sb-alien:alien-sap pair)))))
+             (values 0 0)
+             (values (sb-alien:deref pair 0) (sb-alien:deref pair 1)))
+      (sb-alien:free-alien pair))))
+
 (defun ram-file (dir name text)
   (let ((n (vnop-create dir name #o444)))
     (vnop-write n 0 (sb-ext:string-to-octets text :external-format :utf-8))
@@ -52,7 +62,7 @@
     (multiple-value-bind (address size) (machdep-pair 6)
       (let ((k (vnop-create dir "kernel" #o555)))
         (setf (node-external k) (sb-sys:int-sap address) (node-size k) size)))
-    (multiple-value-bind (address size) (machdep-pair 17)
+    (multiple-value-bind (address size) (core-range)
       (when (plusp address)
         (let ((k (vnop-create dir "finch.core" #o444)))
           (setf (node-external k) (sb-sys:int-sap address) (node-size k) size))))
