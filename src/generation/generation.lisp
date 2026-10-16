@@ -1,6 +1,6 @@
 (defpackage #:finch/generation
   (:use #:cl)
-  (:export #:resume #:contrib-steps #:core-steps #:generation-steps #:*state*))
+  (:export #:resume #:contrib-steps #:core-steps #:generation-steps #:*state* #:start #:progress #:pending-build #:resume-build))
 (in-package #:finch/generation)
 
 (defvar *state* "/Users/finch/generation.state")
@@ -46,7 +46,7 @@
             (progn (note :failed (second last) result missing)
                    (return-from resume (list :failed (second last) result missing))))))
     (let ((done (loop :for (kind name) :in (state) :when (eq kind :done) :collect name)))
-      (dolist (step steps (list :done (length done)))
+      (dolist (step steps (progn (note :finished (length done)) (list :done (length done))))
         (unless (member (step-name step) done :test #'string=)
           (destructuring-bind (name kind thunk &key outputs) step
             (mapc #'uiop:delete-file-if-exists outputs)
@@ -261,3 +261,40 @@
                      (lambda ()
                        (finch/install:install kernel (in out "finch.core")
                                               :loader (in out "boot.efi") :manifest (in out "manifest"))))))))))
+
+(defun build-arguments ()
+  (rest (find :build (state) :key #'first)))
+
+(defun next-out ()
+  (format nil "/Users/finch/generation-~d/"
+          (1+ (reduce #'max (finch/install:generations) :key (lambda (g) (parse-integer g :start 4)) :initial-value 0))))
+
+(defun resume-build ()
+  (let ((args (build-arguments)))
+    (sb-thread:make-thread (lambda ()
+                             (let ((result (resume (generation-steps :out (getf args :out)))))
+                               (format t "~&generation build: ~s~%" result)
+                               (finish-output)))
+                           :name "generation build")))
+
+(defun start (&key (out (next-out)))
+  (uiop:delete-file-if-exists *state*)
+  (note :build :out out :auto t)
+  (resume-build))
+
+(defun pending-build ()
+  (let ((state (state)))
+    (and (getf (build-arguments) :auto)
+         (not (find :finished state :key #'first))
+         (not (eq :failed (first (car (last state))))))))
+
+(defun progress ()
+  (let* ((state (state))
+         (args (build-arguments))
+         (names (mapcar #'step-name (generation-steps :out (or (getf args :out) "/Users/finch/generation/")))))
+    (when state
+      (list :out (getf args :out)
+            :finished (and (find :finished state :key #'first) t)
+            :steps (loop :for name :in names
+                         :collect (list name (let ((entry (find name state :key #'second :test #'equal :from-end t)))
+                                               (if entry (first entry) :waiting))))))))

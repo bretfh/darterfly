@@ -51,7 +51,9 @@
     ("Terminal" "/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal" #(0.24 0.22 0.27 1.0)
      "legacy/utilities-terminal-symbolic")
     ("Listener" "/System/Applications/Listener.app/Contents/MacOS/Listener" #(0.90 0.38 0.0 1.0)
-     "actions/system-run-symbolic")))
+     "actions/system-run-symbolic")
+    ("Generations" "/System/Applications/Generations.app/Contents/MacOS/Generations" #(0.20 0.55 0.35 1.0)
+     "status/software-update-available-symbolic")))
 
 (defun icon-path (name) (format nil "~a~a.png" +icons+ name))
 

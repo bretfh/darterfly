@@ -75,10 +75,10 @@
 
 (asdf:defsystem #:finch/apps
   :description "Applications"
-  :depends-on (#:finch/ca #:finch/server #:finch/bsd #:finch/text #:finch/imageio #:finch/kit #:finch/edit)
+  :depends-on (#:finch/ca #:finch/server #:finch/bsd #:finch/text #:finch/imageio #:finch/kit #:finch/edit #:finch/install #:finch/generation)
   :serial t
   :pathname "src/apps/"
-  :components ((:file "hello") (:file "terminal") (:file "listener") (:file "editor") (:file "session")))
+  :components ((:file "hello") (:file "terminal") (:file "listener") (:file "editor") (:file "generations") (:file "session")))
 
 (asdf:defsystem #:finch/iokit
   :description "IOKit: the registry, PCI and drivers"

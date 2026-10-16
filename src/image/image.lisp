@@ -68,6 +68,7 @@
     ("Applications/Hello.app/Contents/MacOS/Hello" "Hello")
     ("System/Applications/Listener.app/Contents/MacOS/Listener" "Listener")
     ("System/Applications/Editor.app/Contents/MacOS/Editor" "Editor")
+    ("System/Applications/Generations.app/Contents/MacOS/Generations" "Generations")
     ("System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal" "Terminal")
     ("System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow" "loginwindow")
     ("System/Library/CoreServices/Dock.app/Contents/MacOS/Dock" "Dock")
@@ -111,7 +112,8 @@
   '(("places" "folder") ("mimetypes" "application-x-executable") ("mimetypes" "text-x-generic")
     ("devices" "drive-harddisk")
     ("legacy" "system-file-manager-symbolic") ("legacy" "utilities-terminal-symbolic")
-    ("legacy" "accessories-text-editor-symbolic") ("actions" "system-run-symbolic")))
+    ("legacy" "accessories-text-editor-symbolic") ("actions" "system-run-symbolic")
+    ("status" "software-update-available-symbolic")))
 
 (defun icons ()
   (let ((theme (format nil "~a/share/icons/Adwaita/" (uiop:getenv "GUIX_ENVIRONMENT")))
