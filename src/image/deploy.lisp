@@ -36,16 +36,23 @@
      :name "deployment")))
 
 (defun device-eval (host code &key (timeout 600) (nrepl-port 4011))
-  (uiop:run-program (list "timeout" (princ-to-string timeout) "sbcl" "--script" (uiop:native-namestring (source "tools/nrepl.lisp"))
-                          "eval" "--new" "--host" host "--port" (princ-to-string nrepl-port) "--key" (nrepl-key) code)
-                    :output :string :error-output :string :ignore-error-status t))
+  (multiple-value-bind (out err)
+      (uiop:run-program (list "timeout" (princ-to-string timeout) "sbcl" "--script" (uiop:native-namestring (source "tools/nrepl.lisp"))
+                              "eval" "--new" "--host" host "--port" (princ-to-string nrepl-port) "--key" (nrepl-key) code)
+                        :output :string :error-output :string :ignore-error-status t)
+    (concatenate 'string out err)))
+
+(defparameter *receiver-sources* '("src/power/power.lisp" "src/install/deploy.lisp"))
+
+(defun receiver-code ()
+  (format nil "(progn ~{(with-input-from-string (s ~s) (let ((*package* (find-package \"FINCH/INSTALL\"))) (loop for f = (read s nil s) until (eq f s) do (eval f)))) ~})"
+          (mapcar (lambda (f) (uiop:read-file-string (source f))) *receiver-sources*)))
 
 (defun deploy (host &key (from "10.42.0.1") (port 47100) (nrepl-port 4011) (restart t) (reload nil))
   (let* ((entries (deployment :generation (not reload)))
-         (receiver (uiop:read-file-string (source "src/install/deploy.lisp")))
          (server (serve-deployment entries port))
-         (result (device-eval host (format nil "(progn (with-input-from-string (s ~s) (let ((*package* (find-package \"FINCH/INSTALL\"))) (loop for f = (read s nil s) until (eq f s) do (eval f)))) (let ((r (finch/install::receive-deployment ~s ~d))) (cond (~a (append r (finch/install::reload-systems))) (~a (finch/install::restart-soon) r) (t r))))"
-                                           receiver from port (and reload t) (and restart t))
+         (result (device-eval host (format nil "(progn ~a (let ((r (finch/install::receive-deployment ~s ~d))) (cond (~a (append r (finch/install::reload-systems))) (~a (finch/install::restart-soon) r) (t r))))"
+                                           (receiver-code) from port (and reload t) (and restart t))
                               :nrepl-port nrepl-port)))
     (sb-thread:join-thread server :default nil :timeout 5)
     result))
