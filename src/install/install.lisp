@@ -1,6 +1,6 @@
 (defpackage #:finch/install
   (:use #:cl)
-  (:export #:install #:generations #:current #:select #:manifest #:save #:stop-threads #:kernel-image #:build-kernel))
+  (:export #:install #:generations #:current #:select #:confirm #:failed #:manifest #:save #:stop-threads #:kernel-image #:build-kernel))
 (in-package #:finch/install)
 
 (defvar *esp* "/Volumes/EFI/")
@@ -31,6 +31,21 @@
 (defun put-line (name text)
   (with-open-file (s (esp-path name) :direction :output :if-exists :supersede)
     (write-line text s)))
+
+(defun link (name)
+  (let ((path (esp-path name)))
+    (when (probe-file path)
+      (string-trim '(#\Newline #\Space) (uiop:read-file-string path)))))
+
+(defun failed () (link "failed"))
+
+(defun confirm ()
+  (esp)
+  (let ((name (current)))
+    (unless (equal name (link "good"))
+      (put-line "good" name))
+    (uiop:delete-file-if-exists (esp-path "tried"))
+    name))
 
 (defun select (name)
   (unless (member name (generations) :test #'string=)

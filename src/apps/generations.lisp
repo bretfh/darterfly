@@ -1,13 +1,14 @@
 (in-package #:finch/apps)
 
 (defun generation-lines ()
-  (let ((current (ignore-errors (finch/install:current))))
+  (let ((current (ignore-errors (finch/install:current)))
+        (failed (ignore-errors (finch/install:failed))))
     (append
      (list (cons "Generations (click one to boot it next)" nil))
      (loop :for name :in (ignore-errors (finch/install:generations))
            :for manifest := (ignore-errors (finch/install:manifest name))
-           :collect (cons (format nil "~a~:[         ~; (current)~] ~@[~a~]~@[ from ~a~]" name (equal name current)
-                                  (getf manifest :build-id) (getf manifest :parent))
+           :collect (cons (format nil "~a~:[         ~; (current)~] ~@[~a~]~@[ from ~a~]~:[~; (never came up)~]" name (equal name current)
+                                  (getf manifest :build-id) (getf manifest :parent) (equal name failed))
                           (list :generation name)))
      (list (cons "" nil))
      (let ((progress (ignore-errors (finch/generation:progress))))

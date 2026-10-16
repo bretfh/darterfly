@@ -25,6 +25,7 @@
   (setf sb-sys::*sbcl-homedir-pathname* (sb-impl::%sbcl-homedir-pathname))
   (finch-asdf)
   (unless (finch/run:in-run-p)
+    (ignore-errors (finch/install:confirm))
     (when (ignore-errors (finch/generation:pending-build))
       (finch/generation:resume-build))
     (when (finch/iokit:boot-arg "launchd")

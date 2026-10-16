@@ -46,6 +46,37 @@
              (is (image:expect c (format nil "~%halt"))))
         (image:finish c 5)))))
 
+(test boot-efi-recovers-from-a-generation-that-never-comes-up
+  (let ((esp (merge-pathnames "esp-recovery.img" (finch-file "build/"))))
+    (uiop:delete-file-if-exists esp)
+    (let ((c (image:bare-console :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 60)
+               (is (search "\"gen-1\"" (ask "(finch/install::link \"good\")")) "a generation that boots is confirmed good")
+               (ask "(with-open-file (s \"/tmp/broken.core\" :direction :output :if-exists :supersede) (write-string \"not a core\" s))")
+               (is (search "\"gen-2\"" (ask "(finch/install:install \"/Volumes/EFI/EFI/finch/gen-1/kernel\" \"/tmp/broken.core\")")))
+               (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
+               (image:expect c "exit(0)" :timeout 60))
+          (image:finish c 5))))
+    (let ((c (image:bare-console :esp esp)))
+      (unwind-protect
+           (progn
+             (is (image:expect c "boot.efi: generation gen-2" :timeout 60))
+             (is (image:expect c "fatal error encountered in SBCL" :timeout 60) "gen-2 dies before finch comes up"))
+        (image:finish c 5)))
+    (let ((c (image:bare-console :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "boot.efi: generation gen-2 never came up, back to gen-1" :timeout 60))
+               (is (image:expect c "boot.efi: generation gen-1" :timeout 30))
+               (image:expect c "* " :timeout 60)
+               (is (search "(\"gen-1\" \"gen-2\")" (ask "(list (finch/install:current) (finch/install:failed))"))
+                   "finch is back on gen-1 and knows gen-2 failed"))
+          (image:finish c 5))))))
+
 (test the-kernel-owns-the-machine
   (let ((c (image:bare-console :boot-args "trap halt" :root nil)))
     (unwind-protect
@@ -1364,10 +1395,11 @@
                  (ask "(with-open-file (s \"/tmp/manifest\" :direction :output :if-exists :supersede) (prin1 '(:build-id \"finch-test\" :parent \"gen-1\") s))")
                  (is (search "\"gen-2\"" (ask "(finch/install:install \"/Volumes/EFI/EFI/finch/gen-1/kernel\" \"/Volumes/EFI/EFI/finch/gen-1/finch.core\" :manifest \"/tmp/manifest\")")))
                  (ask "(progn (uiop:delete-file-if-exists finch/generation:*state*) (finch/generation::note :build :out \"/Users/finch/generation-3/\") (finch/generation::note :done \"config\" \"finch-test\") (finch/generation::note :running \"make-host-1\"))")
+                 (ask "(finch/install::put-line \"failed\" \"gen-2\")")
                  (sleep 3)
                  (click 742 744)
                  (let ((text (transcript "gen-2 (current)")))
-                   (is (search "> gen-2 (current) finch-test from gen-1" text) "the window lists generations from their manifests: ~s" text)
+                   (is (search "> gen-2 (current) finch-test from gen-1 (never came up)" text) "the window lists generations from their manifests: ~s" text)
                    (is (search "> gen-1" text))
                    (is (search "1 of 23 steps done, running make-host-1" text) "and shows the build's progress: ~s" text))
                  (click 260 (line-y 1))
