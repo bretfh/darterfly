@@ -51,12 +51,22 @@
                      (- (mem :u64 (+ h 40)) (mem :u64 (+ h 32))))))
       (incf i))))
 
+(define-low other-threads (self (terminate :u32))
+  (let ((th all-threads) (n 0))
+    (while th
+      (when (and (/= th self) (/= (mem :u32 (+ th +t-state+)) +th-terminate+))
+        (when terminate (thread-terminate th))
+        (incf n))
+      (setf th (mem :u64 (+ th +t-all-next+))))
+    n))
+
 (define-low restart-user (core size)
   (let ((self (current-thread))
-        (th all-threads))
-    (while th
-      (when (and (/= th self) (/= (mem :u32 (+ th +t-state+)) +th-terminate+)) (result 0))
-      (setf th (mem :u64 (+ th +t-all-next+))))
+        (tries 0))
+    (while (the :u32 (other-threads self 1))
+      (when (> tries 100) (result 0))
+      (thread-wait 0 (deadline-after 0 10000000))
+      (incf tries))
     (vm-map-reset core size)
     (reset-user-image)
     (setf restart-core core)

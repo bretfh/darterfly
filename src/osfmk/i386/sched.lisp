@@ -4,6 +4,7 @@
 (defconstant +th-wait+ 2)
 (defconstant +th-terminate+ 4)
 (defconstant +abort-safely+ #x20)
+(defconstant +terminate-requested+ #x40)
 (defconstant +thread-awakened+ 0)
 (defconstant +thread-timed-out+ 1)
 (defconstant +thread-interrupted+ 2)
@@ -221,7 +222,13 @@
         (setf th (mem :u64 (+ th +t-all-next+))))))
   (when runq-head (setf (mem :u32 (+ (cpu-data) +c-pending-ast+)) 1)))
 
+(define-low thread-terminate (th)
+  (setf (mem :u32 (+ th +t-sched-flags+)) (logior (mem :u32 (+ th +t-sched-flags+)) +terminate-requested+))
+  (thread-abort-safely th))
+
 (define-low sched-ast ()
+  (when (logand (mem :u32 (+ (current-thread) +t-sched-flags+)) +terminate-requested+)
+    (thread-terminate-self))
   (unless (mem :u32 (+ (cpu-data) +c-pending-ast+)) (result 0))
   (setf (mem :u32 (+ (cpu-data) +c-pending-ast+)) 0)
   (thread-block))
