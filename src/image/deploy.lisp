@@ -36,7 +36,7 @@
                           "eval" "--new" "--host" host "--port" (princ-to-string nrepl-port) "--key" (nrepl-key) code)
                     :output :string :error-output :string :ignore-error-status t))
 
-(defun deploy (host &key (from "10.42.0.1") (port 47100) (nrepl-port 4011) (restart t))
+(defun deploy (host &key (from "10.42.0.1") (port 47100) (nrepl-port 4011) (restart nil))
   (let* ((entries (deployment))
          (receiver (uiop:read-file-string (source "src/install/deploy.lisp")))
          (server (serve-deployment entries port))
