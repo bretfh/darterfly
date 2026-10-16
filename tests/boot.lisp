@@ -1169,6 +1169,43 @@
                (image:expect c "exit(0)" :timeout 120))
           (image:finish c 30))))))
 
+(test finch-generation-builds-the-next
+  (let ((disk (merge-pathnames "generation.img" (finch-file "build/")))
+        (esp (merge-pathnames "esp-generation.img" (finch-file "build/")))
+        (same "(lambda (a b) (equalp (finch/install::read-octets a) (finch/install::read-octets b)))"))
+    (let ((c (image:bare-console :root disk :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "boot.efi: generation gen-2" :timeout 60) "finch-builds-a-generation left B installed")
+               (image:expect c "* " :timeout 120)
+               (ask "(uiop:delete-file-if-exists finch/generation:*state*)")
+               (let ((result (generation-resume c "(finch/generation:generation-steps :out \"/Users/finch/generation-c/\")")))
+                 (is (eq :done (first result)) "generation B builds generation C: ~s" result))
+               (is (search "(\"gen-1\" \"gen-2\" \"gen-3\")" (ask "(finch/install:generations)")))
+               (is (search "T" (ask (format nil "(funcall ~a \"/Users/finch/generation/boot.efi\" \"/Users/finch/generation-c/boot.efi\")" same)))
+                   "B and C build the same boot.efi")
+               (is (search "NIL" (ask (format nil "(let ((f ~a)) (remove-if (lambda (n) (funcall f (concatenate 'string \"/Users/finch/generation/objects/\" n) (concatenate 'string \"/Users/finch/generation-c/objects/\" n))) (mapcar (lambda (u) (getf u :name)) (finch/cc:units))))" same)))
+                   "B and C compile every C unit to the same object")
+               (format t "~&B and C finch.core identical: ~a~%"
+                       (ask (format nil "(funcall ~a \"/Users/finch/generation/finch.core\" \"/Users/finch/generation-c/finch.core\")" same)))
+               (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
+               (image:expect c "exit(0)" :timeout 120))
+          (image:finish c 30))))
+    (let ((c (image:bare-console :root disk :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "boot.efi: generation gen-3" :timeout 60))
+               (image:expect c "* " :timeout 120)
+               (is (search "\"gen-2\"" (ask "(progn (finch/install::esp) (getf (with-open-file (s \"/Volumes/EFI/EFI/finch/gen-3/manifest\") (read s)) :parent))"))
+                   "C's manifest names B as its parent")
+               (let ((counts (ask "(let ((r (let ((*standard-output* (make-broadcast-stream))) (append (5am:run 'finch/test::mach) (5am:run 'finch/test::bsd))))) (list (count-if-not (lambda (x) (typep x 'it.bese.fiveam::test-passed)) r) (length r)))")))
+                 (is (search "(0 " counts) "generation C passes the mach and bsd suites: ~a" counts))
+               (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
+               (image:expect c "exit(0)" :timeout 120))
+          (image:finish c 30))))))
+
 (test finch-saves-itself-and-boots-the-save
   (let ((esp (merge-pathnames "esp-save.img" (finch-file "build/"))))
     (uiop:delete-file-if-exists esp)
