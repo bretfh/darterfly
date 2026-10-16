@@ -29,7 +29,9 @@
 
 (defun finch-core ()
   (let ((core (build-path "finch.core")))
-    (unless (and (probe-file core) (> (file-write-date core) (newest (finch-sources))))
+    (unless (and (probe-file core)
+                 (> (file-write-date core) (max (newest (finch-sources))
+                                                (file-write-date (merge-pathnames "output/sbcl.core" (sbcl-tree))))))
       (run "sh" "-c"
            (format nil "CL_SOURCE_REGISTRY=\"~a//:$GUIX_ENVIRONMENT/share/common-lisp//\" ASDF_OUTPUT_TRANSLATIONS=\"/:$HOME/.cache/common-lisp/finch-mt/\" ~a --non-interactive --no-userinit --load ~a ~a"
                    (string-right-trim "/" (source ""))

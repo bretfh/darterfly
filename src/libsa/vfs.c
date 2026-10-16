@@ -52,7 +52,8 @@ static long call(int op, long a, long b, long c, long d) {
   return vfs(op, a, b, c, d);
 }
 
-static int console(int fd) { return fd >= 0 && fd <= 2; }
+int __libsa_run_stdin(void);
+static int console(int fd) { return fd >= 0 && fd <= 2 && !(fd == 0 && __libsa_run_stdin()); }
 static int kfd(int fd) { return fd >= KERNEL_FD && fd < KERNEL_FD + KERNEL_FDS && kfds[fd - KERNEL_FD].open; }
 
 static struct boot_file *boot_file(const char *path) {
@@ -65,6 +66,19 @@ static struct boot_file *boot_file(const char *path) {
     f->size = k[1];
   }
   return f->data ? f : 0;
+}
+
+int __libsa_core_range(uint64_t *data, uint64_t *size) {
+  struct boot_file *f = boot_file(CORE_PATH);
+  if (!f) return 0;
+  *data = (uint64_t)f->data;
+  *size = f->size;
+  return 1;
+}
+
+void __libsa_run_core(const char *data, size_t size) {
+  core_file.data = data;
+  core_file.size = size;
 }
 
 int __libsa_saved_core(uint64_t *core, uint64_t *size) {

@@ -31,8 +31,11 @@
 
 int __libsa_saved_core(uint64_t *core, uint64_t *size);
 
+void __libsa_run_finish(int code);
+
 void _exit(int code) {
   uint64_t core, size;
+  __libsa_run_finish(code);
   if (code == 0 && __libsa_saved_core(&core, &size)) __machdep(MACHDEP_restart, (long)core, (long)size);
   __syscall(SYS_exit, code, 0, 0, 0, 0, 0);
   for (;;) {}

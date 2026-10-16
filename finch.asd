@@ -121,6 +121,12 @@
   :pathname "src/cc/"
   :components ((:file "cc")))
 
+(asdf:defsystem #:finch/run
+  :description "Runs a core and collects its files"
+  :depends-on (#:uiop #:finch/vfs #:finch/install)
+  :pathname "src/run/"
+  :components ((:file "run")))
+
 (asdf:defsystem #:finch/install
   :description "Generations"
   :depends-on (#:uiop #:finch/fat #:finch/low #:finch/pexpert #:finch/osfmk #:finch/link)
@@ -249,7 +255,7 @@
 
 (asdf:defsystem #:finch
   :description "A live, hackable OS on SBCL"
-  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/xpc #:finch/launchd #:finch/shell #:finch/io #:finch/text #:finch/edit #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/iokit #:finch/vfs #:finch/apfs #:finch/fat #:finch/install #:finch/net #:finch/kernel #:finch/image)
+  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/xpc #:finch/launchd #:finch/shell #:finch/io #:finch/text #:finch/edit #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/iokit #:finch/vfs #:finch/apfs #:finch/fat #:finch/install #:finch/net #:finch/run #:finch/kernel #:finch/image)
   :in-order-to ((asdf:test-op (asdf:test-op #:finch/test))))
 
 (asdf:defsystem #:finch/test

@@ -1,5 +1,9 @@
 #pragma once
 #include <sys/types.h>
+#define DT_UNKNOWN 0
+#define DT_DIR 4
+#define DT_REG 8
+#define DT_LNK 10
 struct dirent {
   ino_t d_ino;
   off_t d_off;

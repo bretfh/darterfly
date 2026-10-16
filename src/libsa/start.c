@@ -37,9 +37,12 @@ static void tls_init(void) {
 static char *argv_storage[32];
 static char line[1024];
 
+const char *__libsa_run_start(int *argc, char **argv, int max);
+
 void _libsa_start(const char *cmdline) {
   tls_init();
   int argc = 0;
+  if (__libsa_run_start(&argc, argv_storage, 32)) exit(main(argc, argv_storage, environ));
   argv_storage[argc++] = "/System/Library/Kernels/kernel";
   const char *rest = strstr(cmdline, "-- ");
   if (rest) {

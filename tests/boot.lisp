@@ -825,7 +825,10 @@
            (image:send c "(progn (uiop:chdir \"/usr/src/sbcl/\") (setf *default-pathname-defaults* #p\"/usr/src/sbcl/\") (load \"loader.lisp\") :ready)")
            (image:expect c ":READY" :timeout 120)
            (image:send c form)
-           (prog1 (ignore-errors (image:expect c marker :timeout 3600))
+           (prog1 (or (ignore-errors (image:expect c marker :timeout 600))
+                      (progn (format t "~&sbcl-phase: no ~a; console ends:~%~a~%" marker
+                                     (let ((s (image:transcript c))) (subseq s (max 0 (- (length s) 3000)))))
+                             nil))
              (image:send c "(progn (funcall (intern \"VFS-SYNC\" (or (find-package \"HOST-FINCH/VFS\") (find-package \"FINCH/VFS\")))) (format t \"~%SYNCED~%\"))")
              (image:expect c "SYNCED" :timeout 300)
              (image:send c "(funcall (intern \"EXIT\" (or (find-package \"HOST-SB-EXT\") (find-package \"SB-EXT\"))))")))
@@ -846,9 +849,42 @@
                                    (finch/vfs:vfs-close fd)))))
             :collect rel)))
 
-(test finch-cross-compiles-sbcl
+(defvar *run-wait* 1800)
+
+(defun sbcl-run (disk core argv &key stdin script (files t))
+  (let ((c (image:bare-console :root disk)))
+    (unwind-protect
+         (progn
+           (image:expect c "* " :timeout 60)
+           (when script
+             (image:send c (format nil "(progn (with-open-file (s ~s :direction :output :if-exists :supersede) (write-string ~s s)) :stdin)" stdin script))
+             (image:expect c ":STDIN" :timeout 60))
+           (image:send c (format nil "(finch/run:run-core ~s '~s :cwd \"/usr/src/sbcl\"~:[~; :files (finch/run:tree-files \"/usr/src/sbcl/\" :keep (lambda (f) (let ((n (namestring f))) (not (or (search \"/obj/from-host/\" n) (search \"/obj/from-xc/\" n) (search \".core\" n))))))~]~@[ :stdin ~s~])"
+                                 core argv files stdin))
+           (image:expect c "restart: core" :timeout 300)
+           (unless (ignore-errors (image:expect c "restart: core" :timeout *run-wait*))
+             (format t "~&sbcl-run: no return; console ends:~%~a~%" (let ((s (image:transcript c))) (subseq s (max 0 (- (length s) 3000)))))
+             (finish-output)
+             (return-from sbcl-run nil))
+           (image:expect c "* " :timeout 120)
+           (image:send c "(finch/run:collect)")
+           (prog1 (image:expect c (format nil "~%* ") :timeout 600)
+             (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
+             (image:expect c "exit(0)" :timeout 120)))
+      (image:finish c 30))))
+
+(defun dump-script ()
+  (let* ((script (uiop:read-file-string (finch-file "build/sbcl-mt/make-target-2.sh")))
+         (start (+ (search (format nil "<<EOF~%") script) 6))
+         (body (subseq script start (1+ (search (format nil "~%EOF") script :start2 start))))
+         (at (search "${devel}" body)))
+    (concatenate 'string (subseq body 0 at) (subseq body (+ at 8)))))
+
+(test finch-bootstraps-sbcl
   (let ((disk (merge-pathnames "sbcl-build.img" (finch-file "build/")))
-        (host (finch-file "build/sbcl-mt/")))
+        (host (finch-file "build/sbcl-mt/"))
+        (kernel "/System/Library/Kernels/kernel")
+        (core "/System/Library/Kernels/finch.core"))
     (uiop:delete-file-if-exists disk)
     (finch/image::root-disk disk (* 512 1048576) (append (finch/image::root-entries) (finch/image::sbcl-source-entries)))
     (is (sbcl-phase disk "(progn (cl-user::load-sbcl-file \"make-host-1.lisp\" nil) (format t \"~%HOST1-DONE~%\"))" "HOST1-DONE")
@@ -862,7 +898,37 @@
                            (relatives "output/genesis-2/*.h") (relatives "src/runtime/genesis/*.h")
                            (relatives "obj/from-xc/**/*.lisp-obj"))))
         (is (null (disk-files disk host "usr/src/sbcl/" files))
-            "finch's cold core, headers and target fasls are the host's byte for byte (~d files)" (length files))))))
+            "finch's cold core, headers and target fasls are the host's byte for byte (~d files)" (length files))))
+    (is (search "(:EXIT 0"
+                (sbcl-run disk "/usr/src/sbcl/output/cold-sbcl.core"
+                          (list kernel "--core" core "--lose-on-corruption" "--no-sysinit" "--no-userinit"
+                                "--eval" "(sb-fasl::!warm-load \"src/cold/warm.lisp\")" "--quit")))
+        "the cold core does warm init's compile phase inside finch")
+    (is (search "(:EXIT 0 :FILES 1)"
+                (sbcl-run disk "/usr/src/sbcl/output/cold-sbcl.core"
+                          (list kernel "--noinform" "--core" core "--lose-on-corruption" "--no-sysinit" "--no-userinit" "--noprint")
+                          :stdin "/usr/src/sbcl/output/target-2-dump.lisp" :script (dump-script)))
+        "the cold core loads warm init and saves sbcl.core inside finch")
+    (sbcl-run disk "/usr/src/sbcl/output/sbcl.core"
+              (list kernel "--core" core "--no-sysinit" "--no-userinit" "--disable-debugger" "--eval"
+                    "(with-open-file (o \"/usr/src/sbcl/new-core.txt\" :direction :output :if-exists :supersede) (prin1 (list (lisp-implementation-version) (funcall (compile nil '(lambda (n) (loop for i from 1 to n sum (* i i)))) 100) (class-name (find-class 'standard-object))) o))"
+                    "--quit")
+              :files nil)
+    (is (equal "(\"2.6.4.finch\" 338350 STANDARD-OBJECT)"
+               (let ((out (disk-octets disk "usr/src/sbcl/new-core.txt"))) (and out (map 'string #'code-char out))))
+        "the sbcl.core finch built runs, compiles and has CLOS")))
+
+(defun disk-octets (disk relative)
+  (let ((finch/vfs:*root* nil) (finch/vfs:*mounts* nil))
+    (finch/vfs:vfs-mount (finch/vfs:make-ram-node :vdir #o755) "/")
+    (finch/vfs:vfs-mkdir "/root" #o755)
+    (multiple-value-bind (read write) (finch/apfs:file-store disk)
+      (finch/apfs:mount-writable read write "/root"))
+    (let ((path (concatenate 'string "/root/" relative)))
+      (when (ignore-errors (finch/vfs:vfs-stat path))
+        (let ((fd (finch/vfs:vfs-open path (list :access :rdonly) 0)))
+          (unwind-protect (finch/vfs:vfs-read fd (finch/vfs:vattr-size (finch/vfs:vfs-stat path)))
+            (finch/vfs:vfs-close fd)))))))
 
 (test finch-saves-itself-and-boots-the-save
   (let ((esp (merge-pathnames "esp-save.img" (finch-file "build/"))))

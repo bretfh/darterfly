@@ -36,7 +36,7 @@
 
 (defparameter *libsa-sources*
   '("syscall.c" "signal.c" "string.c" "stdio.c" "stdlib.c" "unistd.c" "time.c" "math.c" "misc.c"
-    "setjmp.s" "start.c" "pthread.c" "vfs.c" "strtod.c"))
+    "setjmp.s" "start.c" "pthread.c" "vfs.c" "strtod.c" "run.c"))
 
 (defparameter *runtime-sources*
   '("alloc.c" "arena.c" "backtrace.c" "breakpoint.c" "coalesce.c" "coreparse.c" "dynbind.c" "funcall.c"

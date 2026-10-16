@@ -41,7 +41,19 @@ static int format_unsigned(char *out, unsigned long long v, int base, int upper)
   return n;
 }
 
+static int format_double_masked(char *out, double v, int precision, char conv);
+
 static int format_double(char *out, double v, int precision, char conv) {
+  unsigned csr, masked;
+  __asm__ volatile("stmxcsr %0" : "=m"(csr));
+  masked = csr | 0x1f80;
+  __asm__ volatile("ldmxcsr %0" : : "m"(masked));
+  int n = format_double_masked(out, v, precision, conv);
+  __asm__ volatile("ldmxcsr %0" : : "m"(csr));
+  return n;
+}
+
+static int format_double_masked(char *out, double v, int precision, char conv) {
   int n = 0;
   if (v != v) return strcpy(out, "nan"), 3;
   if (v < 0 || (v == 0 && 1 / v < 0)) out[n++] = '-', v = -v;
@@ -60,6 +72,21 @@ static int format_double(char *out, double v, int precision, char conv) {
       conv = 'f';
     } else
       conv = 'e';
+  }
+  if (conv == 'f' && v >= 1e18) {
+    int e = 0;
+    double m = v;
+    while (m >= 10) m /= 10, e++;
+    char digits[32];
+    int k = format_unsigned(digits, (unsigned long long)(m * 1e16 + 0.5), 10, 0);
+    memcpy(out + n, digits, k);
+    n += k;
+    for (int i = k - 1; i < e; i++) out[n++] = '0';
+    if (precision) {
+      out[n++] = '.';
+      for (int i = 0; i < precision; i++) out[n++] = '0';
+    }
+    return n;
   }
   double scale = 1;
   for (int i = 0; i < precision; i++) scale *= 10;
