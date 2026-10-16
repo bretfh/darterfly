@@ -183,7 +183,7 @@
                                                                    "data" (finch/qmp:dict "button" "left"
                                                                                           "down" button)))))))))
 
-(defstruct (console (:constructor %console (process))) process (seen (make-string-output-stream)) (text ""))
+(defstruct (console (:constructor %console (process))) process (seen (make-string-output-stream)) (text (pending-text)))
 
 (defun console (&key args)
   (%console (uiop:launch-program args :input :stream :output :stream :error-output :output)))
@@ -198,31 +198,39 @@
                  when (or (search "CPU#" line) (search "RIP=" line) (search "RSP=" line) (search "RAX=" line))
                    do (write-line line out))))))))
 
-(defun first-match (texts string)
+(defun first-match (texts string &optional (start 0))
   (let ((best nil) (found nil))
     (dolist (text (if (listp texts) texts (list texts)) (values best found))
-      (let ((at (search text string)))
+      (let ((at (search text string :start2 start)))
         (when (and at (or (null best) (< at best)))
           (setf best at found text))))))
 
+(defun pending-text (&optional (initial ""))
+  (make-array (length initial) :element-type 'character :adjustable t :fill-pointer t :initial-contents initial))
+
 (defun expect (console text &key (timeout 30))
   (let* ((out (uiop:process-info-output (console-process console)))
-         (deadline (+ (get-internal-real-time) (* timeout internal-time-units-per-second))))
+         (deadline (+ (get-internal-real-time) (* timeout internal-time-units-per-second)))
+         (longest (reduce #'max (if (listp text) text (list text)) :key #'length))
+         (searched 0))
     (loop
-      (multiple-value-bind (at found) (first-match text (console-text console))
-        (when at
-          (let ((seen (subseq (console-text console) 0 (+ at (length found)))))
-            (setf (console-text console) (subseq (console-text console) (+ at (length found))))
-            (return (values seen found)))))
+      (let ((pending (console-text console)))
+        (multiple-value-bind (at found) (first-match text pending (max 0 (- searched longest -1)))
+          (when at
+            (let ((end (+ at (length found))))
+              (setf (console-text console) (pending-text (subseq pending end)))
+              (return (values (subseq pending 0 end) found))))
+          (setf searched (length pending))))
       (when (> (get-internal-real-time) deadline)
         (error "console: no ~s after ~a s, saw ~s~@[~%cpus:~%~a~]" text timeout (console-text console) (cpu-states)))
       (if (listen out)
-          (let ((c (read-char out nil)))
-            (unless c (error "console: closed, saw ~s" (console-text console)))
-            (unless (char= c #\Return)
-              (write-char c (console-seen console))
-              (setf (console-text console)
-                    (concatenate 'string (console-text console) (string c)))))
+          (loop :while (listen out)
+                :repeat 65536
+                :do (let ((c (read-char out nil)))
+                      (unless c (error "console: closed, saw ~s" (console-text console)))
+                      (unless (char= c #\Return)
+                        (write-char c (console-seen console))
+                        (vector-push-extend c (console-text console)))))
           (if (uiop:process-alive-p (console-process console))
               (sleep 0.01)
               (error "console: finch stopped, saw ~s" (console-text console)))))))
