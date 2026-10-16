@@ -246,8 +246,16 @@
       (walk root))
     (finch/fat:newfs image :size (* 256 1048576) :label "EFI" :entries (nreverse entries))))
 
+(defun usb-image (&key (path (build-path "finch-usb.img")) (boot-args ""))
+  (let ((fat (esp-image (esp :boot-args boot-args) (build-path "usb-esp.img"))))
+    (finch/gpt:write-disk path (list (list finch/gpt:+esp-type+ "F1C40000-0000-4000-8000-000000000011" "finch" fat)))
+    (delete-file fat)
+    path))
+
 (defun firmware (name)
   (format nil "~a/share/firmware/~a" (uiop:getenv "GUIX_ENVIRONMENT") name))
+
+(defvar *input-devices* '("virtio-keyboard-pci" "virtio-tablet-pci"))
 
 (defun bare-qemu (esp &optional disks root forwards)
   (append
@@ -267,8 +275,8 @@
                       "-device" (format nil "virtio-blk-pci,drive=disk~d" i)))
    (list "-netdev" (format nil "user,id=net0~{,hostfwd=~(~a~)::~d-:~d~}" (loop for (proto host guest) in forwards append (list proto host guest)))
          "-device" "virtio-net-pci,netdev=net0,romfile=")
-   (list "-device" "virtio-keyboard-pci" "-device" "virtio-tablet-pci"
-         "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
+   (loop :for device :in *input-devices* :append (list "-device" device))
+   (list "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
         "-monitor" (format nil "unix:~a,server=on,wait=off" (monitor-path))
         "-qmp" (format nil "unix:~a,server=on,wait=off" (qmp-path))
         "-display" "none" "-serial" "stdio" "-no-reboot")))

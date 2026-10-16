@@ -1494,3 +1494,41 @@
                (let ((text (transcript "/tmp/Editor.txt" (format nil "~%L4 style-warning: The"))))
                  (is (search (format nil "~%L4 style-warning: The variable Z") text) "and on to the next: ~s" text)))
           (image:finish c 5))))))
+
+(test the-console-is-on-the-screen-and-the-keyboard
+  (let ((image:*input-devices* nil))
+    (let ((c (image:bare-console)))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 60)
+             (sleep 1)
+             (image:send-keys (format nil "(+ 40 2)~%"))
+             (is (image:expect c "42" :timeout 30) "a line typed on the PS/2 keyboard reaches the REPL")
+             (let ((screen (image:screendump)))
+               (is (< 200 (loop :for y :below 64 :sum (loop :for x :below 400 :count (= (image:pixel screen x y) #xffd8d8d0))))
+                   "the kernel log is drawn on the framebuffer")))
+        (image:finish c 5)))))
+
+(test the-usb-stick-boots-like-the-starbook
+  (let* ((stick (image:usb-image))
+         (c (image:console :args (list "qemu-system-x86_64" "-enable-kvm" "-cpu" "host" "-m" "4096" "-smp" "4" "-machine" "q35"
+                                       "-drive" (format nil "if=pflash,format=raw,readonly=on,file=~a" (finch/image::firmware "ovmf_code_x64.bin"))
+                                       "-drive" (format nil "if=pflash,format=raw,snapshot=on,file=~a" (finch/image::firmware "ovmf_vars_x64.bin"))
+                                       "-device" "qemu-xhci,id=xhci"
+                                       "-drive" (format nil "if=none,id=stick,format=raw,snapshot=on,file=~a" (uiop:native-namestring stick))
+                                       "-device" "usb-storage,bus=xhci.0,drive=stick,bootindex=0"
+                                       "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
+                                       "-monitor" (format nil "unix:~a,server=on,wait=off" (finch/image::monitor-path))
+                                       "-qmp" (format nil "unix:~a,server=on,wait=off" (finch/image::qmp-path))
+                                       "-display" "none" "-serial" "stdio" "-no-reboot"))))
+    (unwind-protect
+         (progn
+           (is (image:expect c "boot.efi: generation gen-1" :timeout 60) "the firmware boots boot.efi from the USB stick")
+           (image:expect c "* " :timeout 120)
+           (sleep 1)
+           (image:send-keys (format nil "(+ 40 2)~%"))
+           (is (image:expect c "42" :timeout 30) "the REPL answers a line typed on the PS/2 keyboard")
+           (let ((screen (image:screendump)))
+             (is (< 200 (loop :for y :below 64 :sum (loop :for x :below 400 :count (= (image:pixel screen x y) #xffd8d8d0))))
+                 "and the console is on the screen")))
+      (image:finish c 5))))

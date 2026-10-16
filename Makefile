@@ -1,4 +1,4 @@
-.PHONY: repl check test tahoe bare desktop sbcl
+.PHONY: repl check test tahoe bare desktop sbcl usb
 
 EVAL ?= (finch/tahoe:boot)
 export EVAL
@@ -27,3 +27,6 @@ desktop:
 
 sbcl:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :finch/image)" --eval "(finch/image:build-sbcl)"'
+
+usb:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :finch/image)" --eval "(format t \"~a~%\" (finch/image:usb-image))"'
