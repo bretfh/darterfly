@@ -271,8 +271,11 @@
      (list "-drive" (format nil "if=none,id=root,format=raw,~:[~;snapshot=on,~]file=~a" (eq (car root) :snapshot) (uiop:native-namestring (cdr root)))
            "-device" "virtio-blk-pci,drive=root"))
    (loop for disk in disks for i from 0
-         append (list "-drive" (format nil "if=none,id=disk~d,format=raw,file=~a" i (uiop:native-namestring disk))
-                      "-device" (format nil "virtio-blk-pci,drive=disk~d" i)))
+         for nvme = (and (consp disk) (eq (car disk) :nvme))
+         append (list "-drive" (format nil "if=none,id=disk~d,format=raw,file=~a" i (uiop:native-namestring (if nvme (second disk) disk)))
+                      "-device" (if nvme
+                                    (format nil "nvme,serial=nvme~d,drive=disk~d" i i)
+                                    (format nil "virtio-blk-pci,drive=disk~d" i))))
    (list "-netdev" (format nil "user,id=net0~{,hostfwd=~(~a~)::~d-:~d~}" (loop for (proto host guest) in forwards append (list proto host guest)))
          "-device" "virtio-net-pci,netdev=net0,romfile=")
    (loop :for device :in *input-devices* :append (list "-device" device))

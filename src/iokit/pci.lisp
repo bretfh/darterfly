@@ -138,9 +138,11 @@
 
 (defmethod match-property-table ((d io-pci-device) table)
   (let ((primary (gethash "IOPCIPrimaryMatch" table))
-        (any (gethash "IOPCIMatch" table)))
+        (any (gethash "IOPCIMatch" table))
+        (class (gethash "IOPCIClassMatch" table)))
     (and (or (null primary) (id-matches-p primary (pci-primary-id d)))
-         (or (null any) (id-matches-p any (pci-primary-id d))))))
+         (or (null any) (id-matches-p any (pci-primary-id d)))
+         (or (null class) (id-matches-p class (ash (config-read-32 d 8) -8))))))
 
 (defun probe-bus (bridge bus parent)
   (dotimes (device 32)

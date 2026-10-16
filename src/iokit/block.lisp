@@ -16,7 +16,7 @@
 (add-personality "IOClass" "AppleVirtIOBlockStorageDevice" "IOProviderClass" "AppleVirtIOTransport"
                  "IOVirtIOPrimaryMatch" "0x00021af4")
 
-(defun block-size (device) (declare (ignore device)) 512)
+(defmethod block-size ((device apple-virtio-block-storage-device)) 512)
 
 (defmethod start ((b apple-virtio-block-storage-device) (tr apple-virtio-transport))
   (setf (transport b) tr)
@@ -60,7 +60,7 @@
       (loop for pa in pages for at from start by 4096
             do (copy-from-phys pa vector at (min 4096 (- (+ start (* count 512)) at)))))))
 
-(defun read-blocks (b lba count)
+(defmethod read-blocks ((b apple-virtio-block-storage-device) lba count)
   (let ((vector (make-array (* count 512) :element-type '(unsigned-byte 8)))
         (per (* +request-pages+ 8)))
     (sb-thread:with-mutex ((device-lock b))
@@ -68,7 +68,7 @@
             do (block-request b 0 (+ lba done) (min per (- count done)) vector (* done 512))))
     vector))
 
-(defun write-blocks (b lba vector)
+(defmethod write-blocks ((b apple-virtio-block-storage-device) lba vector)
   (let ((count (floor (length vector) 512))
         (per (* +request-pages+ 8)))
     (sb-thread:with-mutex ((device-lock b))
@@ -76,7 +76,7 @@
             do (block-request b 1 (+ lba done) (min per (- count done)) vector (* done 512))))
     count))
 
-(defun flush-blocks (b)
+(defmethod flush-blocks ((b apple-virtio-block-storage-device))
   (when (flushes b)
     (sb-thread:with-mutex ((device-lock b))
       (block-request b 4 0 0 nil 0)))

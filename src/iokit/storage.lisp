@@ -10,6 +10,11 @@
 (define-io-class io-guid-partition-scheme "IOGUIDPartitionScheme" (io-partition-scheme))
 
 (add-personality "IOClass" "IOBlockStorageDriver" "IOProviderClass" "IOBlockStorageDevice")
+
+(defgeneric block-size (device))
+(defgeneric read-blocks (device lba count))
+(defgeneric write-blocks (device lba vector))
+(defgeneric flush-blocks (device))
 (add-personality "IOClass" "IOGUIDPartitionScheme" "IOProviderClass" "IOMedia"
                  "IOPropertyMatch" (personality "Whole" t) "Content Mask" "GUID_partition_scheme")
 
