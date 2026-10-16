@@ -1,6 +1,6 @@
 (require :asdf)
 
-(defparameter +mine+ '(:finch/mach :finch/server :finch/ca :finch/bsd :finch/launchd :finch/shell :finch/kernel :finch/image :finch/qmp :finch/io :finch/text :finch/imageio :finch/kit :finch/windowserver :finch/apps :finch))
+(defparameter +mine+ '(:finch/mach :finch/server :finch/layer :finch/bsd :finch/init :finch/shell :finch/kernel :finch/image :finch/qmp :finch/io :finch/text :finch/imageio :finch/kit :finch/windowserver :finch/apps :finch))
 
 (defvar *warnings* nil)
 

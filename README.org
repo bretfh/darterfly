@@ -7,6 +7,11 @@ code by SBCL's own assembler. Above them, processes, Mach-style ports, the file
 system, drivers, TCP/IP, the window server and the apps are ordinary Common
 Lisp you can change while it runs.
 
+Its shape is inspired by macOS more than by the BSDs: the whole experience is
+part of the system, from the kernel through the window server, the compositor
+and the desktop apps, rather than a terminal with a desktop borrowed from other
+software. The terms are its own.
+
 It builds itself: a running system compiles its compiler, runtime, kernel and
 loader from source, installs the result as a new generation, and boots it.
 Icons and fonts are GNOME's Adwaita.

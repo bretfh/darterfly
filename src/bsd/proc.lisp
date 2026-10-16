@@ -26,7 +26,7 @@
    (cwd :initform "/" :accessor proc-cwd)
    (root :initform "/" :accessor proc-root)
    (exec-tag :initform (list :exec) :reader exec-tag)
-   (comm :initform "kernel_task" :accessor proc-comm)
+   (comm :initform "kernel" :accessor proc-comm)
    (threads :initform nil :accessor proc-threads)
    (bindings :initform nil :accessor proc-bindings)))
 

@@ -15,9 +15,9 @@
    (pixels :initarg :pixels :reader framebuffer-pixels)))
 
 (defun open-framebuffer ()
-  (destructuring-bind (&key row-bytes width height depth base) (finch/iokit:boot-video)
+  (destructuring-bind (&key row-bytes width height depth base) (finch/devices:boot-video)
     (make-instance 'framebuffer :width width :height height :depth depth :stride row-bytes
-                                :sap (sb-sys:int-sap (finch/iokit:ml-io-map-wcomb base (* row-bytes height)))
+                                :sap (sb-sys:int-sap (finch/devices:ml-io-map-wcomb base (* row-bytes height)))
                                 :pixels (make-array (* width height) :element-type '(unsigned-byte 32)
                                                                      :initial-element #xff000000))))
 

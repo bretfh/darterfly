@@ -208,25 +208,25 @@
       (read-sequence sector s)
       (map 'string #'code-char (subseq sector 0 (or (position 0 sector) 512))))))
 
-(test iokit-on-finch
-  (let* ((disk (pattern-disk "iokit-disk.img" 2048))
+(test devices-on-finch
+  (let* ((disk (pattern-disk "devices-disk.img" 2048))
          (c (image:bare-console :disks (list disk))))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
       (unwind-protect
            (progn
              (image:expect c "* " :timeout 60)
-             (let ((tree (ask "(progn (iokit:start-iokit) (iokit:ioreg))")))
-               (is (search "+-o PCI0  <class IOACPIPlatformDevice>" tree))
-               (is (search "+-o pci1af4,1001@4  <class IOPCIDevice>" tree))
+             (let ((tree (ask "(progn (devices:start-devices) (devices:device-tree))")))
+               (is (search "+-o PCI0  <class ACPIPlatformDevice>" tree))
+               (is (search "+-o pci1af4,1001@4  <class PCIDevice>" tree))
                (is (search "| +-o VirtIOPCITransport  <class VirtIOPCITransport>" tree))
                (is (search "+-o VirtIOBlockStorageDevice  <class VirtIOBlockStorageDevice>" tree)))
-             (ask "(defvar *b* (find 2048 (iokit:find-entries 'iokit:virtio-block-storage-device) :key #'iokit:block-count))")
-             (is (search "\"finch sector 5\"" (ask "(map 'string #'code-char (subseq (iokit:read-blocks *b* 5 1) 0 14))")))
+             (ask "(defvar *b* (find 2048 (devices:find-entries 'devices:virtio-block-storage-device) :key #'devices:block-count))")
+             (is (search "\"finch sector 5\"" (ask "(map 'string #'code-char (subseq (devices:read-blocks *b* 5 1) 0 14))")))
              (is (search "\"finch sector 1099\""
-                         (ask "(map 'string #'code-char (subseq (iokit:read-blocks *b* 1000 100) (* 99 512) (+ (* 99 512) 17)))")))
-             (ask "(iokit:write-blocks *b* 7 (let ((v (make-array 512 :element-type '(unsigned-byte 8) :initial-element 0))) (replace v (map 'vector #'char-code \"written by finch\")) v))")
-             (is (search "\"written by finch\"" (ask "(map 'string #'code-char (subseq (iokit:read-blocks *b* 7 1) 0 16))")))
-             (is (search "(T T T)" (ask "(mapcar (lambda (s) (and (<= #x30 (iokit:interrupt-vector s) #x3f) t)) (list *b* (first (iokit:find-entries 'iokit:virtio-input)) (first (iokit:find-entries 'iokit:virtio-network))))")))
+                         (ask "(map 'string #'code-char (subseq (devices:read-blocks *b* 1000 100) (* 99 512) (+ (* 99 512) 17)))")))
+             (ask "(devices:write-blocks *b* 7 (let ((v (make-array 512 :element-type '(unsigned-byte 8) :initial-element 0))) (replace v (map 'vector #'char-code \"written by finch\")) v))")
+             (is (search "\"written by finch\"" (ask "(map 'string #'code-char (subseq (devices:read-blocks *b* 7 1) 0 16))")))
+             (is (search "(T T T)" (ask "(mapcar (lambda (s) (and (<= #x30 (devices:interrupt-vector s) #x3f) t)) (list *b* (first (devices:find-entries 'devices:virtio-input)) (first (devices:find-entries 'devices:virtio-network))))")))
              (image:send c "(sb-ext:exit)")
              (image:expect c "exit(0)" :timeout 30))
         (image:finish c 5))
@@ -240,7 +240,7 @@
       (unwind-protect
            (progn
              (image:expect c "* " :timeout 60)
-             (ask "(iokit:start-iokit)")
+             (ask "(devices:start-devices)")
              (is (search "(\"/Volumes/finch\")" (ask "(finch/apfs:mount-volumes)")))
              (is (search "\"hello from finch\"" (ask "(with-open-file (s \"/Volumes/finch/hello.txt\") (read-line s))")))
              (is (search "300" (ask "(length (directory \"/Volumes/finch/many/*\"))")))
@@ -255,7 +255,7 @@
       (unwind-protect
            (progn
              (image:expect c "* " :timeout 60)
-             (ask "(iokit:start-iokit)")
+             (ask "(devices:start-devices)")
              (is (search "(\"/Volumes/finch\")" (ask "(finch/apfs:mount-volumes :writable t)")))
              (ask "(with-open-file (s \"/Volumes/finch/from-finch.txt\" :direction :output) (write-line \"written on bare finch\" s))")
              (ask "(ensure-directories-exist \"/Volumes/finch/made/by/finch/\")")
@@ -285,10 +285,10 @@
            (progn
              (image:expect c "* " :timeout 60)
              (is (search "APFS-WVNODE" (ask "(type-of (finch/vfs:namei \"/\"))")))
-             (is (search "\"finch HD\"" (ask "(iokit:get-property (find \"disk2s1\" (iokit:find-entries 'finch/apfs::apfs-volume-media) :key (lambda (e) (iokit:get-property e \"BSD Name\")) :test #'equal) \"FullName\")")))
+             (is (search "\"finch HD\"" (ask "(devices:get-property (find \"disk2s1\" (devices:find-entries 'finch/apfs::apfs-volume-media) :key (lambda (e) (devices:get-property e \"BSD Name\")) :test #'equal) \"FullName\")")))
              (is (search "#P\"/System/Library/Kernels/kernel\"" (ask "(probe-file \"/System/Library/Kernels/kernel\")")))
              (is (search "DEV-NODE" (ask "(type-of (finch/vfs:namei \"/dev/console\"))")))
-             (is (search "T" (ask "(finch/iokit::flushes (finch/iokit::media-device finch/apfs::*root-media*))"))
+             (is (search "T" (ask "(finch/devices::flushes (finch/devices::media-device finch/apfs::*root-media*))"))
                  "the root disk takes flushes")
              (is (search ":LOADED" (ask "(progn (require :sb-rotate-byte) (require :sb-md5) :loaded)")) "contribs from SBCL_HOME")
              (is (search "2.5d0" (ask "(progn (load \"/usr/lib/sbcl/contrib/sb-posix.fasl\") (sb-posix:strtod \"2.5\"))"))
@@ -318,11 +318,11 @@
                    (map 'string #'code-char (apfs:read-file v (apfs:lookup v "/Users/finch/notes.txt")))))))))
 
 (test desktop-on-finch
-  (let ((c (image:bare-console :boot-args "launchd"))
+  (let ((c (image:bare-console :boot-args "init"))
         (image:*screen-size* '(1280 800)))
     (unwind-protect
          (progn
-           (is (image:expect c "load_init_program: /sbin/launchd pid 1" :timeout 90))
+           (is (image:expect c "load_init_program: /sbin/init pid 1" :timeout 90))
            (let ((screen (screen-until (lambda (s) (and (= #xff2e5c8f (image:pixel s 5 300))
                                                         (< 200 (ldb (byte 8 16) (image:pixel s 300 12)))
                                                         (< 100 (dark-pixels s 586 724 626 764 90))))
@@ -369,7 +369,7 @@
                  "dhcp gives the gateway, the name server and the mask")
              (when (ignore-errors (sb-bsd-sockets:get-host-by-name "example.com"))
                (is (search "(\"" (ask "(finch/net:resolve-name \"example.com\")")) "finch resolves a name through the dhcp name server"))
-             (is (search "\"en0\"" (ask "(iokit:get-property (first (iokit:find-entries 'iokit:io-ethernet-interface)) \"BSD Name\")")))
+             (is (search "\"en0\"" (ask "(devices:get-property (first (devices:find-entries 'devices:ethernet-interface)) \"BSD Name\")")))
              (is (not (search "NIL" (ask "(finch/net:ping \"10.0.2.2\")"))) "the gateway answers a ping")
              (let ((s (make-instance 'sb-bsd-sockets:inet-socket :type :datagram :protocol :udp))
                    (buf (make-array 100 :element-type '(unsigned-byte 8))))
@@ -534,13 +534,13 @@
         (image:finish c 5)))))
 
 (test session-on-finch
-  (let ((c (image:bare-console :boot-args "launchd"))
+  (let ((c (image:bare-console :boot-args "init"))
         (image:*screen-size* '(1280 800)))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
       (unwind-protect
            (progn
-             (is (image:expect c "load_init_program: /sbin/launchd pid 1" :timeout 90))
-             (is (image:expect c "launchd: pid 1"))
+             (is (image:expect c "load_init_program: /sbin/init pid 1" :timeout 90))
+             (is (image:expect c "init: pid 1"))
              (is (search "3" (ask "(+ 1 2)")))
              (let ((local (format nil "~s" (multiple-value-list (decode-universal-time 3999999999)))))
                (is (search local (ask "(multiple-value-list (decode-universal-time 3999999999))")) "local time ~a" local))
@@ -583,7 +583,7 @@
              (image:pointer 282 248 nil)
              (is (= #xff2e5c8f (image:pixel (screen-until (lambda (s) (= #xff2e5c8f (image:pixel s 550 400)))) 550 400))
                  "close takes the window away")
-             (is (search "finch.windowserver" (ask "(finch/shell:run \"/bin/launchctl\" \"list\")")))
+             (is (search "finch.windowserver" (ask "(finch/shell:run \"/bin/service\" \"list\")")))
              (image:pointer 605 744)
              (image:pointer 605 744 t)
              (image:pointer 605 744 nil)
@@ -625,7 +625,7 @@
                (image:pointer 1218 70 nil))
              (let ((screen (screen-until (lambda (s) (and (= #xffd9d9d9 (image:pixel s 130 90))
                                                           (/= #xffffffff (image:pixel s 186 160)))))))
-               (is (= #xffd9d9d9 (image:pixel screen 130 90)) "finder's window ~x" (image:pixel screen 130 90))
+               (is (= #xffd9d9d9 (image:pixel screen 130 90)) "the files window ~x" (image:pixel screen 130 90))
                (is (/= #xffffffff (image:pixel screen 186 160)) "a folder in it ~x" (image:pixel screen 186 160))))
         (image:finish c 5)))))
 
@@ -638,7 +638,7 @@
                                                  'vector)))))
 
 (test runaway-code-can-be-stopped
-  (let ((c (image:bare-console :boot-args "launchd"))
+  (let ((c (image:bare-console :boot-args "init"))
         (image:*screen-size* '(1280 800)))
     (labels ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60))
              (file-until (file until)
@@ -653,7 +653,7 @@
                (running name)))
       (unwind-protect
            (progn
-             (is (image:expect c "launchd: pid 1" :timeout 90))
+             (is (image:expect c "init: pid 1" :timeout 90))
              (ask "(finch/shell:spawn \"/System/Applications/Listener.app/Contents/Programs/Listener\")")
              (screen-until (lambda (s) (= #xffffffff (image:pixel s 500 300))))
              (image:send-keys (format nil "(loop)~%"))
@@ -734,8 +734,8 @@
   (let ((esp (merge-pathnames "esp-kernel.img" (finch-file "build/")))
         (disk (merge-pathnames "guest-kernel.img" (finch-file "build/")))
         (copy "(dolist (f (directory \"/usr/src/finch/**/*.*\")) (unless (uiop:directory-pathname-p f) (let ((to (concatenate 'string \"/Users/finch/src/finch/\" (subseq (namestring f) (length \"/usr/src/finch/\"))))) (ensure-directories-exist to) (uiop:copy-file f to))))")
-        (edit "(let* ((p \"/Users/finch/src/finch/src/osfmk/i386/init.lisp\") (text (uiop:read-file-string p)) (at (search \"RELEASE_X86_64\" text))) (with-open-file (s p :direction :output :if-exists :supersede) (write-string (subseq text 0 at) s) (write-string \"BUILT_IN_FINCH\" s) (write-string (subseq text (+ at (length \"RELEASE_X86_64\"))) s)) :edited)")
-        (reload "(progn (handler-bind ((warning #'muffle-warning)) (asdf:load-system :finch/osfmk)) (namestring (asdf:system-source-file (asdf:find-system :finch/osfmk))))"))
+        (edit "(let* ((p \"/Users/finch/src/finch/src/kern/i386/init.lisp\") (text (uiop:read-file-string p)) (at (search \"RELEASE_X86_64\" text))) (with-open-file (s p :direction :output :if-exists :supersede) (write-string (subseq text 0 at) s) (write-string \"BUILT_IN_FINCH\" s) (write-string (subseq text (+ at (length \"RELEASE_X86_64\"))) s)) :edited)")
+        (reload "(progn (handler-bind ((warning #'muffle-warning)) (asdf:load-system :finch/kern)) (namestring (asdf:system-source-file (asdf:find-system :finch/kern))))"))
     (uiop:delete-file-if-exists esp)
     (uiop:delete-file-if-exists disk)
     (let ((c (image:bare-console :esp esp :root disk)))
@@ -769,7 +769,7 @@
   (let* ((esp (merge-pathnames "esp-cc.img" (finch-file "build/")))
          (disk (merge-pathnames "guest-cc.img" (finch-file "build/")))
          (host (let ((image:*c-compiler* :tcc))
-                 (image:mach-kernel)
+                 (image:kernel-file)
                  (loop :for (name path) :in (finch/image::user-objects) :collect (cons name (md5-hex path)))))
          (sums "(progn (require :sb-md5) (mapcar (lambda (name) (cons name (string-downcase (format nil \"~{~2,'0x~}\" (coerce (sb-md5:md5sum-file (concatenate 'string \"/Users/finch/objects/\" name)) 'list))))) (mapcar #'(lambda (u) (getf u :name)) (finch/cc:units))))"))
     (uiop:delete-file-if-exists esp)
@@ -868,8 +868,8 @@
 (test finch-runs-a-core-and-keeps-its-files
   (let ((esp (merge-pathnames "esp-run.img" (finch-file "build/")))
         (disk (merge-pathnames "run.img" (finch-file "build/")))
-        (other (image::octets (let ((image:*c-compiler* :tcc)) (image:mach-kernel))))
-        (boot (image::octets (image:mach-kernel)))
+        (other (image::octets (let ((image:*c-compiler* :tcc)) (image:kernel-file))))
+        (boot (image::octets (image:kernel-file)))
         (report "(with-open-file (o \"/work/runtime.txt\" :direction :output :if-exists :supersede) (prin1 (list (with-open-file (s \"/System/Library/Kernels/kernel\" :element-type '(unsigned-byte 8)) (file-length s)) (sb-sys:find-foreign-symbol-address \"build_id\")) o))")
         (stress "(progn (ensure-directories-exist \"/work/f/\") (with-open-file (keep \"/work/keep.txt\" :direction :output) (dotimes (i 3000) (with-open-file (o (format nil \"/work/f/~d.txt\" i) :direction :output) (print i o))) (write-string \"kept\" keep)) (rename-file \"/work/f/0.txt\" \"/work/renamed.txt\") (with-open-file (o \"/work/count.txt\" :direction :output) (princ (length (directory \"/work/f/*.txt\")) o)))"))
     (uiop:delete-file-if-exists esp)
@@ -1237,7 +1237,7 @@
                (uiop:split-string (or (ignore-errors (uiop:read-file-string file)) "") :separator '(#\Newline))))
 
 (test listener-on-finch
-  (let ((c (image:bare-console :boot-args "launchd")))
+  (let ((c (image:bare-console :boot-args "init")))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60))
            (click (x y) (image:pointer x y) (image:pointer x y t) (image:pointer x y nil))
            (type-slowly (text) (loop :for ch :across text :do (image:send-keys (string ch)) (sleep 0.002))))
@@ -1250,8 +1250,8 @@
              (line-y (index) (+ 90 40 4 (* index 17) 8)))
         (unwind-protect
              (progn
-               (is (image:expect c "load_init_program: /sbin/launchd pid 1" :timeout 90))
-               (image:expect c "launchd: pid 1")
+               (is (image:expect c "load_init_program: /sbin/init pid 1" :timeout 90))
+               (image:expect c "init: pid 1")
                (sleep 3)
                (click 674 744)
                (is (search "* " (transcript "/tmp/Listener.txt" "* ")) "the listener opens")
@@ -1291,7 +1291,7 @@
           (image:finish c 5))))))
 
 (test editor-on-finch
-  (let ((c (image:bare-console :boot-args "launchd")))
+  (let ((c (image:bare-console :boot-args "init")))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60))
            (click (x y) (image:pointer x y) (image:pointer x y t) (image:pointer x y nil))
            (type-slowly (text) (loop :for ch :across text :do (image:send-keys (string ch)) (sleep 0.002))))
@@ -1303,8 +1303,8 @@
                          (sleep 0.2))))
         (unwind-protect
              (progn
-               (is (image:expect c "load_init_program: /sbin/launchd pid 1" :timeout 90))
-               (image:expect c "launchd: pid 1")
+               (is (image:expect c "load_init_program: /sbin/init pid 1" :timeout 90))
+               (image:expect c "init: pid 1")
                (sleep 3)
                (click 674 744)
                (screen-until (lambda (s) (= #xffffffff (image:pixel s 400 500))))
@@ -1330,7 +1330,7 @@
 (test generations-on-finch
   (let ((esp (merge-pathnames "esp-generations.img" (finch-file "build/"))))
     (uiop:delete-file-if-exists esp)
-    (let ((c (image:bare-console :boot-args "launchd" :esp esp)))
+    (let ((c (image:bare-console :boot-args "init" :esp esp)))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120))
              (click (x y) (image:pointer x y) (image:pointer x y t) (image:pointer x y nil)))
         (flet ((transcript (until)
@@ -1342,7 +1342,7 @@
                (line-y (index) (+ 110 40 4 (* index 17) 8)))
           (unwind-protect
                (progn
-                 (is (image:expect c "launchd: pid 1" :timeout 90))
+                 (is (image:expect c "init: pid 1" :timeout 90))
                  (ask "(with-open-file (s \"/tmp/manifest\" :direction :output :if-exists :supersede) (prin1 '(:build-id \"finch-test\" :parent \"gen-1\") s))")
                  (is (search "\"gen-2\"" (ask "(finch/install:install \"/Volumes/EFI/EFI/finch/gen-1/kernel\" \"/Volumes/EFI/EFI/finch/gen-1/finch.core\" :manifest \"/tmp/manifest\")")))
                  (ask "(progn (uiop:delete-file-if-exists finch/generation:*state*) (finch/generation::note :build :out \"/Users/finch/generation-3/\") (finch/generation::note :done \"config\" \"finch-test\") (finch/generation::note :running \"make-host-1\"))")
@@ -1372,7 +1372,7 @@
     (finch/image::root-disk disk (* 1024 1048576)
                             (append (finch/image::root-entries) (finch/image::sbcl-source-entries)
                                     (finch/image::tree-entries (finch/image::tcc-source) "usr/src/tinycc")))
-    (let ((c (image:bare-console :boot-args "launchd" :root disk :esp esp)))
+    (let ((c (image:bare-console :boot-args "init" :root disk :esp esp)))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120))
              (click (x y) (image:pointer x y) (image:pointer x y t) (image:pointer x y nil)))
         (flet ((transcript (until)
@@ -1384,7 +1384,7 @@
                (line-y (index) (+ 110 40 4 (* index 17) 8)))
           (unwind-protect
                (progn
-                 (is (image:expect c "launchd: pid 1" :timeout 90))
+                 (is (image:expect c "init: pid 1" :timeout 90))
                  (ask ":ready")
                  (sleep 3)
                  (click 742 744)
@@ -1401,15 +1401,15 @@
                  (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
                  (image:expect c "exit(0)" :timeout 60))
             (image:finish c 30)))))
-    (let ((c (image:bare-console :boot-args "launchd" :root disk :esp esp)))
+    (let ((c (image:bare-console :boot-args "init" :root disk :esp esp)))
       (unwind-protect
            (progn
              (is (image:expect c "boot.efi: generation gen-2" :timeout 60))
-             (is (image:expect c "launchd: pid 1" :timeout 120) "generation 2 brings up the desktop"))
+             (is (image:expect c "init: pid 1" :timeout 120) "generation 2 brings up the desktop"))
         (image:finish c 30)))))
 
 (test editor-shows-diagnostics
-  (let ((c (image:bare-console :boot-args "launchd")))
+  (let ((c (image:bare-console :boot-args "init")))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60))
            (click (x y) (image:pointer x y) (image:pointer x y t) (image:pointer x y nil))
            (type-slowly (text) (loop :for ch :across text :do (image:send-keys (string ch)) (sleep 0.002))))
@@ -1421,8 +1421,8 @@
                          (sleep 0.3))))
         (unwind-protect
              (progn
-               (is (image:expect c "load_init_program: /sbin/launchd pid 1" :timeout 90))
-               (image:expect c "launchd: pid 1")
+               (is (image:expect c "load_init_program: /sbin/init pid 1" :timeout 90))
+               (image:expect c "init: pid 1")
                (sleep 3)
                (click 674 744)
                (screen-until (lambda (s) (= #xffffffff (image:pixel s 400 500))))
@@ -1478,7 +1478,7 @@
       (unwind-protect
            (progn
              (is (image:expect c "boot.efi: generation gen-1" :timeout 60) "the firmware boots boot.efi from the USB stick")
-             (is (image:expect c "launchd: pid 1" :timeout 120) "launchd starts from the root image in memory")
+             (is (image:expect c "init: pid 1" :timeout 120) "init starts from the root image in memory")
              (is (search "10.0.2.15" (ask "(progn (loop :repeat 100 :until finch/nrepl::*thread* :do (sleep 0.1)) (and finch/nrepl::*thread* (finch/net:address-string (finch/net::interface-ip finch/net:*interface*))))"))
                  "nrepl starts at boot from the key in the boot args")
              (let ((screen (screen-until (lambda (s) (= #xff2e5c8f (image:pixel s 5 300))) 60)))
@@ -1505,13 +1505,13 @@
         (unwind-protect
              (progn
                (image:expect c "* " :timeout 60)
-               (is (search "2" (ask "(length (finch/iokit:find-entries 'finch/iokit::io-nvme-block-storage-device))"))
+               (is (search "2" (ask "(length (finch/devices:find-entries 'finch/devices::nvme-disk))"))
                    "both NVMe controllers are found")
-               (is (search "(\"EFI\")" (ask "(mapcar #'finch/iokit:entry-name (remove-if-not (lambda (m) (and (typep (finch/iokit::media-device m) 'finch/iokit::io-nvme-block-storage-device) (not (finch/iokit:get-property m \"Whole\")))) (finch/iokit:find-entries 'finch/iokit::io-media)))"))
+               (is (search "(\"EFI\")" (ask "(mapcar #'finch/devices:entry-name (remove-if-not (lambda (m) (and (typep (finch/devices::media-device m) 'finch/devices::nvme-disk) (not (finch/devices:get-property m \"Whole\")))) (finch/devices:find-entries 'finch/devices::media)))"))
                    "the GPT on an NVMe disk publishes its partition")
-               (is (search "\"FAT32   \"" (ask "(let ((m (find \"EFI\" (finch/iokit:find-entries 'finch/iokit::io-media) :key #'finch/iokit:entry-name :test #'equal))) (map 'string #'code-char (subseq (finch/iokit::media-read m 0 512) 82 90)))"))
+               (is (search "\"FAT32   \"" (ask "(let ((m (find \"EFI\" (finch/devices:find-entries 'finch/devices::media) :key #'finch/devices:entry-name :test #'equal))) (map 'string #'code-char (subseq (finch/devices::media-read m 0 512) 82 90)))"))
                    "and reads its FAT boot sector")
-               (is (search "T" (ask "(let ((m (find-if (lambda (m) (and (typep (finch/iokit::media-device m) 'finch/iokit::io-nvme-block-storage-device) (= (finch/iokit:get-property m \"Size\") (* 8 1048576)))) (finch/iokit:find-entries 'finch/iokit::io-media)))) (finch/iokit::media-write m (* 512 100) (make-array 4096 :element-type '(unsigned-byte 8) :initial-element 165)) (finch/iokit::media-flush m) (every (lambda (b) (= b 165)) (finch/iokit::media-read m (* 512 100) 4096)))"))
+               (is (search "T" (ask "(let ((m (find-if (lambda (m) (and (typep (finch/devices::media-device m) 'finch/devices::nvme-disk) (= (finch/devices:get-property m \"Size\") (* 8 1048576)))) (finch/devices:find-entries 'finch/devices::media)))) (finch/devices::media-write m (* 512 100) (make-array 4096 :element-type '(unsigned-byte 8) :initial-element 165)) (finch/devices::media-flush m) (every (lambda (b) (= b 165)) (finch/devices::media-read m (* 512 100) 4096)))"))
                    "a write reads back")
                (image:send c "(sb-ext:exit)")
                (image:expect c "exit(0)" :timeout 60))
@@ -1522,7 +1522,7 @@
 (test usb-mouse-and-keyboard-on-finch
   (let ((image:*input-devices* '("qemu-xhci,id=xhci" "usb-kbd,bus=xhci.0" "usb-mouse,bus=xhci.0"))
         (image:*screen-size* '(1280 800)))
-    (let ((c (image:bare-console :boot-args "launchd")))
+    (let ((c (image:bare-console :boot-args "init")))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120))
              (rel (dx dy) (image:qmp "input-send-event"
                                      (finch/qmp:dict "events" (vector (finch/qmp:dict "type" "rel" "data" (finch/qmp:dict "axis" "x" "value" dx))
@@ -1531,9 +1531,9 @@
                                        (finch/qmp:dict "events" (vector (finch/qmp:dict "type" "btn" "data" (finch/qmp:dict "button" "left" "down" down)))))))
         (unwind-protect
              (progn
-               (is (image:expect c "launchd: pid 1" :timeout 90))
+               (is (image:expect c "init: pid 1" :timeout 90))
                (is (search "(\"Keyboard\" \"Mouse\")"
-                           (ask "(mapcar #'finch/iokit:entry-name (finch/iokit:find-entries 'finch/iokit::io-usb-hid-device))"))
+                           (ask "(mapcar #'finch/devices:entry-name (finch/devices:find-entries 'finch/devices::usb-hid-device))"))
                    "the USB keyboard and mouse enumerate behind xHCI")
                (screen-until (lambda (s) (= #xff2e5c8f (image:pixel s 5 300))) 60)
                (sleep 2)
@@ -1567,7 +1567,7 @@
              (is (not (search "=>" (client "wrong" "(+ 1 2)"))) "and a wrong key evaluates nothing")
              (is (search "NOSUCHPKG" (client "test-key" "nosuchpkg::x")) "a read error comes back instead of hanging")
              (when status
-               (is (search ":IN :RUNNING :OUT :RUNNING" (client "test-key" "(finch/iokit:ecm-status)"))))
+               (is (search ":IN :RUNNING :OUT :RUNNING" (client "test-key" "(finch/devices:ecm-status)"))))
              (is (search "=> 200000" (client "test-key" "(length (make-string 200000 :initial-element #\\x))")))
              (let ((big (client "test-key" "(make-string 100000 :initial-element #\\y)")))
                (is (search (make-string 100000 :initial-element #\y) big) "a 100 KB answer comes back whole")))
@@ -1611,7 +1611,7 @@
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
         (unwind-protect
              (progn
-               (is (image:expect c "launchd: pid 1" :timeout 120))
+               (is (image:expect c "init: pid 1" :timeout 120))
                (is (search "\"" (ask "(finch/install:install-disk)")) "the installer writes the NVMe")
                (image:send c "(sb-ext:exit)")
                (image:expect c "exit(0)" :timeout 120))
@@ -1622,8 +1622,8 @@
         (unwind-protect
              (progn
                (is (image:expect c "boot.efi: generation gen-1" :timeout 60) "the firmware boots the NVMe")
-               (is (image:expect c "launchd: pid 1" :timeout 120) "launchd starts from the NVMe root")
-               (is (search "NVME" (ask "(string-upcase (type-of (finch/iokit:media-device finch/apfs::*root-media*)))"))
+               (is (image:expect c "init: pid 1" :timeout 120) "init starts from the NVMe root")
+               (is (search "NVME" (ask "(string-upcase (type-of (finch/devices:media-device finch/apfs::*root-media*)))"))
                    "the root is on the NVMe")
                (is (search "(\"gen-1\")" (ask "(finch/install:generations)")) "the installed system finds its own ESP")
                (is (search "T" (ask "(progn (with-open-file (s \"/Users/finch/kept\" :direction :output :if-exists :supersede) (write-line \"kept\" s)) (finch/vfs:vfs-sync) (probe-file \"/Users/finch/kept\") t)")))
@@ -1642,7 +1642,7 @@
         (unwind-protect
              (progn
                (is (image:expect c "boot.efi: generation gen-2" :timeout 60) "the firmware boots the generation it installed")
-               (is (image:expect c "launchd: pid 1" :timeout 120))
+               (is (image:expect c "init: pid 1" :timeout 120))
                (is (search "(\"gen-1\" \"gen-2\")" (ask "(finch/install:generations)"))))
           (image:finish c 5))))))
 
@@ -1673,12 +1673,12 @@
                  (button t) (sleep 0.05) (button nil) (sleep 1)))
         (unwind-protect
              (progn
-               (is (image:expect c "launchd: pid 1" :timeout 120))
+               (is (image:expect c "init: pid 1" :timeout 120))
                (screen-until (lambda (s) (= #xffffffff (image:pixel s 480 236))) 60)
                (sleep 2)
                (click 654 236)
                (click 654 236)
-               (is (search "\"EFI PART\"" (ask "(loop :repeat 600 :until (equal \"EFI PART\" (map 'string #'code-char (finch/iokit:media-read (finch/install:internal-disk) 512 8))) :do (sleep 0.5) :finally (return (map 'string #'code-char (finch/iokit:media-read (finch/install:internal-disk) 512 8))))"))
+               (is (search "\"EFI PART\"" (ask "(loop :repeat 600 :until (equal \"EFI PART\" (map 'string #'code-char (finch/devices:media-read (finch/install:internal-disk) 512 8))) :do (sleep 0.5) :finally (return (map 'string #'code-char (finch/devices:media-read (finch/install:internal-disk) 512 8))))"))
                    "Install... then Erase and Install writes the disk")
                (sleep 20)
                (image:screendump)

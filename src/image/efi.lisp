@@ -75,17 +75,17 @@
                         :maximize (newest (list sub)))))
 
 (defun kernel-inputs ()
-  (append (mapcar #'source '("src/osfmk/" "src/bsd/dev/" "src/bsd/kern/" "src/pexpert/" "src/libsa/" "src/sbcl/" "src/image/"
+  (append (mapcar #'source '("src/kern/" "src/bsd/dev/" "src/bsd/kern/" "src/platform/" "src/libsa/" "src/sbcl/" "src/image/"
                                      "src/asm/" "src/low/" "src/link/" "src/boot/" "src/cc/" "src/install/"))
           (list (merge-pathnames "output/" (sbcl-tree)))))
 
 (defun user-objects ()
   (mapcar (lambda (unit) (list (getf unit :name) (unit-object unit))) (host-units)))
 
-(defun mach-kernel ()
+(defun kernel-file ()
   (let ((out (build-path (if (eq *c-compiler* :clang) "kernel/kernel" "kernel/kernel-tcc"))))
     (when (and (probe-file out) (> (file-write-date out) (newest (kernel-inputs))))
-      (return-from mach-kernel out))
+      (return-from kernel-file out))
     (c-objects)
     (let ((image (finch/install:kernel-image (loop :for (name path) :in (user-objects) :collect (cons name (octets path))))))
       (ensure-directories-exist out)
@@ -103,7 +103,7 @@
                   (list :file "usr/lib/tcc/libtcc1.a" (text (format nil "!<arch>~%")))))))
 
 (defun object-entries ()
-  (mach-kernel)
+  (kernel-file)
   (let ((objects (user-objects)))
     (cons (list :file "usr/lib/finch/objects/objects" (text (format nil "~{~a~%~}" (mapcar #'first objects))))
           (loop :for (name path) :in objects
@@ -220,7 +220,7 @@
                (uiop:copy-file from path))))
       (let ((efi (boot-efi)))
         (put efi "EFI/BOOT/BOOTX64.EFI"))
-      (put (mach-kernel) "EFI/finch/gen-1/kernel")
+      (put (kernel-file) "EFI/finch/gen-1/kernel")
       (put (finch-core) "EFI/finch/gen-1/finch.core")
       (put (ramdisk) "System/Library/RAMDisk/root.cpio")
       (when root-image (put root-image "System/Library/RAMDisk/root.img")))
@@ -259,10 +259,10 @@
 (defun boot-payload ()
   (flet ((file (name path) (list :file (concatenate 'string "usr/lib/finch/boot/" name) (octets path))))
     (list (list :dir "usr/lib/finch/boot")
-          (file "boot.efi" (boot-efi)) (file "kernel" (mach-kernel))
+          (file "boot.efi" (boot-efi)) (file "kernel" (kernel-file))
           (file "finch.core" (finch-core)) (file "root.cpio" (ramdisk)))))
 
-(defun usb-image (&key (path (build-path "finch-usb.img")) (boot-args (format nil "rd=ram launchd nrepl-key=~a" (nrepl-key))))
+(defun usb-image (&key (path (build-path "finch-usb.img")) (boot-args (format nil "rd=ram init nrepl-key=~a" (nrepl-key))))
   (let ((fat (esp-image (esp :boot-args boot-args
                              :root-image (root-disk (build-path "usb-root.img") (* 256 1048576)
                                                     (append (root-entries) (boot-payload))))
@@ -355,7 +355,7 @@
   (let ((root (if (probe-file disk) (update-root disk) (root-disk disk (* 1024 1048576))))
         (esp (build-path "desktop/esp/")))
     (uiop:delete-directory-tree esp :validate t :if-does-not-exist :ignore)
-    (run "cp" "-a" (uiop:native-namestring (esp :boot-args (root-boot-args "launchd" t)))
+    (run "cp" "-a" (uiop:native-namestring (esp :boot-args (root-boot-args "init" t)))
          (uiop:native-namestring (ensure-directories-exist (build-path "desktop/"))))
     (uiop:run-program (substitute "gtk,zoom-to-fit=off" "none"
                                   (bare-qemu esp nil (cons :keep root))

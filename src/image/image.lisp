@@ -2,7 +2,7 @@
   (:use #:cl)
   (:export #:write-cpio #:*build*
    #:console #:expect #:send #:transcript #:finish #:screendump #:pixel #:monitor #:pointer #:qmp #:send-keys
-   #:boot-efi #:mach-kernel #:esp #:bare-console #:bare-boot #:send-char #:*screen-size* #:update-root #:desktop #:copy-in #:build-sbcl #:*c-compiler* #:build-tcc #:*input-devices* #:*network-device* #:usb-image))
+   #:boot-efi #:kernel-file #:esp #:bare-console #:bare-boot #:send-char #:*screen-size* #:update-root #:desktop #:copy-in #:build-sbcl #:*c-compiler* #:build-tcc #:*input-devices* #:*network-device* #:usb-image))
 (in-package #:finch/image)
 
 (defvar *build* (asdf:system-relative-pathname :finch "build/"))
@@ -63,8 +63,8 @@
   (map '(vector (unsigned-byte 8)) #'char-code string))
 
 (defparameter *programs*
-  '(("sbin/launchd" "launchd") ("bin/launchctl" "launchctl") ("bin/sh" "sh")
-    ("System/Library/CoreServices/WindowServer" "WindowServer")
+  '(("sbin/init" "init") ("bin/service" "service") ("bin/sh" "sh")
+    ("System/Library/Services/WindowServer" "WindowServer")
     ("Applications/Hello.app/Contents/Programs/Hello" "Hello")
     ("System/Applications/Listener.app/Contents/Programs/Listener" "Listener")
     ("System/Applications/Utilities/Force Quit.app/Contents/Programs/Force Quit" "Force Quit")
@@ -73,27 +73,27 @@
     ("System/Applications/Fetch.app/Contents/Programs/Fetch" "Fetch")
     ("System/Applications/Install.app/Contents/Programs/Install" "Install")
     ("System/Applications/Utilities/Terminal.app/Contents/Programs/Terminal" "Terminal")
-    ("System/Library/CoreServices/loginwindow.app/Contents/Programs/loginwindow" "loginwindow")
-    ("System/Library/CoreServices/Dock.app/Contents/Programs/Dock" "Dock")
-    ("System/Library/CoreServices/SystemUIServer.app/Contents/Programs/SystemUIServer" "SystemUIServer")
-    ("System/Library/CoreServices/Finder.app/Contents/Programs/Finder" "Finder")
+    ("System/Library/Services/Session.app/Contents/Programs/Session" "Session")
+    ("System/Library/Services/Dock.app/Contents/Programs/Dock" "Dock")
+    ("System/Library/Services/MenuBar.app/Contents/Programs/MenuBar" "MenuBar")
+    ("System/Library/Services/Files.app/Contents/Programs/Files" "Files")
     ("usr/libexec/finch-gui" "finch-gui")))
 
 (defun job (label &rest keys)
-  (list :file (format nil "Library/LaunchDaemons/~a.job" label)
+  (list :file (format nil "Library/Jobs/~a.job" label)
         (text (with-standard-io-syntax
                 (let ((*print-case* :downcase)) (prin1-to-string (list* :label label keys)))))))
 
 (defun desktop-jobs ()
   (list (job "finch.gui" :arguments '("/usr/libexec/finch-gui") :run-at-load t)
-        (job "finch.windowserver" :program "/System/Library/CoreServices/WindowServer"
+        (job "finch.windowserver" :program "/System/Library/Services/WindowServer"
              :services '("windowserver" ("windowserver.active" :hidden t) ("renderserver" :hidden t)))
-        (job "finch.loginwindow" :program "/System/Library/CoreServices/loginwindow.app/Contents/Programs/loginwindow"
-             :services '("loginwindow"))
-        (job "finch.dock" :program "/System/Library/CoreServices/Dock.app/Contents/Programs/Dock" :keep-alive :after-demand)
-        (job "finch.systemuiserver" :program "/System/Library/CoreServices/SystemUIServer.app/Contents/Programs/SystemUIServer"
+        (job "finch.session" :program "/System/Library/Services/Session.app/Contents/Programs/Session"
+             :services '("Session"))
+        (job "finch.dock" :program "/System/Library/Services/Dock.app/Contents/Programs/Dock" :keep-alive :after-demand)
+        (job "finch.menubar" :program "/System/Library/Services/MenuBar.app/Contents/Programs/MenuBar"
              :keep-alive :after-demand)
-        (job "finch.finder" :program "/System/Library/CoreServices/Finder.app/Contents/Programs/Finder"
+        (job "finch.files" :program "/System/Library/Services/Files.app/Contents/Programs/Files"
              :keep-alive :after-demand :throttle 1)))
 
 (defun fonts ()

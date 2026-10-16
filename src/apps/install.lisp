@@ -1,7 +1,7 @@
 (in-package #:finch/apps)
 
 (defun disk-description (disk)
-  (format nil "~,1f GB NVMe disk" (/ (finch/iokit:get-property disk "Size") 1d9)))
+  (format nil "~,1f GB NVMe disk" (/ (finch/devices:get-property disk "Size") 1d9)))
 
 (defun install-page (content lines buttons)
   (kit:remove-subviews content)
@@ -43,7 +43,7 @@
 
 (bsd:define-program "Install" (argv envp)
   (setf kit:*menus* (kit:standard-menus "Install"))
-  (let* ((screen (handler-case (third (ca:main-display-bounds)) (error () 1280)))
+  (let* ((screen (handler-case (third (layer:main-display-bounds)) (error () 1280)))
          (window (kit:make-window :title "Install" :x (floor (- screen 540) 2) :y 50 :width 540 :height 230)))
     (install-welcome (kit:content-view window))
     (kit:show window)

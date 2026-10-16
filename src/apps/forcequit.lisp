@@ -1,7 +1,7 @@
 (in-package #:finch/apps)
 
 (defparameter *system-programs*
-  '("kernel_task" "launchd" "WindowServer" "loginwindow" "Dock" "SystemUIServer" "Finder" "finch-gui" "Force Quit"))
+  '("kernel" "init" "WindowServer" "Session" "Dock" "MenuBar" "Files" "finch-gui" "Force Quit"))
 
 (defun quittable ()
   (remove-if (lambda (proc) (or (<= (bsd:proc-pid proc) 1)

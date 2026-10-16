@@ -1,6 +1,6 @@
 (defpackage #:finch/fat
   (:use #:cl)
-  (:local-nicknames (#:vfs #:finch/vfs) (#:iokit #:finch/iokit))
+  (:local-nicknames (#:vfs #:finch/vfs) (#:devices #:finch/devices))
   (:export #:newfs #:file-store #:open-volume #:mount #:mount-esp #:volume-label
            #:lookup #:entries #:read-file #:write-file #:make-entry #:remove-entry #:resolve
            #:entry-name #:entry-directory-p #:entry-size))

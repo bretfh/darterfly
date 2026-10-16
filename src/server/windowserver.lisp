@@ -1,7 +1,7 @@
 (defpackage #:finch/windowserver
   (:use #:cl)
-  (:local-nicknames (#:bsd #:finch/bsd) (#:mach #:finch/mach) (#:ca #:finch/ca) (#:io #:finch/io) (#:server #:finch/server)
-                    (#:launchd #:finch/launchd)))
+  (:local-nicknames (#:bsd #:finch/bsd) (#:mach #:finch/mach) (#:layer #:finch/layer) (#:io #:finch/io) (#:server #:finch/server)
+                    (#:init #:finch/init)))
 (in-package #:finch/windowserver)
 
 (defconstant +mach-notify-no-senders+ #o106)
@@ -443,12 +443,12 @@
   (render)
   (bsd:bsdthread-create #'hid-loop "hid")
   (let ((set (mach:mach-port-allocate mach:*task* :port-set))
-        (render-server (launchd:bootstrap-check-in "renderserver")))
+        (render-server (init:bootstrap-check-in "renderserver")))
     (dolist (name '("windowserver" "windowserver.active"))
-      (let ((port (launchd:bootstrap-check-in name)))
+      (let ((port (init:bootstrap-check-in name)))
         (when port (mach:mach-port-move-member mach:*task* port set))))
     (mach:mach-port-move-member mach:*task* render-server set)
-    (finch/launchd:bootstrap-look-up "loginwindow")
+    (finch/init:bootstrap-look-up "Session")
     (format t "WindowServer: ~dx~d, render server #x~x~%"
             (io:framebuffer-width *framebuffer*) (io:framebuffer-height *framebuffer*) render-server)
     (finish-output)

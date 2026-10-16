@@ -51,17 +51,17 @@
   (vfs:vfs-mount (apfs-vnode v +root-dir-ino-num+) path))
 
 (defun mount-volumes (&key writable)
-  (loop for vol in (iokit:find-entries 'apfs-volume-media)
+  (loop for vol in (devices:find-entries 'apfs-volume-media)
         for v = (apfs-volume vol)
         for path = (format nil "/Volumes/~a" (volume-name v))
         unless (eq vol *root-media*)
         do (vfs:vfs-mkdirs path)
            (if writable
                (let ((media vol))
-                 (mount-writable (lambda (at length) (iokit:media-read media at length))
-                                 (lambda (at octets) (iokit:media-write media at octets))
+                 (mount-writable (lambda (at length) (devices:media-read media at length))
+                                 (lambda (at octets) (devices:media-write media at octets))
                                  path
-                                 (lambda () (iokit:media-flush media))))
+                                 (lambda () (devices:media-flush media))))
                (mount-volume v path))
         and collect path))
 

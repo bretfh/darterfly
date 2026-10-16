@@ -1,4 +1,4 @@
-(in-package #:finch/osfmk)
+(in-package #:finch/kern)
 
 (defconstant +nsig+ 65)
 (defconstant +sigint+ 2)
@@ -89,7 +89,7 @@
         (sig 0))
     (setf (mem :u32 (+ self +t-sched-flags+)) (logand (mem :u32 (+ self +t-sched-flags+)) (lognot +abort-safely+)))
     (unless sigtrace-known
-      (setf sigtrace (the :u32 (|PE_parse_boot_arg| "sigtrace")))
+      (setf sigtrace (the :u32 (|platform_parse_boot_arg| "sigtrace")))
       (setf sigtrace-known 1))
     (while (setf sig (issignal))
       (if (logand (mem :u64 (+ self +t-siglist+)) (sigmask sig))

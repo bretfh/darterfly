@@ -292,7 +292,7 @@
   (unless finch/net:*interface*
     (finch/net:start-network))
   (setf *key* (or key
-                  (let ((arg (finch/iokit:boot-arg "nrepl-key"))) (and (stringp arg) arg))
+                  (let ((arg (finch/devices:boot-arg "nrepl-key"))) (and (stringp arg) arg))
                   *key*
                   (new-key)))
   (unless (running-p)

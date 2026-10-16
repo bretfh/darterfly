@@ -94,7 +94,7 @@
     v))
 
 (defun fat-media-p (media)
-  (let ((boot (iokit:media-read media 0 +sector+)))
+  (let ((boot (devices:media-read media 0 +sector+)))
     (and (= (u boot 510 2) #xAA55) (string= (map 'string #'code-char (subseq boot 82 90)) "FAT32   "))))
 
 (defun whole-blocks (read write)
@@ -108,14 +108,14 @@
             (funcall write first blocks))))))
 
 (defun mount-esp (&optional (path "/Volumes/EFI"))
-  (let ((media (find-if (lambda (m) (and (or (iokit:get-property m "Whole")
-                                              (equal (iokit:get-property m "Content") finch/gpt:+esp-type+))
+  (let ((media (find-if (lambda (m) (and (or (devices:get-property m "Whole")
+                                              (equal (devices:get-property m "Content") finch/gpt:+esp-type+))
                                           (fat-media-p m)))
-                        (iokit:find-entries 'iokit:io-media))))
+                        (devices:find-entries 'devices:media))))
     (when media
       (vfs:vfs-mkdirs path)
-      (let ((read (lambda (at length) (iokit:media-read media at length))))
-        (mount read (whole-blocks read (lambda (at octets) (iokit:media-write media at octets))) path)))))
+      (let ((read (lambda (at length) (devices:media-read media at length))))
+        (mount read (whole-blocks read (lambda (at octets) (devices:media-write media at octets))) path)))))
 
 (defun put-entries (v entries)
   (dolist (e entries v)

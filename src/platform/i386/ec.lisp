@@ -1,0 +1,20 @@
+(in-package #:finch/platform)
+
+(defconstant +ec-data+ #x62)
+(defconstant +ec-command+ #x66)
+
+(define-low ec-wait ((mask :u32) (want :u32))
+  (let ((tries 0))
+    (while (< tries 100000)
+      (when (= (logand (inb +ec-command+) mask) want) (result 1))
+      (pause)
+      (incf tries))
+    0))
+
+(define-low ec-read ((offset :u32))
+  (unless (the :u32 (ec-wait 2 0)) (result #xFFFF))
+  (outb +ec-command+ #x80)
+  (unless (the :u32 (ec-wait 2 0)) (result #xFFFF))
+  (outb +ec-data+ offset)
+  (unless (the :u32 (ec-wait 1 1)) (result #xFFFF))
+  (inb +ec-data+))

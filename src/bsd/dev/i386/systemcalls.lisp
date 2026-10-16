@@ -1,4 +1,4 @@
-(in-package #:finch/osfmk)
+(in-package #:finch/kern)
 
 (defconstant +ebadf+ 9)
 (defconstant +enomem+ 12)
@@ -58,7 +58,7 @@
       ((= n 1)
        (kprintf "exit(%d)
 " (logand a #xFFFFFFFF))
-       (|PE_halt|))
+       (|platform_halt|))
       ((= n 3)
        (unless (= a 0) (result (error regs +ebadf+)))
        (when (= c 0) (result (ok regs 0)))
@@ -174,7 +174,7 @@
        (unless (logand d +map-anon+) (result (error regs +enosys+)))
        (let ((at (if (or (logand d +map-fixed+) a) a (vm-map-find-space b))))
          (vm-map-enter at b c)
-         (when (the :u32 (|PE_parse_boot_arg| "faulttrace"))
+         (when (the :u32 (|platform_parse_boot_arg| "faulttrace"))
            (kprintf "[mmap 0x%lx len 0x%lx prot %lu -> 0x%lx]
 " a b c at))
          (ok regs at)))
@@ -191,7 +191,7 @@
   (let ((n (reg regs +r-rax+))
         (a (reg regs +r-rdi+))
         (b (reg regs +r-rsi+))
-        (args |PE_boot_args|))
+        (args |platform_boot_args|))
     (cond
       ((= n 4) (ok regs (address commpage)))
       ((= n 5) (ok regs (the :u32 (serial-ready))))
@@ -224,7 +224,7 @@
       ((= n 24) (ok regs (rdmsr a)))
       ((= n 25) (ok regs (mem :u32 (+ (cpu-data) +cpu-phys-number+))))
       ((= n 12)
-       (ok regs (|PE_interrupt_wait| a (if b (deadline-after (truncate b 1000000) (* (rem b 1000000) 1000)) 0))))
+       (ok regs (|platform_interrupt_wait| a (if b (deadline-after (truncate b 1000000) (* (rem b 1000000) 1000)) 0))))
       ((= n 13) (ok regs (mem :u32 (+ (cpu-datap 0) +cpu-phys-number+))))
       ((= n 14) (ok regs (ml-io-map-wcomb a b)))
       ((= n 16)

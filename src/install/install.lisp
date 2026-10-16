@@ -93,8 +93,8 @@
 (defun kernel-image (user-objects)
   (setf finch/low:*build-date* (build-date))
   (finch/link:link-kernel
-   (list (finch/link:read-object (finch/pexpert:pexpert-object) "pexpert.o" :kernel)
-         (finch/link:read-object (finch/osfmk:osfmk-object) "osfmk.o" :kernel))
+   (list (finch/link:read-object (finch/platform:platform-object) "platform.o" :kernel)
+         (finch/link:read-object (finch/kern:kern-object) "kern.o" :kernel))
    (loop :for (name . octets) :in user-objects
          :collect (finch/link:read-object octets name :user))))
 

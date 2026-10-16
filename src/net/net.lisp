@@ -59,8 +59,8 @@
 
 (defgeneric if-output (device frame))
 
-(defmethod if-output ((device finch/iokit:io-ethernet-controller) frame)
-  (finch/iokit:network-send device frame))
+(defmethod if-output ((device finch/devices:ethernet-controller) frame)
+  (finch/devices:network-send device frame))
 
 (defun send-frame (dst type payload)
   (if-output (interface-device *interface*) (octets dst (interface-mac *interface*) (be type 2) payload)))
@@ -191,19 +191,19 @@
 
 (defun input-loop ()
   (let* ((device (interface-device *interface*))
-         (vector (finch/iokit:interrupt-vector device)))
+         (vector (finch/devices:interrupt-vector device)))
     (loop
-      (let ((frames (finch/iokit:network-receive device)))
+      (let ((frames (finch/devices:network-receive device)))
         (cond (frames (dolist (f frames) (ignore-errors (receive-frame f))))
-              (vector (finch/iokit:wait-for-interrupt (list vector)))
+              (vector (finch/devices:wait-for-interrupt (list vector)))
               (t (sleep 0.002)))))))
 
 (defun start-network (&key ip (prefix 24) gateway)
   (when *interface* (return-from start-network *interface*))
-  (finch/iokit:start-iokit)
-  (let ((device (first (finch/iokit:find-entries 'finch/iokit:io-ethernet-controller))))
+  (finch/devices:start-devices)
+  (let ((device (first (finch/devices:find-entries 'finch/devices:ethernet-controller))))
     (unless device (net-fail :enetdown "no network device"))
-    (setf *interface* (make-interface :device device :mac (finch/iokit:network-mac device)))
+    (setf *interface* (make-interface :device device :mac (finch/devices:network-mac device)))
     (setf (interface-thread *interface*) (sb-thread:make-thread #'input-loop :name "net input"))
     (start-ip6)
     (if ip

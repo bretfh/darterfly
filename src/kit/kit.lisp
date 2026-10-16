@@ -1,7 +1,7 @@
 (defpackage #:finch/kit
   (:use #:cl)
-  (:local-nicknames (#:ca #:finch/ca) (#:text #:finch/text) (#:mach #:finch/mach) (#:server #:finch/server) (#:bsd #:finch/bsd)
-                    (#:imageio #:finch/imageio))
+  (:local-nicknames (#:layer #:finch/layer) (#:text #:finch/text) (#:mach #:finch/mach) (#:server #:finch/server) (#:bsd #:finch/bsd)
+                   (#:imageio #:finch/imageio))
   (:export #:responder #:view #:text-field #:button #:window #:make-window
            #:view-frame #:subviews #:add-subview #:needs-display #:draw #:mouse-down #:key-down
            #:content-view #:window-title #:first-responder #:show #:close-window #:run
@@ -17,7 +17,7 @@
    (subviews :initform nil :accessor subviews)
    (superview :initform nil :accessor superview)
    (window :initform nil :accessor view-window)
-   (layer :initform (ca:make-layer) :reader view-layer)
+   (layer :initform (layer:make-layer) :reader view-layer)
    (background :initarg :background :initform nil :accessor background)
    (dirty :initform t :accessor dirty)))
 
@@ -55,14 +55,14 @@
 
 (defun display (view)
   (let ((layer (view-layer view)))
-    (setf (ca:layer-frame layer) (view-frame view))
+    (setf (layer:layer-frame layer) (view-frame view))
     (when (dirty view)
       (let ((w (max 1 (view-width view))) (h (max 1 (view-height view))))
         (let ((bitmap (text:make-bitmap w h)))
           (draw view bitmap)
-          (setf (ca:layer-contents layer) (ca:image w h (text:bitmap-pixels bitmap)))))
+          (setf (layer:layer-contents layer) (layer:image w h (text:bitmap-pixels bitmap)))))
       (setf (dirty view) nil))
-    (setf (ca:layer-sublayers layer) (mapcar #'view-layer (subviews view)))
+    (setf (layer:layer-sublayers layer) (mapcar #'view-layer (subviews view)))
     (mapc #'display (subviews view))))
 
 (defun view-at (view x y)
@@ -212,13 +212,13 @@
 
 (defun commit (window)
   (display (frame-view window))
-  (ca:commit (window-context window)))
+  (layer:commit (window-context window)))
 
 (bsd:define-process-variable *run-set* nil)
 
 (defun listen-to (window)
   (when *run-set*
-    (mach:mach-port-move-member mach:*task* (ca:context-events (window-context window)) *run-set*)))
+    (mach:mach-port-move-member mach:*task* (layer:context-events (window-context window)) *run-set*)))
 
 (bsd:define-process-variable *menus* nil)
 
@@ -316,12 +316,12 @@
     (setf (app-menu *application*)
           (menu-bar (or *menus* (standard-menus (bsd:proc-comm bsd:*proc*))))))
   (unless (window-context window)
-    (setf (window-context window) (ca:context-create))
-    (setf (ca:context-layer (window-context window)) (view-layer (frame-view window))))
+    (setf (window-context window) (layer:context-create))
+    (setf (layer:context-layer (window-context window)) (view-layer (frame-view window))))
   (commit window)
   (unless (window-id window)
     (setf (window-id window)
-          (ca:window-create (window-context window) (window-x window) (window-y window)
+          (layer:window-create (window-context window) (window-x window) (window-y window)
                             (window-width window) (window-height window) :level (window-level window))))
   (unless (member window (app-windows *application*))
     (push window (app-windows *application*))
@@ -330,7 +330,7 @@
 
 (defun close-window (window)
   (when (window-id window)
-    (ca:transaction-commit (list (list :order (window-id window) :out))))
+    (layer:transaction-commit (list (list :order (window-id window) :out))))
   (setf (app-windows *application*) (remove window (app-windows *application*))))
 
 (defun any-dirty (view)
@@ -371,7 +371,7 @@
     (setf *run-set* set)
     (mach:mach-port-move-member mach:*task* (main-port) set)
     (dolist (window (windows))
-      (mach:mach-port-move-member mach:*task* (ca:context-events (window-context window)) set))
+      (mach:mach-port-move-member mach:*task* (layer:context-events (window-context window)) set))
     (loop
       (loop :for message := (mach:mach-msg-receive set) :then (handler-case (mach:mach-msg-receive set :timeout 0)
                                                                 (mach:kern-return () nil))
@@ -383,7 +383,7 @@
 
 (defun dispatch (message)
   (let ((window (find (mach:msgh-local-port message) (windows)
-                      :key (lambda (w) (ca:context-events (window-context w)))))
+                      :key (lambda (w) (layer:context-events (window-context w)))))
         (event (mach:msgh-body message)))
     (when window
       (case (server:event-type event)

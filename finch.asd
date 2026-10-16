@@ -11,12 +11,12 @@
   :pathname "src/bsd/"
   :components ((:file "errno") (:file "proc") (:file "file") (:file "socket") (:file "vfs") (:file "stdio") (:file "exec") (:file "libsa")))
 
-(asdf:defsystem #:finch/launchd
-  :description "launchd and launchctl"
+(asdf:defsystem #:finch/init
+  :description "init and service"
   :depends-on (#:finch/bsd #:finch/mach)
   :serial t
-  :pathname "src/launchd/"
-  :components ((:file "launchd")))
+  :pathname "src/init/"
+  :components ((:file "init")))
 
 (asdf:defsystem #:finch/shell
   :description "The shell"
@@ -27,7 +27,7 @@
 
 (asdf:defsystem #:finch/io
   :description "Frame buffers and input devices"
-  :depends-on (#:uiop #:finch/iokit (:require #:sb-posix))
+  :depends-on (#:uiop #:finch/devices (:require #:sb-posix))
   :serial t
   :pathname "src/io/"
   :components ((:file "framebuffer") (:file "hid") (:file "report") (:file "blend") (:file "keymap")))
@@ -55,42 +55,42 @@
 
 (asdf:defsystem #:finch/kit
   :description "Views, windows and menus"
-  :depends-on (#:finch/ca #:finch/text #:finch/mach #:finch/server #:finch/bsd #:finch/imageio)
+  :depends-on (#:finch/layer #:finch/text #:finch/mach #:finch/server #:finch/bsd #:finch/imageio)
   :serial t
   :pathname "src/kit/"
   :components ((:file "kit")))
 
 (asdf:defsystem #:finch/windowserver
   :description "WindowServer"
-  :depends-on (#:finch/ca #:finch/server #:finch/bsd #:finch/mach #:finch/launchd #:finch/io)
+  :depends-on (#:finch/layer #:finch/server #:finch/bsd #:finch/mach #:finch/init #:finch/io)
   :serial t
   :pathname "src/server/"
   :components ((:file "windowserver")))
 
 (asdf:defsystem #:finch/apps
   :description "Applications"
-  :depends-on (#:finch/ca #:finch/server #:finch/bsd #:finch/text #:finch/imageio #:finch/kit #:finch/edit #:finch/install #:finch/generation #:finch/iokit #:finch/net)
+  :depends-on (#:finch/layer #:finch/server #:finch/bsd #:finch/text #:finch/imageio #:finch/kit #:finch/edit #:finch/install #:finch/generation #:finch/devices #:finch/net)
   :serial t
   :pathname "src/apps/"
   :components ((:file "hello") (:file "terminal") (:file "listener") (:file "forcequit") (:file "editor") (:file "generations") (:file "session") (:file "fetch") (:file "install")))
 
-(asdf:defsystem #:finch/iokit
-  :description "IOKit: the registry, PCI and drivers"
+(asdf:defsystem #:finch/devices
+  :description "Devices: the registry, PCI and drivers"
   :depends-on (#:uiop)
   :serial t
-  :pathname "src/iokit/"
+  :pathname "src/devices/"
   :components ((:file "machine") (:file "registry") (:file "acpi") (:file "pci") (:file "interrupt") (:file "virtio") (:file "storage") (:file "block") (:file "nvme") (:file "ramdisk") (:file "xhci") (:file "i2c") (:file "input") (:file "network") (:file "ecm") (:file "battery")))
 
 (asdf:defsystem #:finch/nrepl
   :description "Remote eval"
-  :depends-on (#:finch/net #:finch/iokit)
+  :depends-on (#:finch/net #:finch/devices)
   :serial t
   :pathname "src/nrepl/"
   :components ((:file "nrepl")))
 
 (asdf:defsystem #:finch/net
   :description "Networking"
-  :depends-on (#:uiop #:finch/iokit)
+  :depends-on (#:uiop #:finch/devices)
   :serial t
   :pathname "src/net/"
   :components ((:file "net") (:file "ip6") (:file "tcp") (:file "dhcp") (:file "dns")))
@@ -104,14 +104,14 @@
 
 (asdf:defsystem #:finch/apfs
   :description "APFS"
-  :depends-on (#:uiop #:finch/iokit #:finch/vfs)
+  :depends-on (#:uiop #:finch/devices #:finch/vfs)
   :serial t
   :pathname "src/apfs/"
-  :components ((:file "apfs") (:file "iokit") (:file "newfs") (:file "transaction") (:file "write") (:file "vfs") (:file "root")))
+  :components ((:file "apfs") (:file "devices") (:file "newfs") (:file "transaction") (:file "write") (:file "vfs") (:file "root")))
 
 (asdf:defsystem #:finch/fat
   :description "FAT32"
-  :depends-on (#:uiop #:finch/vfs #:finch/iokit #:finch/gpt)
+  :depends-on (#:uiop #:finch/vfs #:finch/devices #:finch/gpt)
   :serial t
   :pathname "src/fat/"
   :components ((:file "fat") (:file "vfs")))
@@ -142,7 +142,7 @@
 
 (asdf:defsystem #:finch/install
   :description "Generations"
-  :depends-on (#:uiop #:finch/fat #:finch/low #:finch/pexpert #:finch/osfmk #:finch/link #:finch/gpt #:finch/apfs #:finch/iokit #:finch/vfs)
+  :depends-on (#:uiop #:finch/fat #:finch/low #:finch/platform #:finch/kern #:finch/link #:finch/gpt #:finch/apfs #:finch/devices #:finch/vfs)
   :serial t
   :pathname "src/install/"
   :components ((:file "install") (:file "disk")))
@@ -165,18 +165,18 @@
   :pathname "src/gpt/"
   :components ((:file "gpt")))
 
-(asdf:defsystem #:finch/pexpert
+(asdf:defsystem #:finch/platform
   :description "Serial console"
   :depends-on (#:finch/low)
   :serial t
-  :pathname "src/pexpert/i386/"
+  :pathname "src/platform/i386/"
   :components ((:file "serial") (:file "init") (:file "font") (:file "console") (:file "ec")))
 
-(asdf:defsystem #:finch/osfmk
+(asdf:defsystem #:finch/kern
   :description "Kernel"
   :depends-on (#:finch/low)
   :serial t
-  :pathname "src/osfmk/i386/"
+  :pathname "src/kern/i386/"
   :components ((:file "mtrr") (:file "printf") (:file "rtclock") (:file "vm-map") (:file "pmap") (:file "lapic") (:file "sched")
                (:file "signal" :pathname "../../bsd/kern/signal") (:file "trap") (:file "mp")
                (:file "systemcalls" :pathname "../../bsd/dev/i386/systemcalls")
@@ -205,7 +205,7 @@
 
 (asdf:defsystem #:finch/image
   :description "The bootable image"
-  :depends-on (#:uiop #:finch/qmp #:finch/io #:finch/apfs #:finch/fat #:finch/gpt #:finch/install #:finch/cc #:finch/build #:finch/pexpert #:finch/osfmk #:finch/low #:finch/boot #:finch/link (:require #:sb-bsd-sockets))
+  :depends-on (#:uiop #:finch/qmp #:finch/io #:finch/apfs #:finch/fat #:finch/gpt #:finch/install #:finch/cc #:finch/build #:finch/platform #:finch/kern #:finch/low #:finch/boot #:finch/link (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/image/"
   :components ((:file "image") (:file "tcc") (:file "runtime") (:file "efi")))
@@ -216,11 +216,11 @@
   :pathname "src/server/"
   :components ((:file "event")))
 
-(asdf:defsystem #:finch/ca
-  :description "The layer render protocol"
-  :depends-on (#:finch/mach #:finch/bsd #:finch/launchd #:finch/server)
+(asdf:defsystem #:finch/layer
+  :description "Layers and their commits"
+  :depends-on (#:finch/mach #:finch/bsd #:finch/init #:finch/server)
   :serial t
-  :pathname "src/ca/"
+  :pathname "src/layer/"
   :components ((:file "client")))
 
 (asdf:defsystem #:finch/qmp
@@ -232,13 +232,13 @@
 
 (asdf:defsystem #:finch
   :description "A live, hackable OS on SBCL"
-  :depends-on (#:finch/mach #:finch/server #:finch/ca #:finch/bsd #:finch/launchd #:finch/shell #:finch/io #:finch/text #:finch/edit #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/iokit #:finch/vfs #:finch/apfs #:finch/fat #:finch/install #:finch/net #:finch/nrepl #:finch/run #:finch/generation #:finch/kernel #:finch/image)
+  :depends-on (#:finch/mach #:finch/server #:finch/layer #:finch/bsd #:finch/init #:finch/shell #:finch/io #:finch/text #:finch/edit #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/devices #:finch/vfs #:finch/apfs #:finch/fat #:finch/install #:finch/net #:finch/nrepl #:finch/run #:finch/generation #:finch/kernel #:finch/image)
   :in-order-to ((asdf:test-op (asdf:test-op #:finch/test))))
 
 (asdf:defsystem #:finch/test
   :depends-on (#:finch #:fiveam (:require #:sb-posix) (:require #:sb-md5) (:require #:sb-bsd-sockets))
   :serial t
   :pathname "tests/"
-  :components ((:file "suite") (:file "mach") (:file "server") (:file "launchd") (:file "boot") (:file "apfs") (:file "net") (:static-file "low-harness.c") (:file "low"))
+  :components ((:file "suite") (:file "mach") (:file "server") (:file "init") (:file "boot") (:file "apfs") (:file "net") (:static-file "low-harness.c") (:file "low"))
   :perform (asdf:test-op (o c)
              (uiop:symbol-call :finch/test :run-them)))
