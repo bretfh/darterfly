@@ -2,7 +2,7 @@
   (:use #:cl #:finch/asm)
   (:shadow #:compile)
   (:export #:define-low #:define-global #:low-object #:inb #:outb #:ref #:mem #:pause #:result #:while
-           #:package-object #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:monitor #:sti-mwait #:address
+           #:package-object #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:monitor #:sti-mwait #:outw #:address
            #:rep-movsb #:rep-stosb #:&va #:va-next #:rdtsc #:return-address
            #:invlpg #:set-cr3 #:cpuid-edx #:cpuid #:cpu-data #:fxsave #:fxrstor #:code-address #:call-pointer #:read-cr #:set-cr #:fninit #:compare-and-swap #:rdrand #:int3 #:build-date #:*build-date* #:lidt #:ltr
            #:efi-call #:wide #:define-efi-entry #:package-image
@@ -394,6 +394,12 @@
                    (inst mov rdx-tn rax-tn)
                    (spop rax-tn)
                    (out :byte))
+             (outw (compile (second args))
+                   (spush rax-tn)
+                   (compile (first args))
+                   (inst mov rdx-tn rax-tn)
+                   (spop rax-tn)
+                   (out :word))
              (pause (inst pause))
              (result (compile (first args)) (inst jmp *exit*))
              (set-cr (compile (second args))

@@ -228,6 +228,9 @@
 
 (defun standard-menus (name &rest menus)
   (list* (list name (cons (format nil "About ~a" name) nil) :separator
+               (cons "Restart" (lambda (sender) (declare (ignore sender)) (finch/power:restart)))
+               (cons "Shut Down" (lambda (sender) (declare (ignore sender)) (finch/power:shut-down)))
+               :separator
                (cons (format nil "Quit ~a" name) #'terminate))
          (or menus
              (list (list "File" (cons "Close Window" (lambda (sender) (declare (ignore sender))

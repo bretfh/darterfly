@@ -1,4 +1,4 @@
-.PHONY: repl check test bare desktop sbcl usb deploy
+.PHONY: repl check test bare desktop sbcl usb deploy reload
 
 GUIX := guix shell -m manifest.scm --
 ENV  := CL_SOURCE_REGISTRY="$$PWD//:$$GUIX_ENVIRONMENT/share/common-lisp//" ASDF_OUTPUT_TRANSLATIONS="/:$$HOME/.cache/common-lisp/finch/"
@@ -27,3 +27,6 @@ usb:
 
 deploy:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :finch/image)" --eval "(format t \"~a~%\" (finch/image:deploy \"$(HOST)\"))"'
+
+reload:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :finch/image)" --eval "(format t \"~a~%\" (finch/image:deploy \"$(HOST)\" :reload t))"'

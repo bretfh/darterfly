@@ -1,6 +1,6 @@
 (defpackage #:finch/install
   (:use #:cl)
-  (:export #:receive-deployment #:restart-machine #:restart-soon #:flush-disks #:install #:generations #:current #:select #:confirm #:failed #:manifest #:save #:stop-threads #:kernel-image #:build-kernel #:install-disk #:internal-disk))
+  (:export #:receive-deployment #:reload-systems #:restart-soon #:flush-disks #:install #:generations #:current #:select #:confirm #:failed #:manifest #:save #:stop-threads #:kernel-image #:build-kernel #:install-disk #:internal-disk))
 (in-package #:finch/install)
 
 (defvar *esp* "/Volumes/EFI/")

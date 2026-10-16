@@ -614,9 +614,9 @@
              (image:pointer 28 12 t)
              (image:pointer 28 12 nil)
              (screen-until (lambda (s) (< 20 (dark-pixels s 10 70 120 95 100))))
-             (image:pointer 60 80)
-             (image:pointer 60 80 t)
-             (image:pointer 60 80 nil)
+             (image:pointer 60 150)
+             (image:pointer 60 150 t)
+             (image:pointer 60 150 nil)
              (is (= #xff2e5c8f (image:pixel (screen-until (lambda (s) (= #xff2e5c8f (image:pixel s 300 110)))) 300 110))
                  "quit takes terminal away")
              (dotimes (i 2)
@@ -636,6 +636,19 @@
                 (finch/qmp:dict "events" (coerce (append (loop :for n :in names :collect (key n t))
                                                          (loop :for n :in (reverse names) :collect (key n nil)))
                                                  'vector)))))
+
+(test power-restarts-and-shuts-down
+  (dolist (form '("(finch/power:shut-down)" "(finch/power:restart)"))
+    (let ((c (image:bare-console)))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 90)
+             (is (search "T" (progn (image:send c "(integerp (finch/power::s5-sleep-type))") (image:expect c (format nil "~%* ") :timeout 60)))
+                 "the sleep type comes from the firmware's _S5")
+             (image:send c form)
+             (is (loop :repeat 600 :unless (uiop:process-alive-p (image::console-process c)) :return t :do (sleep 0.1))
+                 "~a ends the machine" form))
+        (image:finish c 5)))))
 
 (test runaway-code-can-be-stopped
   (let ((c (image:bare-console :boot-args "init"))

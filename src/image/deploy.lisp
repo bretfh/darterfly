@@ -1,14 +1,18 @@
 (in-package #:finch/image)
 
-(defun deployment ()
-  (append (loop for entry in (root-entries)
+(defun source-entries ()
+  (tree-entries (asdf:system-relative-pathname :finch "") "usr/src/finch" :skip '(".git" "build")))
+
+(defun deployment (&key (generation t))
+  (append (loop for entry in (if generation (root-entries) (source-entries))
                 when (eq (first entry) :file)
                   collect (destructuring-bind (path octets &optional (mode #o644) &rest more) (rest entry)
                             (declare (ignore more))
                             (list "file" path octets mode)))
-          (list (list "gen" "kernel" (octets (kernel-file)) #o644)
-                (list "gen" "finch.core" (octets (finch-core)) #o644)
-                (list "gen" "boot.efi" (octets (boot-efi)) #o644))))
+          (and generation
+               (list (list "gen" "kernel" (octets (kernel-file)) #o644)
+                     (list "gen" "finch.core" (octets (finch-core)) #o644)
+                     (list "gen" "boot.efi" (octets (boot-efi)) #o644)))))
 
 (defun serve-deployment (entries port)
   (let ((listener (make-instance 'sb-bsd-sockets:inet-socket :type :stream :protocol :tcp)))
@@ -36,12 +40,12 @@
                           "eval" "--new" "--host" host "--port" (princ-to-string nrepl-port) "--key" (nrepl-key) code)
                     :output :string :error-output :string :ignore-error-status t))
 
-(defun deploy (host &key (from "10.42.0.1") (port 47100) (nrepl-port 4011) (restart t))
-  (let* ((entries (deployment))
+(defun deploy (host &key (from "10.42.0.1") (port 47100) (nrepl-port 4011) (restart t) (reload nil))
+  (let* ((entries (deployment :generation (not reload)))
          (receiver (uiop:read-file-string (source "src/install/deploy.lisp")))
          (server (serve-deployment entries port))
-         (result (device-eval host (format nil "(progn (with-input-from-string (s ~s) (let ((*package* (find-package \"FINCH/INSTALL\"))) (loop for f = (read s nil s) until (eq f s) do (eval f)))) (let ((r (finch/install::receive-deployment ~s ~d))) (when ~a (finch/install::restart-soon)) r))"
-                                           receiver from port (and restart t))
+         (result (device-eval host (format nil "(progn (with-input-from-string (s ~s) (let ((*package* (find-package \"FINCH/INSTALL\"))) (loop for f = (read s nil s) until (eq f s) do (eval f)))) (let ((r (finch/install::receive-deployment ~s ~d))) (cond (~a (append r (finch/install::reload-systems))) (~a (finch/install::restart-soon) r) (t r))))"
+                                           receiver from port (and reload t) (and restart t))
                               :nrepl-port nrepl-port)))
     (sb-thread:join-thread server :default nil :timeout 5)
     result))

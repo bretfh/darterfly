@@ -20,7 +20,11 @@
 
 (defmacro in (size) `(inst byte ,(ecase size (:byte #xEC) (:dword #xED))))
 
-(defmacro out (size) `(inst byte ,(ecase size (:byte #xEE) (:dword #xEF))))
+(defmacro out (size)
+  (ecase size
+    (:byte `(inst byte #xEE))
+    (:word `(progn (inst byte #x66) (inst byte #xEF)))
+    (:dword `(inst byte #xEF))))
 
 (defvar *quads*)
 

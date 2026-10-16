@@ -53,9 +53,16 @@
   :pathname "src/imageio/"
   :components ((:file "imageio")))
 
+(asdf:defsystem #:finch/power
+  :description "Restart and shut down"
+  :depends-on (#:finch/devices #:finch/vfs)
+  :serial t
+  :pathname "src/power/"
+  :components ((:file "power")))
+
 (asdf:defsystem #:finch/kit
   :description "Views, windows and menus"
-  :depends-on (#:finch/layer #:finch/text #:finch/mach #:finch/server #:finch/bsd #:finch/imageio)
+  :depends-on (#:finch/layer #:finch/text #:finch/mach #:finch/server #:finch/bsd #:finch/imageio #:finch/power)
   :serial t
   :pathname "src/kit/"
   :components ((:file "kit")))
@@ -142,7 +149,7 @@
 
 (asdf:defsystem #:finch/install
   :description "Generations"
-  :depends-on (#:uiop #:finch/fat #:finch/low #:finch/platform #:finch/kern #:finch/link #:finch/gpt #:finch/apfs #:finch/devices #:finch/vfs (:require #:sb-bsd-sockets))
+  :depends-on (#:uiop #:finch/fat #:finch/low #:finch/platform #:finch/kern #:finch/link #:finch/gpt #:finch/apfs #:finch/devices #:finch/vfs #:finch/power (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/install/"
   :components ((:file "install") (:file "disk") (:file "deploy")))
