@@ -223,6 +223,7 @@
       ((= n 23) (ok regs (the :u32 (ec-read a))))
       ((= n 24) (ok regs (rdmsr a)))
       ((= n 25) (ok regs (mem :u32 (+ (cpu-data) +cpu-phys-number+))))
+      ((= n 26) (cli) (outb #xCF9 2) (outb #xCF9 #x0E) (while 1 (hlt)))
       ((= n 12)
        (ok regs (|platform_interrupt_wait| a (if b (deadline-after (truncate b 1000000) (* (rem b 1000000) 1000)) 0))))
       ((= n 13) (ok regs (mem :u32 (+ (cpu-datap 0) +cpu-phys-number+))))
