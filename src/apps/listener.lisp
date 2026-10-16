@@ -12,9 +12,14 @@
   (setf (lines view) (append (lines view) (list (cons (substitute #\Space #\Newline text) object))))
   (kit:needs-display view))
 
+(defgeneric prompt (view))
+
+(defmethod prompt ((view transcript-view))
+  (format nil "* ~a" (input view)))
+
 (defun shown-lines (view)
   (let ((rows (floor (- (kit:view-height view) 8) +line-height+))
-        (all (append (lines view) (and (input view) (list (cons (format nil "* ~a" (input view)) nil))))))
+        (all (append (lines view) (and (input view) (list (cons (prompt view) nil))))))
     (last all rows)))
 
 (defmethod kit:draw ((view transcript-view) bitmap)
@@ -123,7 +128,27 @@
 (defclass listener-view (transcript-view)
   ((lock :initform (sb-thread:make-mutex :name "listener") :reader listener-lock)
    (chosen :initform (sb-thread:make-waitqueue) :reader chosen)
-   (restart :initform nil :accessor chosen-restart)))
+   (restart :initform nil :accessor chosen-restart)
+   (running :initform nil :accessor running)))
+
+(defun seconds-since (start)
+  (/ (- (get-internal-real-time) start) internal-time-units-per-second))
+
+(defmethod prompt ((view listener-view))
+  (let ((run (first (running view))))
+    (if run
+        (format nil "  running ~ds — ctrl-c stops   * ~a" (floor (seconds-since (cdr run))) (input view))
+        (call-next-method))))
+
+(defun stop-evaluation (view)
+  (dolist (run (running view))
+    (when (car run)
+      (ignore-errors (sb-thread:interrupt-thread (car run) (lambda () (ignore-errors (throw 'stop-evaluation :stopped))))))))
+
+(defun tick-while-running (view)
+  (loop :while (running view)
+        :do (sleep 1)
+            (kit:perform-on-main (lambda () (kit:needs-display view)))))
 
 (defstruct (choice (:constructor make-choice (restart))) restart)
 
@@ -139,8 +164,16 @@
     (shiftf (chosen-restart view) nil)))
 
 (defun listener-eval (view text)
-  (flet ((show (string &optional object)
-           (kit:perform-on-main (lambda () (add-line view string object)))))
+  (let ((start (get-internal-real-time)))
+    (flet ((show (string &optional object)
+             (kit:perform-on-main (lambda () (add-line view string object)))))
+      (let ((stopped (eq (catch 'stop-evaluation (eval-and-show view text #'show)) :stopped))
+            (seconds (seconds-since start)))
+        (cond (stopped (show (format nil "stopped after ~,1fs" seconds)))
+              ((> seconds 1/2) (show (format nil "; ~,1fs" seconds))))))))
+
+(defun eval-and-show (view text show)
+  (flet ((show (string &optional object) (funcall show string object)))
     (let ((output (make-string-output-stream)))
       (with-simple-restart (abort "Return to the listener")
         (let ((values (handler-bind
@@ -165,7 +198,19 @@
        (let ((text (input view)))
          (add-line view (format nil "* ~a" text))
          (setf (input view) "")
-         (bsd:bsdthread-create (lambda () (listener-eval view text)) "listener eval")))
+         (let ((run (cons nil (get-internal-real-time))))
+           (push run (running view))
+           (when (null (rest (running view)))
+             (bsd:bsdthread-create (lambda () (tick-while-running view)) "listener clock"))
+           (setf (car run)
+                 (bsd:bsdthread-create (lambda ()
+                                         (unwind-protect (listener-eval view text)
+                                           (kit:perform-on-main
+                                            (lambda ()
+                                              (setf (running view) (remove run (running view)))
+                                              (kit:needs-display view)))))
+                                       "listener eval")))))
+      (#\Etx (stop-evaluation view))
       (#\Backspace
        (when (plusp (length (input view)))
          (setf (input view) (subseq (input view) 0 (1- (length (input view)))))))

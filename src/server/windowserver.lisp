@@ -271,6 +271,10 @@
 
 (defvar *shift* nil)
 (defvar *control* nil)
+(defvar *alt* nil)
+(defvar *meta* nil)
+
+(defparameter +force-quit+ "/System/Applications/Utilities/Force Quit.app/Contents/MacOS/Force Quit")
 
 (defun post-event (client body)
   (when (and client (events client))
@@ -284,6 +288,10 @@
           (value (io:event-value event)))
       (cond ((io:shift-key-p code) (setf *shift* (plusp value)))
             ((io:control-key-p code) (setf *control* (plusp value)))
+            ((io:alt-key-p code) (setf *alt* (plusp value)))
+            ((io:meta-key-p code) (setf *meta* (plusp value)))
+            ((and (plusp value) (= code io:+key-esc+) *alt* *meta*)
+             (ignore-errors (bsd:posix-spawn +force-quit+ (list "Force Quit") nil)))
             ((plusp value)
              (let ((char (io:key-character code *shift* *control*)))
                (when char

@@ -1,0 +1,33 @@
+(in-package #:finch/apps)
+
+(defparameter *system-programs*
+  '("kernel_task" "launchd" "WindowServer" "loginwindow" "Dock" "SystemUIServer" "Finder" "finch-gui" "Force Quit"))
+
+(defun quittable ()
+  (remove-if (lambda (proc) (or (<= (bsd:proc-pid proc) 1)
+                                (member (bsd:proc-comm proc) *system-programs* :test #'string=)))
+             (bsd:procs)))
+
+(defun list-quittable (view)
+  (setf (lines view) nil)
+  (add-line view "Click an application to force it to quit.")
+  (add-line view "")
+  (let ((procs (quittable)))
+    (dolist (proc procs)
+      (add-line view (format nil "  ~a   (pid ~d)" (bsd:proc-comm proc) (bsd:proc-pid proc)) proc))
+    (unless procs (add-line view "  Nothing is running."))))
+
+(bsd:define-program "Force Quit" (argv envp)
+  (setf kit:*menus* (kit:standard-menus "Force Quit"))
+  (let* ((window (kit:make-window :title "Force Quit Applications" :x 640 :y 200 :width 420 :height 320))
+         (view (make-instance 'transcript-view :file "/tmp/ForceQuit.txt" :frame (vector 0 0 396 268))))
+    (setf (choose view)
+          (lambda (proc)
+            (ignore-errors (bsd:kill (bsd:proc-pid proc) :sigkill))
+            (sleep 0.1)
+            (list-quittable view)))
+    (list-quittable view)
+    (kit:add-subview (kit:content-view window) view)
+    (setf (kit:first-responder window) view)
+    (kit:show window)
+    (kit:run)))

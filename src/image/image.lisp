@@ -67,6 +67,7 @@
     ("System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer" "WindowServer")
     ("Applications/Hello.app/Contents/MacOS/Hello" "Hello")
     ("System/Applications/Listener.app/Contents/MacOS/Listener" "Listener")
+    ("System/Applications/Utilities/Force Quit.app/Contents/MacOS/Force Quit" "Force Quit")
     ("System/Applications/Editor.app/Contents/MacOS/Editor" "Editor")
     ("System/Applications/Generations.app/Contents/MacOS/Generations" "Generations")
     ("System/Applications/Fetch.app/Contents/MacOS/Fetch" "Fetch")

@@ -24,6 +24,18 @@
         (code-char (- (char-code (char-downcase char)) 96))
         char)))
 
+(defconstant +key-leftalt+ 56)
+(defconstant +key-rightalt+ 100)
+(defconstant +key-leftmeta+ 125)
+(defconstant +key-rightmeta+ 126)
+(defconstant +key-esc+ 1)
+
+(defun alt-key-p (code)
+  (member code (list +key-leftalt+ +key-rightalt+)))
+
+(defun meta-key-p (code)
+  (member code (list +key-leftmeta+ +key-rightmeta+)))
+
 (defun control-key-p (code)
   (member code (list +key-leftctrl+ +key-rightctrl+)))
 

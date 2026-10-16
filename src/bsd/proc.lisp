@@ -49,6 +49,12 @@
   (let ((proc (gethash pid *procs*)))
     (and proc (not (eq (proc-state proc) :zombie)) proc)))
 
+(defun procs ()
+  (with-bsd
+    (sort (loop :for proc :being :the :hash-values :of *procs*
+                :unless (eq (proc-state proc) :zombie) :collect proc)
+          #'< :key #'proc-pid)))
+
 (defun sigmask (signo) (ash 1 (1- signo)))
 
 (defparameter +unmaskable+ (logior (sigmask 9) (sigmask 17)))

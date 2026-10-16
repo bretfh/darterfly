@@ -78,7 +78,7 @@
   :depends-on (#:finch/ca #:finch/server #:finch/bsd #:finch/text #:finch/imageio #:finch/kit #:finch/edit #:finch/install #:finch/generation #:finch/iokit #:finch/net)
   :serial t
   :pathname "src/apps/"
-  :components ((:file "hello") (:file "terminal") (:file "listener") (:file "editor") (:file "generations") (:file "session") (:file "fetch") (:file "install")))
+  :components ((:file "hello") (:file "terminal") (:file "listener") (:file "forcequit") (:file "editor") (:file "generations") (:file "session") (:file "fetch") (:file "install")))
 
 (asdf:defsystem #:finch/iokit
   :description "IOKit: the registry, PCI and drivers"
