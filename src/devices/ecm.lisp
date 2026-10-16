@@ -112,7 +112,9 @@
         (n (max 60 (length frame))))
     (loop repeat 1000
           while (>= (ecm-in-flight e) (1- +ecm-send-pages+))
-          do (process-events c) (sleep 0.0005))
+          do (process-events c)
+             (when (>= (ecm-in-flight e) (1- +ecm-send-pages+))
+               (sleep 0.0005)))
     (sb-thread:with-recursive-lock ((xhci-lock c))
       (let ((page (aref (ecm-send-pages e) (ecm-send-next e)))
             (zlp (zerop (mod n (ecm-mps e)))))
