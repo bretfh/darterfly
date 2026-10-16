@@ -75,30 +75,9 @@
   (if (eq *c-compiler* :clang) name (format nil "~a-tcc" name)))
 
 
-(defparameter *libtcc-config*
-  "#define TCC_VERSION \"0.9.28rc\"
-#define CC_NAME CC_tcc
-#define GCC_MAJOR 0
-#define GCC_MINOR 928
-#define TCC_TARGET_X86_64 1
-#define CONFIG_TCC_SYSINCLUDEPATHS \"{B}/include\"
-#define CONFIG_TCC_LIBPATHS \"{B}\"
-#define CONFIG_TCC_CRTPREFIX \"{B}\"
-#define CONFIG_TCC_ELFINTERP \"-\"
-#define CONFIG_TCCDIR \"/usr/lib/tcc\"
-#define CONFIG_TCC_PREDEFS 1
-")
-
 (defun libtcc-tree ()
   (let ((tree (build-path "tcc/finch-src/")))
     (unless (probe-file (merge-pathnames "config.h" tree))
       (tcc)
-      (ensure-directories-exist tree)
-      (dolist (file (append (directory (concatenate 'string (tcc-source) "*.c"))
-                            (directory (concatenate 'string (tcc-source) "*.h"))
-                            (directory (concatenate 'string (tcc-source) "*.def"))
-                            (list (merge-pathnames "tccdefs_.h" (tcc-stage 2)))))
-        (uiop:copy-file file (merge-pathnames (file-namestring file) tree)))
-      (with-open-file (o (merge-pathnames "config.h" tree) :direction :output :if-exists :supersede)
-        (write-string *libtcc-config* o)))
+      (finch/build:libtcc-tree (tcc-source) (namestring tree) (merge-pathnames "tccdefs_.h" (tcc-stage 2))))
     tree))

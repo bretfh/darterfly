@@ -29,7 +29,7 @@ static uint64_t nanos_since_boot(void) {
 
 int clock_gettime(clockid_t id, struct timespec *ts) {
   uint64_t ns = nanos_since_boot();
-  if (id == CLOCK_REALTIME || id == CLOCK_REALTIME_COARSE) ns += page()->epoch_base * 1000000000ull;
+  if (id == CLOCK_REALTIME || id == CLOCK_REALTIME_COARSE || id == CLOCK_REALTIME_ALARM || id == CLOCK_TAI) ns += page()->epoch_base * 1000000000ull;
   ts->tv_sec = (time_t)(ns / 1000000000u);
   ts->tv_nsec = (long)(ns % 1000000000u);
   return 0;

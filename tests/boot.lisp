@@ -849,6 +849,40 @@
                                    (finch/vfs:vfs-close fd)))))
             :collect rel)))
 
+(test finch-generates-its-bootstrap-inputs
+  (let ((disk (merge-pathnames "inputs.img" (finch-file "build/"))))
+    (uiop:delete-file-if-exists disk)
+    (finch/image::root-disk disk (* 512 1048576)
+                            (append (finch/image::root-entries) (finch/image::sbcl-source-entries)
+                                    (finch/image::tree-entries (finch/image::tcc-source) "usr/src/tinycc")))
+    (let ((c (image:bare-console :root disk)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 60)
+               (ask "(defun same-files (a b names) (remove-if (lambda (n) (equalp (finch/build::file-octets (concatenate 'string a n)) (finch/build::file-octets (concatenate 'string b n)))) names))")
+               (ask "(defun source-differences (a b) (remove-if-not (lambda (d) (member (pathname-type (second d)) '(\"c\" \"h\" \"S\" \"inc\" \"def\") :test #'equal)) (finch/build:tree-differences a b)))")
+               (is (search "NIL"
+                           (ask "(let ((id (string-trim '(#\\\" #\\Newline) (uiop:read-file-string \"/usr/src/sbcl/output/build-id.inc\")))) (finch/build:write-files \"/tmp/config/\" (finch/build:sbcl-config id)) (same-files \"/tmp/config/\" \"/usr/src/sbcl/\" (mapcar #'car (finch/build:sbcl-config id))))"))
+                   "finch writes make-config's files as the host did")
+               (is (search "NIL"
+                           (ask "(progn (finch/build:runtime-tree \"/usr/src/sbcl/\" \"/usr/src/finch/src/sbcl/\" \"/tmp/runtime/\" :genesis \"/usr/src/finch/build/runtime/src/runtime/genesis/\") (source-differences \"/tmp/runtime/\" \"/usr/src/finch/build/runtime/\"))"))
+                   "finch assembles the patched runtime tree from pristine SBCL")
+               (is (search "(0 NIL)"
+                           (ask "(list (finch/cc:run-c \"tools-for-build/grovel-headers.c\" :directory \"/usr/src/sbcl/\" :includes '(\"/tmp/runtime/src/runtime/\") :output \"/tmp/stuff-groveled-from-headers.lisp\") (same-files \"/tmp/\" \"/usr/src/sbcl/output/\" '(\"stuff-groveled-from-headers.lisp\")))"))
+                   "grovel-headers runs inside finch and makes the host's constants byte for byte")
+               (is (search "(0 NIL)"
+                           (ask "(list (finch/cc:run-c \"conftest.c\" :directory \"/usr/src/tinycc/\" :defines '(\"C2STR\") :args '(\"include/tccdefs.h\" \"/tmp/tccdefs_.h\")) (progn (finch/build:libtcc-tree \"/usr/src/tinycc/\" \"/tmp/libtcc/\" \"/tmp/tccdefs_.h\") (finch/build:tree-differences \"/tmp/libtcc/\" \"/usr/src/finch/build/tcc/finch-src/\")))"))
+                   "finch builds libtcc's tree, tccdefs_.h included, as the host did")
+               (is (search "DIGESTS-MATCH"
+                           (ask (format nil "(if (equal (finch/build:digest-tree \"/usr/src/finch/src/build/\") '~s) :digests-match :digests-differ)"
+                                        (finch/build:digest-tree (finch-file "src/build/")))))
+                   "finch's digests of its sources are the host's")
+               (is (search "(3 (\"finch\" \"sbcl\" \"tinycc\"))"
+                           (ask "(let ((m (finch/build:manifest :build-id \"test\" :sources '((\"finch\" \"/usr/src/finch/src/\") (\"sbcl\" \"/usr/src/sbcl/src/\") (\"tinycc\" \"/usr/src/tinycc/\"))))) (finch/build:write-manifest \"/tmp/manifest\" m) (let ((back (with-open-file (s \"/tmp/manifest\") (read s)))) (list (length (getf back :sources)) (mapcar #'first (getf back :sources)))))"))
+                   "a manifest records every source file and reads back"))
+          (image:finish c 5))))))
+
 (test finch-runs-a-core-and-keeps-its-files
   (let ((esp (merge-pathnames "esp-run.img" (finch-file "build/")))
         (disk (merge-pathnames "run.img" (finch-file "build/")))

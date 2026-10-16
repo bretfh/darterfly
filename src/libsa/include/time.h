@@ -13,6 +13,10 @@ struct tm {
 #define CLOCK_MONOTONIC_RAW 4
 #define CLOCK_REALTIME_COARSE 5
 #define CLOCK_MONOTONIC_COARSE 6
+#define CLOCK_BOOTTIME 7
+#define CLOCK_REALTIME_ALARM 8
+#define CLOCK_BOOTTIME_ALARM 9
+#define CLOCK_TAI 11
 #define CLOCKS_PER_SEC 1000000l
 int clock_gettime(clockid_t, struct timespec *);
 int clock_getres(clockid_t, struct timespec *);

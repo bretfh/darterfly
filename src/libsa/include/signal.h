@@ -88,11 +88,13 @@ typedef struct { void *ss_sp; int ss_flags; size_t ss_size; } stack_t;
 #define ILL_ILLOPC 1
 #define TRAP_BRKPT 1
 #define FPE_INTDIV 1
+#define FPE_INTOVF 2
 #define FPE_FLTDIV 3
 #define FPE_FLTOVF 4
 #define FPE_FLTUND 5
 #define FPE_FLTRES 6
 #define FPE_FLTINV 7
+#define FPE_FLTSUB 8
 #define CLD_EXITED 1
 int sigaction(int, const struct sigaction *, struct sigaction *);
 sighandler_t signal(int, sighandler_t);

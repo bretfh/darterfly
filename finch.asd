@@ -121,6 +121,12 @@
   :pathname "src/cc/"
   :components ((:file "cc")))
 
+(asdf:defsystem #:finch/build
+  :description "Bootstrap inputs and trees"
+  :depends-on (#:uiop (:require #:sb-md5))
+  :pathname "src/build/"
+  :components ((:file "build")))
+
 (asdf:defsystem #:finch/run
   :description "Runs a core and collects its files"
   :depends-on (#:uiop #:finch/vfs #:finch/install)
@@ -187,7 +193,7 @@
 
 (asdf:defsystem #:finch/image
   :description "The bootable image"
-  :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io #:finch/apfs #:finch/fat #:finch/install #:finch/cc #:finch/pexpert #:finch/osfmk #:finch/low #:finch/boot #:finch/link (:require #:sb-bsd-sockets))
+  :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io #:finch/apfs #:finch/fat #:finch/install #:finch/cc #:finch/build #:finch/pexpert #:finch/osfmk #:finch/low #:finch/boot #:finch/link (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/image/"
   :components ((:file "image") (:file "tcc") (:file "runtime") (:file "efi")))
