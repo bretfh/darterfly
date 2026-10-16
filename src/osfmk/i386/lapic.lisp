@@ -60,6 +60,8 @@
   (while (logand (mem :u32 (lapic +lapic-icr+)) +lapic-icr-ds-pending+) (pause)))
 
 (define-low enable-lapic ()
+  (when (logand (rdmsr +apic-base-msr+) (ash 1 10))
+    (wrmsr +apic-base-msr+ (logand (rdmsr +apic-base-msr+) (lognot (logior (ash 1 10) (ash 1 11))))))
   (wrmsr +apic-base-msr+ (logior (rdmsr +apic-base-msr+) (ash 1 11)))
   (setf (mem :u32 (lapic +lapic-svr+)) (logior #x100 +lapic-spurious-vector+)))
 
