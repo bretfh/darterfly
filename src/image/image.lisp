@@ -79,31 +79,22 @@
     ("System/Library/CoreServices/Finder.app/Contents/Programs/Finder" "Finder")
     ("usr/libexec/finch-gui" "finch-gui")))
 
-(defun dict (&rest pairs)
-  (let ((table (make-hash-table :test 'equal)))
-    (loop :for (key value) :on pairs :by #'cddr :do (setf (gethash key table) value))
-    table))
-
-(defun job (label &rest pairs)
-  (list :file (format nil "Library/LaunchDaemons/~a.plist" label)
-        (text (with-output-to-string (s) (finch/plist:write-plist (apply #'dict "Label" label pairs) s)))))
+(defun job (label &rest keys)
+  (list :file (format nil "Library/LaunchDaemons/~a.job" label)
+        (text (with-standard-io-syntax
+                (let ((*print-case* :downcase)) (prin1-to-string (list* :label label keys)))))))
 
 (defun desktop-jobs ()
-  (let ((hidden (dict "HideUntilCheckIn" t))
-        (on-demand (dict "AfterInitialDemand" t "SuccessfulExit" nil)))
-    (list (job "finch.gui" "ProgramArguments" (vector "/usr/libexec/finch-gui") "RunAtLoad" t)
-          (job "finch.windowserver"
-               "ProgramArguments" (vector "/System/Library/CoreServices/WindowServer")
-               "MachServices" (dict "windowserver" t "windowserver.active" hidden
-                                    "renderserver" hidden))
-          (job "finch.loginwindow"
-               "ProgramArguments" (vector "/System/Library/CoreServices/loginwindow.app/Contents/Programs/loginwindow")
-               "MachServices" (dict "loginwindow" t))
-          (job "finch.dock" "Program" "/System/Library/CoreServices/Dock.app/Contents/Programs/Dock" "KeepAlive" on-demand)
-          (job "finch.systemuiserver" "Program" "/System/Library/CoreServices/SystemUIServer.app/Contents/Programs/SystemUIServer"
-               "KeepAlive" on-demand)
-          (job "finch.finder" "Program" "/System/Library/CoreServices/Finder.app/Contents/Programs/Finder"
-               "KeepAlive" on-demand "ThrottleInterval" 1))))
+  (list (job "finch.gui" :arguments '("/usr/libexec/finch-gui") :run-at-load t)
+        (job "finch.windowserver" :program "/System/Library/CoreServices/WindowServer"
+             :services '("windowserver" ("windowserver.active" :hidden t) ("renderserver" :hidden t)))
+        (job "finch.loginwindow" :program "/System/Library/CoreServices/loginwindow.app/Contents/Programs/loginwindow"
+             :services '("loginwindow"))
+        (job "finch.dock" :program "/System/Library/CoreServices/Dock.app/Contents/Programs/Dock" :keep-alive :after-demand)
+        (job "finch.systemuiserver" :program "/System/Library/CoreServices/SystemUIServer.app/Contents/Programs/SystemUIServer"
+             :keep-alive :after-demand)
+        (job "finch.finder" :program "/System/Library/CoreServices/Finder.app/Contents/Programs/Finder"
+             :keep-alive :after-demand :throttle 1)))
 
 (defun fonts ()
   (let ((dir (format nil "~a/share/fonts/truetype/" (uiop:getenv "GUIX_ENVIRONMENT"))))

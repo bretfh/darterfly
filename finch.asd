@@ -11,15 +11,9 @@
   :pathname "src/bsd/"
   :components ((:file "errno") (:file "proc") (:file "file") (:file "socket") (:file "vfs") (:file "stdio") (:file "exec") (:file "libsa")))
 
-(asdf:defsystem #:finch/xpc
-  :description "XPC's wire"
-  :serial t
-  :pathname "src/xpc/"
-  :components ((:file "xpc")))
-
 (asdf:defsystem #:finch/launchd
   :description "launchd and launchctl"
-  :depends-on (#:finch/bsd #:finch/mach #:finch/plist #:finch/xpc)
+  :depends-on (#:finch/bsd #:finch/mach)
   :serial t
   :pathname "src/launchd/"
   :components ((:file "launchd")))
@@ -211,30 +205,23 @@
 
 (asdf:defsystem #:finch/image
   :description "The bootable image"
-  :depends-on (#:uiop #:finch/plist #:finch/qmp #:finch/io #:finch/apfs #:finch/fat #:finch/gpt #:finch/install #:finch/cc #:finch/build #:finch/pexpert #:finch/osfmk #:finch/low #:finch/boot #:finch/link (:require #:sb-bsd-sockets))
+  :depends-on (#:uiop #:finch/qmp #:finch/io #:finch/apfs #:finch/fat #:finch/gpt #:finch/install #:finch/cc #:finch/build #:finch/pexpert #:finch/osfmk #:finch/low #:finch/boot #:finch/link (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/image/"
   :components ((:file "image") (:file "tcc") (:file "runtime") (:file "efi")))
-
-(asdf:defsystem #:finch/plist
-  :description "Property lists, XML and binary"
-  :depends-on (#:plump)
-  :serial t
-  :pathname "src/plist/"
-  :components ((:file "plist") (:file "binary") (:file "xml")))
 
 (asdf:defsystem #:finch/server
   :description "The window server"
   :serial t
   :pathname "src/server/"
-  :components ((:file "transaction") (:file "event") (:file "region")))
+  :components ((:file "event")))
 
 (asdf:defsystem #:finch/ca
   :description "The layer render protocol"
   :depends-on (#:finch/mach #:finch/bsd #:finch/launchd #:finch/server)
   :serial t
   :pathname "src/ca/"
-  :components ((:file "render") (:file "client")))
+  :components ((:file "client")))
 
 (asdf:defsystem #:finch/qmp
   :description "QEMU's machine protocol"
@@ -245,13 +232,13 @@
 
 (asdf:defsystem #:finch
   :description "A live, hackable OS on SBCL"
-  :depends-on (#:finch/mach #:finch/plist #:finch/server #:finch/ca #:finch/bsd #:finch/xpc #:finch/launchd #:finch/shell #:finch/io #:finch/text #:finch/edit #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/iokit #:finch/vfs #:finch/apfs #:finch/fat #:finch/install #:finch/net #:finch/nrepl #:finch/run #:finch/generation #:finch/kernel #:finch/image)
+  :depends-on (#:finch/mach #:finch/server #:finch/ca #:finch/bsd #:finch/launchd #:finch/shell #:finch/io #:finch/text #:finch/edit #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/iokit #:finch/vfs #:finch/apfs #:finch/fat #:finch/install #:finch/net #:finch/nrepl #:finch/run #:finch/generation #:finch/kernel #:finch/image)
   :in-order-to ((asdf:test-op (asdf:test-op #:finch/test))))
 
 (asdf:defsystem #:finch/test
   :depends-on (#:finch #:fiveam (:require #:sb-posix) (:require #:sb-md5) (:require #:sb-bsd-sockets))
   :serial t
   :pathname "tests/"
-  :components ((:file "suite") (:file "mach") (:file "plist") (:file "server") (:file "xpc") (:file "launchd") (:file "boot") (:file "apfs") (:file "net") (:static-file "low-harness.c") (:file "low"))
+  :components ((:file "suite") (:file "mach") (:file "server") (:file "launchd") (:file "boot") (:file "apfs") (:file "net") (:static-file "low-harness.c") (:file "low"))
   :perform (asdf:test-op (o c)
              (uiop:symbol-call :finch/test :run-them)))

@@ -26,11 +26,9 @@
   (format t "x")
   3)
 
-(defun job-plist (path &rest pairs)
-  (let ((job (make-hash-table :test 'equal)))
-    (loop :for (k v) :on pairs :by #'cddr :do (setf (gethash k job) v))
-    (with-open-file (s path :direction :output :if-exists :supersede)
-      (plist:write-plist job s))))
+(defun job-file (path &rest keys)
+  (with-open-file (s path :direction :output :if-exists :supersede)
+    (with-standard-io-syntax (prin1 keys s))))
 
 (defun wait-for-file (path test &optional (seconds 10))
   (loop :repeat (* seconds 20)
@@ -55,18 +53,16 @@
                 (with-open-file (s file :direction :output :if-exists :supersede)
                   (format s "#!finch ~a~%" program))
                 (sb-posix:chmod (uiop:native-namestring file) #o755)))
-    (let ((services (make-hash-table :test 'equal)))
-      (setf (gethash "finch.test.echo" services) t)
-      (job-plist (merge-pathnames "echo.plist" daemons) "Label" "finch.test.echo"
-                 "Program" "/usr/libexec/echo" "MachServices" services))
-    (job-plist (merge-pathnames "client.plist" daemons) "Label" "finch.test.client"
-               "ProgramArguments" (vector "/usr/libexec/client") "RunAtLoad" t "StandardOutPath" "/out")
-    (job-plist (merge-pathnames "again.plist" daemons) "Label" "finch.test.again"
-               "Program" "/usr/libexec/again" "KeepAlive" t "ThrottleInterval" 1 "StandardOutPath" "/again")
-    (job-plist (merge-pathnames "missing.plist" daemons) "Label" "finch.test.missing"
-               "Program" "/usr/libexec/missing" "RunAtLoad" t)
-    (job-plist (merge-pathnames "list.plist" daemons) "Label" "finch.test.list"
-               "ProgramArguments" (vector "/bin/launchctl" "list") "StandardOutPath" "/list")
+    (job-file (merge-pathnames "echo.job" daemons) :label "finch.test.echo"
+              :program "/usr/libexec/echo" :services '("finch.test.echo"))
+    (job-file (merge-pathnames "client.job" daemons) :label "finch.test.client"
+              :arguments '("/usr/libexec/client") :run-at-load t :stdout "/out")
+    (job-file (merge-pathnames "again.job" daemons) :label "finch.test.again"
+              :program "/usr/libexec/again" :keep-alive t :throttle 1 :stdout "/again")
+    (job-file (merge-pathnames "missing.job" daemons) :label "finch.test.missing"
+              :program "/usr/libexec/missing" :run-at-load t)
+    (job-file (merge-pathnames "list.job" daemons) :label "finch.test.list"
+              :arguments '("/bin/launchctl" "list") :stdout "/list")
     (let ((launchd (bsd:fork (lambda ()
                                (bsd:chroot (uiop:native-namestring root))
                                (dotimes (i 3)
@@ -74,8 +70,8 @@
                                (bsd:execve "/sbin/launchd" (list "/sbin/launchd") nil)))))
       (unwind-protect
            (progn
-             (is (equal (format nil "hcnif~%NIL 1102~%NIL 1100~%")
-                        (wait-for-file (merge-pathnames "out" root) (lambda (text) (search "1100" text)))))
+             (is (equal (format nil "hcnif~%NIL UNKNOWN-SERVICE~%NIL NOT-PRIVILEGED~%")
+                        (wait-for-file (merge-pathnames "out" root) (lambda (text) (search "PRIVILEGED" text)))))
              (is (<= 2 (length (wait-for-file (merge-pathnames "again" root) (lambda (text) (<= 2 (length text))) 5))))
              (let ((log (uiop:read-file-string (merge-pathnames "launchd.log" root))))
                (is (search "5 jobs, 1 services, 1 unavailable" log) "~a" log)))

@@ -43,17 +43,8 @@
             (random (ash 1 32) state) (random (ash 1 16) state) (random (ash 1 12) state)
             (logior #x8000 (random (ash 1 14) state)) (random (ash 1 48) state))))
 
-(defun boot-plist (boot-args)
-  (format nil "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
-<plist version=\"1.0\">
-<dict>
-	<key>Kernel Flags</key>
-	<string>~a -- --core /System/Library/Kernels/finch.core</string>
-	<key>RAMDisk</key>
-	<string>/System/Library/RAMDisk/root.cpio</string>
-</dict>
-</plist>
-" boot-args))
+(defun boot-conf (boot-args)
+  (format nil "kernel-flags=~a -- --core /System/Library/Kernels/finch.core~%ramdisk=/System/Library/RAMDisk/root.cpio~%" boot-args))
 
 (defun esp-entries (boot-args)
   (flet ((payload (name) (file-octets (concatenate 'string *boot-payload* name))))
@@ -63,13 +54,9 @@
             (list :file "EFI/finch/gen-1/kernel" (payload "kernel"))
             (list :file "EFI/finch/gen-1/finch.core" (payload "finch.core"))
             (list :file "EFI/finch/current" (sb-ext:string-to-octets (format nil "gen-1~%")))
-            (list :dir "System") (list :dir "System/Library") (list :dir "System/Library/CoreServices")
-            (list :file "System/Library/CoreServices/boot.efi" loader)
-            (list :dir "System/Library/RAMDisk")
+            (list :dir "System") (list :dir "System/Library") (list :dir "System/Library/RAMDisk")
             (list :file "System/Library/RAMDisk/root.cpio" (payload "root.cpio"))
-            (list :dir "Library") (list :dir "Library/Preferences") (list :dir "Library/Preferences/SystemConfiguration")
-            (list :file "Library/Preferences/SystemConfiguration/Boot.plist"
-                  (sb-ext:string-to-octets (boot-plist boot-args)))))))
+            (list :file "EFI/finch/boot.conf" (sb-ext:string-to-octets (boot-conf boot-args)))))))
 
 (defun install-disk (&key (disk (internal-disk)) (esp-size (* 1024 1048576)) (root-size (* 1024 1048576))
                           (progress (lambda (step) (declare (ignore step)))))

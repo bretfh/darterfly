@@ -109,13 +109,9 @@
           (loop :for (name path) :in objects
                 :collect (list :file (concatenate 'string "usr/lib/finch/objects/" name) (octets path))))))
 
-(defun boot-plist (boot-args &optional root-image)
-  (let ((d (make-hash-table :test 'equal)))
-    (setf (gethash "Kernel Flags" d) (format nil "~a -- --core /System/Library/Kernels/finch.core" boot-args)
-          (gethash "RAMDisk" d) "/System/Library/RAMDisk/root.cpio")
-    (when root-image
-      (setf (gethash "RootImage" d) "/System/Library/RAMDisk/root.img"))
-    d))
+(defun boot-conf (boot-args &optional root-image)
+  (format nil "kernel-flags=~a -- --core /System/Library/Kernels/finch.core~%ramdisk=/System/Library/RAMDisk/root.cpio~%~@[root-image=~a~%~]"
+          boot-args (and root-image "/System/Library/RAMDisk/root.img")))
 
 (defun ramdisk ()
   (write-cpio (build-path "root.cpio") (list '(:dir "tmp") '(:dir "Users/finch"))))
@@ -223,17 +219,15 @@
                (ensure-directories-exist path)
                (uiop:copy-file from path))))
       (let ((efi (boot-efi)))
-        (put efi "EFI/BOOT/BOOTX64.EFI")
-        (put efi "System/Library/CoreServices/boot.efi"))
+        (put efi "EFI/BOOT/BOOTX64.EFI"))
       (put (mach-kernel) "EFI/finch/gen-1/kernel")
       (put (finch-core) "EFI/finch/gen-1/finch.core")
       (put (ramdisk) "System/Library/RAMDisk/root.cpio")
       (when root-image (put root-image "System/Library/RAMDisk/root.img")))
     (with-open-file (s (merge-pathnames "EFI/finch/current" root) :direction :output)
       (write-line "gen-1" s))
-    (let ((plist (merge-pathnames "Library/Preferences/SystemConfiguration/Boot.plist" root)))
-      (ensure-directories-exist plist)
-      (finch/plist:write-plist (boot-plist boot-args root-image) plist))
+    (with-open-file (s (merge-pathnames "EFI/finch/boot.conf" root) :direction :output :if-exists :supersede)
+      (write-string (boot-conf boot-args root-image) s))
     root))
 
 (defun esp-image (esp &optional (image (build-path "esp.img")) (size (* 256 1048576)))

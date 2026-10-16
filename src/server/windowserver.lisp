@@ -4,7 +4,6 @@
                     (#:launchd #:finch/launchd)))
 (in-package #:finch/windowserver)
 
-(defconstant +register-client+ 40202)
 (defconstant +mach-notify-no-senders+ #o106)
 (defparameter +desktop+ #(0.18 0.36 0.56))
 
@@ -16,11 +15,6 @@
    (root :initform nil :accessor root)
    (events :initarg :events :initform nil :reader events)
 ))
-
-(defconstant +create-window+ 30263)
-(defconstant +main-display-bounds+ 33028)
-(defconstant +set-window-layer-context+ 30264)
-(defconstant +transaction-commit-async+ 30429)
 
 (defclass window ()
   ((id :initarg :id :reader window-id)
@@ -116,25 +110,21 @@
         (destructuring-bind (bx by bw bh) (coerce (getf layer :bounds) 'list)
           (let* ((x (+ ox (- px (/ bw 2))))
                  (y (+ oy (- py (/ bh 2))))
-                 (alpha (* alpha (/ (getf layer :opacity) 255.0)))
+                 (alpha (* alpha (getf layer :opacity)))
                  (frame (list (round x) (round y) (round (+ x bw)) (round (+ y bh))))
-                 (inner (if (logbitp ca:+masks-to-bounds+ (getf layer :flags-a))
+                 (inner (if (getf layer :masks-to-bounds)
                             (intersect clip frame)
                             clip)))
             (destructuring-bind (r g b a) (coerce (getf layer :background-color) 'list)
               (destructuring-bind (x0 y0 x1 y1) (intersect clip frame)
                 (io:blend-rect fb x0 y0 x1 y1 r g b (* a alpha))))
-            (let ((image (contents layer)))
+            (let ((image (getf layer :contents)))
               (when (and image (getf image :pixels))
                 (io:blit-image fb (round x) (round y) (round bw) (round bh)
                                (coerce (getf image :pixels) '(simple-array (unsigned-byte 8) (*)))
                                (getf image :width) (getf image :height) (float alpha 1.0) inner)))
             (loop :for child :across (or (getf layer :sublayers) #())
                   :do (draw-layer fb layers child (- x bx) (- y by) inner alpha))))))))
-
-(defun contents (layer)
-  (let ((c (getf layer :contents)))
-    (if (eq (getf c :type) :cached) (getf c :object) c)))
 
 (defun intersect (a b)
   (list (max (first a) (first b)) (max (second a) (second b))
@@ -263,11 +253,10 @@
 
 (defun click (window type x y)
   (let ((client (context-client (window-context window))))
-    (post-event client (server:encode-event
-                        (server:mouse-event type x y :timestamp (get-internal-real-time)
-                                                     :window (window-id window)
-                                                     :clicks (click-count type x y)
-                                                     :wx (- x (window-x window)) :wy (- y (window-y window)))))))
+    (post-event client (server:mouse-event type x y :timestamp (get-internal-real-time)
+                                                    :window (window-id window)
+                                                    :clicks (click-count type x y)
+                                                    :wx (- x (window-x window)) :wy (- y (window-y window))))))
 
 (defvar *shift* nil)
 (defvar *control* nil)
@@ -296,10 +285,7 @@
              (let ((char (io:key-character code *shift* *control*)))
                (when char
                  (post-event (key-client)
-                             (server:encode-event
-                              (server:key-event t (or (io:virtual-keycode code) 0) char
-                                                :timestamp (get-internal-real-time)
-                                                :location (mapcar (lambda (v) (float v 1.0)) *cursor*)))))))))))
+                             (server:key-event t code char :timestamp (get-internal-real-time) :location *cursor*)))))))))
 
 (defun hid-devices () (io:input-devices))
 
@@ -346,12 +332,11 @@
         (unless (equal before (list *cursor* (first *windows*) (and *drag* (window-x (first *drag*))) (and *drag* (window-y (first *drag*)))))
           (render))))))
 
-(defun apply-commit (client octets)
-  (dolist (command (getf (ca:decode-commit octets) :commands))
-    (case (first command)
-      (:set-object (setf (gethash (second command) (layers client)) (fourth command)))
-      (:delete-object (remhash (second command) (layers client)))
-      (:set-layer-id (setf (root client) (second command))))))
+(defun apply-commit (client body)
+  (clrhash (layers client))
+  (loop :for (id . layer) :in (getf body :layers)
+        :do (setf (gethash id (layers client)) layer))
+  (setf (root client) (getf body :root)))
 
 (defun register-client (message set)
   (sb-thread:with-mutex (*lock*)
@@ -363,25 +348,15 @@
     (mach:mach-port-move-member mach:*task* port set)
     (mach:mach-port-request-notification mach:*task* port :no-senders 1 port :make-send-once)
     (push (make-instance 'client :port port :context context
-                                 :pid (getf (mach:msgh-body message) :pid)
+                                 :pid (getf (rest (mach:msgh-body message)) :pid)
                                  :events (car (first (mach:msgh-descriptors message))))
           *clients*)
-    (mach:mach-msg-send (mach:make-message :remote-port (mach:msgh-remote-port message)
-                                           :remote-disposition :move-send-once
-                                           :body (list :kr 0 :context-id context)
-                                           :descriptors (list (cons port :make-send))))))
+    (reply message (list :context-id context) (list (cons port :make-send)))))
 
-(defun le32 (octets at)
-  (logior (aref octets at) (ash (aref octets (+ at 1)) 8)
-          (ash (aref octets (+ at 2)) 16) (ash (aref octets (+ at 3)) 24)))
-
-(defun put32 (w v) (dotimes (i 4) (vector-push-extend (ldb (byte 8 (* 8 i)) v) w)))
-
-(defun mig-body (&rest words)
-  (let ((w (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0)))
-    (put32 w 0) (put32 w 1)
-    (dolist (v words) (put32 w v))
-    (coerce w '(simple-array (unsigned-byte 8) (*)))))
+(defun reply (message body &optional descriptors)
+  (mach:mach-msg-send (mach:make-message :remote-port (mach:msgh-remote-port message)
+                                         :remote-disposition :move-send-once
+                                         :body body :descriptors descriptors)))
 
 (defun find-window (id) (find id *windows* :key #'window-id))
 
@@ -389,89 +364,74 @@
   (let* ((port (mach:mach-port-allocate mach:*task* :receive))
          (window (make-instance 'window :id (incf *next-window*) :port port
                                         :owner (bsd:task-pid (mach:msgh-audit message))))
-         (region (first (mach:msgh-descriptors message))))
-    (when (vectorp region)
-      (destructuring-bind (x y w h) (server:region-bounds region)
-        (declare (ignore x y))
-        (setf (window-width window) w (window-height window) h)))
+         (body (rest (mach:msgh-body message))))
+    (setf (window-width window) (getf body :width 0) (window-height window) (getf body :height 0))
     (setf *windows* (append *windows* (list window)))
-    (mach:mach-msg-send (mach:make-message :remote-port (mach:msgh-remote-port message)
-                                           :remote-disposition :move-send-once :id (+ +create-window+ 100)
-                                           :body (mig-body (window-id window))
-                                           :descriptors (list (cons port :make-send))))))
+    (reply message (list :window (window-id window)) (list (cons port :make-send)))))
 
-(defun set-window-layer-context (message)
-  (let* ((body (mach:msgh-body message))
-         (window (find-window (le32 body 8))))
+(defun set-window-context (window context)
+  (let ((window (find-window window)))
     (when window
-      (setf (window-context window) (le32 body 12))
+      (setf (window-context window) context)
       (damage-window window))))
 
 (defun apply-transaction (forms)
   (dolist (form forms)
-    (destructuring-bind (name &rest args) form
-      (let ((window (find-window (first args))))
+    (destructuring-bind (op id &rest args) form
+      (let ((window (find-window id)))
         (when window
           (damage-window window)
-          (cond ((string= name "SetWindowShape")
-                 (destructuring-bind (x y w h) (server:region-bounds (second args))
-                   (declare (ignore x y))
-                   (setf (window-width window) w (window-height window) h)))
-                ((string= name "MoveWindowWithGroup")
-                 (setf (window-x window) (round (second args)) (window-y window) (round (third args))))
-                ((string= name "SetWindowLevel")
-                 (setf (window-level window) (second args)))
-                ((string= name "OrderWindow")
-                 (let ((order (second args)))
-                   (setf (ordered window) (/= order 0))
-                   (case order
-                     (1 (setf *windows* (cons window (remove window *windows*))))
-                     (-1 (setf *windows* (append (remove window *windows*) (list window))))))))
+          (ecase op
+            (:shape (setf (window-width window) (first args) (window-height window) (second args)))
+            (:move (setf (window-x window) (round (first args)) (window-y window) (round (second args))))
+            (:level (setf (window-level window) (first args)))
+            (:order (let ((order (first args)))
+                      (setf (ordered window) (not (eq order :out)))
+                      (case order
+                        (:above (setf *windows* (cons window (remove window *windows*))))
+                        (:below (setf *windows* (append (remove window *windows*) (list window))))))))
           (damage-window window))))))
-
-(defun transaction-commit (message)
-  (let* ((body (mach:msgh-body message))
-         (length (le32 body 20))
-         (stream (subseq body 24 (+ 24 length))))
-    (apply-transaction (server:decode-transaction stream))))
 
 (defun client-of (port)
   (find port *clients* :key #'port))
 
+(defun forget-client (port)
+  (let ((client (client-of port)))
+    (when client
+      (dolist (w *windows*) (when (eql (window-context w) (context client)) (damage-window w)))
+      (setf *clients* (remove client *clients*)
+            *windows* (remove-if (lambda (w) (eql (window-context w) (context client))) *windows*))
+      (mach:mach-port-mod-refs mach:*task* port :receive -1)
+      (render))))
+
+(defun commit-from (port body)
+  (let ((client (client-of port)))
+    (when client
+      (dolist (w *windows*) (when (eql (window-context w) (context client)) (damage-window w)))
+      (apply-commit client body)
+      (render))))
+
 (defun serve (render-server set)
   (loop
     (let* ((message (mach:mach-msg-receive set))
-           (port (mach:msgh-local-port message)))
-      (cond ((eql port render-server)
-             (when (= (mach:msgh-id message) +register-client+)
+           (port (mach:msgh-local-port message))
+           (body (mach:msgh-body message)))
+      (cond ((= (mach:msgh-id message) +mach-notify-no-senders+)
+             (sb-thread:with-mutex (*lock*) (forget-client port)))
+            ((not (consp body)))
+            ((eql port render-server)
+             (when (eq (first body) :register-client)
                (register-client message set)))
-            ((= (mach:msgh-id message) +create-window+)
-             (sb-thread:with-mutex (*lock*) (create-window message)))
-            ((= (mach:msgh-id message) +main-display-bounds+)
-             (mach:mach-msg-send (mach:make-message :remote-port (mach:msgh-remote-port message)
-                                                    :remote-disposition :move-send-once :id (+ +main-display-bounds+ 100)
-                                                    :body (mig-body 0 0 (io:framebuffer-width *framebuffer*)
-                                                                    (io:framebuffer-height *framebuffer*)))))
-            ((= (mach:msgh-id message) +set-window-layer-context+)
-             (sb-thread:with-mutex (*lock*) (set-window-layer-context message) (render)))
-            ((= (mach:msgh-id message) +transaction-commit-async+)
-             (sb-thread:with-mutex (*lock*) (transaction-commit message) (render)))
-            ((= (mach:msgh-id message) +mach-notify-no-senders+)
-             (sb-thread:with-mutex (*lock*)
-               (let ((client (client-of port)))
-                 (when client
-                   (dolist (w *windows*) (when (eql (window-context w) (context client)) (damage-window w)))
-                   (setf *clients* (remove client *clients*)
-                         *windows* (remove-if (lambda (w) (eql (window-context w) (context client))) *windows*))
-                   (mach:mach-port-mod-refs mach:*task* port :receive -1)
-                   (render)))))
-            ((<= 40002 (mach:msgh-id message) 40005)
-             (sb-thread:with-mutex (*lock*)
-               (let ((client (client-of port)))
-                 (when client
-                   (dolist (w *windows*) (when (eql (window-context w) (context client)) (damage-window w)))
-                   (apply-commit client (mach:msgh-body message))
-                   (render)))))))))
+            (t
+             (case (first body)
+               (:commit (sb-thread:with-mutex (*lock*) (commit-from port (rest body))))
+               (:create-window (sb-thread:with-mutex (*lock*) (create-window message)))
+               (:display-bounds
+                (reply message (list :bounds (list 0 0 (io:framebuffer-width *framebuffer*) (io:framebuffer-height *framebuffer*)))))
+               (:set-window-context
+                (sb-thread:with-mutex (*lock*) (set-window-context (second body) (third body)) (render)))
+               (:transaction
+                (sb-thread:with-mutex (*lock*) (apply-transaction (second body)) (render)))))))))
 
 (bsd:define-program "WindowServer" (argv envp)
   (setf *framebuffer* (io:open-framebuffer)
@@ -489,7 +449,7 @@
         (when port (mach:mach-port-move-member mach:*task* port set))))
     (mach:mach-port-move-member mach:*task* render-server set)
     (finch/launchd:bootstrap-look-up "loginwindow")
-    (format t "WindowServer: ~dx~d, CARenderServer #x~x~%"
+    (format t "WindowServer: ~dx~d, render server #x~x~%"
             (io:framebuffer-width *framebuffer*) (io:framebuffer-height *framebuffer*) render-server)
     (finish-output)
     (serve render-server set)))

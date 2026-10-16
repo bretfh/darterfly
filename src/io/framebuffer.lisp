@@ -3,7 +3,7 @@
   (:export #:framebuffer #:open-framebuffer #:framebuffer-width #:framebuffer-height
            #:framebuffer-pixels #:flush #:fill-rect #:test-pattern
            #:read-events #:wait-for-events #:hid-event #:event-type #:event-code #:event-value #:blend-rect
-           #:input-devices #:abs-range #:event-fd #:blit-image #:key-character #:shift-key-p #:control-key-p #:alt-key-p #:meta-key-p #:+key-esc+ #:virtual-keycode #:shadow-under #:save-corners #:restore-corners #:*clip*))
+           #:input-devices #:abs-range #:event-fd #:blit-image #:key-character #:shift-key-p #:control-key-p #:alt-key-p #:meta-key-p #:+key-esc+ #:shadow-under #:save-corners #:restore-corners #:*clip*))
 (in-package #:finch/io)
 
 (defclass framebuffer ()

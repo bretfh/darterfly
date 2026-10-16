@@ -330,7 +330,7 @@
 
 (defun close-window (window)
   (when (window-id window)
-    (ca:transaction-commit (list (list "OrderWindow" (window-id window) 0 0))))
+    (ca:transaction-commit (list (list :order (window-id window) :out))))
   (setf (app-windows *application*) (remove window (app-windows *application*))))
 
 (defun any-dirty (view)
@@ -384,15 +384,15 @@
 (defun dispatch (message)
   (let ((window (find (mach:msgh-local-port message) (windows)
                       :key (lambda (w) (ca:context-events (window-context w)))))
-        (event (server:decode-event (mach:msgh-body message))))
+        (event (mach:msgh-body message)))
     (when window
       (case (server:event-type event)
         (:left-mouse-down
          (destructuring-bind (x y) (server:event-window-location event)
-           (let ((*click-count* (or (server:event-value event :mouse-event-click-state) 1)))
+           (let ((*click-count* (or (server:event-value event :clicks) 1)))
              (window-mouse-down window (round x) (round y)))))
         (:key-down
          (let ((char (server:event-character event)))
            (when char
-             (window-key-down window (string char) (server:event-value event :keyboard-event-keycode))))))
+             (window-key-down window (string char) (server:event-value event :keycode))))))
       window)))

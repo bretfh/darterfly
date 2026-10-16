@@ -81,8 +81,7 @@
       (uiop:copy-file manifest (esp-path (format nil "~a/manifest" name))))
     (when loader
       (uiop:copy-file loader (esp-path (format nil "~a/boot.efi" name)))
-      (dolist (to '("EFI/BOOT/BOOTX64.EFI" "System/Library/CoreServices/boot.efi"))
-        (uiop:copy-file loader (concatenate 'string *esp* to))))
+      (uiop:copy-file loader (concatenate 'string *esp* "EFI/BOOT/BOOTX64.EFI")))
     (put-line "previous" was)
     (put-line "current" name)
     name))

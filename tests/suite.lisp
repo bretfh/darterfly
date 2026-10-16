@@ -1,7 +1,7 @@
 (defpackage #:finch/test
   (:use #:cl #:fiveam)
-  (:local-nicknames (#:mach #:finch/mach) (#:plist #:finch/plist)
-                    (#:server #:finch/server) (#:ca #:finch/ca) (#:image #:finch/image) (#:bsd #:finch/bsd) (#:launchd #:finch/launchd) (#:xpc #:finch/xpc) (#:apfs #:finch/apfs))
+  (:local-nicknames (#:mach #:finch/mach)
+                    (#:server #:finch/server) (#:ca #:finch/ca) (#:image #:finch/image) (#:bsd #:finch/bsd) (#:launchd #:finch/launchd) (#:apfs #:finch/apfs))
   (:export #:run-them #:all))
 (in-package #:finch/test)
 
