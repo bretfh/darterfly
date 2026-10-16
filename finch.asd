@@ -75,17 +75,17 @@
 
 (asdf:defsystem #:finch/apps
   :description "Applications"
-  :depends-on (#:finch/ca #:finch/server #:finch/bsd #:finch/text #:finch/imageio #:finch/kit #:finch/edit #:finch/install #:finch/generation)
+  :depends-on (#:finch/ca #:finch/server #:finch/bsd #:finch/text #:finch/imageio #:finch/kit #:finch/edit #:finch/install #:finch/generation #:finch/iokit #:finch/net)
   :serial t
   :pathname "src/apps/"
-  :components ((:file "hello") (:file "terminal") (:file "listener") (:file "editor") (:file "generations") (:file "session")))
+  :components ((:file "hello") (:file "terminal") (:file "listener") (:file "editor") (:file "generations") (:file "session") (:file "fetch")))
 
 (asdf:defsystem #:finch/iokit
   :description "IOKit: the registry, PCI and drivers"
   :depends-on (#:uiop)
   :serial t
   :pathname "src/iokit/"
-  :components ((:file "machine") (:file "registry") (:file "acpi") (:file "pci") (:file "interrupt") (:file "virtio") (:file "storage") (:file "block") (:file "nvme") (:file "ramdisk") (:file "xhci") (:file "i2c") (:file "input") (:file "network") (:file "ecm")))
+  :components ((:file "machine") (:file "registry") (:file "acpi") (:file "pci") (:file "interrupt") (:file "virtio") (:file "storage") (:file "block") (:file "nvme") (:file "ramdisk") (:file "xhci") (:file "i2c") (:file "input") (:file "network") (:file "ecm") (:file "battery")))
 
 (asdf:defsystem #:finch/nrepl
   :description "Remote eval"
@@ -176,7 +176,7 @@
   :depends-on (#:finch/low)
   :serial t
   :pathname "src/pexpert/i386/"
-  :components ((:file "serial") (:file "init") (:file "font") (:file "console")))
+  :components ((:file "serial") (:file "init") (:file "font") (:file "console") (:file "ec")))
 
 (asdf:defsystem #:finch/osfmk
   :description "Kernel"

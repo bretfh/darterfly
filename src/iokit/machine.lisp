@@ -15,7 +15,7 @@
    #:acpi-table #:vm-page-grab #:ml-io-map #:ml-io-map-wcomb #:boot-arg #:kernel-flags #:boot-video
    #:wait-for-interrupt #:interrupt-vector
    #:apple-virtio-input #:input-events #:input-abs-range
-   #:apple-virtio-network #:io-ethernet-controller #:ecm-status #:io-ethernet-interface #:network-send #:network-receive #:network-mac
+   #:apple-virtio-network #:io-ethernet-controller #:ecm-status #:battery #:io-ethernet-interface #:network-send #:network-receive #:network-mac
    #:define-io-class #:add-personality #:personality #:publish-media #:io-partition-scheme
    #:media-device #:media-base #:next-bsd-unit #:bsd-client-class #:io-media-bsd-client))
 (in-package #:finch/iokit)

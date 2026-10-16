@@ -69,6 +69,7 @@
     ("System/Applications/Listener.app/Contents/MacOS/Listener" "Listener")
     ("System/Applications/Editor.app/Contents/MacOS/Editor" "Editor")
     ("System/Applications/Generations.app/Contents/MacOS/Generations" "Generations")
+    ("System/Applications/Fetch.app/Contents/MacOS/Fetch" "Fetch")
     ("System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal" "Terminal")
     ("System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow" "loginwindow")
     ("System/Library/CoreServices/Dock.app/Contents/MacOS/Dock" "Dock")
