@@ -144,12 +144,25 @@
   (list (list :file "etc/ssl/certs/ca-certificates.crt"
               (octets (format nil "~a/etc/ssl/certs/ca-certificates.crt" (uiop:getenv "GUIX_ENVIRONMENT"))))))
 
+(defun host-zone ()
+  (let* ((link (or (uiop:getenv "TZ") (ignore-errors (sb-posix:readlink "/etc/localtime")) ""))
+         (at (search "zoneinfo/" link)))
+    (string-left-trim ":" (if at (subseq link (+ at 9)) link))))
+
+(defun zoneinfo ()
+  (let* ((dir (format nil "~a/share/zoneinfo/" (uiop:getenv "GUIX_ENVIRONMENT")))
+         (zone (host-zone))
+         (file (and (plusp (length zone)) (probe-file (concatenate 'string dir zone)))))
+    (append (tree-entries dir "usr/share/zoneinfo" :skip '("posix" "right"))
+            (list (list :file "etc/localtime" (octets (or file (concatenate 'string dir "UTC"))))))))
+
 (defun root-entries ()
   (let ((files (append (loop :for f :in *ramdisk-files*
                              :collect (list :file (concatenate 'string "finch/" f) (octets (source f))))
                        (desktop-entries)
                        (contribs)
                        (certificates)
+                       (zoneinfo)
                        (library-entries)
                        (object-entries)
                        (compiler-entries)

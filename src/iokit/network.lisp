@@ -91,4 +91,4 @@
 
 (defun forget-hardware ()
   (setf *registry-root* nil *bsd-units* 0 *interface-units* 0
-        *free-vectors* (loop for v from #x30 below #x40 collect v)))
+        *free-vectors* (loop for v from #x30 below +keyboard-vector+ collect v)))

@@ -638,6 +638,8 @@
              (is (image:expect c "load_init_program: /sbin/launchd pid 1" :timeout 90))
              (is (image:expect c "launchd: pid 1"))
              (is (search "3" (ask "(+ 1 2)")))
+             (let ((local (format nil "~s" (multiple-value-list (decode-universal-time 3999999999)))))
+               (is (search local (ask "(multiple-value-list (decode-universal-time 3999999999))")) "local time ~a" local))
              (ask "(finch/shell:spawn \"/Applications/Hello.app/Contents/MacOS/Hello\")")
              (let ((screen (screen-until (lambda (s) (and (< 200 (ldb (byte 8 16) (image:pixel s 300 12)))
                                                           (< 100 (dark-pixels s 586 724 626 764 90))

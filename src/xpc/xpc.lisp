@@ -59,7 +59,7 @@
       (:bool (list :bool (plusp (take-le r 4))))
       (:int64 (list :int64 (signed 64 (take-le r 8))))
       (:uint64 (list :uint64 (take-le r 8)))
-      (:double (list :double (sb-kernel:make-double-float (signed 32 (ash (take-le r 8) -32)) 0)))
+      (:double (let ((bits (take-le r 8))) (list :double (sb-kernel:make-double-float (signed 32 (ash bits -32)) (ldb (byte 32 0) bits)))))
       (:date (list :date (signed 64 (take-le r 8))))
       (:data (let ((n (take-le r 4))) (prog1 (list :data (take-octets r n)) (align r))))
       (:string (let ((n (take-le r 4)))

@@ -123,6 +123,7 @@
              "sbcl-cl-vectors"
              "sbcl-chipz"
              "nss-certs"
+             "tzdata"
              "font-adwaita"
              "adwaita-icon-theme"
              "librsvg"))

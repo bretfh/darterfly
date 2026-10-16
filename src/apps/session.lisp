@@ -127,7 +127,7 @@
           (when (and event (eq (finch/server:event-type event) :left-mouse-down))
             (let ((x (first (finch/server:event-window-location event))))
               (let ((index (floor (- x gap) (+ tile gap))))
-                (when (< 0 index (length *dock-items*))
+                (when (< -1 index (length *dock-items*))
                   (bsd:posix-spawn (second (nth index *dock-items*))
                                    (list (second (nth index *dock-items*))) nil))))))))))
 

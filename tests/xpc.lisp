@@ -32,3 +32,7 @@
     (destructuring-bind (send recv) (subseq messages 4 6)
       (is (= #x400000ce (second send)))
       (is (equal '(:receive :port) (xpc:value (xpc:decode (third recv) (list :port)) "port"))))))
+
+(test xpc-double-round-trips
+  (dolist (d (list 0.1d0 -2.5d0 1d300 pi))
+    (is (equal (list :double d) (xpc:decode (xpc:encode (list :double d)))))))
