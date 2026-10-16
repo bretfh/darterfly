@@ -8,7 +8,7 @@
                       collect b)))
     (and octets (map 'string #'code-char octets))))
 
-(defun read-octets (stream length)
+(defun read-stream-octets (stream length)
   (let ((v (make-array length :element-type '(unsigned-byte 8))))
     (loop with at = 0
           while (< at length)
@@ -47,7 +47,7 @@
                  until (or (null header) (string= header "end"))
                  do (destructuring-bind (kind length mode &rest path) (uiop:split-string header :separator " ")
                       (let ((path (format nil "~{~a~^ ~}" path))
-                            (octets (read-octets stream (parse-integer length))))
+                            (octets (read-stream-octets stream (parse-integer length))))
                         (if (if (string= kind "gen")
                                 (put-octets (concatenate 'string *deploy-dir* path) octets #o644)
                                 (put-octets (concatenate 'string "/" path) octets (parse-integer mode :radix 8)))
