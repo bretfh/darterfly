@@ -55,14 +55,33 @@
 
 (defun page-up (n) (logand (+ n 4095) (lognot 4095)))
 
-(defun run-core (core argv &key files cwd stdin)
+(defun u64-at (octets at) (loop :for i :below 8 :sum (ash (aref octets (+ at i)) (* 8 i))))
+(defun u32-at (octets at) (loop :for i :below 4 :sum (ash (aref octets (+ at i)) (* 8 i))))
+(defun u16-at (octets at) (loop :for i :below 2 :sum (ash (aref octets (+ at i)) (* 8 i))))
+
+(defun elf-symbol (octets name)
+  (let ((shoff (u64-at octets 40)) (size (u16-at octets 58)) (count (u16-at octets 60))
+        (want (sb-ext:string-to-octets name)))
+    (dotimes (i count)
+      (let ((sh (+ shoff (* i size))))
+        (when (= 2 (u32-at octets (+ sh 4)))
+          (let* ((at (u64-at octets (+ sh 24))) (end (+ at (u64-at octets (+ sh 32))))
+                 (strtab (u64-at octets (+ shoff (* (u32-at octets (+ sh 40)) size) 24))))
+            (loop :for sym :from at :below end :by 24
+                  :for start := (+ strtab (u32-at octets sym))
+                  :when (and (= (aref octets (+ start (length want))) 0)
+                             (equalp want (subseq octets start (+ start (length want)))))
+                    :do (return-from elf-symbol (u64-at octets (+ sym 8))))))))))
+
+(defun run-core (core argv &key files cwd stdin kernel)
   (let ((back (make-array 2 :element-type '(unsigned-byte 64))))
     (sb-sys:with-pinned-objects (back)
       (libsa "__libsa_core_range" sb-alien:int (sb-sys:system-area-pointer (sb-sys:vector-sap back))
              (sb-sys:system-area-pointer (sb-sys:sap+ (sb-sys:vector-sap back) 8))))
     (let* ((parts (list (c-strings argv) (c-strings (list (or cwd "/")))
                         (if stdin (c-strings (list stdin)) (make-array 0 :element-type '(unsigned-byte 8)))
-                        (archive files) (read-octets core)))
+                        (archive files) (read-octets core)
+                        (if kernel (read-octets kernel) (make-array 0 :element-type '(unsigned-byte 8)))))
            (offsets (let ((at +header+))
                       (loop :for p :in parts
                             :collect (setf at (page-up at))
@@ -79,7 +98,8 @@
         (loop :for p :in parts :for off :in offsets :do (copy-in (+ +base+ off) p))
         (libsa "memcpy" sb-sys:system-area-pointer (sb-sys:system-area-pointer (sb-sys:int-sap (+ +base+ back-at)))
                (sb-sys:system-area-pointer (sb-sys:int-sap (aref back 0))) (sb-alien:unsigned (aref back 1)))
-        (destructuring-bind (argv cwd stdin archive core) offsets
+        (destructuring-bind (argv cwd stdin archive core image) offsets
+          (declare (ignore image))
           (let ((header (make-array 13 :element-type '(unsigned-byte 64) :initial-element 0)))
             (setf (aref header 0) +magic+
                   (aref header 1) (+ +base+ core) (aref header 2) (length (fifth parts))
@@ -91,9 +111,13 @@
             (sb-sys:with-pinned-objects (header)
               (libsa "memcpy" sb-sys:system-area-pointer (sb-sys:system-area-pointer (sb-sys:int-sap +base+))
                      (sb-sys:system-area-pointer (sb-sys:vector-sap header)) (sb-alien:unsigned +header+))))))
-      (loop :repeat 100
-            :do (libsa "__machdep" sb-alien:long (sb-alien:long 19) (sb-alien:long +base+) (sb-alien:long size))
-                (sleep 0.05))
+      (let* ((image-octets (sixth parts))
+             (entry (if kernel (or (elf-symbol image-octets "_libsa_start") (error "run: ~a has no _libsa_start" kernel)) 0))
+             (image-at (if kernel (+ +base+ (sixth offsets)) 0)))
+        (loop :repeat 100
+              :do (libsa "__machdep5" sb-alien:long (sb-alien:long 19) (sb-alien:long +base+) (sb-alien:long size)
+                         (sb-alien:long image-at) (sb-alien:long (length image-octets)) (sb-alien:long entry))
+                  (sleep 0.05)))
       (error "run: the kernel would not restart; threads ~a" (sb-thread:list-all-threads)))))
 
 (defun count-entries (address size)

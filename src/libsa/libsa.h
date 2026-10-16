@@ -40,4 +40,5 @@
 
 long __syscall(long n, long a, long b, long c, long d, long e, long f);
 long __machdep(long n, long a, long b);
+long __machdep5(long n, long a, long b, long c, long d, long e);
 void __libsa_stdio_init(void);
