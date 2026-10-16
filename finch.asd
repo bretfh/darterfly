@@ -36,7 +36,7 @@
   :depends-on (#:uiop #:finch/iokit (:require #:sb-posix))
   :serial t
   :pathname "src/io/"
-  :components ((:file "framebuffer") (:file "hid") (:file "blend") (:file "keymap")))
+  :components ((:file "framebuffer") (:file "hid") (:file "report") (:file "blend") (:file "keymap")))
 
 (asdf:defsystem #:finch/text
   :description "Fonts and text"
@@ -85,7 +85,7 @@
   :depends-on (#:uiop)
   :serial t
   :pathname "src/iokit/"
-  :components ((:file "machine") (:file "registry") (:file "acpi") (:file "pci") (:file "interrupt") (:file "virtio") (:file "storage") (:file "block") (:file "nvme") (:file "ramdisk") (:file "xhci") (:file "input") (:file "network")))
+  :components ((:file "machine") (:file "registry") (:file "acpi") (:file "pci") (:file "interrupt") (:file "virtio") (:file "storage") (:file "block") (:file "nvme") (:file "ramdisk") (:file "xhci") (:file "i2c") (:file "input") (:file "network")))
 
 (asdf:defsystem #:finch/net
   :description "Networking"

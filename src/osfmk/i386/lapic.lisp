@@ -90,6 +90,17 @@
   (kprintf "lapic: timer %u counts per tick at %d Hz, com1 on vector 0x%x
 " per-tick +hz+ +com1-vector+))
 
+(define-global level-gsi :u32 :count 16)
+(define-global level-low :u32 :count 16)
+
+(define-low route-interrupt ((gsi :u32) (low :u32))
+  (let ((v (logand low #xFF)))
+    (when (and (>= v #x30) (< v #x40) (logand low (ash 1 15)))
+      (setf (ref level-gsi (- v #x30)) (+ gsi 1))
+      (setf (ref level-low (- v #x30)) low))
+    (ioapic-write (+ #x10 (* 2 gsi) 1) (shl (mem :u32 (+ (address |cpu_data_master|) +cpu-phys-number+)) 24))
+    (ioapic-write (+ #x10 (* 2 gsi)) low)))
+
 (define-low lapic-interrupt (vector)
   (cond ((= vector +lapic-timer-vector+)
          (when (= (cpu-number) 0)
@@ -103,6 +114,9 @@
          (keyboard-interrupt)
          (bsd-serial-wakeup))
         ((and (>= vector #x30) (< vector #x40))
+         (let ((gsi (ref level-gsi (- vector #x30))))
+           (when gsi
+             (ioapic-write (+ #x10 (* 2 (- gsi 1))) (logior (ref level-low (- vector #x30)) (ash 1 16)))))
          (|PE_incoming_interrupt| vector)))
   (unless (or (= vector +lapic-spurious-vector+)
               (and (>= vector #x20) (< vector #x30) (/= vector +com1-vector+) (/= vector +keyboard-vector+)))

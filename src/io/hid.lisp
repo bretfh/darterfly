@@ -91,8 +91,21 @@
 (defmethod abs-range ((d finch/iokit::io-usb-hid-device) axis) (declare (ignore axis)) nil)
 (defmethod event-vector ((d finch/iokit::io-usb-hid-device)) nil)
 
+(defmethod read-events ((d finch/iokit::io-i2c-hid-device))
+  (unless (finch/iokit::hid-fields d)
+    (setf (finch/iokit::hid-fields d) (parse-report-descriptor (finch/iokit::hid-report-descriptor d))))
+  (loop :for report :in (finch/iokit::i2c-hid-reports d)
+        :append (multiple-value-bind (events state)
+                    (pointer-events d (finch/iokit::hid-fields d) report (finch/iokit::hid-state d))
+                  (setf (finch/iokit::hid-state d) state)
+                  events)))
+
+(defmethod abs-range ((d finch/iokit::io-i2c-hid-device) axis) (declare (ignore axis)) nil)
+(defmethod event-vector ((d finch/iokit::io-i2c-hid-device)) nil)
+
 (defun input-devices ()
   (finch/iokit:start-iokit)
   (append (finch/iokit:find-entries 'finch/iokit:apple-virtio-input)
           (finch/iokit:find-entries 'finch/iokit::io-usb-hid-device)
+          (finch/iokit:find-entries 'finch/iokit::io-i2c-hid-device)
           (list *ps2-keyboard*)))
