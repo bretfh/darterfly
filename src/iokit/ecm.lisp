@@ -16,6 +16,7 @@
    (send-pages :accessor ecm-send-pages)
    (send-next :initform 0 :accessor ecm-send-next)
    (in-flight :initform 0 :accessor ecm-in-flight)
+   (counts :initform (list :received 0 :sent 0 :receive-codes nil :send-codes nil) :accessor ecm-counts)
    (mac :accessor network-mac)))
 
 (defun ecm-layout (config)
@@ -78,6 +79,8 @@
                   (let ((page (gethash trb (ecm-pending e))))
                     (when page
                       (remhash trb (ecm-pending e))
+                      (incf (getf (ecm-counts e) :received))
+                      (incf (getf (getf (ecm-counts e) :receive-codes) code 0))
                       (let ((n (- 4096 residual)))
                         (when (and (member code '(1 13)) (plusp n))
                           (let ((frame (make-array n :element-type '(unsigned-byte 8))))
@@ -87,7 +90,9 @@
                       (ring-doorbell c slot (ecm-in-dci e)))))
                 (gethash (list slot (ecm-out-dci e)) (xhci-endpoints c))
                 (lambda (trb code residual)
-                  (declare (ignore trb code residual))
+                  (declare (ignore trb residual))
+                  (incf (getf (ecm-counts e) :sent))
+                  (incf (getf (getf (ecm-counts e) :send-codes) code 0))
                   (setf (ecm-in-flight e) (max 0 (1- (ecm-in-flight e))))))
           (loop repeat +ecm-receive-pages+ do (ecm-queue-receive e (vm-page-grab)))
           (ring-doorbell c slot (ecm-in-dci e)))
@@ -104,7 +109,7 @@
 
 (defmethod network-send ((e apple-usb-cdc-ecm) frame)
   (let ((c (ecm-controller e))
-        (n (length frame)))
+        (n (max 60 (length frame))))
     (loop repeat 1000
           while (>= (ecm-in-flight e) (1- +ecm-send-pages+))
           do (process-events c) (sleep 0.0005))
@@ -112,7 +117,8 @@
       (let ((page (aref (ecm-send-pages e) (ecm-send-next e)))
             (zlp (zerop (mod n (ecm-mps e)))))
         (setf (ecm-send-next e) (mod (1+ (ecm-send-next e)) +ecm-send-pages+))
-        (copy-to-phys frame 0 page n)
+        (copy-to-phys frame 0 page (length frame))
+        (loop for at from (length frame) below n do (ml-phys-write-8 (+ page at) 0))
         (ring-push (ecm-out-ring e) page n (logior (ash 1 10) (if zlp 0 (ash 1 5))))
         (when zlp (ring-push (ecm-out-ring e) 0 0 (logior (ash 1 10) (ash 1 5))))
         (incf (ecm-in-flight e))
@@ -120,3 +126,21 @@
     n))
 
 (defmethod interrupt-vector ((e apple-usb-cdc-ecm)) nil)
+
+(defun endpoint-state (c slot dci)
+  (let ((output (ml-phys-read-64 (+ (xhci-dcbaa c) (* 8 slot)))))
+    (nth (ldb (byte 3 0) (ml-phys-read-32 (context c output dci))) '(:disabled :running :halted :stopped :error))))
+
+(defun ecm-status ()
+  (let ((e (first (find-entries 'apple-usb-cdc-ecm))))
+    (if (null e)
+        (list :usb-ethernet nil :controllers (length (find-entries 'io-xhci-controller)))
+        (let ((c (ecm-controller e)))
+          (process-events c)
+          (append (list :mac (format nil "~{~2,'0x~^:~}" (coerce (network-mac e) 'list))
+                        :speed (ldb (byte 4 20) (ml-phys-read-32 (ml-phys-read-64 (+ (xhci-dcbaa c) (* 8 (ecm-slot e))))))
+                        :in (endpoint-state c (ecm-slot e) (ecm-in-dci e))
+                        :out (endpoint-state c (ecm-slot e) (ecm-out-dci e))
+                        :waiting (ecm-in-flight e)
+                        :posted (hash-table-count (ecm-pending e)))
+                  (ecm-counts e))))))

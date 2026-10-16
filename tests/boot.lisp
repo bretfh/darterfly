@@ -1594,7 +1594,7 @@
                  (is (= #xffffffff (image:pixel screen 500 300)) "the USB mouse clicks the terminal open ~x" (image:pixel screen 500 300))))
           (image:finish c 5))))))
 
-(defun nrepl-check (&key (ip "10.0.2.15"))
+(defun nrepl-check (&key (ip "10.0.2.15") status)
   (let* ((port (free-udp-port))
          (c (image:bare-console :forwards (list (list :tcp port 4011)))))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60))
@@ -1611,6 +1611,8 @@
              (is (search "=> 3" (client "test-key" "(+ 1 2)")) "the host evaluates a form on finch")
              (is (search (format nil "=> ~s" ip) (client "test-key" "(finch/net:address-string (finch/net::interface-ip finch/net:*interface*))")) "in finch's own image")
              (is (not (search "=>" (client "wrong" "(+ 1 2)"))) "and a wrong key evaluates nothing")
+             (when status
+               (is (search ":IN :RUNNING :OUT :RUNNING" (client "test-key" "(finch/iokit:ecm-status)"))))
              (is (search "=> 200000" (client "test-key" "(length (make-string 200000 :initial-element #\\x))")))
              (let ((big (client "test-key" "(make-string 100000 :initial-element #\\y)")))
                (is (search (make-string 100000 :initial-element #\y) big) "a 100 KB answer comes back whole")))
@@ -1622,4 +1624,4 @@
 (test nrepl-over-usb-ethernet
   (let ((image:*input-devices* '("qemu-xhci,id=xhci" "virtio-keyboard-pci" "virtio-tablet-pci"))
         (image:*network-device* "usb-net,netdev=net0,bus=xhci.0"))
-    (nrepl-check)))
+    (nrepl-check :status t)))
