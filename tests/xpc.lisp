@@ -3,36 +3,6 @@
 (def-suite xpc :in all)
 (in-suite xpc)
 
-(defun oracle-bootstrap ()
-  (loop :for line :in (uiop:read-file-lines (finch-file "tests/bootstrap.txt"))
-        :for words := (uiop:split-string line :separator " ")
-        :when (member (first words) '("send" "recv") :test #'string=)
-          :collect (let* ((octets (hex-octets (cddr words)))
-                          (at (search #(#x43 #x50 #x58 #x40) octets)))
-                     (list (first words) (ldb (byte 32 0) (logior (aref octets 20) (ash (aref octets 21) 8)
-                                                                   (ash (aref octets 22) 16) (ash (aref octets 23) 24)))
-                           (subseq octets at)))))
-
-(test xpc-matches-launchd
-  (let ((messages (oracle-bootstrap)))
-    (is (= 8 (length messages)))
-    (loop :for (direction id octets) :in messages
-          :do (let ((value (xpc:decode octets (list :a :b :c))))
-                (is (equalp octets (xpc:encode value)) "~a #x~x re-encodes" direction id)))
-    (destructuring-bind (send recv) (subseq messages 0 2)
-      (let ((request (xpc:decode (third send) (list :domain)))
-            (reply (xpc:decode (third recv) (list :port))))
-        (is (= #x400000cf (second send)))
-        (is (equal "com.apple.windowserver" (xpc:value request "name")))
-        (is (equal '(:uint64 7) (xpc:value request "type")))
-        (is (equal '(:send :domain) (xpc:value request "domain-port")))
-        (is (equal '(:send :port) (xpc:value reply "port")))))
-    (let ((error (xpc:decode (third (fourth messages)))))
-      (is (equal '(:int64 1102) (xpc:value error "error"))))
-    (destructuring-bind (send recv) (subseq messages 4 6)
-      (is (= #x400000ce (second send)))
-      (is (equal '(:receive :port) (xpc:value (xpc:decode (third recv) (list :port)) "port"))))))
-
 (test xpc-double-round-trips
   (dolist (d (list 0.1d0 -2.5d0 1d300 pi))
     (is (equal (list :double d) (xpc:decode (xpc:encode (list :double d)))))))

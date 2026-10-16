@@ -4,7 +4,7 @@
 (defconstant +virtio-blk-f-flush+ (ash 1 9))
 (defconstant +request-pages+ 8)
 
-(define-io-class apple-virtio-block-storage-device "AppleVirtIOBlockStorageDevice" (io-block-storage-device)
+(define-io-class virtio-block-storage-device "VirtIOBlockStorageDevice" (io-block-storage-device)
   ((transport :accessor transport)
    (queue :accessor queue)
    (block-count :accessor block-count)
@@ -13,12 +13,12 @@
    (flushes :initform nil :accessor flushes)
    (lock :initform (sb-thread:make-mutex :name "virtio-blk") :reader device-lock)))
 
-(add-personality "IOClass" "AppleVirtIOBlockStorageDevice" "IOProviderClass" "AppleVirtIOTransport"
+(add-personality "IOClass" "VirtIOBlockStorageDevice" "IOProviderClass" "VirtIOTransport"
                  "IOVirtIOPrimaryMatch" "0x00021af4")
 
-(defmethod block-size ((device apple-virtio-block-storage-device)) 512)
+(defmethod block-size ((device virtio-block-storage-device)) 512)
 
-(defmethod start ((b apple-virtio-block-storage-device) (tr apple-virtio-transport))
+(defmethod start ((b virtio-block-storage-device) (tr virtio-transport))
   (setf (transport b) tr)
   (when (and (logtest (device-features tr) +virtio-f-version-1+)
              (set-driver-features tr (logior +virtio-f-version-1+ (logand (device-features tr) +virtio-blk-f-flush+))))
@@ -60,7 +60,7 @@
       (loop for pa in pages for at from start by 4096
             do (copy-from-phys pa vector at (min 4096 (- (+ start (* count 512)) at)))))))
 
-(defmethod read-blocks ((b apple-virtio-block-storage-device) lba count)
+(defmethod read-blocks ((b virtio-block-storage-device) lba count)
   (let ((vector (make-array (* count 512) :element-type '(unsigned-byte 8)))
         (per (* +request-pages+ 8)))
     (sb-thread:with-mutex ((device-lock b))
@@ -68,7 +68,7 @@
             do (block-request b 0 (+ lba done) (min per (- count done)) vector (* done 512))))
     vector))
 
-(defmethod write-blocks ((b apple-virtio-block-storage-device) lba vector)
+(defmethod write-blocks ((b virtio-block-storage-device) lba vector)
   (let ((count (floor (length vector) 512))
         (per (* +request-pages+ 8)))
     (sb-thread:with-mutex ((device-lock b))
@@ -76,10 +76,10 @@
             do (block-request b 1 (+ lba done) (min per (- count done)) vector (* done 512))))
     count))
 
-(defmethod flush-blocks ((b apple-virtio-block-storage-device))
+(defmethod flush-blocks ((b virtio-block-storage-device))
   (when (flushes b)
     (sb-thread:with-mutex ((device-lock b))
       (block-request b 4 0 0 nil 0)))
   t)
 
-(defmethod interrupt-vector ((b apple-virtio-block-storage-device)) (virtqueue-vector (queue b)))
+(defmethod interrupt-vector ((b virtio-block-storage-device)) (virtqueue-vector (queue b)))

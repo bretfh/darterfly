@@ -26,7 +26,7 @@
   (dolist (label '("finch.finder" "finch.systemuiserver" "finch.dock"))
     (finch/launchd:kickstart label))
   (when (equal (finch/iokit:boot-arg "rd") "ram")
-    (ignore-errors (bsd:posix-spawn "/System/Applications/Install.app/Contents/MacOS/Install" (list "Install") nil)))
+    (ignore-errors (bsd:posix-spawn "/System/Applications/Install.app/Contents/Programs/Install" (list "Install") nil)))
   (loop (bsd:pause)))
 
 (defun battery-layer (battery)
@@ -75,13 +75,13 @@
 (defparameter +icons+ "/usr/share/icons/Adwaita/")
 
 (defparameter *dock-items*
-  '(("Finder" "/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder" #(0.21 0.52 0.89 1.0)
+  '(("Finder" "/System/Library/CoreServices/Finder.app/Contents/Programs/Finder" #(0.21 0.52 0.89 1.0)
      "legacy/system-file-manager-symbolic")
-    ("Terminal" "/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal" #(0.24 0.22 0.27 1.0)
+    ("Terminal" "/System/Applications/Utilities/Terminal.app/Contents/Programs/Terminal" #(0.24 0.22 0.27 1.0)
      "legacy/utilities-terminal-symbolic")
-    ("Listener" "/System/Applications/Listener.app/Contents/MacOS/Listener" #(0.90 0.38 0.0 1.0)
+    ("Listener" "/System/Applications/Listener.app/Contents/Programs/Listener" #(0.90 0.38 0.0 1.0)
      "actions/system-run-symbolic")
-    ("Generations" "/System/Applications/Generations.app/Contents/MacOS/Generations" #(0.20 0.55 0.35 1.0)
+    ("Generations" "/System/Applications/Generations.app/Contents/Programs/Generations" #(0.20 0.55 0.35 1.0)
      "status/software-update-available-symbolic")))
 
 (defun icon-path (name) (format nil "~a~a.png" +icons+ name))
@@ -154,7 +154,7 @@
     (if (directory-p (path view))
         (browse (browser view) (path view))
         (when (uiop:string-suffix-p (path view) ".app")
-          (let ((program (format nil "~a/Contents/MacOS/~a" (path view)
+          (let ((program (format nil "~a/Contents/Programs/~a" (path view)
                                  (subseq (pathname-name (path view)) 0))))
             (ignore-errors (bsd:posix-spawn program (list program) nil))))))
   t)
@@ -203,5 +203,5 @@
       (kit:run))))
 
 (bsd:define-program "finch-gui" (argv envp)
-  (finch/launchd:bootstrap-look-up "com.apple.windowserver")
+  (finch/launchd:bootstrap-look-up "windowserver")
   0)

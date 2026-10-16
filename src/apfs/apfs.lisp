@@ -21,6 +21,7 @@
 (defconstant +nx-magic+ #x4253584e)
 (defconstant +apfs-magic+ #x42535041)
 (defconstant +root-dir-ino-num+ 2)
+(defparameter +symlink-xattr+ "com.apple.fs.symlink")
 (defconstant +object-type-nx-superblock+ 1)
 (defconstant +btnode-root+ 1)
 (defconstant +btnode-leaf+ 2)
@@ -269,7 +270,7 @@
 
 (defun readlink (v id)
   (loop for (key . val) in (fs-records v id +apfs-type-xattr+)
-        when (string= (c-string key 10 (+ 10 (u16 key 8))) "com.apple.fs.symlink")
+        when (string= (c-string key 10 (+ 10 (u16 key 8))) +symlink-xattr+)
           return (if (logtest (u16 val 0) +xattr-data-embedded+)
                      (c-string val 4 (+ 4 (u16 val 2)))
                      (fail "symlink ~d keeps its target in a data stream" id))))

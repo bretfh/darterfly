@@ -5,7 +5,7 @@
 (define-io-class io-pci-bridge "IOPCIBridge" (io-service)
   ((ecam :initarg :ecam :reader bridge-ecam)
    (bus-maps :initform (make-hash-table) :reader bus-maps)))
-(define-io-class apple-acpi-pci "AppleACPIPCI" (io-pci-bridge))
+(define-io-class acpi-pci "ACPIPCI" (io-pci-bridge))
 
 (define-io-class io-pci-device "IOPCIDevice" (io-service)
   ((bridge :initarg :bridge :reader device-bridge)
@@ -167,7 +167,7 @@
          (expert (attach (make-instance 'io-platform-expert-device :name "finch") root))
          (mcfg (acpi-table "MCFG"))
          (pci0 (attach (make-instance 'io-acpi-platform-device :name "PCI0") expert))
-         (bridge (attach (make-instance 'apple-acpi-pci :ecam (ml-phys-read-64 (+ mcfg 44))) pci0)))
+         (bridge (attach (make-instance 'acpi-pci :ecam (ml-phys-read-64 (+ mcfg 44))) pci0)))
     (setf *registry-root* root *bsd-units* 0 *interface-units* 0)
     (probe-bus bridge (ml-phys-read-8 (+ mcfg 54)) bridge)
     (dolist (d (find-entries 'io-pci-device root))

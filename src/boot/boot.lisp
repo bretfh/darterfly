@@ -265,7 +265,7 @@
 
 (define-low kernel-flags (root args)
   (let ((size 0) (plist 0))
-    (setf plist (read-file root (wide "\\Library\\Preferences\\SystemConfiguration\\com.apple.Boot.plist") (address size)))
+    (setf plist (read-file root (wide "\\Library\\Preferences\\SystemConfiguration\\Boot.plist") (address size)))
     (plist-string plist "<key>Kernel Flags</key>" (+ args +command-line+) +line-length+)
     (boot-file root plist "RAMDisk" (+ args +ramdisk-start+) (+ args +ramdisk-size+))
     (boot-file root plist "RootImage" (+ args +root-image-start+) (+ args +root-image-size+))

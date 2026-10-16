@@ -4,23 +4,23 @@
 (defparameter +apfs-container+ "EF57347C-0000-11AA-AA11-00306543ECAC")
 (defparameter +apfs-volume+ "41504653-0000-11AA-AA11-00306543ECAC")
 
-(iokit:define-io-class apple-apfs-container-scheme "AppleAPFSContainerScheme" (iokit:io-partition-scheme))
-(iokit:define-io-class apple-apfs-media "AppleAPFSMedia" (iokit:io-media))
-(iokit:define-io-class apple-apfs-media-bsd-client "AppleAPFSMediaBSDClient" (iokit:io-media-bsd-client))
-(iokit:define-io-class apple-apfs-container "AppleAPFSContainer" (iokit:io-service)
+(iokit:define-io-class apfs-container-scheme "APFSContainerScheme" (iokit:io-partition-scheme))
+(iokit:define-io-class apfs-media "APFSMedia" (iokit:io-media))
+(iokit:define-io-class apfs-media-bsd-client "APFSMediaBSDClient" (iokit:io-media-bsd-client))
+(iokit:define-io-class apfs-container-driver "APFSContainer" (iokit:io-service)
   ((container :accessor apfs-container)))
-(iokit:define-io-class apple-apfs-volume "AppleAPFSVolume" (iokit:io-media)
+(iokit:define-io-class apfs-volume-media "APFSVolume" (iokit:io-media)
   ((volume :initarg :volume :reader apfs-volume)))
-(iokit:define-io-class apple-apfs-volume-bsd-client "AppleAPFSVolumeBSDClient" (iokit:io-media-bsd-client))
+(iokit:define-io-class apfs-volume-bsd-client "APFSVolumeBSDClient" (iokit:io-media-bsd-client))
 
-(defmethod iokit:bsd-client-class ((m apple-apfs-media)) 'apple-apfs-media-bsd-client)
-(defmethod iokit:bsd-client-class ((m apple-apfs-volume)) 'apple-apfs-volume-bsd-client)
+(defmethod iokit:bsd-client-class ((m apfs-media)) 'apfs-media-bsd-client)
+(defmethod iokit:bsd-client-class ((m apfs-volume-media)) 'apfs-volume-bsd-client)
 
-(iokit:add-personality "IOClass" "AppleAPFSContainerScheme" "IOProviderClass" "IOMedia"
+(iokit:add-personality "IOClass" "APFSContainerScheme" "IOProviderClass" "IOMedia"
                        "IOPropertyMatch" (list (iokit:personality "Content Hint" +apfs-partition+)
                                                               (iokit:personality "Whole" t))
                        "IOProbeScore" 2000)
-(iokit:add-personality "IOClass" "AppleAPFSContainer" "IOProviderClass" "IOMedia"
+(iokit:add-personality "IOClass" "APFSContainer" "IOProviderClass" "IOMedia"
                        "IOPropertyMatch" (list (iokit:personality "Content Hint" +apfs-container+)) "IOProbeScore" 1000)
 
 (defun media-device (media)
@@ -29,12 +29,12 @@
 (defun set-properties (entry &rest kv)
   (loop for (k v) on kv by #'cddr do (iokit:set-property entry k v)))
 
-(defmethod iokit:start ((scheme apple-apfs-container-scheme) (partition iokit:io-media))
-  (let ((c (and (not (typep partition 'apple-apfs-media))
+(defmethod iokit:start ((scheme apfs-container-scheme) (partition iokit:io-media))
+  (let ((c (and (not (typep partition 'apfs-media))
                 (handler-case (open-container (media-device partition)) (apfs-error () nil)))))
     (when c
       (let* ((unit (iokit:next-bsd-unit))
-             (media (make-instance 'apple-apfs-media :device (iokit:media-device partition) :base (iokit:media-base partition))))
+             (media (make-instance 'apfs-media :device (iokit:media-device partition) :base (iokit:media-base partition))))
         (set-properties media "Logical Block Size" 4096 "Preferred Block Size" 4096 "Physical Block Size" 4096
                         "Writable" t "Size" (iokit:get-property partition "Size")
                         "Content" +apfs-container+ "Content Hint" +apfs-container+ "Whole" t "Leaf" t
@@ -43,7 +43,7 @@
         (iokit:publish-media media scheme)
         t))))
 
-(defmethod iokit:start ((driver apple-apfs-container) (media iokit:io-media))
+(defmethod iokit:start ((driver apfs-container-driver) (media iokit:io-media))
   (let ((c (handler-case (open-container (media-device media)) (apfs-error () nil))))
     (when c
       (setf (apfs-container driver) c)
@@ -51,7 +51,7 @@
                       "Logical Block Size" (container-block-size c) "Status" "Online")
       (iokit:set-property media "Leaf" nil)
       (dolist (v (container-volumes c))
-        (let ((vol (make-instance 'apple-apfs-volume :volume v :name (volume-name v)
+        (let ((vol (make-instance 'apfs-volume-media :volume v :name (volume-name v)
                                                      :location (princ-to-string (1+ (volume-index v)))
                                                      :device (iokit:media-device media) :base (iokit:media-base media))))
           (set-properties vol "Logical Block Size" 4096 "Preferred Block Size" 4096 "Physical Block Size" 4096

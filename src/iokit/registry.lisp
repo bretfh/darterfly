@@ -2,15 +2,15 @@
 
 (defvar *io-classes* (make-hash-table :test 'equal))
 
-(defmacro define-io-class (name apple-name supers &optional slots)
+(defmacro define-io-class (name registry-name supers &optional slots)
   `(progn
      (defclass ,name ,supers ,slots)
-     (setf (gethash ,apple-name *io-classes*) ',name
-           (get ',name 'io-class-name) ,apple-name)
+     (setf (gethash ,registry-name *io-classes*) ',name
+           (get ',name 'io-class-name) ,registry-name)
      ',name))
 
 (defun io-class-name (entry) (get (class-name (class-of entry)) 'io-class-name))
-(defun find-io-class (apple-name) (gethash apple-name *io-classes*))
+(defun find-io-class (registry-name) (gethash registry-name *io-classes*))
 
 (define-io-class io-registry-entry "IORegistryEntry" ()
   ((name :initarg :name :initform nil :accessor %entry-name)

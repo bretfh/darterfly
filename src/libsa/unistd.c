@@ -233,8 +233,8 @@ void *mmap(void *addr, size_t len, int prot, int flags, int fd, off_t off) {
     if (prot != (PROT_READ | PROT_WRITE)) mprotect(at, len, prot);
     return at;
   }
-  long darwin = 0x1000 | ((flags & MAP_FIXED) ? 0x10 : 0) | ((flags & MAP_PRIVATE) ? 0x2 : 0) | ((flags & MAP_SHARED) ? 0x1 : 0);
-  long r = __syscall(SYS_mmap, (long)addr, (long)len, prot, darwin, fd, off);
+  long kflags = 0x1000 | ((flags & MAP_FIXED) ? 0x10 : 0) | ((flags & MAP_PRIVATE) ? 0x2 : 0) | ((flags & MAP_SHARED) ? 0x1 : 0);
+  long r = __syscall(SYS_mmap, (long)addr, (long)len, prot, kflags, fd, off);
   return r == -1 ? MAP_FAILED : (void *)r;
 }
 

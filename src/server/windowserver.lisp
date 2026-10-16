@@ -274,7 +274,7 @@
 (defvar *alt* nil)
 (defvar *meta* nil)
 
-(defparameter +force-quit+ "/System/Applications/Utilities/Force Quit.app/Contents/MacOS/Force Quit")
+(defparameter +force-quit+ "/System/Applications/Utilities/Force Quit.app/Contents/Programs/Force Quit")
 
 (defun post-event (client body)
   (when (and client (events client))
@@ -483,12 +483,12 @@
   (render)
   (bsd:bsdthread-create #'hid-loop "hid")
   (let ((set (mach:mach-port-allocate mach:*task* :port-set))
-        (render-server (launchd:bootstrap-check-in "com.apple.CARenderServer")))
-    (dolist (name '("com.apple.windowserver" "com.apple.windowserver.active"))
+        (render-server (launchd:bootstrap-check-in "renderserver")))
+    (dolist (name '("windowserver" "windowserver.active"))
       (let ((port (launchd:bootstrap-check-in name)))
         (when port (mach:mach-port-move-member mach:*task* port set))))
     (mach:mach-port-move-member mach:*task* render-server set)
-    (finch/launchd:bootstrap-look-up "com.apple.loginwindow")
+    (finch/launchd:bootstrap-look-up "loginwindow")
     (format t "WindowServer: ~dx~d, CARenderServer #x~x~%"
             (io:framebuffer-width *framebuffer*) (io:framebuffer-height *framebuffer*) render-server)
     (finish-output)

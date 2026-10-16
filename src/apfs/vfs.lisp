@@ -51,7 +51,7 @@
   (vfs:vfs-mount (apfs-vnode v +root-dir-ino-num+) path))
 
 (defun mount-volumes (&key writable)
-  (loop for vol in (iokit:find-entries 'apple-apfs-volume)
+  (loop for vol in (iokit:find-entries 'apfs-volume-media)
         for v = (apfs-volume vol)
         for path = (format nil "/Volumes/~a" (volume-name v))
         unless (eq vol *root-media*)
@@ -123,7 +123,7 @@
   (with-commit (w n) (wtruncate w (vfs:vnode-id n) size)))
 
 (defun wreadlink (w id)
-  (let ((v (gethash (octets (j-key id +apfs-type-xattr+) (le 21 2) (c-octets "com.apple.fs.symlink")) (wvolume-records w))))
+  (let ((v (gethash (octets (j-key id +apfs-type-xattr+) (le 21 2) (c-octets +symlink-xattr+)) (wvolume-records w))))
     (unless v (vfs:fail :einval))
     (c-string v 4 (+ 4 (u16 v 2)))))
 

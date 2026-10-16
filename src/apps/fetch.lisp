@@ -32,10 +32,10 @@
     (flet ((have (class label) (when (finch/iokit:find-entries class) (push label found))))
       (have 'finch/iokit::io-nvme-block-storage-device "NVMe")
       (have 'finch/iokit::io-xhci-controller "xHCI")
-      (have 'finch/iokit::apple-usb-cdc-ecm "USB Ethernet")
+      (have 'finch/iokit::usb-cdc-ecm "USB Ethernet")
       (have 'finch/iokit::io-i2c-hid-device "I2C touchpad")
       (have 'finch/iokit::io-usb-hid-device "USB HID")
-      (have 'finch/iokit:apple-virtio-network "virtio")
+      (have 'finch/iokit:virtio-network "virtio")
       (when (finch/iokit:battery) (push "EC battery" found)))
     (format nil "~{~a~^, ~}" (reverse found))))
 

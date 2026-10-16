@@ -1,12 +1,12 @@
 (in-package #:finch/iokit)
 
-(define-io-class apple-intel-lpss-i2c-controller "AppleIntelLpssI2CController" (io-service)
+(define-io-class intel-lpss-i2c-controller "IntelLpssI2CController" (io-service)
   ((base :accessor i2c-base)
    (target :initform nil :accessor i2c-target)
    (depth :initform 16 :accessor i2c-depth)
    (lock :initform (sb-thread:make-mutex :name "i2c") :reader i2c-lock)))
 
-(add-personality "IOClass" "AppleIntelLpssI2CController" "IOProviderClass" "IOPCIDevice"
+(add-personality "IOClass" "IntelLpssI2CController" "IOProviderClass" "IOPCIDevice"
                  "IOPCIClassMatch" "0x000c8000")
 
 (define-io-class io-i2c-hid-device "IOHIDI2CDevice" (io-service)
@@ -76,7 +76,7 @@
           do (setf (aref v i) (ldb (byte 8 0) x) (aref v (1+ i)) (ldb (byte 8 8) x)))
     v))
 
-(defmethod start ((c apple-intel-lpss-i2c-controller) (d io-pci-device))
+(defmethod start ((c intel-lpss-i2c-controller) (d io-pci-device))
   (let* ((here (logior (ash (pci-device d) 16) (pci-function d)))
          (devices (remove-if-not (lambda (h) (and (zerop (pci-bus d)) (eql (getf h :controller) here)))
                                  (ignore-errors (i2c-hid-devices)))))

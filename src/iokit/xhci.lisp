@@ -2,7 +2,7 @@
 
 (defconstant +trbs+ 256)
 
-(define-io-class io-xhci-controller "AppleUSBXHCI" (io-service)
+(define-io-class io-xhci-controller "USBXHCI" (io-service)
   ((base :accessor xhci-base)
    (operational :accessor xhci-operational)
    (runtime :accessor xhci-runtime)
@@ -19,7 +19,7 @@
    (endpoints :initform (make-hash-table :test 'equal) :reader xhci-endpoints)
    (lock :initform (sb-thread:make-mutex :name "xhci") :reader xhci-lock)))
 
-(add-personality "IOClass" "AppleUSBXHCI" "IOProviderClass" "IOPCIDevice" "IOPCIClassMatch" "0x000c0330")
+(add-personality "IOClass" "USBXHCI" "IOProviderClass" "IOPCIDevice" "IOPCIClassMatch" "0x000c0330")
 
 (define-io-class io-usb-hid-device "IOUSBHostHIDDevice" (io-service)
   ((controller :initarg :controller :reader hid-controller)

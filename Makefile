@@ -1,7 +1,4 @@
-.PHONY: repl check test tahoe bare desktop sbcl usb
-
-EVAL ?= (finch/tahoe:boot)
-export EVAL
+.PHONY: repl check test bare desktop sbcl usb
 
 GUIX := guix shell -m manifest.scm --
 ENV  := CL_SOURCE_REGISTRY="$$PWD//:$$GUIX_ENVIRONMENT/share/common-lisp//" ASDF_OUTPUT_TRANSLATIONS="/:$$HOME/.cache/common-lisp/finch/"
@@ -15,9 +12,6 @@ check:
 
 test:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:test-system :finch)"'
-
-tahoe:
-	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :finch/tahoe)" --eval "(print (eval (read-from-string (uiop:getenv \"EVAL\"))))"'
 
 bare:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :finch/image)" --eval "(finch/image:bare-boot)"'

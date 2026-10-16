@@ -6,10 +6,10 @@
           (append (remove (gethash "IOClass" p) *personalities* :key (lambda (q) (gethash "IOClass" q)) :test #'equal)
                   (list p)))))
 
-(define-io-class apple-virtio-transport "AppleVirtIOTransport" (io-service)
+(define-io-class virtio-transport "VirtIOTransport" (io-service)
   ((device-type :initform nil :accessor virtio-device-type)))
 
-(define-io-class apple-virtio-pci-transport "AppleVirtIOPCITransport" (apple-virtio-transport)
+(define-io-class virtio-pci-transport "VirtIOPCITransport" (virtio-transport)
   ((common :initform nil :accessor common-cfg)
    (notify :initform nil :accessor notify-base)
    (notify-multiplier :initform 0 :accessor notify-multiplier)
@@ -18,10 +18,10 @@
    (msi-x :initform nil :accessor msi-x-table)
    (entries :initform 0 :accessor msi-x-entries)))
 
-(add-personality "IOClass" "AppleVirtIOPCITransport" "IOProviderClass" "IOPCIDevice"
+(add-personality "IOClass" "VirtIOPCITransport" "IOProviderClass" "IOPCIDevice"
                  "IOPCIPrimaryMatch" "0x00001af4&0x0000FFFF" "IOProbeScore" 10000)
 
-(defmethod match-property-table ((tr apple-virtio-transport) table)
+(defmethod match-property-table ((tr virtio-transport) table)
   (let ((primary (gethash "IOVirtIOPrimaryMatch" table)))
     (or (null primary)
         (and (virtio-device-type tr) (id-matches-p primary (logior (ash (virtio-device-type tr) 16) #x1af4))))))
@@ -40,7 +40,7 @@
 (defun device-config-read-64 (tr offset)
   (logior (device-config-read tr offset 32) (ash (device-config-read tr (+ offset 4) 32) 32)))
 
-(defmethod start ((tr apple-virtio-pci-transport) (d io-pci-device))
+(defmethod start ((tr virtio-pci-transport) (d io-pci-device))
   (let ((maps (make-hash-table)))
     (flet ((region (cap)
              (let ((bar (config-read-8 d (+ cap 4))))

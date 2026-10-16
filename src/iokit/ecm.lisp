@@ -3,7 +3,7 @@
 (defconstant +ecm-receive-pages+ 16)
 (defconstant +ecm-send-pages+ 16)
 
-(define-io-class apple-usb-cdc-ecm "AppleUSBCDCECMData" (io-ethernet-controller)
+(define-io-class usb-cdc-ecm "USBCDCECMData" (io-ethernet-controller)
   ((controller :initarg :controller :reader ecm-controller)
    (slot :initarg :slot :reader ecm-slot)
    (in-ring :accessor ecm-in-ring)
@@ -52,7 +52,7 @@
     (let ((in (find-if (lambda (ep) (logtest (first ep) #x80)) endpoints))
           (out (find-if-not (lambda (ep) (logtest (first ep) #x80)) endpoints)))
       (unless (and comm data in out) (error "usb ethernet: no bulk data interface"))
-      (let ((e (make-instance 'apple-usb-cdc-ecm :name "USB Ethernet" :controller c :slot slot)))
+      (let ((e (make-instance 'usb-cdc-ecm :name "USB Ethernet" :controller c :slot slot)))
         (setf (ecm-in-dci e) (1+ (* 2 (logand (first in) #x0f)))
               (ecm-out-dci e) (* 2 (logand (first out) #x0f))
               (ecm-in-ring e) (new-ring)
@@ -101,13 +101,13 @@
         (register-service e)
         e))))
 
-(defmethod network-receive ((e apple-usb-cdc-ecm))
+(defmethod network-receive ((e usb-cdc-ecm))
   (let ((c (ecm-controller e)))
     (process-events c)
     (sb-thread:with-recursive-lock ((xhci-lock c))
       (nreverse (shiftf (ecm-frames e) nil)))))
 
-(defmethod network-send ((e apple-usb-cdc-ecm) frame)
+(defmethod network-send ((e usb-cdc-ecm) frame)
   (let ((c (ecm-controller e))
         (n (max 60 (length frame))))
     (loop repeat 1000
@@ -125,14 +125,14 @@
         (ring-doorbell c (ecm-slot e) (ecm-out-dci e))))
     n))
 
-(defmethod interrupt-vector ((e apple-usb-cdc-ecm)) nil)
+(defmethod interrupt-vector ((e usb-cdc-ecm)) nil)
 
 (defun endpoint-state (c slot dci)
   (let ((output (ml-phys-read-64 (+ (xhci-dcbaa c) (* 8 slot)))))
     (nth (ldb (byte 3 0) (ml-phys-read-32 (context c output dci))) '(:disabled :running :halted :stopped :error))))
 
 (defun ecm-status ()
-  (let ((e (first (find-entries 'apple-usb-cdc-ecm))))
+  (let ((e (first (find-entries 'usb-cdc-ecm))))
     (if (null e)
         (list :usb-ethernet nil :controllers (length (find-entries 'io-xhci-controller)))
         (let ((c (ecm-controller e)))

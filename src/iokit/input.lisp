@@ -2,14 +2,14 @@
 
 (defconstant +input-buffers+ 64)
 
-(define-io-class apple-virtio-input "AppleVirtIOInput" (io-service)
+(define-io-class virtio-input "VirtIOInput" (io-service)
   ((transport :accessor transport)
    (queue :accessor queue)
    (page :accessor event-page)
    (ranges :initform (make-hash-table) :reader abs-ranges)
    (lock :initform (sb-thread:make-mutex :name "virtio-input") :reader input-lock)))
 
-(add-personality "IOClass" "AppleVirtIOInput" "IOProviderClass" "AppleVirtIOTransport"
+(add-personality "IOClass" "VirtIOInput" "IOProviderClass" "VirtIOTransport"
                  "IOVirtIOPrimaryMatch" "0x00121af4")
 
 (defun input-config (tr select subsel)
@@ -27,7 +27,7 @@
     (sb-thread:barrier (:write))
     (ml-phys-write-16 (+ (virtqueue-avail q) 2) (ldb (byte 16 0) (1+ idx)))))
 
-(defmethod start ((in apple-virtio-input) (tr apple-virtio-transport))
+(defmethod start ((in virtio-input) (tr virtio-transport))
   (setf (transport in) tr)
   (when (and (logtest (device-features tr) (ash 1 32)) (set-driver-features tr (ash 1 32)))
     (let ((q (setup-queue tr 0 +input-buffers+))
@@ -45,7 +45,7 @@
       (let* ((name (input-config tr 1 0))
              (absolute (plusp (length (input-config tr #x11 3)))))
         (set-property in "Product" (map 'string #'code-char (remove 0 name)))
-        (set-property in "AppleVirtIOInputType"
+        (set-property in "VirtIOInputType"
                       (cond (absolute "Mouse") ((plusp (length (input-config tr #x11 2))) "Mouse") (t "Keyboard")))
         (when absolute
           (dolist (axis '(0 1))
@@ -74,4 +74,4 @@
 
 (defun input-abs-range (in axis) (gethash axis (abs-ranges in)))
 
-(defmethod interrupt-vector ((in apple-virtio-input)) (virtqueue-vector (queue in)))
+(defmethod interrupt-vector ((in virtio-input)) (virtqueue-vector (queue in)))

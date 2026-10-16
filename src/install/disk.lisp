@@ -45,7 +45,6 @@
 
 (defun boot-plist (boot-args)
   (format nil "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
-<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
 <plist version=\"1.0\">
 <dict>
 	<key>Kernel Flags</key>
@@ -69,7 +68,7 @@
             (list :dir "System/Library/RAMDisk")
             (list :file "System/Library/RAMDisk/root.cpio" (payload "root.cpio"))
             (list :dir "Library") (list :dir "Library/Preferences") (list :dir "Library/Preferences/SystemConfiguration")
-            (list :file "Library/Preferences/SystemConfiguration/com.apple.Boot.plist"
+            (list :file "Library/Preferences/SystemConfiguration/Boot.plist"
                   (sb-ext:string-to-octets (boot-plist boot-args)))))))
 
 (defun install-disk (&key (disk (internal-disk)) (esp-size (* 1024 1048576)) (root-size (* 1024 1048576))

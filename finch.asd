@@ -109,7 +109,7 @@
   :components ((:file "vfs") (:file "ramfs") (:file "start") (:file "host")))
 
 (asdf:defsystem #:finch/apfs
-  :description "Apple File System"
+  :description "APFS"
   :depends-on (#:uiop #:finch/iokit #:finch/vfs)
   :serial t
   :pathname "src/apfs/"
@@ -223,33 +223,6 @@
   :pathname "src/plist/"
   :components ((:file "plist") (:file "binary") (:file "xml")))
 
-(asdf:defsystem #:finch/macho
-  :description "Mach-O images, thin and fat"
-  :serial t
-  :pathname "src/macho/"
-  :components ((:file "macho")))
-
-(asdf:defsystem #:finch/dyld
-  :description "The dyld shared cache and its subcaches"
-  :depends-on (#:finch/macho #:uiop)
-  :serial t
-  :pathname "src/dyld/"
-  :components ((:file "dyld") (:file "extract")))
-
-(asdf:defsystem #:finch/objc
-  :description "Objective-C metadata in cache images"
-  :depends-on (#:finch/dyld #:finch/macho)
-  :serial t
-  :pathname "src/objc/"
-  :components ((:file "objc")))
-
-(asdf:defsystem #:finch/mig
-  :description "MIG subsystems in images"
-  :depends-on (#:finch/macho)
-  :serial t
-  :pathname "src/mig/"
-  :components ((:file "mig")))
-
 (asdf:defsystem #:finch/server
   :description "The window server"
   :serial t
@@ -270,22 +243,15 @@
   :pathname "src/qmp/"
   :components ((:file "qmp")))
 
-(asdf:defsystem #:finch/tahoe
-  :description "The Tahoe reference guest"
-  :depends-on (#:finch/plist #:finch/qmp #:com.inuoe.jzon #:uiop (:require #:sb-bsd-sockets))
-  :serial t
-  :pathname "src/tahoe/"
-  :components ((:static-file "SSDT-EC-USBX.dsl") (:static-file "transactions.c") (:static-file "commit-tap.c") (:static-file "commits.m") (:static-file "ports.c") (:static-file "ports.script") (:static-file "bsd.c") (:static-file "bsd.script") (:static-file "mach-tap.c") (:static-file "lookup.c") (:static-file "events.c") (:static-file "windows.c") (:static-file "media.sh") (:static-file "apfs-check.sh") (:file "opencore") (:file "qmp") (:file "guest")))
-
 (asdf:defsystem #:finch
   :description "A live, hackable OS on SBCL"
-  :depends-on (#:finch/mach #:finch/plist #:finch/macho #:finch/dyld #:finch/objc #:finch/mig #:finch/server #:finch/ca #:finch/bsd #:finch/xpc #:finch/launchd #:finch/shell #:finch/io #:finch/text #:finch/edit #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/iokit #:finch/vfs #:finch/apfs #:finch/fat #:finch/install #:finch/net #:finch/nrepl #:finch/run #:finch/generation #:finch/kernel #:finch/image)
+  :depends-on (#:finch/mach #:finch/plist #:finch/server #:finch/ca #:finch/bsd #:finch/xpc #:finch/launchd #:finch/shell #:finch/io #:finch/text #:finch/edit #:finch/imageio #:finch/kit #:finch/windowserver #:finch/apps #:finch/iokit #:finch/vfs #:finch/apfs #:finch/fat #:finch/install #:finch/net #:finch/nrepl #:finch/run #:finch/generation #:finch/kernel #:finch/image)
   :in-order-to ((asdf:test-op (asdf:test-op #:finch/test))))
 
 (asdf:defsystem #:finch/test
-  :depends-on (#:finch #:finch/tahoe #:fiveam (:require #:sb-posix) (:require #:sb-md5) (:require #:sb-bsd-sockets))
+  :depends-on (#:finch #:fiveam (:require #:sb-posix) (:require #:sb-md5) (:require #:sb-bsd-sockets))
   :serial t
   :pathname "tests/"
-  :components ((:file "suite") (:file "mach") (:file "plist") (:file "macho") (:file "dyld") (:file "objc") (:file "mig") (:file "server") (:file "ca") (:file "bsd") (:file "xpc") (:file "launchd") (:file "boot") (:file "apfs") (:file "net") (:file "tahoe") (:static-file "low-harness.c") (:file "low"))
+  :components ((:file "suite") (:file "mach") (:file "plist") (:file "server") (:file "xpc") (:file "launchd") (:file "boot") (:file "apfs") (:file "net") (:static-file "low-harness.c") (:file "low"))
   :perform (asdf:test-op (o c)
              (uiop:symbol-call :finch/test :run-them)))

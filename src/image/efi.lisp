@@ -117,14 +117,8 @@
       (setf (gethash "RootImage" d) "/System/Library/RAMDisk/root.img"))
     d))
 
-(defparameter *ramdisk-files*
-  '("tests/ports.txt" "tests/bsd.txt" "tests/bootstrap.txt" "src/tahoe/ports.script" "src/tahoe/bsd.script" "tests/apfs-files.txt"))
-
 (defun ramdisk ()
-  (write-cpio (build-path "root.cpio")
-              (append (list '(:dir "tmp") '(:dir "Users/finch"))
-                      (loop :for f :in *ramdisk-files*
-                            :collect (list :file (concatenate 'string "finch/" f) (octets (source f)))))))
+  (write-cpio (build-path "root.cpio") (list '(:dir "tmp") '(:dir "Users/finch"))))
 
 (defun desktop-entries ()
   (append (loop :for (path program) :in *programs*
@@ -157,9 +151,7 @@
             (list (list :file "etc/localtime" (octets (or file (concatenate 'string dir "UTC"))))))))
 
 (defun root-entries ()
-  (let ((files (append (loop :for f :in *ramdisk-files*
-                             :collect (list :file (concatenate 'string "finch/" f) (octets (source f))))
-                       (desktop-entries)
+  (let ((files (append (desktop-entries)
                        (contribs)
                        (certificates)
                        (zoneinfo)
@@ -167,7 +159,7 @@
                        (object-entries)
                        (compiler-entries)
                        (tree-entries (asdf:system-relative-pathname :finch "") "usr/src/finch"
-                                     :skip '(".git" "build" "tahoe"))))
+                                     :skip '(".git" "build"))))
         (dirs (list "tmp" "Users" "Users/finch" "dev" "Volumes" "System" "System/Library" "System/Library/Kernels")))
     (dolist (f files)
       (let ((path (second f)))
@@ -239,7 +231,7 @@
       (when root-image (put root-image "System/Library/RAMDisk/root.img")))
     (with-open-file (s (merge-pathnames "EFI/finch/current" root) :direction :output)
       (write-line "gen-1" s))
-    (let ((plist (merge-pathnames "Library/Preferences/SystemConfiguration/com.apple.Boot.plist" root)))
+    (let ((plist (merge-pathnames "Library/Preferences/SystemConfiguration/Boot.plist" root)))
       (ensure-directories-exist plist)
       (finch/plist:write-plist (boot-plist boot-args root-image) plist))
     root))
@@ -348,7 +340,8 @@
                          entries)))
                (dolist (sub (uiop:subdirectories dir))
                  (let ((name (car (last (pathname-directory sub)))))
-                   (unless (member (concatenate 'string relative name) skip :test #'string=)
+                   (unless (or (member (concatenate 'string relative name) skip :test #'string=)
+                               (sb-posix:s-islnk (sb-posix:stat-mode (sb-posix:lstat (string-right-trim "/" (uiop:native-namestring sub))))))
                      (walk sub (format nil "~a/~a" at name) (concatenate 'string relative name "/")))))))
       (walk (uiop:ensure-directory-pathname from) (string-trim "/" to) ""))
     (nreverse entries)))

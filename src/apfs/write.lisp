@@ -108,7 +108,7 @@
                                 :name name :nchildren (if (eq kind :dir) 0 1))))
     (when (eq kind :symlink)
       (let ((t8 (c-octets target)))
-        (put-record w (octets (j-key id +apfs-type-xattr+) (le 21 2) (c-octets "com.apple.fs.symlink"))
+        (put-record w (octets (j-key id +apfs-type-xattr+) (le 21 2) (c-octets +symlink-xattr+))
                     (octets (le 6 2) (le (length t8) 2) t8))))
     (counter w (ecase kind (:file 184) (:dir 192) (:symlink 200)) 1)
     (add-drec w parent name id (ecase kind (:dir 4) (:file 8) (:symlink 10)))

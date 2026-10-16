@@ -68,8 +68,8 @@ int sigaction(int sig, const struct sigaction *sa, struct sigaction *old) {
   if (old) *old = actions[sig];
   if (sa) {
     actions[sig] = *sa;
-    uint64_t darwin[4] = {(uint64_t)sa->sa_handler, (uint64_t)_sigtramp, sa->sa_mask.__val[0], (uint64_t)(unsigned)sa->sa_flags};
-    return (int)__syscall(SYS_sigaction, sig, (long)darwin, 0, 0, 0, 0);
+    uint64_t action[4] = {(uint64_t)sa->sa_handler, (uint64_t)_sigtramp, sa->sa_mask.__val[0], (uint64_t)(unsigned)sa->sa_flags};
+    return (int)__syscall(SYS_sigaction, sig, (long)action, 0, 0, 0, 0);
   }
   return 0;
 }

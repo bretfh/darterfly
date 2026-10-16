@@ -5,14 +5,14 @@
 (defgeneric read-events (device))
 (defgeneric abs-range (device axis))
 
-(defmethod read-events ((in finch/iokit:apple-virtio-input))
+(defmethod read-events ((in finch/iokit:virtio-input))
   (loop for (type code value) in (finch/iokit:input-events in)
         collect (make-hid-event :seconds 0 :type type :code code :value value :fd in)))
 
-(defmethod abs-range ((in finch/iokit:apple-virtio-input) axis) (finch/iokit:input-abs-range in axis))
+(defmethod abs-range ((in finch/iokit:virtio-input) axis) (finch/iokit:input-abs-range in axis))
 
 (defgeneric event-vector (device))
-(defmethod event-vector ((in finch/iokit:apple-virtio-input)) (finch/iokit:interrupt-vector in))
+(defmethod event-vector ((in finch/iokit:virtio-input)) (finch/iokit:interrupt-vector in))
 
 (defun wait-for-events (devices)
   (let ((vectors (mapcar #'event-vector devices)))
@@ -108,7 +108,7 @@
 
 (defun input-devices ()
   (finch/iokit:start-iokit)
-  (append (finch/iokit:find-entries 'finch/iokit:apple-virtio-input)
+  (append (finch/iokit:find-entries 'finch/iokit:virtio-input)
           (finch/iokit:find-entries 'finch/iokit::io-usb-hid-device)
           (finch/iokit:find-entries 'finch/iokit::io-i2c-hid-device)
           (list *ps2-keyboard*)))

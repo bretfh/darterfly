@@ -218,127 +218,33 @@
              (let ((tree (ask "(progn (iokit:start-iokit) (iokit:ioreg))")))
                (is (search "+-o PCI0  <class IOACPIPlatformDevice>" tree))
                (is (search "+-o pci1af4,1001@4  <class IOPCIDevice>" tree))
-               (is (search "| +-o AppleVirtIOPCITransport  <class AppleVirtIOPCITransport>" tree))
-               (is (search "+-o AppleVirtIOBlockStorageDevice  <class AppleVirtIOBlockStorageDevice>" tree)))
-             (ask "(defvar *b* (find 2048 (iokit:find-entries 'iokit:apple-virtio-block-storage-device) :key #'iokit:block-count))")
+               (is (search "| +-o VirtIOPCITransport  <class VirtIOPCITransport>" tree))
+               (is (search "+-o VirtIOBlockStorageDevice  <class VirtIOBlockStorageDevice>" tree)))
+             (ask "(defvar *b* (find 2048 (iokit:find-entries 'iokit:virtio-block-storage-device) :key #'iokit:block-count))")
              (is (search "\"finch sector 5\"" (ask "(map 'string #'code-char (subseq (iokit:read-blocks *b* 5 1) 0 14))")))
              (is (search "\"finch sector 1099\""
                          (ask "(map 'string #'code-char (subseq (iokit:read-blocks *b* 1000 100) (* 99 512) (+ (* 99 512) 17)))")))
              (ask "(iokit:write-blocks *b* 7 (let ((v (make-array 512 :element-type '(unsigned-byte 8) :initial-element 0))) (replace v (map 'vector #'char-code \"written by finch\")) v))")
              (is (search "\"written by finch\"" (ask "(map 'string #'code-char (subseq (iokit:read-blocks *b* 7 1) 0 16))")))
-             (is (search "(T T T)" (ask "(mapcar (lambda (s) (and (<= #x30 (iokit:interrupt-vector s) #x3f) t)) (list *b* (first (iokit:find-entries 'iokit:apple-virtio-input)) (first (iokit:find-entries 'iokit:apple-virtio-network))))")))
+             (is (search "(T T T)" (ask "(mapcar (lambda (s) (and (<= #x30 (iokit:interrupt-vector s) #x3f) t)) (list *b* (first (iokit:find-entries 'iokit:virtio-input)) (first (iokit:find-entries 'iokit:virtio-network))))")))
              (image:send c "(sb-ext:exit)")
              (image:expect c "exit(0)" :timeout 30))
         (image:finish c 5))
       (is (equal "written by finch" (disk-sector disk 7)))
       (is (equal "finch sector 8" (disk-sector disk 8))))))
 
-(defun gunzip-fixture (name to)
-  (let ((path (merge-pathnames to (finch-file "build/"))))
-    (with-open-file (in (finch-file (format nil "tests/~a" name)) :element-type '(unsigned-byte 8))
-      (with-open-file (out path :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
-        (chipz:decompress out 'chipz:gzip in)))
-    path))
-
-(defparameter *media-keys*
-  '("Content" "Content Hint" "Whole" "Leaf" "Writable" "Preferred Block Size" "Size" "Base" "UUID" "Partition ID" "BSD Name"
-    "Logical Block Size" "Physical Block Size" "FullName" "RoleValue" "CaseSensitive" "FormattedBy" "IncompatibleFeatures"))
-
-(defun ioreg-value (text)
-  (cond ((string= text "Yes") t)
-        ((string= text "No") nil)
-        ((char= (char text 0) #\") (subseq text 1 (1- (length text))))
-        (t (parse-integer text))))
-
-(defun ioreg-media (file)
-  (let ((entries nil) (current nil))
-    (dolist (line (uiop:read-file-lines file))
-      (let ((o (search "+-o " line)))
-        (cond (o (let* ((head (subseq line (+ o 4) (search "  <class " line)))
-                        (at (position #\@ head :from-end t)))
-                   (setf current (and (some (lambda (c) (search c line)) '("<class IOMedia," "<class AppleAPFSMedia," "<class AppleAPFSVolume,"))
-                                      (list (if at (subseq head 0 at) head) (and at (subseq head (1+ at))) nil)))
-                   (when current (push current entries))))
-              (current
-               (let ((q (search "\" = " line)))
-                 (when q
-                   (let ((key (subseq line (1+ (position #\" line)) q)))
-                     (when (member key *media-keys* :test #'string=)
-                       (push (cons key (ioreg-value (subseq line (+ q 4)))) (third current))))))))))
-    (nreverse entries)))
-
-(defun bsd-suffix (name) (subseq name (or (position #\s name :start 4) (length name))))
-
-(test media-matches-tahoe
-  (let* ((disk (gunzip-fixture "apfs-disk.img.gz" "apfs-disk.img"))
-         (want (ioreg-media (finch-file "tests/media.txt")))
-         (c (image:bare-console :disks (list disk))))
-    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
-      (unwind-protect
-           (progn
-             (image:expect c "* " :timeout 60)
-             (ask "(iokit:start-iokit)")
-             (let* ((answer (ask (format nil "(let ((whole (find ~d (iokit:find-entries 'iokit:io-media) :key #'iokit:media-size))) (format t \"~~&@@~~s@@~~%\" (mapcar (lambda (m) (list (iokit:entry-name m) (iokit:entry-location m) (loop for k in '~s collect (cons k (iokit:get-property m k))))) (iokit:find-entries 'iokit:io-media whole))))"
-                                         (cdr (assoc "Size" (third (first want)) :test #'string=)) *media-keys*)))
-                    (got (read-from-string (subseq answer (+ 2 (search "@@" answer)) (search "@@" answer :from-end t)))))
-               (is (= (length want) (length got)))
-               (loop for (wname wloc wprops) in want
-                     for (gname gloc gprops) in got
-                     for whole = (cdr (assoc "Whole" wprops :test #'string=))
-                     do (unless whole
-                          (is (equal wname gname))
-                          (is (equal wloc gloc)))
-                        (loop for (key . value) in wprops
-                              for mine = (cdr (assoc key gprops :test #'string=))
-                              do (cond ((string= key "BSD Name") (is (equal (bsd-suffix value) (bsd-suffix mine))))
-                                       (t (is (equal value mine) "~a ~a: Tahoe ~s, finch ~s" wname key value mine))))))
-             (is (search (let ((line (find "UUID" (uiop:read-file-lines (finch-file "tests/media.txt"))
-                                           :test (lambda (k l) (and (search k l) (search "|   \"UUID\"" l))))))
-                           (subseq line (- (length line) 37) (1- (length line))))
-                         (ask "(iokit:get-property (first (iokit:find-entries 'iokit:io-guid-partition-scheme)) \"UUID\")"))))
-        (image:finish c 5)))))
-
-(test apfs-on-finch
-  (let* ((disk (gunzip-fixture "apfs-disk.img.gz" "apfs-boot.img"))
-         (files (mapcar (lambda (l) (uiop:split-string l :separator "|")) (uiop:read-file-lines (finch-file "tests/apfs-files.txt"))))
-         (c (image:bare-console :disks (list disk))))
-    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
-      (unwind-protect
-           (progn
-             (image:expect c "* " :timeout 60)
-             (ask "(iokit:start-iokit)")
-             (ask "(defvar *v* (find \"finch\" (mapcar #'finch/apfs::apfs-volume (iokit:find-entries 'finch/apfs::apple-apfs-volume)) :key #'finch/apfs:volume-name :test #'equal))")
-             (is (search "\"finch\"" (ask "(finch/apfs:volume-name *v*)")))
-             (is (search "\"hello from tahoe" (ask "(map 'string #'code-char (finch/apfs:read-file *v* (finch/apfs:lookup *v* \"/hello.txt\")))")))
-             (is (search "\"hello.txt\"" (ask "(finch/apfs:readlink *v* (finch/apfs:lookup *v* \"/link\"))")))
-             (is (search "300" (ask "(length (finch/apfs:directory-entries *v* (finch/apfs:lookup *v* \"/many\")))")))
-             (is (search (format nil "~s" (car (last (find "./big.txt" files :key #'first :test #'string=))))
-                         (ask "(string-downcase (format nil \"~{~2,'0x~}\" (coerce (sb-md5:md5sum-sequence (finch/apfs:read-file *v* (finch/apfs:lookup *v* \"/big.txt\"))) 'list)))"))))
-        (image:finish c 5)))))
-
 (test apfs-mounts-on-finch
-  (let* ((disk (gunzip-fixture "apfs-disk.img.gz" "apfs-mount.img"))
-         (c (image:bare-console :disks (list disk))))
+  (let* ((disk (merge-pathnames "apfs-mount.img" (finch-file "build/")))
+         (c (progn (uiop:copy-file (newfs-image) disk) (image:bare-console :disks (list disk)))))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
       (unwind-protect
            (progn
              (image:expect c "* " :timeout 60)
              (ask "(iokit:start-iokit)")
              (is (search "(\"/Volumes/finch\")" (ask "(finch/apfs:mount-volumes)")))
-             (is (search "\"hello from tahoe\"" (ask "(with-open-file (s \"/Volumes/finch/hello.txt\") (read-line s))")))
+             (is (search "\"hello from finch\"" (ask "(with-open-file (s \"/Volumes/finch/hello.txt\") (read-line s))")))
              (is (search "300" (ask "(length (directory \"/Volumes/finch/many/*\"))")))
              (is (search "#P\"/Volumes/finch/hello.txt\"" (ask "(truename \"/Volumes/finch/link\")")))
-             (is (search "(0 NIL)"
-                         (ask (concatenate 'string
-                                           "(let ((bad nil) (n 0)) "
-                                           "(dolist (l (uiop:read-file-lines \"/finch/tests/apfs-files.txt\") (list (- 309 n) bad)) "
-                                           "(destructuring-bind (path type perms size ino nlink uid gid target md5) (uiop:split-string l :separator \"|\") "
-                                           "(declare (ignore type target md5)) "
-                                           "(let ((st (sb-posix:lstat (concatenate 'string \"/Volumes/finch\" (subseq path 1))))) "
-                                           "(if (and (= (parse-integer perms :radix 8) (logand (sb-posix:stat-mode st) #o7777)) "
-                                           "(= (parse-integer size) (sb-posix:stat-size st)) (= (parse-integer ino) (sb-posix:stat-ino st)) "
-                                           "(= (parse-integer nlink) (sb-posix:stat-nlink st)) (= (parse-integer uid) (sb-posix:stat-uid st)) "
-                                           "(= (parse-integer gid) (sb-posix:stat-gid st))) (incf n) (push path bad))))))"))))
              (is (search "read-only file system" (ask "(handler-case (with-open-file (s \"/Volumes/finch/new.txt\" :direction :output) (write-line \"x\" s)) (error (e) (string-downcase (princ-to-string e))))"))))
         (image:finish c 5)))))
 
@@ -379,8 +285,7 @@
            (progn
              (image:expect c "* " :timeout 60)
              (is (search "APFS-WVNODE" (ask "(type-of (finch/vfs:namei \"/\"))")))
-             (is (search "\"finch HD\"" (ask "(iokit:get-property (find \"disk2s1\" (iokit:find-entries 'finch/apfs::apple-apfs-volume) :key (lambda (e) (iokit:get-property e \"BSD Name\")) :test #'equal) \"FullName\")")))
-             (is (search "334" (ask "(length (uiop:read-file-lines \"/finch/tests/ports.txt\"))")))
+             (is (search "\"finch HD\"" (ask "(iokit:get-property (find \"disk2s1\" (iokit:find-entries 'finch/apfs::apfs-volume-media) :key (lambda (e) (iokit:get-property e \"BSD Name\")) :test #'equal) \"FullName\")")))
              (is (search "#P\"/System/Library/Kernels/kernel\"" (ask "(probe-file \"/System/Library/Kernels/kernel\")")))
              (is (search "DEV-NODE" (ask "(type-of (finch/vfs:namei \"/dev/console\"))")))
              (is (search "T" (ask "(finch/iokit::flushes (finch/iokit::media-device finch/apfs::*root-media*))"))
@@ -618,15 +523,14 @@
              (is (search "ECONNREFUSED" (ask "(handler-case (finch/bsd:connect (finch/bsd:socket finch/bsd:+af-inet+ finch/bsd:+sock-stream+) \"10.0.2.2\" 1) (finch/bsd:errno (e) (symbol-name (finch/bsd:errno-name e))))"))))
         (image:finish c 5)))))
 
-(test xnu-checked-suites-pass-on-finch
+(test mach-suite-passes-on-finch
   (let ((c (image:bare-console)))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 300)))
       (unwind-protect
            (progn
              (image:expect c "* " :timeout 60)
-             (is (search "334" (ask "(length (uiop:read-file-lines \"/finch/tests/ports.txt\"))")))
-             (is (search "(T T)"
-                         (ask "(list (fiveam:results-status (fiveam:run 'finch/test::mach)) (fiveam:results-status (fiveam:run 'finch/test::bsd)))"))))
+             (is (search "(T)"
+                         (ask "(list (fiveam:results-status (fiveam:run 'finch/test::mach)))"))))
         (image:finish c 5)))))
 
 (test session-on-finch
@@ -640,7 +544,7 @@
              (is (search "3" (ask "(+ 1 2)")))
              (let ((local (format nil "~s" (multiple-value-list (decode-universal-time 3999999999)))))
                (is (search local (ask "(multiple-value-list (decode-universal-time 3999999999))")) "local time ~a" local))
-             (ask "(finch/shell:spawn \"/Applications/Hello.app/Contents/MacOS/Hello\")")
+             (ask "(finch/shell:spawn \"/Applications/Hello.app/Contents/Programs/Hello\")")
              (let ((screen (screen-until (lambda (s) (and (< 200 (ldb (byte 8 16) (image:pixel s 300 12)))
                                                           (< 100 (dark-pixels s 586 724 626 764 90))
                                                           (/= #xff2e5c8f (image:pixel s 1218 60)))))))
@@ -750,7 +654,7 @@
       (unwind-protect
            (progn
              (is (image:expect c "launchd: pid 1" :timeout 90))
-             (ask "(finch/shell:spawn \"/System/Applications/Listener.app/Contents/MacOS/Listener\")")
+             (ask "(finch/shell:spawn \"/System/Applications/Listener.app/Contents/Programs/Listener\")")
              (screen-until (lambda (s) (= #xffffffff (image:pixel s 500 300))))
              (image:send-keys (format nil "(loop)~%"))
              (is (search "running" (file-until "/tmp/Listener.txt" "running")) "the listener says it is busy")
@@ -1221,8 +1125,8 @@
                (image:expect c "* " :timeout 120)
                (is (search "\"/usr/src/finch/src/install/install.lisp\"" (ask compiled-from))
                    "the running core was compiled inside finch")
-               (let ((counts (ask "(let ((r (let ((*standard-output* (make-broadcast-stream))) (append (5am:run 'finch/test::mach) (5am:run 'finch/test::bsd))))) (list (count-if-not (lambda (x) (typep x 'it.bese.fiveam::test-passed)) r) (length r)))")))
-                 (is (search "(0 " counts) "finch's own core passes the mach and bsd suites: ~a" counts))
+               (let ((counts (ask "(let ((r (let ((*standard-output* (make-broadcast-stream))) (append (5am:run 'finch/test::mach))))) (list (count-if-not (lambda (x) (typep x 'it.bese.fiveam::test-passed)) r) (length r)))")))
+                 (is (search "(0 " counts) "finch's own core passes the mach suite: ~a" counts))
                (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
                (image:expect c "exit(0)" :timeout 120))
           (image:finish c 30))))))
@@ -1259,8 +1163,8 @@
                    "generation 2 runs a core compiled inside finch")
                (is (search "T" (ask "(equal (progn (finch/install::esp) (getf (with-open-file (s \"/Volumes/EFI/EFI/finch/gen-2/manifest\") (read s)) :build-id)) (finch/generation::runtime-build-id))"))
                    "generation 2's runtime carries the build id its manifest records")
-               (let ((counts (ask "(let ((r (let ((*standard-output* (make-broadcast-stream))) (append (5am:run 'finch/test::mach) (5am:run 'finch/test::bsd))))) (list (count-if-not (lambda (x) (typep x 'it.bese.fiveam::test-passed)) r) (length r)))")))
-                 (is (search "(0 " counts) "generation 2 passes the mach and bsd suites: ~a" counts))
+               (let ((counts (ask "(let ((r (let ((*standard-output* (make-broadcast-stream))) (append (5am:run 'finch/test::mach))))) (list (count-if-not (lambda (x) (typep x 'it.bese.fiveam::test-passed)) r) (length r)))")))
+                 (is (search "(0 " counts) "generation 2 passes the mach suite: ~a" counts))
                (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
                (image:expect c "exit(0)" :timeout 120))
           (image:finish c 30))))))
@@ -1296,8 +1200,8 @@
                (image:expect c "* " :timeout 120)
                (is (search "\"gen-2\"" (ask "(progn (finch/install::esp) (getf (with-open-file (s \"/Volumes/EFI/EFI/finch/gen-3/manifest\") (read s)) :parent))"))
                    "C's manifest names B as its parent")
-               (let ((counts (ask "(let ((r (let ((*standard-output* (make-broadcast-stream))) (append (5am:run 'finch/test::mach) (5am:run 'finch/test::bsd))))) (list (count-if-not (lambda (x) (typep x 'it.bese.fiveam::test-passed)) r) (length r)))")))
-                 (is (search "(0 " counts) "generation C passes the mach and bsd suites: ~a" counts))
+               (let ((counts (ask "(let ((r (let ((*standard-output* (make-broadcast-stream))) (append (5am:run 'finch/test::mach))))) (list (count-if-not (lambda (x) (typep x 'it.bese.fiveam::test-passed)) r) (length r)))")))
+                 (is (search "(0 " counts) "generation C passes the mach suite: ~a" counts))
                (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
                (image:expect c "exit(0)" :timeout 120))
           (image:finish c 30))))))
@@ -1579,7 +1483,7 @@
                  "nrepl starts at boot from the key in the boot args")
              (let ((screen (screen-until (lambda (s) (= #xff2e5c8f (image:pixel s 5 300))) 60)))
                (is (= #xff2e5c8f (image:pixel screen 5 300)) "the desktop is on the screen ~x" (image:pixel screen 5 300)))
-             (ask "(finch/bsd:posix-spawn \"/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal\" (list \"Terminal\") nil)")
+             (ask "(finch/bsd:posix-spawn \"/System/Applications/Utilities/Terminal.app/Contents/Programs/Terminal\" (list \"Terminal\") nil)")
              (let ((screen (screen-until (lambda (s) (= #xffffffff (image:pixel s 500 300))) 30)))
                (is (= #xffffffff (image:pixel screen 500 300)) "the terminal opens ~x" (image:pixel screen 500 300)))
              (let ((before (dark-pixels (image:screendump) 172 160 300 200 100)))

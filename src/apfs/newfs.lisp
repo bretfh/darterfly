@@ -262,7 +262,7 @@ data blocks as (block . octets), the next inode number and counts."
                                       :nchildren 1)
                      fs)
                (let ((target (c-octets content)))
-                 (push (cons (octets (j-key id +apfs-type-xattr+) (le 21 2) (c-octets "com.apple.fs.symlink"))
+                 (push (cons (octets (j-key id +apfs-type-xattr+) (le 21 2) (c-octets +symlink-xattr+))
                              (octets (le 6 2) (le (length target) 2) target))
                        fs))))))))
     (values fs (reverse extents) (reverse data) next block files dirs links
@@ -270,9 +270,7 @@ data blocks as (block . octets), the next inode number and counts."
 
 (defparameter +layouts+
   '((4096 8 52 1 1) (8192 8 124 3 3) (16384 8 160 4 4) (32768 8 304 8 8) (65536 8 332 15 8)
-    (131072 8 388 29 8) (262144 16 992 116 8))
-  "Blocks, descriptor blocks, data blocks, main free-queue node limit, ephemeral minimum: what Tahoe's
-newfs_apfs chose for empty containers of these sizes.")
+    (131072 8 388 29 8) (262144 16 992 116 8)))
 
 (defun layout (blocks)
   (or (assoc blocks +layouts+)

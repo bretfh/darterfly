@@ -9,13 +9,13 @@
    #:io-pci-device #:config-read-8 #:config-read-16 #:config-read-32
    #:config-write-8 #:config-write-16 #:config-write-32 #:find-pci-capability
    #:map-device-memory-with-index #:io-memory-map #:map-virtual-address #:map-physical-address #:map-length
-   #:apple-virtio-transport #:apple-virtio-pci-transport #:virtio-device-type
-   #:apple-virtio-block-storage-device #:block-count #:block-size #:read-blocks #:write-blocks
+   #:virtio-transport #:virtio-pci-transport #:virtio-device-type
+   #:virtio-block-storage-device #:block-count #:block-size #:read-blocks #:write-blocks
    #:io-block-storage-device #:io-media #:media-read #:media-write #:media-flush #:media-size #:io-guid-partition-scheme #:crc32
    #:acpi-table #:vm-page-grab #:ml-io-map #:ml-io-map-wcomb #:boot-arg #:kernel-flags #:boot-video
    #:wait-for-interrupt #:interrupt-vector
-   #:apple-virtio-input #:input-events #:input-abs-range
-   #:apple-virtio-network #:io-ethernet-controller #:ecm-status #:battery #:io-ethernet-interface #:network-send #:network-receive #:network-mac
+   #:virtio-input #:input-events #:input-abs-range
+   #:virtio-network #:io-ethernet-controller #:ecm-status #:battery #:io-ethernet-interface #:network-send #:network-receive #:network-mac
    #:define-io-class #:add-personality #:personality #:publish-media #:io-partition-scheme
    #:media-device #:media-base #:next-bsd-unit #:bsd-client-class #:io-media-bsd-client))
 (in-package #:finch/iokit)

@@ -1,16 +1,15 @@
 #+TITLE: finch
 
-A live, hackable operating system on SBCL with Unix semantics: processes, file
-descriptors, signals, pipes and sockets. A small C core boots the machine,
-owns the page tables, traps and the scheduler; everything above it, from the
-VFS and the network stack to the window server and the apps, is Common Lisp
-you can change while it runs.
+A live, hackable operating system for x86-64, written in Common Lisp from the
+boot loader up and running on SBCL. The loader and the kernel (boot, paging,
+traps, the scheduler, SMP) are written in a restricted Lisp compiled to machine
+code by SBCL's own assembler. Above them, processes, Mach-style ports, the file
+system, drivers, TCP/IP, the window server and the apps are ordinary Common
+Lisp you can change while it runs.
 
-Some designs come from macOS because they are good ones: Mach ports and
-launchd, IOKit-style driver matching, APFS, a layer compositor, and xnu's
-system call numbers as the line between SBCL's runtime and the kernel. macOS 26
-Tahoe and xnu sit on the reference shelf (=finch/tahoe=); finch does not try
-to look or behave like macOS. Icons and fonts are GNOME's Adwaita.
+It builds itself: a running system compiles its compiler, runtime, kernel and
+loader from source, installs the result as a new generation, and boots it.
+Icons and fonts are GNOME's Adwaita.
 
 * Running it
 

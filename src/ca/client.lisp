@@ -63,12 +63,12 @@
   (/ (get-internal-real-time) (float internal-time-units-per-second 1d0)))
 
 (defun render-server (&key (tries 100))
-  (finch/launchd:bootstrap-look-up "com.apple.windowserver")
+  (finch/launchd:bootstrap-look-up "windowserver")
   (loop :repeat tries
-        :do (let ((port (finch/launchd:bootstrap-look-up "com.apple.CARenderServer")))
+        :do (let ((port (finch/launchd:bootstrap-look-up "renderserver")))
               (when port (return port))
               (sleep 0.05))
-        :finally (error "com.apple.CARenderServer is not there")))
+        :finally (error "renderserver is not there")))
 
 (defun context-create ()
   (let ((server (render-server))
@@ -124,7 +124,7 @@
   (sb-thread:with-mutex ((connection-lock *connection*))
     (or (connection-window-server *connection*)
         (setf (connection-window-server *connection*)
-              (finch/launchd:bootstrap-look-up "com.apple.windowserver")))))
+              (finch/launchd:bootstrap-look-up "windowserver")))))
 
 (defun octets (&rest words)
   (let ((w (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0)))

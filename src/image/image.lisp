@@ -64,19 +64,19 @@
 
 (defparameter *programs*
   '(("sbin/launchd" "launchd") ("bin/launchctl" "launchctl") ("bin/sh" "sh")
-    ("System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer" "WindowServer")
-    ("Applications/Hello.app/Contents/MacOS/Hello" "Hello")
-    ("System/Applications/Listener.app/Contents/MacOS/Listener" "Listener")
-    ("System/Applications/Utilities/Force Quit.app/Contents/MacOS/Force Quit" "Force Quit")
-    ("System/Applications/Editor.app/Contents/MacOS/Editor" "Editor")
-    ("System/Applications/Generations.app/Contents/MacOS/Generations" "Generations")
-    ("System/Applications/Fetch.app/Contents/MacOS/Fetch" "Fetch")
-    ("System/Applications/Install.app/Contents/MacOS/Install" "Install")
-    ("System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal" "Terminal")
-    ("System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow" "loginwindow")
-    ("System/Library/CoreServices/Dock.app/Contents/MacOS/Dock" "Dock")
-    ("System/Library/CoreServices/SystemUIServer.app/Contents/MacOS/SystemUIServer" "SystemUIServer")
-    ("System/Library/CoreServices/Finder.app/Contents/MacOS/Finder" "Finder")
+    ("System/Library/CoreServices/WindowServer" "WindowServer")
+    ("Applications/Hello.app/Contents/Programs/Hello" "Hello")
+    ("System/Applications/Listener.app/Contents/Programs/Listener" "Listener")
+    ("System/Applications/Utilities/Force Quit.app/Contents/Programs/Force Quit" "Force Quit")
+    ("System/Applications/Editor.app/Contents/Programs/Editor" "Editor")
+    ("System/Applications/Generations.app/Contents/Programs/Generations" "Generations")
+    ("System/Applications/Fetch.app/Contents/Programs/Fetch" "Fetch")
+    ("System/Applications/Install.app/Contents/Programs/Install" "Install")
+    ("System/Applications/Utilities/Terminal.app/Contents/Programs/Terminal" "Terminal")
+    ("System/Library/CoreServices/loginwindow.app/Contents/Programs/loginwindow" "loginwindow")
+    ("System/Library/CoreServices/Dock.app/Contents/Programs/Dock" "Dock")
+    ("System/Library/CoreServices/SystemUIServer.app/Contents/Programs/SystemUIServer" "SystemUIServer")
+    ("System/Library/CoreServices/Finder.app/Contents/Programs/Finder" "Finder")
     ("usr/libexec/finch-gui" "finch-gui")))
 
 (defun dict (&rest pairs)
@@ -93,16 +93,16 @@
         (on-demand (dict "AfterInitialDemand" t "SuccessfulExit" nil)))
     (list (job "finch.gui" "ProgramArguments" (vector "/usr/libexec/finch-gui") "RunAtLoad" t)
           (job "finch.windowserver"
-               "ProgramArguments" (vector "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer")
-               "MachServices" (dict "com.apple.windowserver" t "com.apple.windowserver.active" hidden
-                                    "com.apple.CARenderServer" hidden))
+               "ProgramArguments" (vector "/System/Library/CoreServices/WindowServer")
+               "MachServices" (dict "windowserver" t "windowserver.active" hidden
+                                    "renderserver" hidden))
           (job "finch.loginwindow"
-               "ProgramArguments" (vector "/System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow")
-               "MachServices" (dict "com.apple.loginwindow" t))
-          (job "finch.dock" "Program" "/System/Library/CoreServices/Dock.app/Contents/MacOS/Dock" "KeepAlive" on-demand)
-          (job "finch.systemuiserver" "Program" "/System/Library/CoreServices/SystemUIServer.app/Contents/MacOS/SystemUIServer"
+               "ProgramArguments" (vector "/System/Library/CoreServices/loginwindow.app/Contents/Programs/loginwindow")
+               "MachServices" (dict "loginwindow" t))
+          (job "finch.dock" "Program" "/System/Library/CoreServices/Dock.app/Contents/Programs/Dock" "KeepAlive" on-demand)
+          (job "finch.systemuiserver" "Program" "/System/Library/CoreServices/SystemUIServer.app/Contents/Programs/SystemUIServer"
                "KeepAlive" on-demand)
-          (job "finch.finder" "Program" "/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder"
+          (job "finch.finder" "Program" "/System/Library/CoreServices/Finder.app/Contents/Programs/Finder"
                "KeepAlive" on-demand "ThrottleInterval" 1))))
 
 (defun fonts ()

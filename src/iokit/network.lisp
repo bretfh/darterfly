@@ -8,7 +8,7 @@
 (defgeneric network-send (net frame))
 (defgeneric network-receive (net))
 
-(define-io-class apple-virtio-network "AppleVirtIONetwork" (io-ethernet-controller)
+(define-io-class virtio-network "VirtIONetwork" (io-ethernet-controller)
   ((transport :accessor transport)
    (receive :accessor receive-queue)
    (transmit :accessor transmit-queue)
@@ -19,14 +19,14 @@
 
 (define-io-class io-ethernet-interface "IOEthernetInterface" (io-service))
 
-(add-personality "IOClass" "AppleVirtIONetwork" "IOProviderClass" "AppleVirtIOTransport"
+(add-personality "IOClass" "VirtIONetwork" "IOProviderClass" "VirtIOTransport"
                  "IOVirtIOPrimaryMatch" "0x00011af4")
 
 (defconstant +virtio-net-f-mac+ (ash 1 5))
 
 
 
-(defmethod start ((net apple-virtio-network) (tr apple-virtio-transport))
+(defmethod start ((net virtio-network) (tr virtio-transport))
   (setf (transport net) tr)
   (let ((wanted (logior +virtio-f-version-1+ +virtio-net-f-mac+)))
     (when (and (= wanted (logand wanted (device-features tr))) (set-driver-features tr wanted))
@@ -61,7 +61,7 @@
     (incf *interface-units*)
     (attach en net)))
 
-(defmethod network-send ((net apple-virtio-network) frame)
+(defmethod network-send ((net virtio-network) frame)
   (sb-thread:with-mutex ((network-lock net))
     (let ((page (send-page net)))
       (dotimes (i +net-header+) (ml-phys-write-8 (+ page i) 0))
@@ -69,7 +69,7 @@
       (virtqueue-run (transmit-queue net) (list (list page (+ +net-header+ (length frame)) nil)))
       (length frame))))
 
-(defmethod network-receive ((net apple-virtio-network))
+(defmethod network-receive ((net virtio-network))
   (sb-thread:with-mutex ((network-lock net))
     (let* ((q (receive-queue net)) (size (virtqueue-size q)) (frames nil))
       (loop until (= (ml-phys-read-16 (+ (virtqueue-used q) 2)) (virtqueue-last-used q))
@@ -85,7 +85,7 @@
       (when frames (mmio-write (virtqueue-notify q) 16 0))
       (nreverse frames))))
 
-(defmethod interrupt-vector ((net apple-virtio-network)) (virtqueue-vector (receive-queue net)))
+(defmethod interrupt-vector ((net virtio-network)) (virtqueue-vector (receive-queue net)))
 
 (pushnew 'forget-hardware sb-ext:*save-hooks*)
 
