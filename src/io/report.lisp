@@ -1,6 +1,6 @@
 (in-package #:finch/io)
 
-(defstruct field id page usage offset size minimum relative application)
+(defstruct field id page usage offset size minimum relative application (kind :input))
 
 (defun item-value (v at size)
   (loop for i below size sum (ash (aref v (+ at i)) (* 8 i))))
@@ -11,7 +11,7 @@
 (defun parse-report-descriptor (v)
   (let ((at 0) (page 0) (minimum 0) (size 0) (count 0) (id 0)
         (usages nil) (usage-min nil) (usage-max nil)
-        (stack nil) (collections nil) (offsets (make-hash-table)) (fields nil))
+        (stack nil) (collections nil) (offsets (make-hash-table :test 'equal)) (fields nil))
     (loop while (< at (length v))
           do (let* ((prefix (aref v at))
                     (n (case (logand prefix 3) (3 4) (t (logand prefix 3))))
@@ -24,16 +24,18 @@
                (let ((value (item-value v (1+ at) n)))
                  (case kind
                    (0 (case tag
-                        (8 (let ((application (car (last collections))))
-                             (dotimes (i count)
-                               (let ((usage (cond (usages (nth (min i (1- (length usages))) usages))
-                                                  (usage-min (cons page (min (+ usage-min i) (or usage-max (+ usage-min i)))))))
-                                     (offset (gethash id offsets 0)))
-                                 (when (and usage (not (logbitp 0 value)))
-                                   (push (make-field :id id :page (car usage) :usage (cdr usage) :offset offset :size size
-                                                     :minimum minimum :relative (logbitp 2 value) :application application)
-                                         fields))
-                                 (setf (gethash id offsets) (+ offset size))))))
+                        ((8 11) (let ((application (car (last collections)))
+                                      (kind (if (= tag 8) :input :feature)))
+                                  (dotimes (i count)
+                                    (let ((usage (cond (usages (nth (min i (1- (length usages))) usages))
+                                                       (usage-min (cons page (min (+ usage-min i) (or usage-max (+ usage-min i)))))))
+                                          (offset (gethash (cons kind id) offsets 0)))
+                                      (when (and usage (not (logbitp 0 value)))
+                                        (push (make-field :id id :page (car usage) :usage (cdr usage) :offset offset :size size
+                                                          :minimum minimum :relative (logbitp 2 value) :application application
+                                                          :kind kind)
+                                              fields))
+                                      (setf (gethash (cons kind id) offsets) (+ offset size))))))
                         (10 (push (or (first usages) (cons page 0)) collections))
                         (12 (pop collections)))
                       (setf usages nil usage-min nil usage-max nil))
@@ -51,7 +53,28 @@
                         (1 (setf usage-min value))
                         (2 (setf usage-max value))))))
                (incf at (1+ n))))
-    (nreverse fields)))
+    (values (nreverse fields) offsets)))
+
+(defun feature-report (fields offsets id values)
+  (let ((v (make-array (1+ (ceiling (gethash (cons :feature id) offsets 0) 8)) :element-type '(unsigned-byte 8) :initial-element 0)))
+    (setf (aref v 0) id)
+    (dolist (f fields v)
+      (when (and (eq (field-kind f) :feature) (= (field-id f) id))
+        (let ((value (cdr (assoc (cons (field-page f) (field-usage f)) values :test #'equal))))
+          (when value
+            (dotimes (bit (field-size f))
+              (when (logbitp bit value)
+                (let ((at (+ 8 (field-offset f) bit)))
+                  (setf (ldb (byte 1 (mod at 8)) (aref v (floor at 8))) 1))))))))))
+
+(defun touchpad-modes (fields offsets)
+  (let ((settings '(((#x0d . #x52) . 3) ((#x0d . #x57) . 1) ((#x0d . #x58) . 1))))
+    (loop for id in (remove-duplicates
+                     (loop for f in fields
+                           when (and (eq (field-kind f) :feature)
+                                     (assoc (cons (field-page f) (field-usage f)) settings :test #'equal))
+                             collect (field-id f)))
+          collect (feature-report fields offsets id settings))))
 
 (defun field-value (field report)
   (let* ((start (+ (field-offset field) (if (zerop (field-id field)) 0 8)))
@@ -65,7 +88,7 @@
 
 (defun report-fields (fields report)
   (let ((id (if (some (lambda (f) (plusp (field-id f))) fields) (aref report 0) 0)))
-    (remove-if-not (lambda (f) (= (field-id f) id)) fields)))
+    (remove-if-not (lambda (f) (and (eq (field-kind f) :input) (= (field-id f) id))) fields)))
 
 (defun field (fields page usage)
   (find-if (lambda (f) (and (= (field-page f) page) (= (field-usage f) usage))) fields))
@@ -83,15 +106,26 @@
               (let ((x (value 1 #x30)) (y (value 1 #x31)))
                 (when (and x (/= x 0)) (emit 2 0 x))
                 (when (and y (/= y 0)) (emit 2 1 y)))
-              (let ((tip (value #x0d #x42)) (x (value 1 #x30)) (y (value 1 #x31)) (last (getf state :finger)))
+              (let ((tip (value #x0d #x42)) (x (value 1 #x30)) (y (value 1 #x31)) (last (getf state :finger))
+                    (contacts (or (value #x0d #x54) 0)) (now (get-internal-real-time)))
                 (if (and tip (plusp tip) x y)
                     (progn
-                      (when last
-                        (let ((dx (round (- x (first last)) 2)) (dy (round (- y (second last)) 2)))
-                          (unless (zerop dx) (emit 2 0 dx))
-                          (unless (zerop dy) (emit 2 1 dy))))
+                      (if last
+                          (let ((dx (round (- x (first last)) 2)) (dy (round (- y (second last)) 2)))
+                            (unless (zerop dx) (emit 2 0 dx))
+                            (unless (zerop dy) (emit 2 1 dy))
+                            (incf (getf state :travel 0) (+ (abs dx) (abs dy))))
+                          (setf (getf state :touched) now (getf state :travel) 0 (getf state :fingers) 0))
+                      (setf (getf state :fingers) (max contacts (getf state :fingers 0)))
                       (setf (getf state :finger) (list x y)))
-                    (setf (getf state :finger) nil))))
+                    (progn
+                      (when (and last (zerop buttons) (zerop (getf state :buttons 0))
+                                 (< (- now (getf state :touched now)) (* 0.25 internal-time-units-per-second))
+                                 (< (getf state :travel 0) 12))
+                        (let ((code (if (>= (getf state :fingers 0) 2) #x111 #x110)))
+                          (emit 1 code 1)
+                          (emit 1 code 0)))
+                      (setf (getf state :finger) nil)))))
           (loop for bit below 3 for code in '(#x110 #x111 #x112)
                 unless (eq (logbitp bit buttons) (logbitp bit (getf state :buttons 0)))
                   do (emit 1 code (if (logbitp bit buttons) 1 0)))

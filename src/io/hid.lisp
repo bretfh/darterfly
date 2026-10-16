@@ -93,7 +93,10 @@
 
 (defmethod read-events ((d finch/iokit::io-i2c-hid-device))
   (unless (finch/iokit::hid-fields d)
-    (setf (finch/iokit::hid-fields d) (parse-report-descriptor (finch/iokit::hid-report-descriptor d))))
+    (multiple-value-bind (fields offsets) (parse-report-descriptor (finch/iokit::hid-report-descriptor d))
+      (dolist (report (touchpad-modes fields offsets))
+        (ignore-errors (finch/iokit::i2c-hid-set-feature d report)))
+      (setf (finch/iokit::hid-fields d) fields)))
   (loop :for report :in (finch/iokit::i2c-hid-reports d)
         :append (multiple-value-bind (events state)
                     (pointer-events d (finch/iokit::hid-fields d) report (finch/iokit::hid-state d))

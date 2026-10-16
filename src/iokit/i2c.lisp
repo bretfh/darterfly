@@ -118,6 +118,18 @@
                   (concatenate '(vector (unsigned-byte 8)) (le16-octets command) (vector argument opcode))
                   0)))
 
+(defun i2c-hid-set-feature (h report)
+  (let* ((descriptor (hid-descriptor h))
+         (id (aref report 0))
+         (header (if (< id 15)
+                     (vector (logior #x30 id) 3)
+                     (vector #x3f 3 id))))
+    (i2c-transfer (hid-controller h) (hid-address h)
+                  (concatenate '(vector (unsigned-byte 8))
+                               (le16-octets (le16 descriptor 16)) header
+                               (le16-octets (le16 descriptor 18) (+ 2 (length report))) report)
+                  0)))
+
 (defun i2c-hid-input (h)
   (let* ((report (i2c-transfer (hid-controller h) (hid-address h) #() (le16 (hid-descriptor h) 10)))
          (length (le16 report 0)))
