@@ -12,6 +12,7 @@
 (defconstant +lapic-timer-initial-count+ #x380)
 (defconstant +lapic-timer-current-count+ #x390)
 (defconstant +lapic-timer-divide-config+ #x3E0)
+(defconstant +lapic-lint0+ #x350)
 (defconstant +lapic-timer-periodic+ (ash 1 17))
 (defconstant +lapic-spurious-vector+ #xDA)
 (defconstant +lapic-timer-vector+ #xDD)
@@ -63,6 +64,7 @@
   (when (logand (rdmsr +apic-base-msr+) (ash 1 10))
     (wrmsr +apic-base-msr+ (logand (rdmsr +apic-base-msr+) (lognot (logior (ash 1 10) (ash 1 11))))))
   (wrmsr +apic-base-msr+ (logior (rdmsr +apic-base-msr+) (ash 1 11)))
+  (setf (mem :u32 (lapic +lapic-lint0+)) (ash 1 16))
   (setf (mem :u32 (lapic +lapic-svr+)) (logior #x100 +lapic-spurious-vector+)))
 
 (define-low start-timer ()
@@ -102,7 +104,8 @@
          (bsd-serial-wakeup))
         ((and (>= vector #x30) (< vector #x40))
          (|PE_incoming_interrupt| vector)))
-  (when (/= vector +lapic-spurious-vector+)
+  (unless (or (= vector +lapic-spurious-vector+)
+              (and (>= vector #x20) (< vector #x30) (/= vector +com1-vector+) (/= vector +keyboard-vector+)))
     (setf (mem :u32 (lapic +lapic-eoi+)) 0)))
 
 (defconstant +cpu-data-size+ 8416)
