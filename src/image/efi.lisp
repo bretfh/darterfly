@@ -268,6 +268,7 @@
   (format nil "~a/share/firmware/~a" (uiop:getenv "GUIX_ENVIRONMENT") name))
 
 (defvar *input-devices* '("virtio-keyboard-pci" "virtio-tablet-pci"))
+(defvar *network-device* "virtio-net-pci,netdev=net0,romfile=")
 
 (defun bare-qemu (esp &optional disks root forwards)
   (append
@@ -288,9 +289,9 @@
                       "-device" (if nvme
                                     (format nil "nvme,serial=nvme~d,drive=disk~d" i i)
                                     (format nil "virtio-blk-pci,drive=disk~d" i))))
-   (list "-netdev" (format nil "user,id=net0~{,hostfwd=~(~a~)::~d-:~d~}" (loop for (proto host guest) in forwards append (list proto host guest)))
-         "-device" "virtio-net-pci,netdev=net0,romfile=")
+   (list "-netdev" (format nil "user,id=net0~{,hostfwd=~(~a~)::~d-:~d~}" (loop for (proto host guest) in forwards append (list proto host guest))))
    (loop :for device :in *input-devices* :append (list "-device" device))
+   (list "-device" *network-device*)
    (list "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
         "-monitor" (format nil "unix:~a,server=on,wait=off" (monitor-path))
         "-qmp" (format nil "unix:~a,server=on,wait=off" (qmp-path))

@@ -59,7 +59,7 @@
 
 (defgeneric if-output (device frame))
 
-(defmethod if-output ((device finch/iokit:apple-virtio-network) frame)
+(defmethod if-output ((device finch/iokit:io-ethernet-controller) frame)
   (finch/iokit:network-send device frame))
 
 (defun send-frame (dst type payload)
@@ -200,7 +200,7 @@
 
 (defun start-network (&key ip (prefix 24) gateway)
   (finch/iokit:start-iokit)
-  (let ((device (first (finch/iokit:find-entries 'finch/iokit:apple-virtio-network))))
+  (let ((device (first (finch/iokit:find-entries 'finch/iokit:io-ethernet-controller))))
     (unless device (net-fail :enetdown "no network device"))
     (setf *interface* (make-interface :device device :mac (finch/iokit:network-mac device)))
     (setf (interface-thread *interface*) (sb-thread:make-thread #'input-loop :name "net input"))

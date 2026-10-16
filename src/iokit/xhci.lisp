@@ -94,7 +94,7 @@
             (33 (setf (gethash parameter (xhci-results c)) (list (ldb (byte 8 24) status) (ldb (byte 8 24) control))))
             (32 (let ((endpoint (gethash (list (ldb (byte 8 24) control) (ldb (byte 5 16) control)) (xhci-endpoints c))))
                   (if endpoint
-                      (funcall endpoint parameter (ldb (byte 8 24) status))
+                      (funcall endpoint parameter (ldb (byte 8 24) status) (ldb (byte 24 0) status))
                       (setf (gethash parameter (xhci-results c)) (list (ldb (byte 8 24) status) (ldb (byte 24 0) status))))))))
         (incf (xhci-event-index c))
         (when (= (xhci-event-index c) +trbs+)
@@ -144,9 +144,9 @@
     (xw32 at (logior (logand (xr32 at) #x0e00c3e0) (ash 1 21)))
     (logbitp 1 (xr32 at))))
 
-(defun read-descriptor (c slot ring type index length)
+(defun read-descriptor (c slot ring type index length &optional (language 0))
   (let ((page (vm-page-grab)))
-    (control c slot ring #x80 6 (logior (ash type 8) index) 0 length page)
+    (control c slot ring #x80 6 (logior (ash type 8) index) language length page)
     (let ((v (make-array length :element-type '(unsigned-byte 8))))
       (dotimes (i length v) (setf (aref v i) (ml-phys-read-8 (+ page i)))))))
 
@@ -202,8 +202,8 @@
              (ring-push ep-ring buffer (min mps 64) (logior (ash 1 10) (ash 1 5) (ash 1 2)))
              (ring-doorbell c slot dci)))
       (setf (gethash (list slot dci) (xhci-endpoints c))
-            (lambda (trb code)
-              (declare (ignore trb))
+            (lambda (trb code residual)
+              (declare (ignore trb residual))
               (when (member code '(1 13))
                 (let ((report (make-array 8 :element-type '(unsigned-byte 8))))
                   (dotimes (i 8) (setf (aref report i) (ml-phys-read-8 (+ buffer i))))
@@ -213,8 +213,28 @@
     (attach device c)
     (register-service device)))
 
+(defun read-configuration (c slot ring index)
+  (let ((head (read-descriptor c slot ring 2 index 9)))
+    (read-descriptor c slot ring 2 index (logior (aref head 2) (ash (aref head 3) 8)))))
+
+(defun descriptors (config)
+  (loop with at = 0
+        while (< (1+ at) (length config))
+        for length = (aref config at)
+        until (zerop length)
+        collect (subseq config at (min (length config) (+ at length)))
+        do (incf at length)))
+
+(defun ethernet-configuration-p (config)
+  (some (lambda (d) (and (= (aref d 1) 4) (= (aref d 5) 2) (= (aref d 6) 6))) (descriptors config)))
+
 (defun configure-device (c port)
   (multiple-value-bind (slot ring speed input) (address-device c port)
+    (let ((configurations (aref (read-descriptor c slot ring 1 0 18) 17)))
+      (loop for index below configurations
+            for config = (read-configuration c slot ring index)
+            when (ethernet-configuration-p config)
+              do (return-from configure-device (start-ecm c slot ring speed input config))))
     (let* ((head (read-descriptor c slot ring 2 0 9))
            (config (read-descriptor c slot ring 2 0 (logior (aref head 2) (ash (aref head 3) 8))))
            (configured nil))

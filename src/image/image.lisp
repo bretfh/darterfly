@@ -2,7 +2,7 @@
   (:use #:cl)
   (:export #:write-cpio #:*build*
    #:console #:expect #:send #:transcript #:finish #:screendump #:pixel #:monitor #:pointer #:qmp #:send-keys
-   #:boot-efi #:mach-kernel #:esp #:bare-console #:bare-boot #:send-char #:*screen-size* #:update-root #:desktop #:copy-in #:build-sbcl #:*c-compiler* #:build-tcc #:*input-devices* #:usb-image))
+   #:boot-efi #:mach-kernel #:esp #:bare-console #:bare-boot #:send-char #:*screen-size* #:update-root #:desktop #:copy-in #:build-sbcl #:*c-compiler* #:build-tcc #:*input-devices* #:*network-device* #:usb-image))
 (in-package #:finch/image)
 
 (defvar *build* (asdf:system-relative-pathname :finch "build/"))

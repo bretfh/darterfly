@@ -3,7 +3,12 @@
 (defconstant +net-header+ 12)
 (defconstant +receive-buffers+ 32)
 
-(define-io-class apple-virtio-network "AppleVirtIONetwork" (io-service)
+(define-io-class io-ethernet-controller "IOEthernetController" (io-service))
+
+(defgeneric network-send (net frame))
+(defgeneric network-receive (net))
+
+(define-io-class apple-virtio-network "AppleVirtIONetwork" (io-ethernet-controller)
   ((transport :accessor transport)
    (receive :accessor receive-queue)
    (transmit :accessor transmit-queue)
@@ -41,19 +46,22 @@
         (driver-ok tr)
         (mmio-write (virtqueue-notify rx) 16 0)
         (setf (network-mac net) (coerce (loop for i below 6 collect (device-config-read tr i 8)) '(vector (unsigned-byte 8))))
-        (loop for (k v) on (list "IOMACAddress" (network-mac net) "IOMaxPacketSize" 1518 "IOMinPacketSize" 64
-                                 "IOLinkStatus" 3 "Product Name" "VirtIO Ethernet" "IOModel" "VirtIO Ethernet")
-              by #'cddr do (set-property net k v))
-        (let ((en (make-instance 'io-ethernet-interface :name (format nil "en~d" *interface-units*))))
-          (loop for (k v) on (list "BSD Name" (entry-name en) "IOInterfaceNamePrefix" "en" "IOInterfaceUnit" *interface-units*
-                                   "IOMaxTransferUnit" 1500 "IOMediaAddressLength" 6 "IOMediaHeaderLength" 14
-                                   "IOInterfaceType" 6 "IOBuiltin" t "IOPrimaryInterface" (zerop *interface-units*))
-                by #'cddr do (set-property en k v))
-          (incf *interface-units*)
-          (attach en net))
+        (publish-ethernet net "VirtIO Ethernet" t)
         t))))
 
-(defun network-send (net frame)
+(defun publish-ethernet (net product builtin)
+  (loop for (k v) on (list "IOMACAddress" (network-mac net) "IOMaxPacketSize" 1518 "IOMinPacketSize" 64
+                           "IOLinkStatus" 3 "Product Name" product "IOModel" product)
+        by #'cddr do (set-property net k v))
+  (let ((en (make-instance 'io-ethernet-interface :name (format nil "en~d" *interface-units*))))
+    (loop for (k v) on (list "BSD Name" (entry-name en) "IOInterfaceNamePrefix" "en" "IOInterfaceUnit" *interface-units*
+                             "IOMaxTransferUnit" 1500 "IOMediaAddressLength" 6 "IOMediaHeaderLength" 14
+                             "IOInterfaceType" 6 "IOBuiltin" builtin "IOPrimaryInterface" (zerop *interface-units*))
+          by #'cddr do (set-property en k v))
+    (incf *interface-units*)
+    (attach en net)))
+
+(defmethod network-send ((net apple-virtio-network) frame)
   (sb-thread:with-mutex ((network-lock net))
     (let ((page (send-page net)))
       (dotimes (i +net-header+) (ml-phys-write-8 (+ page i) 0))
@@ -61,8 +69,7 @@
       (virtqueue-run (transmit-queue net) (list (list page (+ +net-header+ (length frame)) nil)))
       (length frame))))
 
-(defun network-receive (net)
-  "Frames the device has delivered since the last call."
+(defmethod network-receive ((net apple-virtio-network))
   (sb-thread:with-mutex ((network-lock net))
     (let* ((q (receive-queue net)) (size (virtqueue-size q)) (frames nil))
       (loop until (= (ml-phys-read-16 (+ (virtqueue-used q) 2)) (virtqueue-last-used q))
