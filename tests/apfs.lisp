@@ -216,3 +216,11 @@
       (is (= 1001 (length (apfs:directory-entries v (apfs:lookup v "/many")))))
       (is (equal "still writable" (funcall read "/many/after"))))
     (delete-file disk)))
+
+(test a-root-one-entry-too-full-splits
+  (let* ((records (loop :for i :below 112 :collect (cons (apfs::octets (apfs::le i 8) (apfs::le 1 8)) (apfs::le i 16))))
+         (nodes (apfs::pack-btree records :fixed t :key-size 16 :value-size 16 :info-flags #x12 :subtype #xb
+                                          :physical t :xid 1 :next-oid (let ((n 100)) (lambda () (incf n))))))
+    (is (not (apfs::fits-p records t t 16 16)))
+    (is (= 3 (length nodes)))
+    (is (= 112 (loop :for (nil level . node) :in nodes :when (zerop level) :sum (apfs::node-count (apfs::make-node node)))))))

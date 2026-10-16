@@ -93,7 +93,10 @@
           (setf current (append current (list r)))
           (progn (push current nodes) (setf current (list r)))))
     (when current (push current nodes))
-    (nreverse nodes)))
+    (if (rest nodes)
+        (nreverse nodes)
+        (let ((half (ceiling (length current) 2)))
+          (list (subseq current 0 half) (subseq current half))))))
 
 (defun pack-btree (records &key fixed (key-size 0) (value-size 0) info-flags subtype physical xid next-oid)
   (let* ((longest-key (reduce #'max records :key (lambda (r) (length (car r))) :initial-value 0))
