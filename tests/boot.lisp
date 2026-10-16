@@ -1564,3 +1564,32 @@
           (image:finish c 5))))
     (is (every (lambda (b) (= b 165)) (subseq (image::octets blank) (* 512 100) (+ (* 512 100) 4096)))
         "and is on the disk after finch exits")))
+
+(test usb-mouse-and-keyboard-on-finch
+  (let ((image:*input-devices* '("qemu-xhci,id=xhci" "usb-kbd,bus=xhci.0" "usb-mouse,bus=xhci.0"))
+        (image:*screen-size* '(1280 800)))
+    (let ((c (image:bare-console :boot-args "launchd")))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120))
+             (rel (dx dy) (image:qmp "input-send-event"
+                                     (finch/qmp:dict "events" (vector (finch/qmp:dict "type" "rel" "data" (finch/qmp:dict "axis" "x" "value" dx))
+                                                                      (finch/qmp:dict "type" "rel" "data" (finch/qmp:dict "axis" "y" "value" dy))))))
+             (button (down) (image:qmp "input-send-event"
+                                       (finch/qmp:dict "events" (vector (finch/qmp:dict "type" "btn" "data" (finch/qmp:dict "button" "left" "down" down)))))))
+        (unwind-protect
+             (progn
+               (is (image:expect c "launchd: pid 1" :timeout 90))
+               (is (search "(\"Keyboard\" \"Mouse\")"
+                           (ask "(mapcar #'finch/iokit:entry-name (finch/iokit:find-entries 'finch/iokit::io-usb-hid-device))"))
+                   "the USB keyboard and mouse enumerate behind xHCI")
+               (screen-until (lambda (s) (= #xff2e5c8f (image:pixel s 5 300))) 60)
+               (sleep 2)
+               (dotimes (i 40) (rel -100 -100) (sleep 0.01))
+               (loop :with x := 0 :with y := 0
+                     :until (and (>= x 605) (>= y 744))
+                     :do (let ((dx (min 50 (- 605 x))) (dy (min 50 (- 744 y))))
+                           (rel dx dy) (incf x dx) (incf y dy) (sleep 0.02)))
+               (sleep 0.5)
+               (button t) (sleep 0.05) (button nil)
+               (let ((screen (screen-until (lambda (s) (= #xffffffff (image:pixel s 500 300))) 30)))
+                 (is (= #xffffffff (image:pixel screen 500 300)) "the USB mouse clicks the terminal open ~x" (image:pixel screen 500 300))))
+          (image:finish c 5))))))
