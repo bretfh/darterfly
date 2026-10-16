@@ -177,7 +177,7 @@
   :depends-on (#:finch/low)
   :serial t
   :pathname "src/kern/i386/"
-  :components ((:file "mtrr") (:file "printf") (:file "rtclock") (:file "vm-map") (:file "pmap") (:file "lapic") (:file "sched")
+  :components ((:file "mtrr") (:file "power") (:file "printf") (:file "rtclock") (:file "vm-map") (:file "pmap") (:file "lapic") (:file "sched")
                (:file "signal" :pathname "../../bsd/kern/signal") (:file "trap") (:file "mp")
                (:file "systemcalls" :pathname "../../bsd/dev/i386/systemcalls")
                (:file "start" :pathname "../x86_64/start") (:file "init") (:file "stubs" :pathname "../x86_64/stubs") (:file "mp-desc") (:file "memory")))

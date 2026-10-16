@@ -2,7 +2,7 @@
   (:use #:cl #:finch/asm)
   (:shadow #:compile)
   (:export #:define-low #:define-global #:low-object #:inb #:outb #:ref #:mem #:pause #:result #:while
-           #:package-object #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:address
+           #:package-object #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:monitor #:sti-mwait #:address
            #:rep-movsb #:rep-stosb #:&va #:va-next #:rdtsc #:return-address
            #:invlpg #:set-cr3 #:cpuid-edx #:cpuid #:cpu-data #:fxsave #:fxrstor #:code-address #:call-pointer #:read-cr #:set-cr #:fninit #:compare-and-swap #:rdrand #:int3 #:build-date #:*build-date* #:lidt #:ltr
            #:efi-call #:wide #:define-efi-entry #:package-image
@@ -377,6 +377,13 @@
              (cli (inst byte #xFA))
              (sti (inst byte #xFB))
              (hlt (inst byte #xF4))
+             (monitor (compile (first args))
+                      (inst xor :dword (reg :dword 1) (reg :dword 1))
+                      (inst xor :dword (reg :dword 2) (reg :dword 2))
+                      (inst byte #x0F) (inst byte #x01) (inst byte #xC8))
+             (sti-mwait (compile (first args))
+                        (inst xor :dword (reg :dword 1) (reg :dword 1))
+                        (inst byte #xFB) (inst byte #x0F) (inst byte #x01) (inst byte #xC9))
              (inb (compile (first args))
                   (inst mov rdx-tn rax-tn)
                   (in :byte)

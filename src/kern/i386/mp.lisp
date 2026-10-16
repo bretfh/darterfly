@@ -129,6 +129,7 @@
   (setf (mem :u64 (+ cdp +c-active-thread+)) (mem :u64 (+ cdp +c-idle-thread+)))
   (set-kernel-stack (mem :u64 (+ (mem :u64 (+ cdp +c-idle-thread+)) +t-kstack-top+)))
   (pat-init)
+  (power-init)
   (lapic-init-slave)
   (setf (mem :u32 (+ cdp +c-running+)) 1)
   (funnel-lock)

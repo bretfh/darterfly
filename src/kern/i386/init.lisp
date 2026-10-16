@@ -188,6 +188,7 @@
   (when (the :u32 (|platform_parse_boot_arg| "vmtest")) (vm-test))
   (rtclock-init)
   (pat-init)
+  (power-init)
   (lapic-init)
   (thread-bootstrap (boot-kernel-stack-top))
   (i386-start-cpus)

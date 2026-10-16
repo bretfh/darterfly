@@ -110,9 +110,7 @@
               (panic "idle_thread: funnel depth %d" (funnel-depth)))
             (setf (mem :u32 (+ (cpu-data) +c-idle+)) 1)
             (funnel-unlock)
-            (sti)
-            (hlt)
-            (cli)
+            (idle-wait)
             (funnel-lock)
             (setf (mem :u32 (+ (cpu-data) +c-idle+)) 0))))))
 
