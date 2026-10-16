@@ -172,4 +172,5 @@
     (probe-bus bridge (ml-phys-read-8 (+ mcfg 54)) bridge)
     (dolist (d (find-entries 'io-pci-device root))
       (register-service d))
+    (start-root-image expert)
     root))

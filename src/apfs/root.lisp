@@ -4,8 +4,11 @@
   (let ((rd (iokit:boot-arg "rd")))
     (when (stringp rd)
       (iokit:start-iokit)
-      (let ((media (find rd (iokit:find-entries 'apple-apfs-volume)
-                         :key (lambda (e) (iokit:get-property e "BSD Name")) :test #'equal)))
+      (let ((media (if (equal rd "ram")
+                       (find-if (lambda (e) (typep (iokit:media-device e) 'iokit::io-ram-block-storage-device))
+                                (iokit:find-entries 'apple-apfs-volume))
+                       (find rd (iokit:find-entries 'apple-apfs-volume)
+                             :key (lambda (e) (iokit:get-property e "BSD Name")) :test #'equal))))
         (unless media
           (format *error-output* "~&mountroot: no APFS volume ~a~%" rd)
           (return-from mountroot nil))

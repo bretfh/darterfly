@@ -1511,6 +1511,7 @@
 
 (test the-usb-stick-boots-like-the-starbook
   (let* ((stick (image:usb-image))
+         (image:*screen-size* '(1280 800))
          (c (image:console :args (list "qemu-system-x86_64" "-enable-kvm" "-cpu" "host" "-m" "4096" "-smp" "4" "-machine" "q35"
                                        "-drive" (format nil "if=pflash,format=raw,readonly=on,file=~a" (finch/image::firmware "ovmf_code_x64.bin"))
                                        "-drive" (format nil "if=pflash,format=raw,snapshot=on,file=~a" (finch/image::firmware "ovmf_vars_x64.bin"))
@@ -1521,17 +1522,22 @@
                                        "-monitor" (format nil "unix:~a,server=on,wait=off" (finch/image::monitor-path))
                                        "-qmp" (format nil "unix:~a,server=on,wait=off" (finch/image::qmp-path))
                                        "-display" "none" "-serial" "stdio" "-no-reboot"))))
-    (unwind-protect
-         (progn
-           (is (image:expect c "boot.efi: generation gen-1" :timeout 60) "the firmware boots boot.efi from the USB stick")
-           (image:expect c "* " :timeout 120)
-           (sleep 1)
-           (image:send-keys (format nil "(+ 40 2)~%"))
-           (is (image:expect c "42" :timeout 30) "the REPL answers a line typed on the PS/2 keyboard")
-           (let ((screen (image:screendump)))
-             (is (< 200 (loop :for y :below 64 :sum (loop :for x :below 400 :count (= (image:pixel screen x y) #xffd8d8d0))))
-                 "and the console is on the screen")))
-      (image:finish c 5))))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
+      (unwind-protect
+           (progn
+             (is (image:expect c "boot.efi: generation gen-1" :timeout 60) "the firmware boots boot.efi from the USB stick")
+             (is (image:expect c "launchd: pid 1" :timeout 120) "launchd starts from the root image in memory")
+             (let ((screen (screen-until (lambda (s) (= #xff2e5c8f (image:pixel s 5 300))) 60)))
+               (is (= #xff2e5c8f (image:pixel screen 5 300)) "the desktop is on the screen ~x" (image:pixel screen 5 300)))
+             (ask "(finch/bsd:posix-spawn \"/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal\" (list \"Terminal\") nil)")
+             (let ((screen (screen-until (lambda (s) (= #xffffffff (image:pixel s 500 300))) 30)))
+               (is (= #xffffffff (image:pixel screen 500 300)) "the terminal opens ~x" (image:pixel screen 500 300)))
+             (let ((before (dark-pixels (image:screendump) 172 160 300 200 100)))
+               (image:send-keys (format nil "(+ 1 2)~%"))
+               (is (< before (dark-pixels (screen-until (lambda (s) (< before (dark-pixels s 172 160 300 200 100))) 30)
+                                          172 160 300 200 100))
+                   "typing on the PS/2 keyboard reaches the terminal")))
+        (image:finish c 5)))))
 
 (test nvme-on-finch
   (let ((stick (merge-pathnames "nvme-stick.img" (finch-file "build/")))
@@ -1547,9 +1553,9 @@
                (image:expect c "* " :timeout 60)
                (is (search "2" (ask "(length (finch/iokit:find-entries 'finch/iokit::io-nvme-block-storage-device))"))
                    "both NVMe controllers are found")
-               (is (search "(\"finch\")" (ask "(mapcar #'finch/iokit:entry-name (remove-if-not (lambda (m) (and (typep (finch/iokit::media-device m) 'finch/iokit::io-nvme-block-storage-device) (not (finch/iokit:get-property m \"Whole\")))) (finch/iokit:find-entries 'finch/iokit::io-media)))"))
+               (is (search "(\"EFI\")" (ask "(mapcar #'finch/iokit:entry-name (remove-if-not (lambda (m) (and (typep (finch/iokit::media-device m) 'finch/iokit::io-nvme-block-storage-device) (not (finch/iokit:get-property m \"Whole\")))) (finch/iokit:find-entries 'finch/iokit::io-media)))"))
                    "the GPT on an NVMe disk publishes its partition")
-               (is (search "\"FAT32   \"" (ask "(let ((m (find \"finch\" (finch/iokit:find-entries 'finch/iokit::io-media) :key #'finch/iokit:entry-name :test #'equal))) (map 'string #'code-char (subseq (finch/iokit::media-read m 0 512) 82 90)))"))
+               (is (search "\"FAT32   \"" (ask "(let ((m (find \"EFI\" (finch/iokit:find-entries 'finch/iokit::io-media) :key #'finch/iokit:entry-name :test #'equal))) (map 'string #'code-char (subseq (finch/iokit::media-read m 0 512) 82 90)))"))
                    "and reads its FAT boot sector")
                (is (search "T" (ask "(let ((m (find-if (lambda (m) (and (typep (finch/iokit::media-device m) 'finch/iokit::io-nvme-block-storage-device) (= (finch/iokit:get-property m \"Size\") (* 8 1048576)))) (finch/iokit:find-entries 'finch/iokit::io-media)))) (finch/iokit::media-write m (* 512 100) (make-array 4096 :element-type '(unsigned-byte 8) :initial-element 165)) (finch/iokit::media-flush m) (every (lambda (b) (= b 165)) (finch/iokit::media-read m (* 512 100) 4096)))"))
                    "a write reads back")

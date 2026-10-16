@@ -218,6 +218,7 @@
          (ok regs pa)))
       ((= n 10) (ok regs (ml-io-map a b)))
       ((= n 11) (console-off) (ok regs (+ args +video+)))
+      ((= n 21) (ok regs (the :u32 (keyboard-raw a b))))
       ((= n 12)
        (ok regs (|PE_interrupt_wait| a (if b (deadline-after (truncate b 1000000) (* (rem b 1000000) 1000)) 0))))
       ((= n 13) (ok regs (mem :u32 (+ (cpu-datap 0) +cpu-phys-number+))))

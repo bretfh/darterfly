@@ -1,6 +1,7 @@
 (in-package #:finch/iokit)
 
-(defvar *free-vectors* (loop for v from #x30 below #x40 collect v))
+(defconstant +keyboard-vector+ #x3F)
+(defvar *free-vectors* (loop for v from #x30 below +keyboard-vector+ collect v))
 (defvar *vectors-lock* (sb-thread:make-mutex :name "interrupt vectors"))
 
 (defun allocate-vector () (sb-thread:with-mutex (*vectors-lock*) (pop *free-vectors*)))

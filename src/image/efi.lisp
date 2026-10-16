@@ -109,10 +109,12 @@
           (loop :for (name path) :in objects
                 :collect (list :file (concatenate 'string "usr/lib/finch/objects/" name) (octets path))))))
 
-(defun boot-plist (boot-args)
+(defun boot-plist (boot-args &optional root-image)
   (let ((d (make-hash-table :test 'equal)))
     (setf (gethash "Kernel Flags" d) (format nil "~a -- --core /System/Library/Kernels/finch.core" boot-args)
           (gethash "RAMDisk" d) "/System/Library/RAMDisk/root.cpio")
+    (when root-image
+      (setf (gethash "RootImage" d) "/System/Library/RAMDisk/root.img"))
     d))
 
 (defparameter *ramdisk-files*
@@ -208,7 +210,7 @@
                      (unwind-protect (finch/vfs:vfs-write fd octets)
                        (finch/vfs:vfs-close fd))))))))))
 
-(defun esp (&key (boot-args ""))
+(defun esp (&key (boot-args "") root-image)
   (let ((root (build-path "esp/")))
     (uiop:delete-directory-tree root :validate t :if-does-not-exist :ignore)
     (flet ((put (from to)
@@ -220,15 +222,16 @@
         (put efi "System/Library/CoreServices/boot.efi"))
       (put (mach-kernel) "EFI/finch/gen-1/kernel")
       (put (finch-core) "EFI/finch/gen-1/finch.core")
-      (put (ramdisk) "System/Library/RAMDisk/root.cpio"))
+      (put (ramdisk) "System/Library/RAMDisk/root.cpio")
+      (when root-image (put root-image "System/Library/RAMDisk/root.img")))
     (with-open-file (s (merge-pathnames "EFI/finch/current" root) :direction :output)
       (write-line "gen-1" s))
     (let ((plist (merge-pathnames "Library/Preferences/SystemConfiguration/com.apple.Boot.plist" root)))
       (ensure-directories-exist plist)
-      (finch/plist:write-plist (boot-plist boot-args) plist))
+      (finch/plist:write-plist (boot-plist boot-args root-image) plist))
     root))
 
-(defun esp-image (esp &optional (image (build-path "esp.img")))
+(defun esp-image (esp &optional (image (build-path "esp.img")) (size (* 256 1048576)))
   (let ((root (uiop:ensure-directory-pathname esp))
         (entries nil))
     (labels ((relative (p) (enough-namestring p root))
@@ -244,11 +247,12 @@
                                  v)))
                        entries))))
       (walk root))
-    (finch/fat:newfs image :size (* 256 1048576) :label "EFI" :entries (nreverse entries))))
+    (finch/fat:newfs image :size size :label "EFI" :entries (nreverse entries))))
 
-(defun usb-image (&key (path (build-path "finch-usb.img")) (boot-args ""))
-  (let ((fat (esp-image (esp :boot-args boot-args) (build-path "usb-esp.img"))))
-    (finch/gpt:write-disk path (list (list finch/gpt:+esp-type+ "F1C40000-0000-4000-8000-000000000011" "finch" fat)))
+(defun usb-image (&key (path (build-path "finch-usb.img")) (boot-args "rd=ram launchd"))
+  (let ((fat (esp-image (esp :boot-args boot-args :root-image (root-disk (build-path "usb-root.img")))
+                        (build-path "usb-esp.img") (* 512 1048576))))
+    (finch/gpt:write-disk path (list (list finch/gpt:+esp-type+ "F1C40000-0000-4000-8000-000000000011" "EFI" fat)))
     (delete-file fat)
     path))
 

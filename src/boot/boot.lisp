@@ -48,6 +48,8 @@
 (defconstant +ramdisk-size+ 1552)
 (defconstant +core-start+ 1560)
 (defconstant +core-size+ 1568)
+(defconstant +root-image-start+ 1576)
+(defconstant +root-image-size+ 1584)
 (defconstant +boot-args-size+ 4096)
 
 (define-global st :u64)
@@ -266,6 +268,7 @@
     (setf plist (read-file root (wide "\\Library\\Preferences\\SystemConfiguration\\com.apple.Boot.plist") (address size)))
     (plist-string plist "<key>Kernel Flags</key>" (+ args +command-line+) +line-length+)
     (boot-file root plist "RAMDisk" (+ args +ramdisk-start+) (+ args +ramdisk-size+))
+    (boot-file root plist "RootImage" (+ args +root-image-start+) (+ args +root-image-size+))
     plist))
 
 (define-low table ()

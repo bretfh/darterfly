@@ -148,11 +148,30 @@
                     (incf kbd-length)
                     (console-putc c))))))))
 
+(define-global kbd-raw :u8 :count 256)
+(define-global kbd-raw-head :u32 :alignment 4)
+(define-global kbd-raw-tail :u32 :alignment 4)
+
 (define-low keyboard-interrupt ()
   (while (logand (inb +kbd-status+) 1)
     (let ((aux (logand (inb +kbd-status+) #x20))
           (code (inb +kbd-data+)))
-      (unless aux (kbd-key code)))))
+      (unless aux
+        (if console-on
+            (kbd-key code)
+            (progn
+              (when (< (logand (- kbd-raw-head kbd-raw-tail) #xFFFFFFFF) 256)
+                (setf (ref kbd-raw (logand kbd-raw-head #xFF)) code)
+                (incf kbd-raw-head))
+              (|PE_incoming_interrupt| #x3F)))))))
+
+(define-low keyboard-raw (buffer (max :u32))
+  (let ((n 0))
+    (while (and (< n max) (/= kbd-raw-tail kbd-raw-head))
+      (setf (mem :u8 (+ buffer n)) (ref kbd-raw (logand kbd-raw-tail #xFF)))
+      (incf kbd-raw-tail)
+      (incf n))
+    n))
 
 (define-low keyboard-init ()
   (let ((i 0))
