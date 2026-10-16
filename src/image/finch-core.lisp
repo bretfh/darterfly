@@ -28,6 +28,8 @@
     (ignore-errors (finch/install:confirm))
     (when (ignore-errors (finch/generation:pending-build))
       (finch/generation:resume-build))
+    (when (stringp (finch/iokit:boot-arg "nrepl-key"))
+      (sb-thread:make-thread (lambda () (ignore-errors (finch/nrepl:start))) :name "nrepl start"))
     (when (finch/iokit:boot-arg "launchd")
       (sb-thread:make-thread #'finch/kernel:launch :name "load_init_program"))))
 

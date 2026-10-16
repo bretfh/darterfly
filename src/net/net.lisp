@@ -199,6 +199,7 @@
               (t (sleep 0.002)))))))
 
 (defun start-network (&key ip (prefix 24) gateway)
+  (when *interface* (return-from start-network *interface*))
   (finch/iokit:start-iokit)
   (let ((device (first (finch/iokit:find-entries 'finch/iokit:io-ethernet-controller))))
     (unless device (net-fail :enetdown "no network device"))

@@ -1518,6 +1518,7 @@
                                        "-device" "qemu-xhci,id=xhci"
                                        "-drive" (format nil "if=none,id=stick,format=raw,snapshot=on,file=~a" (uiop:native-namestring stick))
                                        "-device" "usb-storage,bus=xhci.0,drive=stick,bootindex=0"
+                                       "-netdev" "user,id=net0" "-device" "usb-net,netdev=net0,bus=xhci.0"
                                        "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
                                        "-monitor" (format nil "unix:~a,server=on,wait=off" (finch/image::monitor-path))
                                        "-qmp" (format nil "unix:~a,server=on,wait=off" (finch/image::qmp-path))
@@ -1527,6 +1528,8 @@
            (progn
              (is (image:expect c "boot.efi: generation gen-1" :timeout 60) "the firmware boots boot.efi from the USB stick")
              (is (image:expect c "launchd: pid 1" :timeout 120) "launchd starts from the root image in memory")
+             (is (search "10.0.2.15" (ask "(progn (loop :repeat 100 :until finch/nrepl::*thread* :do (sleep 0.1)) (and finch/nrepl::*thread* (finch/net:address-string (finch/net::interface-ip finch/net:*interface*))))"))
+                 "nrepl starts at boot from the key in the boot args")
              (let ((screen (screen-until (lambda (s) (= #xff2e5c8f (image:pixel s 5 300))) 60)))
                (is (= #xff2e5c8f (image:pixel screen 5 300)) "the desktop is on the screen ~x" (image:pixel screen 5 300)))
              (ask "(finch/bsd:posix-spawn \"/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal\" (list \"Terminal\") nil)")
