@@ -138,11 +138,12 @@
 (defun port-speed (c port) (ldb (byte 4 10) (xr32 (portsc c port))))
 
 (defun reset-port (c port)
-  (let ((at (portsc c port)))
-    (xw32 at (logior (logand (xr32 at) #x0e00c3e0) (ash 1 4)))
-    (wait-until (lambda () (logbitp 21 (xr32 at))) 1)
-    (xw32 at (logior (logand (xr32 at) #x0e00c3e0) (ash 1 21)))
-    (logbitp 1 (xr32 at))))
+  (let ((at (portsc c port))
+        (changes (logior (ash 1 21) (ash 1 19))))
+    (xw32 at (logior (logand (xr32 at) #x0e00c3e0) (if (>= (port-speed c port) 4) (ash 1 31) (ash 1 4))))
+    (wait-until (lambda () (logtest (xr32 at) changes)) 1)
+    (xw32 at (logior (logand (xr32 at) #x0e00c3e0) changes))
+    (wait-until (lambda () (logbitp 1 (xr32 at))) 1)))
 
 (defun read-descriptor (c slot ring type index length &optional (language 0))
   (let ((page (vm-page-grab)))
@@ -313,7 +314,7 @@
     (loop :for port :from 1 :to (xhci-ports c)
           :when (logbitp 0 (xr32 (portsc c port)))
             :do (handler-case
-                    (when (or (>= (port-speed c port) 4) (reset-port c port))
+                    (when (reset-port c port)
                       (configure-device c port))
                   (error (e) (set-property c (format nil "port ~d" port) (princ-to-string e)))))
     (register-service c)
