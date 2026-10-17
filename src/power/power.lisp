@@ -1,6 +1,7 @@
 (defpackage #:darterfly/power
   (:use #:cl)
-  (:export #:flush-disks #:restart #:shut-down #:restart-soon #:save-system #:*save-system*)
+  (:export #:flush-disks #:restart #:shut-down #:restart-soon #:save-system #:*save-system*
+           #:note-activity #:dim-when-idle #:*dim-after* #:*dim-to*)
   (:shadow #:restart))
 (in-package #:darterfly/power)
 
@@ -51,3 +52,45 @@
       (error "shut down: no ACPI sleep control"))
     (flush-disks)
     (darterfly/devices:machdep 27 port (logior (ash type 10) (ash 1 13)))))
+
+(defparameter *dim-after* 120)
+(defparameter *dim-to* 0.3)
+
+(defvar *last-activity* (get-internal-real-time))
+(defvar *dimmed-from* nil)
+(defvar *idle-waiting* nil)
+(defvar *dim-lock* (sb-thread:make-mutex :name "dimming"))
+(defvar *activity* (sb-thread:make-waitqueue))
+
+(defun idle-seconds ()
+  (/ (- (get-internal-real-time) *last-activity*) internal-time-units-per-second))
+
+(defun note-activity ()
+  (setf *last-activity* (get-internal-real-time))
+  (when (or *dimmed-from* *idle-waiting*)
+    (sb-thread:with-mutex (*dim-lock*)
+      (when *dimmed-from*
+        (darterfly/devices:set-brightness (shiftf *dimmed-from* nil) :save nil))
+      (sb-thread:condition-broadcast *activity*))))
+
+(defun dim-display ()
+  (let ((now (darterfly/devices:brightness)))
+    (when (and now (null *dimmed-from*) (> now (* 1.5 (max 0.05 (* now *dim-to*)))))
+      (setf *dimmed-from* now)
+      (darterfly/devices:set-brightness (* now *dim-to*) :save nil))))
+
+(defun dim-when-idle ()
+  (loop
+    (let ((left (- *dim-after* (idle-seconds))))
+      (if (plusp left)
+          (sleep left)
+          (let ((seen *last-activity*))
+            (sb-thread:with-mutex (*dim-lock*)
+              (dim-display)
+              (when (and *dimmed-from* (/= seen *last-activity*))
+                (darterfly/devices:set-brightness (shiftf *dimmed-from* nil) :save nil))
+              (setf *idle-waiting* t)
+              (unwind-protect
+                   (loop while (= seen *last-activity*)
+                         do (sb-thread:condition-wait *activity* *dim-lock*))
+                (setf *idle-waiting* nil))))))))

@@ -314,6 +314,7 @@
 (defun collect-events (devices)
   (loop
     (let ((events (drain devices)))
+      (when events (darterfly/power:note-activity))
       (if events
           (sb-thread:with-mutex (*pending-lock*)
             (setf *pending* (nconc *pending* events))
@@ -444,6 +445,7 @@
   (damage-all)
   (render)
   (bsd:bsdthread-create #'hid-loop "hid")
+  (bsd:bsdthread-create #'darterfly/power:dim-when-idle "dimming")
   (let ((set (mach:mach-port-allocate mach:*task* :port-set))
         (render-server (init:bootstrap-check-in "renderserver")))
     (dolist (name '("windowserver" "windowserver.active"))

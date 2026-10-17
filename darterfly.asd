@@ -76,7 +76,7 @@
 
 (asdf:defsystem #:darterfly/windowserver
   :description "WindowServer"
-  :depends-on (#:darterfly/layer #:darterfly/server #:darterfly/bsd #:darterfly/mach #:darterfly/init #:darterfly/io #:darterfly/stats)
+  :depends-on (#:darterfly/layer #:darterfly/server #:darterfly/bsd #:darterfly/mach #:darterfly/init #:darterfly/io #:darterfly/stats #:darterfly/power)
   :serial t
   :pathname "src/server/"
   :components ((:file "windowserver")))
@@ -273,6 +273,6 @@
   :depends-on (#:darterfly #:fiveam (:require #:sb-posix) (:require #:sb-md5) (:require #:sb-bsd-sockets))
   :serial t
   :pathname "tests/"
-  :components ((:file "suite") (:file "mach") (:file "server") (:file "init") (:file "boot") (:file "apfs") (:file "net") (:file "wifi") (:static-file "low-harness.c") (:file "low"))
+  :components ((:file "suite") (:file "mach") (:file "server") (:file "init") (:file "boot") (:file "apfs") (:file "net") (:file "wifi") (:file "power") (:static-file "low-harness.c") (:file "low"))
   :perform (asdf:test-op (o c)
              (uiop:symbol-call :darterfly/test :run-them)))
