@@ -405,6 +405,11 @@
 
 (defvar *card* nil)
 
+(pushnew 'forget-card sb-ext:*save-hooks*)
+
+(defun forget-card ()
+  (setf *card* nil))
+
 (defun bring-up ()
   (let ((w (or *card* (setf *card* (make-card)))))
     (setf (card-log w) nil (card-rx-cur w) 0 (card-alive w) nil)
