@@ -903,6 +903,21 @@
                  "a process that crashes leaves its error and backtrace behind"))
         (image:finish c 5)))))
 
+(test a-program-that-quits-ends-only-its-own-process
+  (let ((c (image:bare-console :boot-args "init")))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
+      (unwind-protect
+           (progn
+             (is (image:expect c "init: pid 1" :timeout 120))
+             (ask "(darterfly/bsd:define-program \"quitter\" (argv envp) (declare (ignore argv envp)) (uiop:quit 7) (error \"quit returned\"))")
+             (ask "(with-open-file (s \"/tmp/quitter\" :direction :output :if-exists :supersede) (write-line \"#!darterfly quitter\" s))")
+             (ask "(darterfly/vfs:vnop-setattr (darterfly/vfs::namei \"/tmp/quitter\") :mode #o755)")
+             (is (search "[7]" (ask "(darterfly/bsd::with-bsd (let ((pid (darterfly/shell:spawn \"/tmp/quitter\"))) (format nil \"[~a]\" (ash (nth-value 1 (darterfly/bsd:wait4 pid)) -8))))"))
+                 "the program's exit code comes back to its parent")
+             (is (search "[ALIVE]" (ask "(format nil \"[~a]\" (if (sb-thread:thread-alive-p (sb-thread:main-thread)) :alive :gone))"))
+                 "and the system is still running"))
+        (image:finish c 5)))))
+
 (test a-thread-caught-in-a-reload-carries-on
   (let ((c (image:bare-console :boot-args "init")))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))

@@ -187,6 +187,18 @@
 (defun exit (code)
   (throw *proc* (w-exitcode (logand code 255) 0)))
 
+(defun user-process-p ()
+  (and (boundp '*proc*) *proc* (> (proc-pid *proc*) 1)))
+
+(defun exit-process-or-lisp (exit &rest args &key (code 0) &allow-other-keys)
+  (if (user-process-p)
+      (exit code)
+      (apply exit args)))
+
+(unless (sb-int:encapsulated-p 'sb-ext:exit 'process-exit)
+  (sb-int:encapsulate 'sb-ext:exit 'process-exit
+                      (lambda (exit &rest args) (apply #'exit-process-or-lisp exit args))))
+
 (defun bsdthread-create (fn &optional (name "thread"))
   (let* ((proc *proc*)
          (task darterfly/mach:*task*)
