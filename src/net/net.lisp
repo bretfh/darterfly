@@ -198,7 +198,7 @@
       (let ((frames (handler-case (darterfly/devices:network-receive device)
                       (error (e) (format *error-output* "~&net input: ~a~%" e) (sleep 0.1) nil))))
         (cond (frames (dolist (f frames) (ignore-errors (receive-frame f))))
-              (vector (darterfly/devices:wait-for-interrupt (list vector)))
+              (vector (darterfly/devices:wait-for-interrupt (list vector) 1))
               (t (sleep 0.002)))))))
 
 (defvar *configuration* nil)

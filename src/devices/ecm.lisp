@@ -127,7 +127,7 @@
         (ring-doorbell c (ecm-slot e) (ecm-out-dci e))))
     n))
 
-(defmethod interrupt-vector ((e usb-cdc-ecm)) nil)
+(defmethod interrupt-vector ((e usb-cdc-ecm)) (xhci-vector (ecm-controller e)))
 
 (defun endpoint-state (c slot dci)
   (let ((output (ml-phys-read-64 (+ (xhci-dcbaa c) (* 8 slot)))))

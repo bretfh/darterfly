@@ -7,10 +7,48 @@
 (defun allocate-vector () (sb-thread:with-mutex (*vectors-lock*) (pop *free-vectors*)))
 (defun free-vector (vector) (sb-thread:with-mutex (*vectors-lock*) (push vector *free-vectors*)))
 
+(defvar *interrupts-lock* (sb-thread:make-mutex :name "interrupts"))
+(defvar *interrupted* (sb-thread:make-waitqueue :name "interrupts"))
+(defvar *interrupt-counts* (make-array 64 :initial-element 0))
+(defvar *dispatchers* (make-hash-table))
+(defvar *seen* (make-hash-table :test 'eq :weakness :key :synchronized t))
+
+(pushnew 'forget-interrupts sb-ext:*save-hooks*)
+
+(defun forget-interrupts ()
+  (setf *dispatchers* (make-hash-table))
+  (clrhash *seen*))
+
+(defun dispatch (vector)
+  (loop
+    (when (plusp (machdep 12 (ash 1 (- vector #x30)) 1000000))
+      (sb-thread:with-mutex (*interrupts-lock*)
+        (incf (aref *interrupt-counts* (- vector #x30)))
+        (sb-thread:condition-broadcast *interrupted*)))))
+
+(defun ensure-dispatcher (vector)
+  (unless (gethash vector *dispatchers*)
+    (let ((recording (find-symbol "*RECORDING*" "DARTERFLY/BSD")))
+      (progv (and recording (list recording)) '(nil)
+        (setf (gethash vector *dispatchers*)
+              (sb-thread:make-thread #'dispatch :name (format nil "interrupt #x~x" vector) :arguments (list vector)))))))
+
 (defun wait-for-interrupt (vectors &optional timeout)
-  (let ((fired (machdep 12 (loop for v in vectors sum (ash 1 (- v #x30)))
-                        (if timeout (max 1 (round (* timeout 1000000))) 0))))
-    (loop for v in vectors when (logbitp (- v #x30) fired) collect v)))
+  (let ((deadline (and timeout (+ (get-internal-real-time) (round (* timeout internal-time-units-per-second))))))
+    (sb-thread:with-mutex (*interrupts-lock*)
+      (mapc #'ensure-dispatcher vectors)
+      (let ((seen (or (gethash sb-thread:*current-thread* *seen*)
+                      (setf (gethash sb-thread:*current-thread* *seen*) (make-array 64 :initial-element 0)))))
+        (loop
+          (let ((fired (loop for v in vectors
+                             unless (= (aref seen (- v #x30)) (aref *interrupt-counts* (- v #x30)))
+                               collect v)))
+            (when fired
+              (dolist (v vectors) (setf (aref seen (- v #x30)) (aref *interrupt-counts* (- v #x30))))
+              (return fired))
+            (let ((left (and deadline (/ (- deadline (get-internal-real-time)) internal-time-units-per-second))))
+              (when (and left (<= left 0)) (return nil))
+              (sb-thread:condition-wait *interrupted* *interrupts-lock* :timeout left))))))))
 
 (defun enable-msi-x (device)
   (let ((cap (find-pci-capability device #x11)))
