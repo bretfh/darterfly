@@ -1,6 +1,6 @@
 (defpackage #:finch/power
   (:use #:cl)
-  (:export #:flush-disks #:restart #:shut-down #:restart-soon)
+  (:export #:flush-disks #:restart #:shut-down #:restart-soon #:save-system #:*save-system*)
   (:shadow #:restart))
 (in-package #:finch/power)
 
@@ -9,6 +9,13 @@
   (dolist (m (finch/devices:find-entries 'finch/devices:media))
     (when (finch/devices:get-property m "Whole")
       (ignore-errors (finch/devices:media-flush m)))))
+
+(defvar *save-system* nil)
+
+(defun save-system ()
+  (if *save-system*
+      (funcall *save-system*)
+      (error "save: nothing knows how to save this system")))
 
 (defun restart ()
   (flush-disks)

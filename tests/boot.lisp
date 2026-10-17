@@ -614,9 +614,9 @@
              (image:pointer 28 12 t)
              (image:pointer 28 12 nil)
              (screen-until (lambda (s) (< 20 (dark-pixels s 10 70 120 95 100))))
-             (image:pointer 60 150)
-             (image:pointer 60 150 t)
-             (image:pointer 60 150 nil)
+             (image:pointer 60 172)
+             (image:pointer 60 172 t)
+             (image:pointer 60 172 nil)
              (is (= #xff2e5c8f (image:pixel (screen-until (lambda (s) (= #xff2e5c8f (image:pixel s 300 110)))) 300 110))
                  "quit takes terminal away")
              (dotimes (i 2)
@@ -636,6 +636,36 @@
                 (finch/qmp:dict "events" (coerce (append (loop :for n :in names :collect (key n t))
                                                          (loop :for n :in (reverse names) :collect (key n nil)))
                                                  'vector)))))
+
+(test the-running-system-saves-itself
+  (let ((esp (merge-pathnames "esp-live-save.img" (finch-file "build/")))
+        (image:*screen-size* '(1280 800)))
+    (uiop:delete-file-if-exists esp)
+    (let ((c (image:bare-console :boot-args "init" :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 300)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "init: pid 1" :timeout 120))
+               (ask "(defun cl-user::made-live () :made-live)")
+               (image:send c "(finch/install:save-generation)")
+               (is (image:expect c "restart: core " :timeout 300) "the running image is saved and restarted")
+               (is (image:expect c "init: pid 1" :timeout 120) "the session comes back")
+               (is (search ":MADE-LIVE" (ask "(cl-user::made-live)")) "what was made live is still there")
+               (is (search "T" (ask "(loop :repeat 600 :until (equal \"gen-2\" (finch/install:current)) :do (sleep 0.5) :finally (return (equal \"gen-2\" (finch/install:current))))"))
+                   "it becomes a generation")
+               (let ((screen (screen-until (lambda (s) (< 200 (ldb (byte 8 16) (image:pixel s 300 12)))))))
+                 (is (< 200 (ldb (byte 8 16) (image:pixel screen 300 12))) "the menu bar is back"))
+               (image:send c "(progn (finch/power:flush-disks) (sb-ext:exit))")
+               (image:expect c "exit(0)" :timeout 120))
+          (image:finish c 5))))
+    (let ((c (image:bare-console :boot-args "init" :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "boot.efi: generation gen-2" :timeout 60) "the saved system boots")
+               (is (image:expect c "init: pid 1" :timeout 120))
+               (is (search ":MADE-LIVE" (ask "(cl-user::made-live)")) "a change made live survives a cold boot"))
+          (image:finish c 5))))))
 
 (test power-restarts-and-shuts-down
   (dolist (form '("(finch/power:shut-down)" "(finch/power:restart)"))

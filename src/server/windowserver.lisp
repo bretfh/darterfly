@@ -453,3 +453,11 @@
             (io:framebuffer-width *framebuffer*) (io:framebuffer-height *framebuffer*) render-server)
     (finish-output)
     (serve render-server set)))
+
+(defun forget-windows ()
+  (setf *lock* (sb-thread:make-mutex :name "WindowServer")
+        *pending-lock* (sb-thread:make-mutex :name "hid events")
+        *pending-ready* (sb-thread:make-waitqueue)
+        *pending* nil *windows* nil *clients* nil *framebuffer* nil *drag* nil *damage* nil))
+
+(pushnew 'forget-windows sb-ext:*save-hooks*)

@@ -1,6 +1,6 @@
 (defpackage #:finch/install
   (:use #:cl)
-  (:export #:receive-deployment #:reload-systems #:restart-soon #:flush-disks #:install #:generations #:current #:select #:confirm #:failed #:manifest #:save #:stop-threads #:kernel-image #:build-kernel #:install-disk #:internal-disk))
+  (:export #:save-generation #:install-saved-generation #:receive-deployment #:reload-systems #:restart-soon #:flush-disks #:install #:generations #:current #:select #:confirm #:failed #:manifest #:save #:stop-threads #:kernel-image #:build-kernel #:install-disk #:internal-disk))
 (in-package #:finch/install)
 
 (defvar *esp* "/Volumes/EFI/")
@@ -71,6 +71,24 @@
     (when left (error "threads still running: ~a" left)))
   (sb-ext:save-lisp-and-die "/System/Library/Kernels/saved.core"))
 
+(defparameter *pending-generation* "/Library/Settings/pending-generation")
+
+(defun save-generation ()
+  (ensure-directories-exist *pending-generation*)
+  (with-open-file (s *pending-generation* :direction :output :if-exists :supersede)
+    (write-line "pending" s))
+  (finch/bsd:end-processes)
+  (finch/power:flush-disks)
+  (if (eq sb-thread:*current-thread* (sb-thread:main-thread))
+      (save)
+      (sb-thread:interrupt-thread (sb-thread:main-thread) #'save)))
+
+(defun install-saved-generation ()
+  (when (probe-file *pending-generation*)
+    (delete-file *pending-generation*)
+    (prog1 (install "/System/Library/Kernels/kernel" "/System/Library/Kernels/finch.core")
+      (finch/power:flush-disks))))
+
 (defun install (kernel core &key loader manifest)
   (let* ((was (current))
          (name (format nil "gen-~d" (1+ (reduce #'max (generations) :key (lambda (g) (parse-integer g :start 4)) :initial-value 0)))))
@@ -113,3 +131,5 @@
                                             names))
                       s))
     out))
+
+(setf finch/power:*save-system* 'save-generation)

@@ -276,3 +276,9 @@
            (multiple-value-bind (pid code) (launch (third argv))
              (if pid (progn (format t "~a~%" pid) 0) (progn (format *error-output* "~a: ~(~a~)~%" (third argv) code) 1))))
           (t (format *error-output* "usage: service list | start label~%") 64))))
+
+(defun forget-jobs ()
+  (setf *lock* (sb-thread:make-mutex :name "init")
+        *jobs* nil *services* (make-hash-table :test 'equal) *notify* nil))
+
+(pushnew 'forget-jobs sb-ext:*save-hooks*)

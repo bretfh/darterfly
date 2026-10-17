@@ -98,3 +98,9 @@
     (mapc (lambda (carried) (when carried (release carried))) (shiftf (registered task) (list nil nil nil)))
     (kill (task-port task))
     (values)))
+
+(defun forget-ipc ()
+  (setf *ipc* (sb-thread:make-mutex :name "ipc")
+        *threads* (make-hash-table :test 'eq :weakness :key :synchronized t)))
+
+(pushnew 'forget-ipc sb-ext:*save-hooks*)

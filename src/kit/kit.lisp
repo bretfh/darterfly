@@ -228,6 +228,7 @@
 
 (defun standard-menus (name &rest menus)
   (list* (list name (cons (format nil "About ~a" name) nil) :separator
+               (cons "Save System" (lambda (sender) (declare (ignore sender)) (finch/power:save-system)))
                (cons "Restart" (lambda (sender) (declare (ignore sender)) (finch/power:restart)))
                (cons "Shut Down" (lambda (sender) (declare (ignore sender)) (finch/power:shut-down)))
                :separator
@@ -399,3 +400,8 @@
            (when char
              (window-key-down window (string char) (server:event-value event :keycode))))))
       window)))
+
+(defun forget-icons ()
+  (setf *icons-lock* (sb-thread:make-mutex :name "icons")))
+
+(pushnew 'forget-icons sb-ext:*save-hooks*)

@@ -278,3 +278,20 @@
     (loop :for proc :being :the :hash-values :of *procs*
           :when (and (eq (proc-task proc) task) (not (eq (proc-state proc) :zombie)))
             :return (proc-pid proc))))
+
+(defun forget-processes ()
+  (setf *bsd* (sb-thread:make-mutex :name "bsd")
+        *changed* (sb-thread:make-waitqueue)
+        *procs* (make-hash-table)
+        *next-pid* 0
+        finch/mach:*task* (finch/mach:make-task "self")
+        *proc0* (setf (gethash 0 *procs*) (make-instance 'proc :pid 0 :task finch/mach:*task*))
+        *proc* *proc0*))
+
+(pushnew 'forget-processes sb-ext:*save-hooks*)
+
+(defun end-processes ()
+  (dolist (proc (procs))
+    (when (> (proc-pid proc) 0)
+      (ignore-errors (kill (proc-pid proc) :sigkill))))
+  (loop :repeat 100 :while (rest (procs)) :do (sleep 0.05)))
