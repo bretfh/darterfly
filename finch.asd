@@ -149,7 +149,7 @@
 
 (asdf:defsystem #:finch/install
   :description "Generations"
-  :depends-on (#:uiop #:finch/fat #:finch/low #:finch/platform #:finch/kern #:finch/link #:finch/gpt #:finch/apfs #:finch/devices #:finch/vfs #:finch/power (:require #:sb-bsd-sockets))
+  :depends-on (#:uiop #:finch/fat #:finch/low #:finch/platform #:finch/kern #:finch/link #:finch/gpt #:finch/apfs #:finch/devices #:finch/vfs #:finch/power #:finch/bsd (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/install/"
   :components ((:file "install") (:file "disk") (:file "deploy")))
