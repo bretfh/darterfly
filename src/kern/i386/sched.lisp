@@ -104,8 +104,9 @@
     th))
 
 (define-low idle-thread ()
+  (note-cpu-kind)
   (while 1
-    (let ((next (dequeue)))
+    (let ((next (if (leave-for-performance-cpu) 0 (dequeue))))
       (if next
           (switch-to next)
           (progn
@@ -141,18 +142,45 @@
     (thread-setrun th)
     th))
 
+(define-global cpu-kinds :u32 :count 32 :alignment 4)
+
+(defconstant +performance-cpu+ 1)
+(defconstant +efficient-cpu+ 2)
+
+(define-low note-cpu-kind ()
+  (setf (ref cpu-kinds (cpu-number))
+        (if (and (>= (the :u32 (cpuid 0 :eax)) #x1A)
+                 (= (shr (the :u32 (cpuid #x1A :eax)) 24) #x20))
+            +efficient-cpu+
+            +performance-cpu+)))
+
+(define-low idle-cpu-of-kind (kind)
+  (let ((i 0))
+    (while (< i |real_ncpus|)
+      (let ((cdp (cpu-datap i)))
+        (when (and (/= i (cpu-number)) (mem :u32 (+ cdp +c-running+)) (mem :u32 (+ cdp +c-idle+))
+                   (/= (ref cpu-kinds i) (if (= kind +performance-cpu+) +efficient-cpu+ +performance-cpu+)))
+          (result (+ i 1))))
+      (incf i))
+    0))
+
+(define-low wake-cpu (i)
+  (setf (mem :u32 (+ (cpu-datap i) +c-idle+)) 0)
+  (i386-signal-cpu i))
+
 (define-low thread-setrun (th)
   (when (= (mem :u32 (+ th +t-state+)) +th-run+) (result 0))
   (setf (mem :u32 (+ th +t-state+)) +th-run+)
   (enqueue th)
-  (let ((i 0))
-    (while (< i |real_ncpus|)
-      (let ((cdp (cpu-datap i)))
-        (when (and (/= i (cpu-number)) (mem :u32 (+ cdp +c-running+)) (mem :u32 (+ cdp +c-idle+)))
-          (setf (mem :u32 (+ cdp +c-idle+)) 0)
-          (i386-signal-cpu i)
-          (result 0)))
-      (incf i))))
+  (let ((cpu (idle-cpu-of-kind +performance-cpu+)))
+    (unless cpu (setf cpu (idle-cpu-of-kind +efficient-cpu+)))
+    (when cpu (wake-cpu (- cpu 1)))))
+
+(define-low leave-for-performance-cpu ()
+  (unless (and runq-head (= (ref cpu-kinds (cpu-number)) +efficient-cpu+)) (result 0))
+  (let ((cpu (idle-cpu-of-kind +performance-cpu+)))
+    (when cpu (wake-cpu (- cpu 1)))
+    cpu))
 
 (define-low charge (old)
   (let* ((c (* 4 (cpu-number))) (now (rdtsc)) (since (ref cpu-stats c)))
