@@ -229,8 +229,8 @@
 (defun standard-menus (name &rest menus)
   (list* (list name (cons (format nil "About ~a" name) nil) :separator
                (cons "Save System" (lambda (sender) (declare (ignore sender)) (darterfly/power:save-system)))
-               (cons "Restart" (lambda (sender) (declare (ignore sender)) (darterfly/power:restart)))
-               (cons "Shut Down" (lambda (sender) (declare (ignore sender)) (darterfly/power:shut-down)))
+               (cons "Restart" (lambda (sender) (declare (ignore sender)) (darterfly/power:save-system :then :restart)))
+               (cons "Shut Down" (lambda (sender) (declare (ignore sender)) (darterfly/power:save-system :then :shut-down)))
                :separator
                (cons (format nil "Quit ~a" name) #'terminate))
          (or menus

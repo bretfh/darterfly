@@ -75,11 +75,13 @@
 
 (defparameter *pending-generation* "/Library/Settings/pending-generation")
 
-(defun save-generation (&key kernel loader boot-conf restart)
+(defun save-generation (&key kernel loader boot-conf restart then)
   (ensure-directories-exist *pending-generation*)
   (with-open-file (s *pending-generation* :direction :output :if-exists :supersede)
     (with-standard-io-syntax
-      (prin1 (list :kernel kernel :loader loader :boot-conf boot-conf :restart restart) s)))
+      (prin1 (list :kernel kernel :loader loader :boot-conf boot-conf
+                   :restart (or restart (eq then :restart)) :shut-down (eq then :shut-down))
+             s)))
   (darterfly/bsd:suspend-processes)
   (darterfly/bsd:suspend-threads)
   (darterfly/bsd:end-processes)
@@ -100,8 +102,8 @@
           (with-open-file (s (esp-path "boot.conf") :direction :output :if-exists :supersede)
             (write-string (getf pending :boot-conf) s)))
         (darterfly/power:flush-disks)
-        (when (getf pending :restart)
-          (darterfly/power:restart))))))
+        (cond ((getf pending :shut-down) (darterfly/power:shut-down))
+              ((getf pending :restart) (darterfly/power:restart)))))))
 
 (defun install (kernel core &key loader manifest)
   (let* ((was (current))

@@ -827,6 +827,30 @@
                  "~a ends the machine" form))
         (image:finish c 5)))))
 
+(test shutting-down-keeps-the-world
+  (let ((esp (merge-pathnames "esp-shut-down.img" (darterfly-file "build/"))))
+    (uiop:delete-file-if-exists esp)
+    (let ((c (image:bare-console :boot-args "init" :esp esp)))
+      (unwind-protect
+           (progn
+             (is (image:expect c "init: pid 1" :timeout 120))
+             (image:send c "(defvar cl-user::*kept* 42)")
+             (image:expect c (format nil "~%* ") :timeout 60)
+             (image:send c "(darterfly/power:save-system :then :shut-down)")
+             (is (image:expect c "restart: core " :timeout 300) "shutting down saves the world first")
+             (is (loop :repeat 3000 :unless (uiop:process-alive-p (image::console-process c)) :return t :do (sleep 0.1))
+                 "and then the machine is off")
+             (is (= 1 (count-restarts c)) "without a restart in between"))
+        (image:finish c 5)))
+    (let ((c (image:bare-console :boot-args "init" :esp esp)))
+      (unwind-protect
+           (progn
+             (is (image:expect c "boot.efi: generation gen-2" :timeout 60))
+             (is (image:expect c "init: pid 1" :timeout 120))
+             (image:send c "cl-user::*kept*")
+             (is (search "42" (image:expect c (format nil "~%* ") :timeout 60)) "the next power-on finds the world as it was"))
+        (image:finish c 5)))))
+
 (test runaway-code-can-be-stopped
   (let ((c (image:bare-console :boot-args "init"))
         (image:*screen-size* '(1280 800)))

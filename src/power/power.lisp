@@ -12,10 +12,11 @@
 
 (defvar *save-system* nil)
 
-(defun save-system ()
-  (if *save-system*
-      (funcall *save-system*)
-      (error "save: nothing knows how to save this system")))
+(defun save-system (&key then)
+  (cond (*save-system* (funcall *save-system* :then then))
+        ((eq then :restart) (restart))
+        ((eq then :shut-down) (shut-down))
+        (t (error "save: nothing knows how to save this system"))))
 
 (defun restart ()
   (flush-disks)
