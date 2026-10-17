@@ -2,6 +2,8 @@
 
 (defparameter *wifi-settings* "/Library/Settings/wifi")
 
+(defparameter *power-save* 2)
+
 (defconstant +tx-slots+ 256)
 (defconstant +mgmt-tid+ 15)
 
@@ -107,14 +109,11 @@
           (setf (link-frames l) (remove found (link-frames l) :count 1))
           (return found)))
       (when (> (microseconds) deadline) (return nil))
-      (let ((packets (sb-thread:with-recursive-lock ((link-lock l)) (receive-packets w))))
-        (if packets
-            (dolist (p packets)
-              (if (= (getf p :code) #xC1)
-                  (let ((frame (mpdu (getf p :payload))))
-                    (when frame (setf (link-frames l) (append (link-frames l) (list frame)))))
-                  (setf (card-notifications w) (append (card-notifications w) (list p)))))
-            (sleep 0.002))))))
+      (let ((packets (pump w)))
+        (dolist (p (take-mpdus w))
+          (let ((frame (mpdu (getf p :payload))))
+            (when frame (setf (link-frames l) (append (link-frames l) (list frame))))))
+        (unless packets (sleep 0.002))))))
 
 (defun from-bss-p (l frame fc0)
   (and (= (aref frame 0) fc0) (>= (length frame) 24)
@@ -195,8 +194,19 @@
                                  (loop for (aging idle) in '((2016 320) (2016 320) (10016 2016) (2016 320) (2016 320))
                                        append (append (le-u32 aging) (le-u32 idle)))))
     (command-ok w 0 #xD0 (octets 1 0 0 1 (link-bssid l) 0 0))
-    (command-ok w 0 #x77 (zeros 4))
+    (set-power-save l *power-save*)
     (send-command w 5 #xF (octets 0 0 0 0 0 0 1 0 (le-u16 0) (le-u16 #xFF0) (zeros 12) (le-u16 2346) (le-u16 0)))))
+
+(defparameter +power-levels+ '((0 0 0) (1 200 500) (2 200 300) (3 50 100)))
+
+(defun set-power-save (l level)
+  (destructuring-bind (rx tx) (rest (assoc level +power-levels+))
+    (let ((w (link-card l)) (on (plusp level)))
+      (command-ok w 0 #x77 (octets (le-u16 (if on 1 0)) 0 0))
+      (command-ok w 0 #xA9 (octets (le-u32 0) (le-u16 (if on 3 0)) (le-u16 25)
+                                   (le-u32 (* rx 1024)) (le-u32 (* tx 1024)) (le-u32 0) (le-u32 0)
+                                   (zeros 16)))
+      level)))
 
 (defun eapol-frame (l body)
   (let ((w (link-card l)) (bssid (link-bssid l)))
@@ -333,11 +343,18 @@
   (unless (wireless-up-p d) (sleep 0.1) (return-from devices:network-receive nil))
   (let* ((l (wireless-link d)) (w (link-card l)) (out nil) (lost nil))
     (sb-thread:with-recursive-lock ((link-lock l))
-      (acknowledge-interrupts w)
-      (dolist (p (receive-packets w))
-        (multiple-value-bind (f status) (and (= (getf p :code) #xC1) (mpdu (getf p :payload)))
+      (multiple-value-bind (fh hw) (acknowledge-interrupts w)
+        (when (or (logtest hw (logior (ash 1 3) (ash 1 5) (ash 1 25) (ash 1 29))) (logbitp 21 fh))
+          (setf lost :firmware-error)))
+      (pump w)
+      (let ((missed (sb-thread:with-recursive-lock ((card-pump-lock w))
+                      (prog1 (find-if (lambda (p) (= (getf p :code) #xA2)) (card-notifications w))
+                        (setf (card-notifications w) (remove #xA2 (card-notifications w) :key (lambda (p) (getf p :code))))))))
+        (when missed (setf lost (lost-signal l missed nil))))
+      (dolist (p (take-mpdus w))
+        (multiple-value-bind (f status) (mpdu (getf p :payload))
           (setf lost (or lost (lost-signal l p f)))
-          (when (= (getf p :code) #xC1)
+          (progn
             (when (and f (data-from-bss-p l f) (decrypted-p f status))
               (if (eql +eapol-ethertype+ (data-payload f))
                   (multiple-value-bind (reply events) (supplicant-receive (link-supplicant l) (nth-value 1 (data-payload f)))
@@ -384,6 +401,30 @@
   (setf darterfly/bsd::*activities*
         (cons (cons :wifi (lambda () (sb-thread:make-thread #'start-wifi :name "wifi start")))
               (remove :wifi darterfly/bsd::*activities* :key #'car :test #'equal))))
+
+(defun wired-p (device)
+  (and (typep device 'devices:ethernet-controller) (not (typep device 'wireless-interface))))
+
+(defun wifi-device-changed (event device)
+  (when (and (wired-p device) darterfly/net:*interface* (probe-file *wifi-settings*))
+    (case event
+      (:added
+       (let ((current (darterfly/net::interface-device darterfly/net:*interface*)))
+         (when (typep current 'wireless-interface)
+           (sb-thread:make-thread
+            (lambda ()
+              (darterfly/net::interface-detach current)
+              (darterfly/net::interface-attach device))
+            :name "wifi to cable"))))
+      (:removed
+       (sb-thread:make-thread
+        (lambda ()
+          (sleep 1)
+          (unless (darterfly/net::interface-device darterfly/net:*interface*)
+            (start-wifi)))
+        :name "cable to wifi")))))
+
+(pushnew 'wifi-device-changed devices:*device-hooks*)
 
 (defun confirm-wifi ()
   (setf *wifi-confirmed* t)

@@ -187,3 +187,11 @@
     (is (null (darterfly/wifi::lost-signal l (list :code #xC1) other)))
     (is (eq :beacons-lost (darterfly/wifi::lost-signal l (funcall beacons 30) nil)))
     (is (null (darterfly/wifi::lost-signal l (funcall beacons 3) nil)))))
+
+(test the-power-table-is-the-size-the-firmware-checks
+  (let ((sent nil))
+    (sb-int:encapsulate 'darterfly/wifi::command-ok 'capture
+                        (lambda (f w group opcode payload) (declare (ignore f w)) (push (list group opcode (length payload)) sent) nil))
+    (unwind-protect (darterfly/wifi::set-power-save (offline-link) 2)
+      (sb-int:unencapsulate 'darterfly/wifi::command-ok 'capture))
+    (is (equal '((0 #x77 4) (0 #xA9 40)) (reverse sent)))))
