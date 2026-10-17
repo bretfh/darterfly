@@ -1838,6 +1838,41 @@
                (is (search "(\"gen-1\" \"gen-2\")" (ask "(darterfly/install:generations)"))))
           (image:finish c 5))))))
 
+(test erase-and-install-over-an-installed-system
+  (let* ((stick (image:usb-image))
+         (disk (merge-pathnames "reinstall-nvme.img" (darterfly-file "build/"))))
+    (with-open-file (s disk :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
+      (file-position s (1- (* 4096 1048576)))
+      (write-byte 0 s))
+    (flet ((from-stick ()
+             (let ((c (stick-machine "-drive" (format nil "if=none,id=stick,format=raw,snapshot=on,file=~a" (uiop:native-namestring stick))
+                                     "-device" "usb-storage,bus=xhci.0,drive=stick,bootindex=0"
+                                     "-drive" (format nil "if=none,id=disk,format=raw,file=~a" (uiop:native-namestring disk))
+                                     "-device" "nvme,serial=disk,drive=disk")))
+               (unwind-protect
+                    (progn
+                      (is (image:expect c "init: pid 1" :timeout 120))
+                      (image:send c "(darterfly/install:install-disk)")
+                      (is (image:expect c (format nil "~%* ") :timeout 600))
+                      (image:send c "(sb-ext:exit)")
+                      (image:expect c "exit(0)" :timeout 120))
+                 (image:finish c 5))))
+           (from-disk (form)
+             (let ((c (stick-machine "-drive" (format nil "if=none,id=disk,format=raw,file=~a" (uiop:native-namestring disk))
+                                     "-device" "nvme,serial=disk,drive=disk,bootindex=0")))
+               (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 300)))
+                 (unwind-protect
+                      (progn
+                        (is (image:expect c "init: pid 1" :timeout 120) "the installed system comes up")
+                        (prog1 (ask form)
+                          (image:send c "(progn (darterfly/power:flush-disks) (sb-ext:exit))")
+                          (image:expect c "exit(0)" :timeout 120)))
+                   (image:finish c 5))))))
+      (from-stick)
+      (from-disk "(progn (dotimes (i 60) (with-open-file (s (format nil \"/Users/darterfly/churn~d\" i) :direction :output :if-exists :supersede) (write-line \"churn\" s)) (darterfly/vfs:vfs-sync)) :churned)")
+      (from-stick)
+      (is (search "NIL" (from-disk "(probe-file \"/Users/darterfly/churn0\")")) "the erased system is gone and the new one is mounted"))))
+
 (test deploy-updates-an-installed-system
   (let* ((stick (image:usb-image))
          (disk (merge-pathnames "deploy-nvme.img" (darterfly-file "build/")))

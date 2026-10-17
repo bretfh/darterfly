@@ -95,6 +95,26 @@
     (is (apfs:lookup v "/many/f51"))
     (is (= 250 (length (apfs:directory-entries v (apfs:lookup v "/many")))))))
 
+(test newfs-over-a-used-container-leaves-nothing-of-it
+  (let* ((image (write-image))
+         (v (image-volume image)))
+    (is (equal "00000000-0000-0000-0000-000000000002" (string-upcase (apfs:volume-uuid v))))
+    (let ((apfs:*clock* (lambda () 1)))
+      (multiple-value-bind (r w) (apfs:file-store image)
+        (declare (ignore r))
+        (dotimes (i 30)
+          (let ((darterfly/vfs:*root* nil) (darterfly/vfs:*mounts* nil))
+            (darterfly/vfs:vfs-mount (darterfly/vfs:make-ram-node :vdir #o755) "/")
+            (darterfly/vfs:vfs-mkdir "/mnt" #o755)
+            (multiple-value-bind (r2 w2) (apfs:file-store image) (apfs:mount-writable r2 w2 "/mnt"))
+            (put-file (format nil "/mnt/churn~d" i) "x")))
+        (apfs:newfs w :size (* 16 1048576) :volume-name "fresh" :volume-uuid "AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE"
+                      :entries (list (list :file "new.txt" (text "new"))))))
+    (let ((fresh (image-volume image)))
+      (is (equal "AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE" (string-upcase (apfs:volume-uuid fresh))) "the new volume is the one found")
+      (is (equal "fresh" (apfs:volume-name fresh)))
+      (is (null (apfs:lookup fresh "/new/a.txt")) "nothing of the old volume is visible"))))
+
 (test update-root-keeps-what-is-not-the-system
   (let ((disk (merge-pathnames "update-root.img" (darterfly-file "build/"))))
     (apfs:newfs disk :volume-name "darterfly HD"

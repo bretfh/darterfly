@@ -147,10 +147,14 @@
 (defconstant +performance-cpu+ 1)
 (defconstant +efficient-cpu+ 2)
 
+(define-global efficient-from :u32 :alignment 4)
+
 (define-low note-cpu-kind ()
   (setf (ref cpu-kinds (cpu-number))
-        (if (and (>= (the :u32 (cpuid 0 :eax)) #x1A)
-                 (= (shr (the :u32 (cpuid #x1A :eax)) 24) #x20))
+        (if (or (and (>= (the :u32 (cpuid 0 :eax)) #x1A)
+                     (= (shr (the :u32 (cpuid #x1A :eax)) 24) #x20))
+                (and (the :u32 (|platform_parse_boot_argn| "efficient" (address efficient-from)))
+                     (>= (cpu-number) efficient-from)))
             +efficient-cpu+
             +performance-cpu+)))
 

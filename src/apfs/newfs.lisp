@@ -420,7 +420,9 @@ data blocks as (block . octets), the next inode number and counts."
               (put-u64 vol 304 time) (put-u64 vol 312 xid)
               (put-bytes vol 704 (c-octets volume-name))
               (put-u32 vol 960 3)
-              (put volume-block (seal vol)))))
+              (put volume-block (seal vol)))
+            (dotimes (block fixed-end)
+              (unless (gethash block image) (put block (new-block))))))
         (if (functionp path)
             (progn
               (loop for n in (sort (loop for k being the hash-keys of image collect k) #'<)
