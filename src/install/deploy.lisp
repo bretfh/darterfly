@@ -85,10 +85,10 @@
                               (unless (typep w 'style-warning) (push (princ-to-string w) problems))
                               (muffle-warning w))))
       (unwind-protect
-           (progn (setf darterfly/bsd:*reloading* t)
+           (progn (setf darterfly/bsd::*reloading* t)
                   (asdf:load-system :darterfly))
         (setf darterfly/bsd::*reloaded* (get-internal-real-time)
-              darterfly/bsd:*reloading* nil)))
+              darterfly/bsd::*reloading* nil)))
     (list :seconds (/ (round (- (get-internal-real-time) t0) 100000) 10.0) :warnings (reverse problems))))
 
 (defun flush-disks () (darterfly/power:flush-disks))
