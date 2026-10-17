@@ -22,12 +22,12 @@ enum {
   VFS_fcntl, VFS_readdir, VFS_link, VFS_utimes, VFS_fsync, VFS_umask, VFS_pipe, VFS_spawn, VFS_waitpid
 };
 
-enum { ARG_INT, ARG_STRING, ARG_IN, ARG_OUT };
+enum { ARG_INT, ARG_STRING, ARG_IN, ARG_OUT, ARG_FROM, ARG_INTO };
 enum { TAG_CALL = 1, TAG_EXIT, TAG_FILES };
 
 #define PORT_MESSAGE 65536
 #define PORT_HEADER 72
-#define PORT_CHUNK 49152
+#define PORT_CHUNK (1 << 20)
 
 struct record {
   uint64_t magic, core, core_size, argv, argv_size, archive, archive_size, cwd, stdin_path, back_core, back_size,
@@ -375,6 +375,8 @@ static long arg_size(int kind, long value, long len) {
   return kind == ARG_STRING ? (value ? (long)strlen((const char *)value) + 1 : 0) : kind == ARG_INT ? 0 : value ? len : 0;
 }
 
+static int by_address(int kind) { return kind == ARG_INT || kind == ARG_FROM || kind == ARG_INTO; }
+
 static long port_vfs(long op, long a, long b, long c, long d) {
   long args[4] = {a, b, c, d};
   int kinds[4] = {ARG_INT, ARG_INT, ARG_INT, ARG_INT};
@@ -387,10 +389,10 @@ static long port_vfs(long op, long a, long b, long c, long d) {
     kinds[0] = kinds[1] = ARG_STRING; break;
   case VFS_read: case VFS_pread:
     if (args[2] > PORT_CHUNK) args[2] = PORT_CHUNK;
-    kinds[1] = ARG_OUT; lens[1] = args[2]; break;
+    kinds[1] = ARG_INTO; lens[1] = args[2]; break;
   case VFS_write: case VFS_pwrite:
     if (args[2] > PORT_CHUNK) args[2] = PORT_CHUNK;
-    kinds[1] = ARG_IN; lens[1] = args[2]; break;
+    kinds[1] = ARG_FROM; lens[1] = args[2]; break;
   case VFS_stat: case VFS_lstat:
     kinds[0] = ARG_STRING; kinds[1] = ARG_OUT; lens[1] = sizeof(struct stat); break;
   case VFS_fstat:
@@ -423,7 +425,7 @@ static long port_vfs(long op, long a, long b, long c, long d) {
   char *p = msg + PORT_HEADER;
   for (int i = 0; i < 4; i++) {
     long size = arg_size(kinds[i], args[i], lens[i]);
-    h[2 + i] = kinds[i] == ARG_INT ? (uint64_t)args[i] : 0;
+    h[2 + i] = by_address(kinds[i]) ? (uint64_t)args[i] : 0;
     sizes[i] = (uint32_t)size;
     k[i] = (uint8_t)kinds[i];
     if ((kinds[i] == ARG_STRING || kinds[i] == ARG_IN) && size) {

@@ -155,19 +155,20 @@
 
 (defun serve-world (port world proc timeout)
   (let ((end (and timeout (+ (get-internal-real-time) (* timeout internal-time-units-per-second))))
-        (code nil) (archive nil) (at 0))
+        (code nil) (archive nil) (at 0)
+        (m (make-array 65536 :element-type '(unsigned-byte 8))))
     (loop
       (handler-case
-          (multiple-value-bind (m token) (darterfly/worlds:receive port :timeout 1)
+          (multiple-value-bind (n token) (darterfly/worlds:receive-into port m :timeout 1)
             (case (u64-at m 0)
-              (1 (darterfly/worlds:reply token (if proc (darterfly/bsd:serve-request proc m) (make-array 24 :element-type '(unsigned-byte 8) :initial-element 255))))
+              (1 (darterfly/worlds:reply token (if proc (darterfly/bsd:serve-request proc m token) (make-array 24 :element-type '(unsigned-byte 8) :initial-element 255))))
               (2 (setf code (u64-at m 8)
                        archive (make-array (u64-at m 16) :element-type '(unsigned-byte 8))
                        at 0)
                  (darterfly/worlds:reply token #(0)))
               (3 (when archive
-                   (replace archive m :start1 at :start2 8)
-                   (incf at (- (length m) 8)))
+                   (replace archive m :start1 at :start2 8 :end2 n)
+                   (incf at (- n 8)))
                  (darterfly/worlds:reply token #(0)))
               (t (darterfly/worlds:reply token #(0))))
             (when (and archive (>= at (length archive)))

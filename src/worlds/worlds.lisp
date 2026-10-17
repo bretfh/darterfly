@@ -1,6 +1,6 @@
 (defpackage #:darterfly/worlds
   (:use #:cl)
-  (:export #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages #:spawn-record))
+  (:export #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages #:spawn-record #:receive-into #:copy-from #:copy-into))
 (in-package #:darterfly/worlds)
 
 (define-condition world-error (error)
@@ -40,6 +40,17 @@
       (with-octets (os out)
         (let ((n (machdep 42 port bs (length buf) os (round (* timeout 1000000)))))
           (values (subseq buf 0 n) (aref out 0) (aref out 2)))))))
+
+(defun receive-into (port buffer &key (timeout 0))
+  (let ((out (make-array 3 :element-type '(unsigned-byte 64))))
+    (with-octets (bs buffer)
+      (with-octets (os out)
+        (let ((n (machdep 42 port bs (length buffer) os (round (* timeout 1000000)))))
+          (values n (aref out 0) (aref out 2)))))))
+
+(defun copy-from (token there here size) (machdep 49 token there size here))
+
+(defun copy-into (token there here size) (machdep 50 token there size here))
 
 (defun reply (token message)
   (let ((m (octets message)))

@@ -214,7 +214,7 @@
         (a (reg regs +r-rdi+))
         (b (reg regs +r-rsi+))
         (args |platform_boot_args|))
-    (unless (or (privileged) (= n 3) (= n 4) (and (= n 16) (user-ok a b 1)) (and (>= n 40) (<= n 43))
+    (unless (or (privileged) (= n 3) (= n 4) (and (= n 16) (user-ok a b 1)) (and (>= n 40) (<= n 43)) (= n 49) (= n 50)
                 (and (or (= n 6) (= n 17)) (user-ok a 16 1)))
       (result (error regs +eperm+)))
     (cond
@@ -234,6 +234,8 @@
       ((= n 45) (ok regs (world-stop-id a)))
       ((= n 46) (ok regs (world-state a)))
       ((= n 47) (ok regs (vm-page-free-count)))
+      ((= n 49) (ok regs (port-copy a b (reg regs +r-r10+) (reg regs +r-rdx+) 0)))
+      ((= n 50) (ok regs (port-copy a b (reg regs +r-r10+) (reg regs +r-rdx+) 1)))
       ((= n 4) (ok regs (if (privileged) (address commpage) +commpage-va+)))
       ((= n 5) (ok regs (the :u32 (serial-ready))))
       ((= n 6)
