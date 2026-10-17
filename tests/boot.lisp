@@ -827,6 +827,23 @@
              (is (search "PID" (ask "(darterfly/stats:top 1)"))))
         (image:finish c 5)))))
 
+(test an-idle-machine-stops-ticking
+  (let ((c (image:bare-console)))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 90)
+             (ask "(defvar *s* (darterfly/stats:sample 3))")
+             (is (search "T" (ask "(< (or (cdr (assoc \"#xDD\" (getf *s* :interrupts-per-s) :test #'equal)) 0) 120)"))
+                 "four idle cpus take far fewer than 400 clock interrupts a second")
+             (is (search "T" (ask "(let ((t0 (get-internal-real-time))) (sleep 0.5) (< 0.45 (/ (- (get-internal-real-time) t0) internal-time-units-per-second) 0.6))"))
+                 "a sleep on an idle machine wakes on time")
+             (is (search "T" (ask "(let ((t0 (get-internal-real-time)) (done nil)) (sb-thread:make-thread (lambda () (sleep 3) (setf done :late))) (sleep 0.05) (sb-thread:join-thread (sb-thread:make-thread (lambda () (sleep 0.3) (setf done (or done :on-time))))) (and (eq done :on-time) (< (/ (- (get-internal-real-time) t0) internal-time-units-per-second) 0.5)))"))
+                 "a nearer deadline set while the clock sleeps toward a later one still fires on time")
+             (is (search "T" (ask "(let ((n 0)) (sb-ext:schedule-timer (sb-ext:make-timer (lambda () (incf n))) 0.2) (sleep 0.4) (= n 1))"))
+                 "an alarm timer fires on an idle machine"))
+        (image:finish c 5)))))
+
 (test power-restarts-and-shuts-down
   (dolist (form '("(darterfly/power:shut-down)" "(darterfly/power:restart)"))
     (let ((c (image:bare-console)))

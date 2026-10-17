@@ -72,6 +72,20 @@
   (setf (mem :u32 (lapic +lapic-timer+)) (logior +lapic-timer-vector+ +lapic-timer-periodic+))
   (setf (mem :u32 (lapic +lapic-timer-initial-count+)) per-tick))
 
+(define-global wake-at :u64 :export t)
+
+(define-low timer-stop ()
+  (setf (mem :u32 (lapic +lapic-timer+)) (logior +lapic-timer-vector+ (ash 1 16)))
+  (setf (mem :u32 (lapic +lapic-timer-initial-count+)) 0))
+
+(define-low timer-oneshot (delta)
+  (let ((counts (truncate (* delta per-tick) (truncate (ref commpage 0) +hz+))))
+    (when (> counts #xFFFFFFFF) (setf counts #xFFFFFFFF))
+    (when (< counts 1) (setf counts 1))
+    (setf (mem :u32 (lapic +lapic-timer-divide-config+)) 3)
+    (setf (mem :u32 (lapic +lapic-timer+)) +lapic-timer-vector+)
+    (setf (mem :u32 (lapic +lapic-timer-initial-count+)) counts)))
+
 (define-low lapic-init-slave ()
   (enable-lapic)
   (start-timer))

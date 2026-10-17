@@ -129,7 +129,8 @@
   (when old (getitimer-real old))
   (setf real-interval (usec-to-tsc (mem :u64 in) (mem :u64 (+ in 8))))
   (let ((value (usec-to-tsc (mem :u64 (+ in 16)) (mem :u64 (+ in 24)))))
-    (setf real-deadline (if value (+ (rdtsc) value) 0))))
+    (setf real-deadline (if value (+ (rdtsc) value) 0))
+    (kick-clock real-deadline)))
 
 (define-low getitimer-prof (out)
   (tsc-to-timeval profinterval out)
