@@ -48,6 +48,13 @@
 
 (define-low current-thread () (mem :u64 (+ (cpu-data) +c-active-thread+)))
 
+(define-low world-of (th)
+  (if (and th (mem :u64 (+ th +t-world+)))
+      (mem :u64 (+ th +t-world+))
+      (world-0)))
+
+(define-low current-world () (world-of (current-thread)))
+
 (define-low cpu-datap ((i :u32)) (+ (address |cpu_data_master|) (* i +cpu-data-size+)))
 
 (define-low enqueue (th)
@@ -82,6 +89,7 @@
   (let ((th (thread-alloc)))
     (setf (mem :u64 (+ th +t-kstack-top+)) kstack-top)
     (setf (mem :u32 (+ th +t-state+)) +th-run+)
+    (setf (mem :u64 (+ (world-0) +w-pml4+)) (kvtophys (address idle-pml4)))
     (setf (mem :u64 (+ th +t-world+)) (world-0))
     (setf (mem :u64 (+ (cpu-data) +c-active-thread+)) th)
     (setf (mem :u64 (+ (cpu-data) +c-idle-thread+)) (idle-thread-create))
@@ -123,7 +131,11 @@
             (setf (mem :u32 (+ (cpu-data) +c-idle+)) 0))))))
 
 (define-low next-deadline ()
-  (let ((best real-deadline) (th all-threads))
+  (let ((best 0) (th all-threads) (w (world-0)))
+    (while w
+      (let ((d (mem :u64 (+ w +w-real-deadline+))))
+        (when (and d (or (= best 0) (< d best))) (setf best d)))
+      (setf w (mem :u64 (+ w +w-next+))))
     (while th
       (when (= (mem :u32 (+ th +t-state+)) +th-wait+)
         (let ((d (mem :u64 (+ th +t-wait-deadline+))))
@@ -298,7 +310,8 @@
     (set-kernel-stack (mem :u64 (+ next +t-kstack-top+)))
     (wrmsr #xC0000100 (mem :u64 (+ next +t-fs-base+)))
     (let ((w (mem :u64 (+ next +t-world+))))
-      (when (and w (/= w (logand (read-cr 3) +pte-pfn+))) (set-cr 3 w)))
+      (when (and w (/= (mem :u64 (+ w +w-pml4+)) (logand (read-cr 3) +pte-pfn+)))
+        (set-cr 3 (mem :u64 (+ w +w-pml4+)))))
     (|Switch_context| (+ old +t-kernel-rsp+) (mem :u64 (+ next +t-kernel-rsp+)))))
 
 (define-low thread-block ()
@@ -335,10 +348,13 @@
   (setf (mem :u32 (+ th +t-sched-flags+)) (logior (mem :u32 (+ th +t-sched-flags+)) +abort-safely+))
   (cause-ast-check th))
 
-(define-low thread-wakeup (event (all :u32))
+(define-low thread-wakeup (event (all :u32)) (thread-wakeup-in event all 0))
+
+(define-low thread-wakeup-in (event (all :u32) world)
   (let ((n 0) (th all-threads))
     (while th
-      (when (and (= (mem :u32 (+ th +t-state+)) +th-wait+) (= (mem :u64 (+ th +t-wait-event+)) event))
+      (when (and (= (mem :u32 (+ th +t-state+)) +th-wait+) (= (mem :u64 (+ th +t-wait-event+)) event)
+                 (or (not world) (= (world-of th) world)))
         (thread-wakeup-thread th +thread-awakened+)
         (incf n)
         (unless all (result n)))

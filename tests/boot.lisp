@@ -94,7 +94,7 @@
 (test two-worlds-have-their-own-memory
   (let ((c (image:bare-console :boot-args "worldtest halt" :root nil)))
     (unwind-protect
-         (is (image:expect c "worldtest: world 0 sees 0x1111, world 1 thread sees 0x2222"))
+         (is (image:expect c "worldtest: world 0 sees 0x1111, world 1 found 0x0 and wrote 0x2222, world 1 has 1 entries"))
       (image:finish c 5))))
 
 (test the-kernel-has-memory

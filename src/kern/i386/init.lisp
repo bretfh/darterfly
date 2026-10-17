@@ -45,30 +45,28 @@
 (defconstant +world-test-va+ #x1300000000)
 
 (define-global world-test-seen :u64)
+(define-global world-test-found :u64)
 
 (define-low world-test-thread ()
+  (vm-map-enter +world-test-va+ +page-size+ 3)
+  (setf world-test-found (mem :u64 +world-test-va+))
+  (setf (mem :u64 +world-test-va+) #x2222)
   (setf world-test-seen (mem :u64 +world-test-va+))
   (thread-wakeup (address world-test-seen) 1)
   (thread-terminate-self))
 
 (define-low world-test ()
   (let ((w (world-create))
-        (a (vm-page-grab))
-        (b (vm-page-grab))
         (tries 0))
-    (pmap-enter +world-test-va+ a 3)
+    (vm-map-enter +world-test-va+ +page-size+ 3)
     (setf (mem :u64 +world-test-va+) #x1111)
-    (set-cr 3 w)
-    (pmap-enter +world-test-va+ b 3)
-    (setf (mem :u64 +world-test-va+) #x2222)
-    (set-cr 3 (world-0))
     (thread-create-kernel (code-address world-test-thread) w)
     (while (and (not world-test-seen) (< tries 100))
       (thread-wait (address world-test-seen) (deadline-after 0 10000000))
       (incf tries))
-    (kprintf "worldtest: world 0 sees 0x%lx, world 1 thread sees 0x%lx, world 1 pml4 0x%lx
-" (mem :u64 +world-test-va+) world-test-seen w)
-    (pmap-remove +world-test-va+ +page-size+)))
+    (kprintf "worldtest: world 0 sees 0x%lx, world 1 found 0x%lx and wrote 0x%lx, world 1 has %lu entries
+" (mem :u64 +world-test-va+) world-test-found world-test-seen (mem :u64 (+ w +w-nentries+)))
+    (vm-map-remove +world-test-va+ +page-size+)))
 
 (define-low reset-user-image ()
   (let* ((file (+ (mem :u64 (+ |platform_boot_args| +kernel-file-start+)) +physmap-base+))
@@ -163,7 +161,7 @@
     (setf restart-core-size size)
     (setf (mem :u64 (+ self +t-sigmask+)) 0)
     (setf (mem :u64 (+ self +t-siglist+)) 0)
-    (setf p-siglist 0)
+    (setf (mem :u64 (siglist-of (current-world))) 0)
     (kprintf "restart: core 0x%lx size %lu
 " core size)
     (load-init-program)

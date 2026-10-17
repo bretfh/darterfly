@@ -37,7 +37,8 @@
 (define-low thread-by-id (id)
   (let ((th all-threads))
     (while th
-      (when (and (= (mem :u64 (+ th +t-thread-id+)) id) (/= (mem :u32 (+ th +t-state+)) +th-terminate+))
+      (when (and (= (mem :u64 (+ th +t-thread-id+)) id) (/= (mem :u32 (+ th +t-state+)) +th-terminate+)
+                 (= (world-of th) (current-world)))
         (result th))
       (setf th (mem :u64 (+ th +t-all-next+))))
     0))
@@ -53,7 +54,7 @@
 " n (mem :u64 (+ (current-thread) +t-thread-id+)) a
                (if (and b (or (= n 48) (= n 329))) (mem :u64 b) b) c
                (mem :u64 (+ (current-thread) +t-sigmask+))
-               (logior p-siglist (mem :u64 (+ (current-thread) +t-siglist+)))))
+               (logior (mem :u64 (siglist-of (current-world))) (mem :u64 (+ (current-thread) +t-siglist+)))))
     (cond
       ((= n 1)
        (kprintf "exit(%d)
@@ -83,7 +84,7 @@
          (serial-tx-kick)
          (ok regs c)))
       ((= n 20) (ok regs 1))
-      ((= n 37) (psignal b) (ok regs 0))
+      ((= n 37) (psignal (current-world) b) (ok regs 0))
       ((= n 328)
        (let ((th (thread-by-id a)))
          (unless th (result (error regs 3)))
@@ -93,7 +94,7 @@
       ((= n 361)
        (when d
          (setf (mem :u32 d) 1)
-         (thread-wakeup d 1))
+         (thread-wakeup-in d 1 (current-world)))
        (thread-terminate-self))
       ((= n 372) (ok regs (mem :u64 (+ (current-thread) +t-thread-id+))))
       ((= n 515)
@@ -103,13 +104,13 @@
          (cond ((= r +thread-timed-out+) (error regs +etimedout+))
                ((= r +thread-interrupted+) (error regs +eintr+))
                (t (ok regs 0)))))
-      ((= n 516) (ok regs (thread-wakeup b (if (logand a #x100) 1 0))))
+      ((= n 516) (ok regs (thread-wakeup-in b (if (logand a #x100) 1 0) (current-world))))
       ((= n 46)
        (when (or (= a 0) (>= a +nsig+)) (result (error regs +einval+)))
-       (let ((act (+ (address p-sigacts) (* a +sigact-size+))))
+       (let ((act (sigact (current-world) a)))
          (when c (rep-movsb c act +sigact-size+))
          (when b
-           (setf sigtramp (mem :u64 (+ b 8)))
+           (setf (mem :u64 (+ (current-world) +w-sigtramp+)) (mem :u64 (+ b 8)))
            (setf (mem :u64 act) (mem :u64 b))
            (setf (mem :u64 (+ act 8)) (mem :u64 (+ b 16)))
            (setf (mem :u32 (+ act 16)) (mem :u32 (+ b 24))))

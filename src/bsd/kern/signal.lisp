@@ -27,20 +27,19 @@
 (defconstant +uc-sigmask+ 512)
 (defconstant +uc-ss+ 640)
 
-(define-global p-siglist :u64 :export t)
-(define-global p-sigacts :u8 :count (* 65 24) :alignment 8 :export t)
-(define-global sigtramp :u64 :export t)
 (define-global sigtrace :u32 :alignment 4 :export t)
 (define-global sigtrace-known :u64)
-(define-global real-interval :u64)
-(define-global real-deadline :u64)
 (define-global profinterval :u64)
 (define-global profnext :u64 :count 32)
 
 (define-low sigmask ((sig :u32)) (shl 1 (- sig 1)))
 
+(define-low siglist-of (w) (+ w +w-siglist+))
+
+(define-low sigact (w (sig :u32)) (+ w +w-sigacts+ (* sig +sigact-size+)))
+
 (define-low deliverable (th)
-  (logand (logior (mem :u64 (+ th +t-siglist+)) p-siglist)
+  (logand (logior (mem :u64 (+ th +t-siglist+)) (mem :u64 (siglist-of (world-of th))))
           (lognot (logand (mem :u64 (+ th +t-sigmask+)) (lognot +unblockable+)))))
 
 (define-low psignal-thread (th (sig :u32))
@@ -48,12 +47,13 @@
   (setf (mem :u64 (+ th +t-siglist+)) (logior (mem :u64 (+ th +t-siglist+)) (sigmask sig)))
   (when (deliverable th) (thread-abort-safely th)))
 
-(define-low psignal ((sig :u32))
+(define-low psignal (w (sig :u32))
   (when (or (= sig 0) (>= sig +nsig+)) (result 0))
-  (setf p-siglist (logior p-siglist (sigmask sig)))
+  (setf (mem :u64 (siglist-of w)) (logior (mem :u64 (siglist-of w)) (sigmask sig)))
   (let ((th all-threads))
     (while th
       (when (and (/= (mem :u32 (+ th +t-state+)) +th-terminate+)
+                 (= (world-of th) w)
                  (not (logand (mem :u64 (+ th +t-sigmask+)) (sigmask sig))))
         (thread-abort-safely th)
         (result 0))
@@ -69,9 +69,14 @@
     n))
 
 (define-low bsd-hardclock ()
-  (when (and real-deadline (>= (rdtsc) real-deadline))
-    (psignal +sigalrm+)
-    (setf real-deadline (if real-interval (+ (rdtsc) real-interval) 0))))
+  (let ((w (world-0)))
+    (while w
+      (let ((d (mem :u64 (+ w +w-real-deadline+))))
+        (when (and d (>= (rdtsc) d))
+          (psignal w +sigalrm+)
+          (setf (mem :u64 (+ w +w-real-deadline+))
+                (if (mem :u64 (+ w +w-real-interval+)) (+ (rdtsc) (mem :u64 (+ w +w-real-interval+))) 0))))
+      (setf w (mem :u64 (+ w +w-next+))))))
 
 (define-low bsd-proftick ()
   (unless profinterval (result 0))
@@ -82,7 +87,7 @@
     (psignal-thread (current-thread) +sigprof+)))
 
 (define-low bsd-console-interrupt-char ()
-  (psignal +sigint+))
+  (psignal (world-0) +sigint+))
 
 (define-low bsd-ast (regs)
   (let ((self (current-thread))
@@ -94,11 +99,11 @@
     (while (setf sig (issignal))
       (if (logand (mem :u64 (+ self +t-siglist+)) (sigmask sig))
           (setf (mem :u64 (+ self +t-siglist+)) (logand (mem :u64 (+ self +t-siglist+)) (lognot (sigmask sig))))
-          (setf p-siglist (logand p-siglist (lognot (sigmask sig)))))
+          (setf (mem :u64 (siglist-of (current-world))) (logand (mem :u64 (siglist-of (current-world))) (lognot (sigmask sig)))))
       (when sigtrace
         (kprintf "[ast: thread 0x%lx deliver %d at 0x%lx mask 0x%lx]
 " (mem :u64 (+ self +t-thread-id+)) sig (mem :u64 (+ regs +r-rip+)) (mem :u64 (+ self +t-sigmask+))))
-      (unless (= (mem :u64 (+ (address p-sigacts) (* sig +sigact-size+))) +sig-ign+)
+      (unless (= (mem :u64 (sigact (current-world) sig)) +sig-ign+)
         (sendsig regs sig 0 0)
         (result 0)))))
 
@@ -121,16 +126,17 @@
   (setf (mem :u64 (+ tv 8)) (truncate (rem tsc (ref commpage 0)) (truncate (ref commpage 0) 1000000))))
 
 (define-low getitimer-real (out)
-  (let ((now (rdtsc)))
-    (tsc-to-timeval real-interval out)
-    (tsc-to-timeval (if (> real-deadline now) (- real-deadline now) 0) (+ out 16))))
+  (let ((now (rdtsc))
+        (d (mem :u64 (+ (current-world) +w-real-deadline+))))
+    (tsc-to-timeval (mem :u64 (+ (current-world) +w-real-interval+)) out)
+    (tsc-to-timeval (if (> d now) (- d now) 0) (+ out 16))))
 
 (define-low setitimer-real (in old)
   (when old (getitimer-real old))
-  (setf real-interval (usec-to-tsc (mem :u64 in) (mem :u64 (+ in 8))))
+  (setf (mem :u64 (+ (current-world) +w-real-interval+)) (usec-to-tsc (mem :u64 in) (mem :u64 (+ in 8))))
   (let ((value (usec-to-tsc (mem :u64 (+ in 16)) (mem :u64 (+ in 24)))))
-    (setf real-deadline (if value (+ (rdtsc) value) 0))
-    (kick-clock real-deadline)))
+    (setf (mem :u64 (+ (current-world) +w-real-deadline+)) (if value (+ (rdtsc) value) 0))
+    (kick-clock (mem :u64 (+ (current-world) +w-real-deadline+)))))
 
 (define-low getitimer-prof (out)
   (tsc-to-timeval profinterval out)
@@ -150,7 +156,7 @@
   (+ (rdtsc) (usec-to-tsc sec (truncate nsec 1000))))
 
 (define-low sendsig (regs (sig :u32) (code :u32) addr)
-  (unless sigtramp (result 0))
+  (unless (mem :u64 (+ (current-world) +w-sigtramp+)) (result 0))
   (let* ((sp (logand (- (mem :u64 (+ regs +r-rsp+)) 128 +ucontext-size+) (lognot 15)))
          (low (- (logand (- sp +siginfo-size+) (lognot 15)) 8))
          (page (logand low (lognot 4095)))
@@ -176,7 +182,7 @@
     (setf (mem :u32 (+ si 4)) 0)
     (setf (mem :u32 (+ si 8)) code)
     (setf (mem :u64 (+ si 16)) addr)
-    (setf act (+ (address p-sigacts) (* sig +sigact-size+)))
+    (setf act (sigact (current-world) sig))
     (setf (mem :u64 (+ (current-thread) +t-sigmask+))
           (logior (mem :u64 (+ (current-thread) +t-sigmask+)) (mem :u64 (+ act 8))))
     (unless (logand (mem :u32 (+ act 16)) +sa-nodefer+)
@@ -184,7 +190,7 @@
             (logior (mem :u64 (+ (current-thread) +t-sigmask+)) (sigmask sig))))
     (when (logand (mem :u32 (+ act 16)) +sa-resethand+)
       (setf (mem :u64 act) 0))
-    (setf (mem :u64 (+ regs +r-rip+)) sigtramp)
+    (setf (mem :u64 (+ regs +r-rip+)) (mem :u64 (+ (current-world) +w-sigtramp+)))
     (setf (mem :u64 (+ regs +r-rdi+)) sig)
     (setf (mem :u64 (+ regs +r-rsi+)) si)
     (setf (mem :u64 (+ regs +r-rdx+)) uc)

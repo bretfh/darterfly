@@ -169,9 +169,7 @@
     (kprintf "pmap: physmap %d GB at 0x%lx with %s pages, kernel at 0x%lx from 0x%x
 " gigs +physmap-base+ (if (= gigs 512) "1 GB" "2 MB") +kernel-base+ kaddr)))
 
-(define-low world-0 () (kvtophys (address idle-pml4)))
-
-(define-low world-create ()
+(define-low pmap-create ()
   (let ((pa (vm-page-grab))
         (i 256))
     (when (= pa 0) (result 0))
