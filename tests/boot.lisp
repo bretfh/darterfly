@@ -863,7 +863,8 @@
              (image:expect c ":SYNC" :timeout 30)
              (image:expect c "* " :timeout 30)
              (let ((seen (ask "(list (if (sb-thread:mutex-owner darterfly/bsd::*bsd*) :held :free) (darterfly/bsd:getpid))")))
-               (is (search "(:FREE " seen) "the process lock is free again and processes still work: ~a" seen)))
+               (is (search "(:FREE " seen) "the process lock is free again and processes still work: ~a" seen))
+             (is (search "\"boom\"" (ask "(getf (first darterfly/bsd:*background-errors*) :error)")) "and the error is kept to look at"))
         (image:finish c 5)))))
 
 (test a-thread-caught-in-a-reload-carries-on

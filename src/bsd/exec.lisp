@@ -143,6 +143,17 @@
 (defun retry-restart (condition)
   (find "RETRY" (compute-restarts condition) :key (lambda (r) (symbol-name (restart-name r))) :test #'string=))
 
+(defvar *background-errors* nil)
+
+(defun note-background-error (condition)
+  (let ((entry (list :time (get-universal-time)
+                     :thread (sb-thread:thread-name sb-thread:*current-thread*)
+                     :error (ignore-errors (princ-to-string condition))
+                     :backtrace (ignore-errors (with-output-to-string (s) (sb-debug:print-backtrace :stream s :count 25))))))
+    (sb-ext:atomic-push entry *background-errors*)
+    (when (> (length *background-errors*) 50)
+      (setf (cdr (nthcdr 49 *background-errors*)) nil))))
+
 (defun report-and-unwind (condition hook)
   (declare (ignore hook))
   (unless (or (eq sb-thread:*current-thread* (sb-thread:main-thread)) *debugger-hook*)
@@ -150,6 +161,7 @@
       (loop while *reloading* do (sleep 0.05))
       (let ((retry (retry-restart condition)))
         (when retry (invoke-restart retry))))
+    (ignore-errors (note-background-error condition))
     (ignore-errors
      (format *error-output* "~&~a: ~a~%" (sb-thread:thread-name sb-thread:*current-thread*) condition)
      (sb-debug:print-backtrace :stream *error-output* :count 15))
