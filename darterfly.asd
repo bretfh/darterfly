@@ -90,7 +90,7 @@
 
 (asdf:defsystem #:darterfly/apps
   :description "Applications"
-  :depends-on (#:darterfly/layer #:darterfly/server #:darterfly/bsd #:darterfly/text #:darterfly/imageio #:darterfly/kit #:darterfly/edit #:darterfly/install #:darterfly/generation #:darterfly/devices #:darterfly/net #:darterfly/wifi)
+  :depends-on (#:darterfly/layer #:darterfly/server #:darterfly/bsd #:darterfly/text #:darterfly/imageio #:darterfly/kit #:darterfly/edit #:darterfly/install #:darterfly/generation #:darterfly/devices #:darterfly/net #:darterfly/wifi #:darterfly/journal)
   :serial t
   :pathname "src/apps/"
   :components ((:file "hello") (:file "terminal") (:file "listener") (:file "forcequit") (:file "editor") (:file "generations") (:file "session") (:file "fetch") (:file "install")))
@@ -115,9 +115,16 @@
   :pathname "src/wifi/"
   :components ((:file "eapol") (:file "firmware") (:file "ax210") (:file "join")))
 
+(asdf:defsystem #:darterfly/journal
+  :description "Forms evaluated since the last save"
+  :depends-on (#:darterfly/vfs)
+  :serial t
+  :pathname "src/journal/"
+  :components ((:file "journal")))
+
 (asdf:defsystem #:darterfly/nrepl
   :description "Remote eval"
-  :depends-on (#:darterfly/net #:darterfly/devices #:darterfly/bsd)
+  :depends-on (#:darterfly/net #:darterfly/devices #:darterfly/bsd #:darterfly/journal)
   :serial t
   :pathname "src/nrepl/"
   :components ((:file "nrepl")))
@@ -176,7 +183,7 @@
 
 (asdf:defsystem #:darterfly/install
   :description "Generations"
-  :depends-on (#:uiop #:darterfly/fat #:darterfly/low #:darterfly/platform #:darterfly/kern #:darterfly/link #:darterfly/gpt #:darterfly/apfs #:darterfly/devices #:darterfly/vfs #:darterfly/power #:darterfly/bsd (:require #:sb-bsd-sockets))
+  :depends-on (#:uiop #:darterfly/fat #:darterfly/low #:darterfly/platform #:darterfly/kern #:darterfly/link #:darterfly/gpt #:darterfly/apfs #:darterfly/devices #:darterfly/vfs #:darterfly/power #:darterfly/bsd #:darterfly/journal (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/install/"
   :components ((:file "install") (:file "disk") (:file "deploy")))
@@ -266,13 +273,13 @@
 
 (asdf:defsystem #:darterfly
   :description "A live, hackable OS on SBCL"
-  :depends-on (#:darterfly/mach #:darterfly/server #:darterfly/layer #:darterfly/bsd #:darterfly/init #:darterfly/shell #:darterfly/io #:darterfly/text #:darterfly/edit #:darterfly/imageio #:darterfly/kit #:darterfly/stats #:darterfly/windowserver #:darterfly/bench #:darterfly/apps #:darterfly/devices #:darterfly/vfs #:darterfly/apfs #:darterfly/fat #:darterfly/install #:darterfly/net #:darterfly/nrepl #:darterfly/run #:darterfly/generation #:darterfly/kernel #:darterfly/image #:darterfly/crypto #:darterfly/wifi)
+  :depends-on (#:darterfly/mach #:darterfly/server #:darterfly/layer #:darterfly/bsd #:darterfly/init #:darterfly/shell #:darterfly/io #:darterfly/text #:darterfly/edit #:darterfly/imageio #:darterfly/kit #:darterfly/stats #:darterfly/windowserver #:darterfly/bench #:darterfly/apps #:darterfly/devices #:darterfly/vfs #:darterfly/apfs #:darterfly/fat #:darterfly/install #:darterfly/net #:darterfly/nrepl #:darterfly/run #:darterfly/generation #:darterfly/kernel #:darterfly/image #:darterfly/crypto #:darterfly/wifi #:darterfly/journal)
   :in-order-to ((asdf:test-op (asdf:test-op #:darterfly/test))))
 
 (asdf:defsystem #:darterfly/test
   :depends-on (#:darterfly #:fiveam (:require #:sb-posix) (:require #:sb-md5) (:require #:sb-bsd-sockets))
   :serial t
   :pathname "tests/"
-  :components ((:file "suite") (:file "mach") (:file "server") (:file "init") (:file "boot") (:file "apfs") (:file "net") (:file "wifi") (:file "power") (:static-file "low-harness.c") (:file "low"))
+  :components ((:file "suite") (:file "mach") (:file "server") (:file "init") (:file "boot") (:file "apfs") (:file "net") (:file "wifi") (:file "power") (:file "install") (:static-file "low-harness.c") (:file "low"))
   :perform (asdf:test-op (o c)
              (uiop:symbol-call :darterfly/test :run-them)))

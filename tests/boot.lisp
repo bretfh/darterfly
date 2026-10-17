@@ -933,8 +933,31 @@
                (is (image:expect c "restart: core " :timeout 300))
                (is (image:expect c "init: pid 1" :timeout 120))
                (is (not (search "12345" (ask "darterfly/devices::*backlight*"))) "the backlight is looked up again, not taken from the old mapping")
-               (is (search "=> T" (format nil "=> ~a" (string-trim '(#\Space #\Newline #\*) (ask "(open-stream-p (slot-value (darterfly/text::loader (darterfly/text:font \"AdwaitaSans-Regular\" 13)) 'zpb-ttf::input-stream))"))))
+               (is (search "[T]" (ask "(format nil \"[~a]\" (open-stream-p (slot-value (darterfly/text::loader (darterfly/text:font \"AdwaitaSans-Regular\" 13)) 'zpb-ttf::input-stream)))"))
                    "a font asked for after the save reads from an open file"))
+          (image:finish c 5))))))
+
+(test a-damaged-world-is-not-saved
+  (let ((esp (merge-pathnames "esp-badworld.img" (darterfly-file "build/"))))
+    (uiop:delete-file-if-exists esp)
+    (let ((c (image:bare-console :boot-args "init" :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "init: pid 1" :timeout 120))
+               (is (search "[0]" (ask "(format nil \"[~a]\" (darterfly/install:heap-errors))")) "a healthy world checks clean")
+               (ask "(defvar cl-user::*victim* (list 1 2 3))")
+               (ask "(defvar cl-user::*filler* (make-array 64 :element-type '(unsigned-byte 64) :initial-element 0))")
+               (ask "(fill cl-user::*filler* (sb-sys:sap-ref-word (sb-sys:int-sap (logandc2 (sb-kernel:get-lisp-obj-address cl-user::*filler*) 15)) 0))")
+               (ask "(defvar cl-user::*car* (sb-sys:int-sap (logandc2 (sb-kernel:get-lisp-obj-address cl-user::*victim*) 15)))")
+               (ask "(defvar cl-user::*word* (sb-sys:sap-ref-word cl-user::*car* 0))")
+               (ask "(setf (sb-sys:sap-ref-word cl-user::*car* 0) (logior (+ (logandc2 (sb-kernel:get-lisp-obj-address cl-user::*filler*) 15) 256) 7))")
+               (is (search "[T]" (ask "(format nil \"[~a]\" (plusp (darterfly/install:heap-errors)))")) "a pointer into the middle of an object is found")
+               (is (search "BAD-WORLD" (ask "(handler-case (progn (darterfly/install:save-generation) :saved) (darterfly/install:bad-world (e) (type-of e)))"))
+                   "the save is refused")
+               (is (search "[NIL]" (ask "(format nil \"[~a]\" (probe-file \"/Library/Settings/pending-generation\"))")) "nothing is queued for install")
+               (ask "(setf (sb-sys:sap-ref-word cl-user::*car* 0) cl-user::*word*)")
+               (is (search "[0]" (ask "(format nil \"[~a]\" (darterfly/install:heap-errors))")) "once repaired it checks clean again"))
           (image:finish c 5))))))
 
 (test the-kernel-builds-the-same-every-time

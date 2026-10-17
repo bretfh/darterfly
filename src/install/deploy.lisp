@@ -37,6 +37,8 @@
     (format nil "kernel-flags=~{~a~^ ~} -- --core /System/Library/Kernels/darterfly.core~%ramdisk=/System/Library/RAMDisk/root.cpio~%"
             (substitute "init" "launchd" (uiop:split-string flags :separator " ") :test #'string=))))
 
+(defvar *written* nil)
+
 (defun receive-deployment (host port)
   (let ((socket (make-instance 'sb-bsd-sockets:inet-socket :type :stream :protocol :tcp))
         (written nil) (kept 0))
@@ -55,7 +57,66 @@
                             (incf kept))))))
       (sb-bsd-sockets:socket-close socket))
     (flush-disks)
+    (setf *written* (loop for path in written
+                          when (uiop:string-suffix-p path ".lisp")
+                            collect (concatenate 'string "/" path)))
     (list :written (length written) :unchanged kept)))
+
+
+(defun source-forms (file)
+  (let ((*package* (find-package "COMMON-LISP-USER"))
+        (*read-eval* nil)
+        (forms nil))
+    (handler-case
+        (with-open-file (s file)
+          (loop for form = (read s nil s)
+                until (eq form s)
+                do (if (and (consp form) (eq (first form) 'in-package))
+                       (let ((package (find-package (second form))))
+                         (if package (setf *package* package) (return)))
+                       (push form forms))))
+      (error () nil))
+    (nreverse forms)))
+
+(defun struct-slot-names (name)
+  (let ((dd (sb-kernel:find-defstruct-description name nil)))
+    (and dd (mapcar (lambda (slot) (string (sb-kernel:dsd-name slot))) (sb-kernel:dd-slots dd)))))
+
+(defun new-struct-slots (form)
+  (destructuring-bind (name-and-options &rest slots) (rest form)
+    (let* ((options (if (consp name-and-options) (rest name-and-options) nil))
+           (include (find :include options :key (lambda (o) (if (consp o) (first o) o))))
+           (own (mapcar (lambda (slot) (string (if (consp slot) (first slot) slot)))
+                        (if (stringp (first slots)) (rest slots) slots))))
+      (append (and (consp include) (struct-slot-names (second include))) own))))
+
+(defun form-hazard (form)
+  (when (consp form)
+    (case (first form)
+      (defstruct
+       (let* ((name (let ((n (second form))) (if (consp n) (first n) n)))
+              (live (find-class name nil)))
+         (cond ((null live) nil)
+               ((not (typep live 'structure-class))
+                (format nil "~s is a class in the running world; a struct can't take its name live" name))
+               ((not (equal (struct-slot-names name) (new-struct-slots form)))
+                (format nil "the struct ~s changes its slots from ~a to ~a" name (struct-slot-names name) (new-struct-slots form))))))
+      (defclass
+       (let ((live (find-class (second form) nil)))
+         (when (typep live 'structure-class)
+           (format nil "~s is a struct in the running world; a class can't take its name live" (second form)))))
+      (defconstant
+       (let ((name (second form)) (value (third form)))
+         (when (and (symbolp name) (boundp name) (constantp name) (constantp value))
+           (let ((new (ignore-errors (eval value))))
+             (unless (equalp new (symbol-value name))
+               (format nil "the constant ~s changes from ~s to ~s" name (symbol-value name) new)))))))))
+
+(defun reload-hazards (files)
+  (loop for file in files
+        append (loop for form in (source-forms file)
+                     for hazard = (form-hazard form)
+                     when hazard collect (format nil "~a: ~a" (file-namestring file) hazard))))
 
 (defun deploy-into-world (&key restart)
   (let* ((kernel (concatenate 'string *deploy-dir* "kernel"))
@@ -67,6 +128,8 @@
                                                 (let ((v (make-array (file-length s) :element-type '(unsigned-byte 8))))
                                                   (read-sequence v s) v)))))))
          (reloaded (reload-systems)))
+    (when (getf reloaded :refused)
+      (return-from deploy-into-world reloaded))
     (let ((darterfly/bsd:*recording* nil))
       (sb-thread:make-thread
        (lambda ()
@@ -78,7 +141,10 @@
        :name "deploy save"))
     (append reloaded (list :new-kernel (and new-kernel t) :saving t))))
 
-(defun reload-systems ()
+(defun reload-systems (&key force)
+  (let ((hazards (and (not force) (reload-hazards *written*))))
+    (when hazards
+      (return-from reload-systems (list :refused hazards))))
   (let ((t0 (get-internal-real-time))
         (problems nil))
     (handler-bind ((warning (lambda (w)

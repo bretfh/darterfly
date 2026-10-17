@@ -1,6 +1,6 @@
 (defpackage #:darterfly/install
   (:use #:cl)
-  (:export #:*stable-after* #:deploy-into-world #:save-generation #:install-saved-generation #:receive-deployment #:reload-systems #:restart-soon #:flush-disks #:install #:generations #:current #:select #:confirm #:failed #:manifest #:save #:stop-threads #:kernel-image #:build-kernel #:install-disk #:internal-disk))
+  (:export #:*stable-after* #:deploy-into-world #:save-generation #:heap-errors #:bad-world #:install-saved-generation #:receive-deployment #:reload-systems #:restart-soon #:flush-disks #:install #:generations #:current #:select #:confirm #:failed #:manifest #:save #:stop-threads #:kernel-image #:build-kernel #:install-disk #:internal-disk))
 (in-package #:darterfly/install)
 
 (defvar *esp* "/Volumes/EFI/")
@@ -71,11 +71,35 @@
     (when left (error "threads still running: ~a" left)))
   (sb-ext:save-lisp-and-die "/System/Library/Kernels/saved.core"))
 
+(define-condition bad-world (error)
+  ((errors :initarg :errors :reader bad-world-errors))
+  (:report (lambda (c s) (format s "the world has ~d heap errors; it is not saved" (bad-world-errors c)))))
+
+(defun runtime-function (name)
+  (or (sb-sys:find-foreign-symbol-address name) (error "the runtime has no ~a" name)))
+
+(defun heap-errors ()
+  (let ((verify (runtime-function "darterfly_heap_errors"))
+        (lock (runtime-function "try_acquire_gc_lock"))
+        (unlock (runtime-function "release_gc_lock"))
+        (result nil))
+    (sb-sys:without-gcing
+      (when (eql 1 (sb-alien:alien-funcall (sb-alien:sap-alien (sb-sys:int-sap lock) (function sb-alien:int))))
+        (sb-kernel::gc-stop-the-world)
+        (unwind-protect
+             (setq result (sb-alien:alien-funcall (sb-alien:sap-alien (sb-sys:int-sap verify) (function sb-alien:int))))
+          (sb-kernel::gc-start-the-world)
+          (sb-alien:alien-funcall (sb-alien:sap-alien (sb-sys:int-sap unlock) (function sb-alien:void))))))
+    (or result (error "could not stop the world to check the heap"))))
+
 (defparameter *stable-after* 90)
 
 (defparameter *pending-generation* "/Library/Settings/pending-generation")
 
 (defun save-generation (&key kernel loader boot-conf restart then)
+  (let ((errors (heap-errors)))
+    (when (plusp errors) (error 'bad-world :errors errors)))
+  (darterfly/journal:note-save)
   (ensure-directories-exist *pending-generation*)
   (with-open-file (s *pending-generation* :direction :output :if-exists :supersede)
     (with-standard-io-syntax
@@ -98,6 +122,7 @@
                       "/System/Library/Kernels/darterfly.core"
                       :loader (getf pending :loader))
         (delete-file *pending-generation*)
+        (ignore-errors (darterfly/journal:trim))
         (when (getf pending :boot-conf)
           (with-open-file (s (esp-path "boot.conf") :direction :output :if-exists :supersede)
             (write-string (getf pending :boot-conf) s)))

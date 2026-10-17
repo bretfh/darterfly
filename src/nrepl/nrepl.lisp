@@ -177,6 +177,7 @@
 (defun %eval-code (session code emit)
   (let ((*package* (session-package session))
         (eof (list nil)))
+    (darterfly/journal:note-form code :origin :nrepl)
     (with-input-from-string (in code)
       (loop
         (let ((text (make-string-output-stream)))

@@ -185,6 +185,7 @@
                                       (show (format nil "  restart: ~a" r) (make-choice r)))
                                     (invoke-restart-interactively (await-restart view)))))
                         (let ((*standard-output* output) (sb-ext:*ed-functions* (list #'ed-in-window)))
+                          (darterfly/journal:note-form text :origin :listener)
                           (multiple-value-list (let ((bsd:*recording* t)) (eval (read-from-string text))))))))
           (dolist (line (uiop:split-string (get-output-stream-string output) :separator '(#\Newline)))
             (unless (string= line "") (show line)))

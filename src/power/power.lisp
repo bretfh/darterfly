@@ -14,7 +14,14 @@
 (defvar *save-system* nil)
 
 (defun save-system (&key then)
-  (cond (*save-system* (funcall *save-system* :then then))
+  (cond (*save-system*
+         (handler-case (funcall *save-system* :then then)
+           (error (e)
+             (format *error-output* "~&save: ~a~%" e)
+             (case then
+               (:restart (restart))
+               (:shut-down (shut-down))
+               (t (error e))))))
         ((eq then :restart) (restart))
         ((eq then :shut-down) (shut-down))
         (t (error "save: nothing knows how to save this system"))))

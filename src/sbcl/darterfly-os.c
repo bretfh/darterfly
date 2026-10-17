@@ -74,3 +74,13 @@ int futex_wait(int *lock_word, int oldval, long sec, unsigned long usec) {
 
 int futex_wake(int *lock_word, int n) { return (int)__syscall(516, 1 | (n > 1 ? 0x100 : 0), (long)lock_word, 0, 0, 0, 0); }
 #endif
+
+extern void gc_close_collector_regions(int);
+
+int darterfly_heap_errors(void) {
+  struct thread *th;
+  lispobj here;
+  for_each_thread(th) gc_close_thread_regions(th, 0);
+  gc_close_collector_regions(0);
+  return verify_heap(&here, VERIFY_DONT_LOSE | VERIFY_TAGS);
+}
