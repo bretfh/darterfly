@@ -882,6 +882,21 @@
                  "the call that found no method retries once the reload is done"))
         (image:finish c 5)))))
 
+(test a-saved-world-maps-its-hardware-again
+  (let ((esp (merge-pathnames "esp-remap.img" (darterfly-file "build/"))))
+    (uiop:delete-file-if-exists esp)
+    (let ((c (image:bare-console :boot-args "init" :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "init: pid 1" :timeout 120))
+               (ask "(setf darterfly/devices::*backlight* 12345)")
+               (image:send c "(darterfly/install:save-generation)")
+               (is (image:expect c "restart: core " :timeout 300))
+               (is (image:expect c "init: pid 1" :timeout 120))
+               (is (not (search "12345" (ask "darterfly/devices::*backlight*"))) "the backlight is looked up again, not taken from the old mapping"))
+          (image:finish c 5))))))
+
 (test runaway-code-can-be-stopped
   (let ((c (image:bare-console :boot-args "init"))
         (image:*screen-size* '(1280 800)))

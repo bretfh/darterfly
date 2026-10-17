@@ -6,6 +6,11 @@
 
 (defvar *backlight* :unknown)
 
+(pushnew 'forget-backlight sb-ext:*save-hooks*)
+
+(defun forget-backlight ()
+  (setf *backlight* :unknown))
+
 (defun backlight ()
   (when (eq *backlight* :unknown)
     (setf *backlight*
