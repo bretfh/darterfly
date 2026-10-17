@@ -55,7 +55,9 @@
               (return fired))
             (let ((left (and deadline (/ (- deadline (get-internal-real-time)) internal-time-units-per-second))))
               (when (and left (<= left 0)) (return nil))
-              (sb-thread:condition-wait *interrupted* *interrupts-lock* :timeout left))))))))
+              (sb-thread:condition-wait *interrupted* *interrupts-lock* :timeout left)
+              (unless (sb-thread:holding-mutex-p *interrupts-lock*)
+                (sb-thread:grab-mutex *interrupts-lock*)))))))))
 
 (defun enable-msi-x (device)
   (let ((cap (find-pci-capability device #x11)))

@@ -170,3 +170,22 @@
            (is (eq c (gethash :key darterfly/net::*connections*)) "the connection waits for the link to come back")
            (is (= 1 (fifth (first (darterfly/net::tcp-unacked c)))) "the failed try still counts toward giving up"))
       (sb-int:unencapsulate 'darterfly/net::send-segment 'dead-link))))
+
+(defmacro with-timeouts-that-drop-the-mutex (&body body)
+  `(progn
+     (sb-int:encapsulate 'sb-thread:condition-wait 'drop
+                         (lambda (f queue mutex &key timeout)
+                           (declare (ignore f queue))
+                           (unless (sb-thread:holding-mutex-p mutex)
+                             (error "The current thread is not holding ~s." mutex))
+                           (when timeout (sleep (min timeout 0.05)))
+                           (sb-thread:release-mutex mutex)
+                           nil))
+     (unwind-protect (progn ,@body)
+       (sb-int:unencapsulate 'sb-thread:condition-wait 'drop))))
+
+(test a-wait-whose-timeout-drops-the-mutex-carries-on
+  (with-timeouts-that-drop-the-mutex
+    (is (null (darterfly/devices:wait-for-interrupt (list darterfly/devices::+input-vector+) 0.2)) "an interrupt wait times out cleanly")
+    (let ((darterfly/net:*interface* (darterfly/net::make-interface)))
+      (is (null (darterfly/net:udp-receive (darterfly/net:udp-bind 40999) :timeout 0.2)) "and so does a udp receive"))))

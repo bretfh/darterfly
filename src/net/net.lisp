@@ -158,6 +158,7 @@
   (sb-thread:with-mutex ((port-lock port))
     (loop until (port-queue port)
           do (unless (sb-thread:condition-wait (port-ready port) (port-lock port) :timeout timeout)
+               (unless (sb-thread:holding-mutex-p (port-lock port)) (sb-thread:grab-mutex (port-lock port)))
                (unless (port-queue port) (return-from udp-receive nil))))
     (let ((d (car (last (port-queue port)))))
       (setf (port-queue port) (butlast (port-queue port)))
