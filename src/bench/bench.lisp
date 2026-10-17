@@ -93,6 +93,50 @@
                                            (darterfly/windowserver::render)))))
        1000.0)))
 
+(defparameter *call-loop*
+  (coerce #(187 208 7 0 0 184 41 0 0 0 191 1 0 0 0 72 190 0 8 0 64 0 0 0 0 186 4 0 0 0 73 186 0 9 0 64 0 0 0 0
+            65 184 16 0 0 0 205 130 255 203 117 209 184 1 0 0 0 49 255 205 128 235 254)
+          '(simple-array (unsigned-byte 8) (*))))
+
+(defparameter *calls* 2000)
+
+(defparameter *exit-at* 52)
+
+(defun wait-gone (world)
+  (loop :until (eq (darterfly/worlds:world-state world) :gone)))
+
+(define-benchmark world-spawn-us ("us")
+  (/ (best-of 3 (lambda () (elapsed-us (dotimes (i 20) (wait-gone (darterfly/worlds:spawn *call-loop* :entry *exit-at*))))))
+     20.0))
+
+(define-benchmark world-call-us ("us")
+  (/ (best-of 3 (lambda ()
+                  (let ((port (darterfly/worlds:make-port)))
+                    (darterfly/worlds:spawn *call-loop* :port port)
+                    (elapsed-us (dotimes (i *calls*)
+                                  (multiple-value-bind (m token) (darterfly/worlds:receive port :timeout 5)
+                                    (declare (ignore m))
+                                    (darterfly/worlds:reply token "ok")))))))
+     *calls*))
+
+(defparameter *sbcl-core* "/usr/lib/sbcl/sbcl.core")
+
+(define-benchmark world-run-ms ("ms")
+  (when (probe-file *sbcl-core*)
+    (/ (best-of 3 (lambda () (elapsed-us (darterfly/run:run-world *sbcl-core* (list "/System/Library/Kernels/kernel" "--core" "/System/Library/Kernels/darterfly.core"
+                                                                                  "--no-sysinit" "--no-userinit" "--disable-debugger" "--eval" "(+ 1 2)" "--quit")
+                                                                  :cwd "/"))))
+       1000.0)))
+
+(define-benchmark heap-check-ms ("ms")
+  (/ (best-of 3 (lambda () (elapsed-us (darterfly/install::heap-errors)))) 1000.0))
+
+(defun memory ()
+  (list :free-mb (round (* 4096 (darterfly/worlds:free-pages)) 1048576)
+        :heap-mb (round (sb-kernel:dynamic-usage) 1048576)
+        :kernel-threads (hash-table-count (darterfly/stats::thread-times))
+        :lisp-threads (length (sb-thread:list-all-threads))))
+
 (defun idle ()
   (let ((s (darterfly/stats:sample 5)))
     (list :idle-cpu-percent (/ (round (* 10 (/ (reduce #'+ (getf s :cpu-busy)) (max 1 (length (getf s :cpu-busy)))))) 10.0)
@@ -106,6 +150,9 @@
    (loop for (name unit lower thunk) in *benchmarks*
          when (or (null only) (member name only :test #'string-equal))
            collect (list (intern (symbol-name name) :keyword) (handler-case (funcall thunk) (error (e) (princ-to-string e))) unit lower))
+   (unless only
+     (loop for (key value) on (memory) by #'cddr
+           collect (list key value (if (search "-MB" (symbol-name key)) "MB" "") t)))
    (unless only
      (loop for (key value) on (idle) by #'cddr
            collect (list key value

@@ -83,7 +83,7 @@
 
 (asdf:defsystem #:darterfly/bench
   :description "The benchmark suite"
-  :depends-on (#:darterfly/bsd #:darterfly/mach #:darterfly/vfs #:darterfly/stats #:darterfly/windowserver)
+  :depends-on (#:darterfly/bsd #:darterfly/mach #:darterfly/vfs #:darterfly/stats #:darterfly/windowserver #:darterfly/worlds #:darterfly/run #:darterfly/install)
   :serial t
   :pathname "src/bench/"
   :components ((:file "bench")))
