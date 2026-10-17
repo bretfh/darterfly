@@ -359,12 +359,15 @@
 
 (defun watch-ports (c)
   (loop
-    (if (xhci-vector c)
-        (wait-for-interrupt (list (xhci-vector c)) 1)
-        (sleep 0.5))
-    (process-events c)
-    (dolist (port (sb-thread:with-recursive-lock ((xhci-lock c)) (shiftf (xhci-changed-ports c) nil)))
-      (port-changed c port))))
+    (handler-case
+        (progn
+          (if (xhci-vector c)
+              (wait-for-interrupt (list (xhci-vector c)) 1)
+              (sleep 0.5))
+          (process-events c)
+          (dolist (port (sb-thread:with-recursive-lock ((xhci-lock c)) (shiftf (xhci-changed-ports c) nil)))
+            (port-changed c port)))
+      (error (e) (format *error-output* "~&usb ports: ~a~%" e) (sleep 0.5)))))
 
 (defmethod interrupt-vector ((d usb-hid-device)) (xhci-vector (hid-controller d)))
 

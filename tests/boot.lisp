@@ -851,6 +851,21 @@
              (is (search "42" (image:expect c (format nil "~%* ") :timeout 60)) "the next power-on finds the world as it was"))
         (image:finish c 5)))))
 
+(test a-failing-background-thread-lets-go-of-its-locks
+  (let ((c (image:bare-console :boot-args "init")))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
+      (unwind-protect
+           (progn
+             (is (image:expect c "init: pid 1" :timeout 120))
+             (ask "(defvar cl-user::*boom* (sb-thread:make-thread (lambda () (darterfly/bsd::with-bsd (error \"boom\"))) :name \"boom\"))")
+             (is (search ":ENDED" (ask "(sb-thread:join-thread cl-user::*boom* :default :ended :timeout 10)")))
+             (image:send c ":sync")
+             (image:expect c ":SYNC" :timeout 30)
+             (image:expect c "* " :timeout 30)
+             (let ((seen (ask "(list (if (sb-thread:mutex-owner darterfly/bsd::*bsd*) :held :free) (darterfly/bsd:getpid))")))
+               (is (search "(:FREE " seen) "the process lock is free again and processes still work: ~a" seen)))
+        (image:finish c 5)))))
+
 (test runaway-code-can-be-stopped
   (let ((c (image:bare-console :boot-args "init"))
         (image:*screen-size* '(1280 800)))

@@ -134,6 +134,14 @@
       (setf (gethash thread *user-threads*) (cons function keys)))
     thread))
 
+(defun report-and-unwind (condition hook)
+  (declare (ignore hook))
+  (unless (or (eq sb-thread:*current-thread* (sb-thread:main-thread)) *debugger-hook*)
+    (ignore-errors
+     (format *error-output* "~&~a: ~a~%" (sb-thread:thread-name sb-thread:*current-thread*) condition)
+     (sb-debug:print-backtrace :stream *error-output* :count 15))
+    (abort)))
+
 (sb-ext:without-package-locks
   (sb-int:unencapsulate 'sb-thread:make-thread 'user-threads)
   (sb-int:encapsulate 'sb-thread:make-thread 'user-threads #'record-user-thread))

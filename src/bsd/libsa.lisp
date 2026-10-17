@@ -280,6 +280,7 @@
         (setf (aref fds fd) (cons (make-instance 'vnode :fd fd :device t :access 2) nil))))))
 
 (defun libsa-start ()
+  (setf sb-ext:*invoke-debugger-hook* 'report-and-unwind)
   (console-fds)
   (setf *libsa-entry* (sb-alien::alien-lambda sb-alien:long ((op sb-alien:long) (a sb-alien:unsigned-long)
                                                              (b sb-alien:unsigned-long) (c sb-alien:unsigned-long)

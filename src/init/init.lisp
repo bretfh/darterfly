@@ -124,7 +124,8 @@
     (handler-case
         (multiple-value-bind (pid status) (bsd:wait4 -1)
           (reaped pid status))
-      (bsd:errno () (sleep 0.1)))))
+      (bsd:errno () (sleep 0.1))
+      (error (e) (format *error-output* "~&reaper: ~a~%" e) (sleep 0.1)))))
 
 (defun reply (message body &optional descriptors)
   (when (mach:msgh-remote-port message)
