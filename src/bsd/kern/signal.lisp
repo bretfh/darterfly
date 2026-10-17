@@ -163,6 +163,8 @@
          (uc 0)
          (si 0)
          (act 0))
+    (unless (or (privileged) (user-range low (- (mem :u64 (+ regs +r-rsp+)) low)))
+      (result 0))
     (while (< page (mem :u64 (+ regs +r-rsp+)))
       (unless (the :u32 (vm-fault page 2))
         (kprintf "sendsig: thread 0x%lx has no stack at 0x%lx for signal %d

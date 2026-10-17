@@ -67,6 +67,10 @@ Fault CR2: 0x%016lx, Error code: 0x%016lx, Fault CPU: 0x0
            (when (the :u32 (sendsig regs +sigfpe+ 0 (reg regs +r-rip+))) (result 0)))
           ((or (= trapno 13) (= trapno 17))
            (when (the :u32 (sendsig regs (if (= trapno 13) +sigsegv+ +sigbus+) 0 0)) (result 0))))
+    (unless (privileged)
+      (kprintf "world 0x%lx stopped: %s at 0x%lx, address 0x%lx
+" (current-world) (trap-type trapno) (reg regs +r-rip+) cr2)
+      (world-stop (current-world)))
     (kprintf "user trap with no handler:
 ")
     (panic-trap regs)))

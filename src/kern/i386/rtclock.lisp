@@ -1,6 +1,6 @@
 (in-package #:darterfly/kern)
 
-(define-global commpage :u64 :count 3 :alignment 4096 :export t)
+(define-global commpage :u64 :count 512 :alignment 4096 :export t)
 
 (define-low tsc-from-cpuid ()
   (when (< (the :u32 (cpuid 0 :eax)) #x15) (result 0))

@@ -94,7 +94,10 @@
 (test two-worlds-have-their-own-memory
   (let ((c (image:bare-console :boot-args "worldtest halt" :root nil)))
     (unwind-protect
-         (is (image:expect c "worldtest: world 0 sees 0x1111, world 1 found 0x0 and wrote 0x2222, world 1 has 1 entries"))
+         (progn
+           (is (image:expect c "worldtest: world 0 sees 0x1111, world 1 found 0x0 and wrote 0x2222, world 1 has 1 entries"))
+           (is (image:expect c "stopped: page fault at 0x40000057, address 0xffff800000000000"))
+           (is (image:expect c "worldtest: world 2 read the clock: yes, raw pages: error 1, a kernel buffer: error 14, stopped: yes")))
       (image:finish c 5))))
 
 (test the-kernel-has-memory

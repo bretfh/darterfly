@@ -41,9 +41,10 @@
     pa))
 
 (define-low pte (va create)
-  (let ((table (if physmap-ready
-                   (ptov (logand (read-cr 3) +pte-pfn+))
-                   (ptov (kvtophys (address idle-pml4)))))
+  (pte-in (if physmap-ready (logand (read-cr 3) +pte-pfn+) (kvtophys (address idle-pml4))) va create))
+
+(define-low pte-in (root va create)
+  (let ((table (ptov root))
         (shift 39))
     (while (> shift 12)
       (let ((e (+ table (* 8 (logand (shr va shift) 511)))))
@@ -175,6 +176,7 @@
     (when (= pa 0) (result 0))
     (rep-stosb (ptov pa) 0 +page-size+)
     (while (< i 512)
-      (setf (mem :u64 (+ (ptov pa) (* 8 i))) (ref idle-pml4 i))
+      (setf (mem :u64 (+ (ptov pa) (* 8 i))) (logand (ref idle-pml4 i) (lognot +pte-user+)))
       (incf i))
+    (setf (mem :u64 (pte-in pa +commpage-va+ 1)) (logior (kvtophys (address commpage)) (prot-bits 1)))
     pa))

@@ -17,10 +17,14 @@
 (defconstant +w-real-deadline+ 56)
 (defconstant +w-entries+ 64)
 (defconstant +w-sigacts+ 24640)
-(defconstant +world-size+ 26200)
+(defconstant +w-flags+ 26200)
+(defconstant +world-size+ 26208)
+(defconstant +privileged+ 1)
+(defconstant +stopped+ 2)
+(defconstant +commpage-va+ #x00007FFFFFE00000)
 
-(define-global world-0-map :u8 :count 26200 :alignment 4096)
-(define-global kernel-map :u8 :count 26200 :alignment 4096)
+(define-global world-0-map :u8 :count 26208 :alignment 4096)
+(define-global kernel-map :u8 :count 26208 :alignment 4096)
 (define-global io-next :u64)
 
 (define-low page-down (a) (logand a (lognot (- +page-size+ 1))))
@@ -138,7 +142,22 @@
       (incf i))
     0))
 
+(define-low privileged () (logand (mem :u64 (+ (current-world) +w-flags+)) +privileged+))
+
+(define-low user-range (a len)
+  (and (< a +user-top+) (<= len +user-top+) (<= (+ a len) +user-top+)))
+
+(define-low user-ok (a len (write :u32))
+  (when (privileged) (result 1))
+  (unless (user-range a len) (result 0))
+  (let ((p (page-down a)))
+    (while (< p (+ a len))
+      (unless (the :u32 (vm-fault p (logior 4 (if write 2 0)))) (result 0))
+      (incf p +page-size+)))
+  1)
+
 (define-low vm-fault (va err)
+  (when (and (>= va +user-top+) (logand err 4) (not (privileged))) (result 0))
   (when (the :u32 (pmap-access-ok (page-down va) err)) (result 1))
   (let ((x (lookup (map-for va) va)))
     (when (or (not x) (logand err 1) (not (mem :u64 (+ x 16)))) (result 0))

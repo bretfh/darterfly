@@ -90,6 +90,7 @@
     (setf (mem :u64 (+ th +t-kstack-top+)) kstack-top)
     (setf (mem :u32 (+ th +t-state+)) +th-run+)
     (setf (mem :u64 (+ (world-0) +w-pml4+)) (kvtophys (address idle-pml4)))
+    (setf (mem :u64 (+ (world-0) +w-flags+)) +privileged+)
     (setf (mem :u64 (+ th +t-world+)) (world-0))
     (setf (mem :u64 (+ (cpu-data) +c-active-thread+)) th)
     (setf (mem :u64 (+ (cpu-data) +c-idle-thread+)) (idle-thread-create))
@@ -183,6 +184,9 @@
     th))
 
 (define-low thread-create-user (rip rsp arg fs-base)
+  (thread-create-user-in (current-world) rip rsp arg fs-base))
+
+(define-low thread-create-user-in (world rip rsp arg fs-base)
   (let* ((th (thread-alloc))
          (stack (kalloc +kernel-stack-size+))
          (top (+ stack +kernel-stack-size+))
@@ -193,7 +197,7 @@
     (setf (mem :u64 (+ th +t-kstack-top+)) top)
     (setf (mem :u64 (+ th +t-fs-base+)) fs-base)
     (setf (mem :u64 (+ th +t-sigmask+)) (mem :u64 (+ (current-thread) +t-sigmask+)))
-    (setf (mem :u64 (+ th +t-world+)) (mem :u64 (+ (current-thread) +t-world+)))
+    (setf (mem :u64 (+ th +t-world+)) world)
     (fxsave (+ th +t-fpu+))
     (setf (mem :u64 (+ frame 136)) rip)
     (setf (mem :u64 (+ frame 144)) +user64-cs+)
@@ -360,6 +364,16 @@
         (unless all (result n)))
       (setf th (mem :u64 (+ th +t-all-next+))))
     n))
+
+(define-low world-stop (w)
+  (let ((th all-threads) (self (current-thread)))
+    (setf (mem :u64 (+ w +w-flags+)) (logior (mem :u64 (+ w +w-flags+)) +stopped+))
+    (while th
+      (when (and (/= th self) (= (world-of th) w) (/= (mem :u32 (+ th +t-state+)) +th-terminate+))
+        (thread-terminate th))
+      (setf th (mem :u64 (+ th +t-all-next+))))
+    (thread-wakeup w 1)
+    (when (= (world-of self) w) (thread-terminate-self))))
 
 (define-low thread-terminate-self ()
   (setf (mem :u32 (+ (current-thread) +t-state+)) +th-terminate+)
