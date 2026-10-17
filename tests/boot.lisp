@@ -1873,6 +1873,21 @@
              (is (answers) "and plugging it back brings nrepl back"))
         (image:finish c 5)))))
 
+(test usb-ethernet-on-a-controller-with-only-msi
+  (let ((image:*input-devices* '("qemu-xhci,id=xhci,msi=on,msix=off" "virtio-keyboard-pci" "virtio-tablet-pci"))
+        (image:*network-device* "usb-net,netdev=net0,bus=xhci.0")
+        (port (free-udp-port)))
+    (let ((c (image:bare-console :forwards (list (list :tcp port 4011)))))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 90)
+               (is (search "4011" (ask "(darterfly/nrepl:start :key \"test-key\")")))
+               (let ((seen (nrepl-client port "test-key" "(mapcar (lambda (c) (and (darterfly/devices::xhci-vector c) t)) (darterfly/devices:find-entries 'darterfly/devices::xhci-controller))")))
+                 (is (search "=> (T)" seen) "the controller interrupts through msi: ~a" seen))
+               (is (search "=> 200000" (nrepl-client port "test-key" "(length (make-string 200000 :initial-element #\\x))"))))
+          (image:finish c 5))))))
+
 (defvar *stick-netdev* "user,id=net0")
 
 (defun stick-machine (&rest devices)

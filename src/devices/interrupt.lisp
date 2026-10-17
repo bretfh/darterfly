@@ -60,6 +60,19 @@
           (config-write-16 device (+ cap 2) (logior (logandc2 control #x4000) #x8000))
           (values (+ (map-virtual-address map) (logandc2 table 7)) (1+ (logand control #x7ff))))))))
 
+(defun enable-msi (device vector)
+  (let ((cap (find-pci-capability device #x05)))
+    (when cap
+      (let ((control (config-read-16 device (+ cap 2))))
+        (config-write-32 device (+ cap 4) (logior #xfee00000 (ash (ml-get-apicid) 12)))
+        (if (logbitp 7 control)
+            (progn (config-write-32 device (+ cap 8) 0)
+                   (config-write-16 device (+ cap 12) vector))
+            (config-write-16 device (+ cap 8) vector))
+        (config-write-16 device (+ cap 2) (logior (logandc2 control #x70) 1))
+        (config-write-16 device 4 (logior (config-read-16 device 4) #x400))
+        vector))))
+
 (defun set-msi-x-vector (table entry vector)
   (let ((at (+ table (* 16 entry))))
     (mmio-write at 32 (logior #xfee00000 (ash (ml-get-apicid) 12)))
