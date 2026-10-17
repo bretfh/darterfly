@@ -13,6 +13,7 @@
 #define RUN_OUT_SPACE (8ul << 30)
 #define RUN_FDS 256
 #define RUN_FD_BASE 3
+#define RUN_CHUNK 16384
 
 enum {
   VFS_open = 1, VFS_close, VFS_read, VFS_write, VFS_pread, VFS_pwrite, VFS_lseek, VFS_stat, VFS_lstat, VFS_fstat,
@@ -23,7 +24,7 @@ enum {
 
 struct record {
   uint64_t magic, core, core_size, argv, argv_size, archive, archive_size, cwd, stdin_path, back_core, back_size,
-    result, exit_code;
+    result, exit_code, port;
 };
 
 struct node { char *path; char *data; size_t size, cap; uint32_t mode; int64_t mtime; int dead, written; uint64_t ino; };
@@ -439,6 +440,13 @@ void __libsa_run_finish(int code) {
     p = put_entry(p, n->path, n->data, (n->mode & S_IFMT) == S_IFDIR ? 0 : n->size, n->mode, n->mtime, i + 1);
   }
   p = put_entry(p, "TRAILER!!!", 0, 0, 0, 0, 0);
+  if (record->port) {
+    uint64_t head[2] = {(uint64_t)(unsigned)code, (uint64_t)(p - archive)}, ack;
+    __machdep5(MACHDEP_port_call, (long)record->port, (long)head, sizeof head, (long)&ack, sizeof ack);
+    for (char *q = archive; q < p; q += RUN_CHUNK)
+      __machdep5(MACHDEP_port_call, (long)record->port, (long)q, p - q < RUN_CHUNK ? p - q : RUN_CHUNK, (long)&ack, sizeof ack);
+    return;
+  }
   char *core = (char *)(((uint64_t)p + 4095) & ~4095ull);
   memcpy(core, (const void *)record->back_core, record->back_size);
   memset(out, 0, sizeof *out);

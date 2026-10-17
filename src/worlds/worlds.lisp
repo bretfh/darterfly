@@ -1,6 +1,6 @@
 (defpackage #:darterfly/worlds
   (:use #:cl)
-  (:export #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages))
+  (:export #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages #:spawn-record))
 (in-package #:darterfly/worlds)
 
 (define-condition world-error (error)
@@ -52,6 +52,8 @@
       (machdep 44 ps (length p) entry (or port 0)))))
 
 (defun stop (world) (machdep 45 world))
+
+(defun spawn-record (base size port) (machdep 48 base size port))
 
 (defun free-pages () (machdep 47))
 

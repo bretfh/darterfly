@@ -1350,6 +1350,33 @@
                    "and the next run is back on the runtime darterfly booted"))
           (image:finish c 5))))))
 
+(test a-world-runs-a-core-beside-the-system
+  (let ((disk (merge-pathnames "world-run.img" (darterfly-file "build/")))
+        (stress "(progn (ensure-directories-exist \"/work/f/\") (dotimes (i 300) (with-open-file (o (format nil \"/work/f/~d.txt\" i) :direction :output) (print i o))) (with-open-file (o \"/work/count.txt\" :direction :output) (princ (length (directory \"/work/f/*.txt\")) o)))"))
+    (uiop:delete-file-if-exists disk)
+    (darterfly/image::root-disk disk (* 256 1048576)
+                            (append (darterfly/image::root-entries)
+                                    (list (list :file "usr/lib/sbcl/sbcl.core" (image::octets (darterfly-file "build/sbcl-mt/output/sbcl.core"))))))
+    (let ((c (image:bare-console :root disk)))
+      (flet ((ask (form &optional (timeout 120)) (image:send c form) (image:expect c (format nil "~%* ") :timeout timeout))
+             (argv (code) (format nil "'~s" (list "/System/Library/Kernels/kernel" "--core" "/System/Library/Kernels/darterfly.core"
+                                                 "--no-sysinit" "--no-userinit" "--disable-debugger" "--eval" code "--quit"))))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 90)
+               (ask (format nil "(defparameter *run* (sb-thread:make-thread (lambda () (darterfly/run:run-world \"/usr/lib/sbcl/sbcl.core\" ~a :cwd \"/\"))))" (argv stress)))
+               (is (search "[3 T]" (ask "(format nil \"[~a ~a]\" (+ 1 2) (sb-thread:thread-alive-p *run*))"))
+                   "the system answers while the world runs")
+               (is (search "(:EXIT 0 :FILES 301)" (ask "(sb-thread:join-thread *run*)"))
+                   "every file the world wrote comes back")
+               (is (search "\"300\"" (ask "(uiop:read-file-string \"/work/count.txt\")")))
+               (is (search "(:EXIT 3 :FILES 0 :REJECTED 1)"
+                           (ask (format nil "(darterfly/run:run-world \"/usr/lib/sbcl/sbcl.core\" ~a :cwd \"/\")"
+                                        (argv "(progn (with-open-file (o \"/work/failed.txt\" :direction :output) (write-string \"partial\" o)) (sb-ext:exit :code 3))"))))
+                   "a failed run's files are rejected")
+               (is (search "NIL" (ask "(probe-file \"/work/failed.txt\")"))))
+          (image:finish c 5))))))
+
 (defvar *run-wait* 1800)
 
 (defun sbcl-run (disk core argv &key stdin script (files t))

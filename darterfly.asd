@@ -177,7 +177,7 @@
 
 (asdf:defsystem #:darterfly/run
   :description "Runs a core and collects its files"
-  :depends-on (#:uiop #:darterfly/vfs #:darterfly/install)
+  :depends-on (#:uiop #:darterfly/vfs #:darterfly/install #:darterfly/worlds)
   :pathname "src/run/"
   :components ((:file "run")))
 

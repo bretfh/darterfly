@@ -11,7 +11,7 @@
 (define-global restart-core-size :u64 :export t)
 (define-global user-file :u64 :export t)
 (define-global user-file-size :u64 :export t)
-(define-global user-entry :u64)
+(define-global user-entry :u64 :export t)
 (define-global run-pages :u64 :count 32768)
 (define-global run-page-count :u64)
 
