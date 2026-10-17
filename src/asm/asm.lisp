@@ -1,4 +1,4 @@
-(defpackage #:finch/asm
+(defpackage #:darterfly/asm
   (:use #:cl)
   (:import-from #:sb-assem #:inst)
   (:import-from #:sb-vm #:ea #:rip-relative-ea
@@ -8,7 +8,7 @@
            #:inst #:ea #:rip-relative-ea
            #:rax-tn #:rbx-tn #:rcx-tn #:rdx-tn #:rsi-tn #:rdi-tn #:rbp-tn #:rsp-tn
            #:r8-tn #:r9-tn #:r10-tn #:r11-tn #:r12-tn #:r13-tn #:r14-tn #:r15-tn))
-(in-package #:finch/asm)
+(in-package #:darterfly/asm)
 
 (defstruct routine name code fixups)
 

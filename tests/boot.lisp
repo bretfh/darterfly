@@ -1,4 +1,4 @@
-(in-package #:finch/test)
+(in-package #:darterfly/test)
 
 (def-suite boot :in all)
 (in-suite boot)
@@ -19,10 +19,10 @@
   (let ((c (image:bare-console :boot-args "halt" :root nil)))
     (unwind-protect
          (progn
-           (is (image:expect c "finch boot.efi"))
+           (is (image:expect c "darterfly boot.efi"))
            (is (search "boot.efi: Core " (image:expect c "rsdp 0x")) "boot.efi loads the core beside the kernel")
-           (is (image:expect c "boot-args \"halt -- --core /System/Library/Kernels/finch.core\""))
-           (is (image:expect c "finch Kernel Version"))
+           (is (image:expect c "boot-args \"halt -- --core /System/Library/Kernels/darterfly.core\""))
+           (is (image:expect c "darterfly Kernel Version"))
            (is (image:expect c "boot_args: Revision 1 Version 2 efiMode 64"))
            (is (search "kslide 0x" (image:expect c "memory:")))
            (is (search "MB usable" (image:expect c "video: 1280x800x32")))
@@ -35,9 +35,9 @@
              (let ((at (merge-pathnames path esp)))
                (ensure-directories-exist at)
                (with-open-file (s at :direction :output :if-exists :supersede) (write-line text s)))))
-      (put "EFI/finch/gen-2/kernel" "not a kernel")
-      (put "EFI/finch/current" "gen-2")
-      (put "EFI/finch/previous" "gen-1"))
+      (put "EFI/darterfly/gen-2/kernel" "not a kernel")
+      (put "EFI/darterfly/current" "gen-2")
+      (put "EFI/darterfly/previous" "gen-1"))
     (let ((c (image::console :args (image::bare-qemu esp))))
       (unwind-protect
            (progn
@@ -47,24 +47,24 @@
         (image:finish c 5)))))
 
 (test boot-efi-recovers-from-a-generation-that-never-comes-up
-  (let ((esp (merge-pathnames "esp-recovery.img" (finch-file "build/"))))
+  (let ((esp (merge-pathnames "esp-recovery.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists esp)
     (let ((c (image:bare-console :esp esp)))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
         (unwind-protect
              (progn
                (image:expect c "* " :timeout 60)
-               (is (search "\"gen-1\"" (ask "(finch/install::link \"good\")")) "a generation that boots is confirmed good")
+               (is (search "\"gen-1\"" (ask "(darterfly/install::link \"good\")")) "a generation that boots is confirmed good")
                (ask "(with-open-file (s \"/tmp/broken.core\" :direction :output :if-exists :supersede) (write-string \"not a core\" s))")
-               (is (search "\"gen-2\"" (ask "(finch/install:install \"/Volumes/EFI/EFI/finch/gen-1/kernel\" \"/tmp/broken.core\")")))
-               (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
+               (is (search "\"gen-2\"" (ask "(darterfly/install:install \"/Volumes/EFI/EFI/darterfly/gen-1/kernel\" \"/tmp/broken.core\")")))
+               (image:send c "(progn (darterfly/vfs:vfs-sync) (sb-ext:exit))")
                (image:expect c "exit(0)" :timeout 60))
           (image:finish c 5))))
     (let ((c (image:bare-console :esp esp)))
       (unwind-protect
            (progn
              (is (image:expect c "boot.efi: generation gen-2" :timeout 60))
-             (is (image:expect c "fatal error encountered in SBCL" :timeout 60) "gen-2 dies before finch comes up"))
+             (is (image:expect c "fatal error encountered in SBCL" :timeout 60) "gen-2 dies before darterfly comes up"))
         (image:finish c 5)))
     (let ((c (image:bare-console :esp esp)))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
@@ -73,8 +73,8 @@
                (is (image:expect c "boot.efi: generation gen-2 never came up, back to gen-1" :timeout 60))
                (is (image:expect c "boot.efi: generation gen-1" :timeout 30))
                (image:expect c "* " :timeout 60)
-               (is (search "(\"gen-1\" \"gen-2\")" (ask "(list (finch/install:current) (finch/install:failed))"))
-                   "finch is back on gen-1 and knows gen-2 failed"))
+               (is (search "(\"gen-1\" \"gen-2\")" (ask "(list (darterfly/install:current) (darterfly/install:failed))"))
+                   "darterfly is back on gen-1 and knows gen-2 failed"))
           (image:finish c 5))))))
 
 (test the-kernel-owns-the-machine
@@ -99,14 +99,14 @@
            (is (image:expect c "vmtest: kalloc reuses freed blocks")))
       (image:finish c 5))))
 
-(test sbcl-runs-on-finch
+(test sbcl-runs-on-darterfly
   (let ((c (image:bare-console)))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
       (unwind-protect
            (progn
              (is (image:expect c "load_init_program: sbcl"))
              (is (image:expect c "* " :timeout 60))
-             (is (search "\"2.6.4.finch\"" (ask "(lisp-implementation-version)")))
+             (is (search "\"2.6.4.darterfly\"" (ask "(lisp-implementation-version)")))
              (is (search "200000000" (ask "(let ((n 0)) (dotimes (i 200) (incf n (length (make-array 1000000)))) n)")))
              (ask "(gc :full t)")
              (is (search "3000000" (ask "(length (loop repeat 3000000 collect (cons 1 2)))")))
@@ -117,7 +117,7 @@
              (ask "(defun fib (n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))")
              (is (search "832040" (ask "(fib 30)")))
              (is (search "T" (ask "(> (get-universal-time) 3960000000)")))
-             (ask "(finch/io:test-pattern (finch/io:open-framebuffer))")
+             (ask "(darterfly/io:test-pattern (darterfly/io:open-framebuffer))")
              (let ((screen (screen-until (lambda (s) (= #xff202020 (image:pixel s 1000 700))) 10)))
                (is (= #xffff0000 (image:pixel screen 10 10)))
                (is (= #xff00ff00 (image:pixel screen 1000 10)))
@@ -149,7 +149,7 @@
              (is (search "3" (ask "(+ 1 2)"))))
         (image:finish c 5)))))
 
-(test threads-on-finch
+(test threads-on-darterfly
   (let ((c (image:bare-console)))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
       (unwind-protect
@@ -165,7 +165,7 @@
                          (ask "(let ((ts (loop repeat 3 collect (sb-thread:make-thread (lambda () (let ((n 0)) (dotimes (i 300) (incf n (length (make-array 100000)))) n)))))) (mapcar #'sb-thread:join-thread ts))"))))
         (image:finish c 5)))))
 
-(test smp-on-finch
+(test smp-on-darterfly
   (let ((c (image:bare-console :boot-args "cpus=1 halt" :root nil)))
     (unwind-protect (is (image:expect c "mp: 1 cpu"))
       (image:finish c 5)))
@@ -193,11 +193,11 @@
         (image:finish c 5)))))
 
 (defun pattern-disk (name sectors)
-  (let ((path (merge-pathnames name (finch-file "build/"))))
+  (let ((path (merge-pathnames name (darterfly-file "build/"))))
     (with-open-file (s path :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
       (dotimes (i sectors)
         (let ((sector (make-array 512 :element-type '(unsigned-byte 8) :initial-element 0)))
-          (replace sector (map 'vector #'char-code (format nil "finch sector ~d" i)))
+          (replace sector (map 'vector #'char-code (format nil "darterfly sector ~d" i)))
           (write-sequence sector s))))
     path))
 
@@ -208,7 +208,7 @@
       (read-sequence sector s)
       (map 'string #'code-char (subseq sector 0 (or (position 0 sector) 512))))))
 
-(test devices-on-finch
+(test devices-on-darterfly
   (let* ((disk (pattern-disk "devices-disk.img" 2048))
          (c (image:bare-console :disks (list disk))))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
@@ -221,74 +221,74 @@
                (is (search "| +-o VirtIOPCITransport  <class VirtIOPCITransport>" tree))
                (is (search "+-o VirtIOBlockStorageDevice  <class VirtIOBlockStorageDevice>" tree)))
              (ask "(defvar *b* (find 2048 (devices:find-entries 'devices:virtio-block-storage-device) :key #'devices:block-count))")
-             (is (search "\"finch sector 5\"" (ask "(map 'string #'code-char (subseq (devices:read-blocks *b* 5 1) 0 14))")))
-             (is (search "\"finch sector 1099\""
-                         (ask "(map 'string #'code-char (subseq (devices:read-blocks *b* 1000 100) (* 99 512) (+ (* 99 512) 17)))")))
-             (ask "(devices:write-blocks *b* 7 (let ((v (make-array 512 :element-type '(unsigned-byte 8) :initial-element 0))) (replace v (map 'vector #'char-code \"written by finch\")) v))")
-             (is (search "\"written by finch\"" (ask "(map 'string #'code-char (subseq (devices:read-blocks *b* 7 1) 0 16))")))
+             (is (search "\"darterfly sector 5\"" (ask "(map 'string #'code-char (subseq (devices:read-blocks *b* 5 1) 0 (length \"darterfly sector 5\")))")))
+             (is (search "\"darterfly sector 1099\""
+                         (ask "(map 'string #'code-char (subseq (devices:read-blocks *b* 1000 100) (* 99 512) (+ (* 99 512) (length \"darterfly sector 1099\"))))")))
+             (ask "(devices:write-blocks *b* 7 (let ((v (make-array 512 :element-type '(unsigned-byte 8) :initial-element 0))) (replace v (map 'vector #'char-code \"written by darterfly\")) v))")
+             (is (search "\"written by darterfly\"" (ask "(map 'string #'code-char (subseq (devices:read-blocks *b* 7 1) 0 (length \"written by darterfly\")))")))
              (is (search "(T T T)" (ask "(mapcar (lambda (s) (and (<= #x30 (devices:interrupt-vector s) #x3f) t)) (list *b* (first (devices:find-entries 'devices:virtio-input)) (first (devices:find-entries 'devices:virtio-network))))")))
              (image:send c "(sb-ext:exit)")
              (image:expect c "exit(0)" :timeout 30))
         (image:finish c 5))
-      (is (equal "written by finch" (disk-sector disk 7)))
-      (is (equal "finch sector 8" (disk-sector disk 8))))))
+      (is (equal "written by darterfly" (disk-sector disk 7)))
+      (is (equal "darterfly sector 8" (disk-sector disk 8))))))
 
-(test apfs-mounts-on-finch
-  (let* ((disk (merge-pathnames "apfs-mount.img" (finch-file "build/")))
+(test apfs-mounts-on-darterfly
+  (let* ((disk (merge-pathnames "apfs-mount.img" (darterfly-file "build/")))
          (c (progn (uiop:copy-file (newfs-image) disk) (image:bare-console :disks (list disk)))))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
       (unwind-protect
            (progn
              (image:expect c "* " :timeout 60)
              (ask "(devices:start-devices)")
-             (is (search "(\"/Volumes/finch\")" (ask "(finch/apfs:mount-volumes)")))
-             (is (search "\"hello from finch\"" (ask "(with-open-file (s \"/Volumes/finch/hello.txt\") (read-line s))")))
-             (is (search "300" (ask "(length (directory \"/Volumes/finch/many/*\"))")))
-             (is (search "#P\"/Volumes/finch/hello.txt\"" (ask "(truename \"/Volumes/finch/link\")")))
-             (is (search "read-only file system" (ask "(handler-case (with-open-file (s \"/Volumes/finch/new.txt\" :direction :output) (write-line \"x\" s)) (error (e) (string-downcase (princ-to-string e))))"))))
+             (is (search "(\"/Volumes/darterfly\")" (ask "(darterfly/apfs:mount-volumes)")))
+             (is (search "\"hello from darterfly\"" (ask "(with-open-file (s \"/Volumes/darterfly/hello.txt\") (read-line s))")))
+             (is (search "300" (ask "(length (directory \"/Volumes/darterfly/many/*\"))")))
+             (is (search "#P\"/Volumes/darterfly/hello.txt\"" (ask "(truename \"/Volumes/darterfly/link\")")))
+             (is (search "read-only file system" (ask "(handler-case (with-open-file (s \"/Volumes/darterfly/new.txt\" :direction :output) (write-line \"x\" s)) (error (e) (string-downcase (princ-to-string e))))"))))
         (image:finish c 5)))))
 
-(test apfs-writes-on-finch
-  (let* ((disk (merge-pathnames "apfs-write-boot.img" (finch-file "build/")))
+(test apfs-writes-on-darterfly
+  (let* ((disk (merge-pathnames "apfs-write-boot.img" (darterfly-file "build/")))
          (c (progn (uiop:copy-file (newfs-image) disk) (image:bare-console :disks (list disk)))))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
       (unwind-protect
            (progn
              (image:expect c "* " :timeout 60)
              (ask "(devices:start-devices)")
-             (is (search "(\"/Volumes/finch\")" (ask "(finch/apfs:mount-volumes :writable t)")))
-             (ask "(with-open-file (s \"/Volumes/finch/from-finch.txt\" :direction :output) (write-line \"written on bare finch\" s))")
-             (ask "(ensure-directories-exist \"/Volumes/finch/made/by/finch/\")")
-             (ask "(with-open-file (s \"/Volumes/finch/made/by/finch/lines.txt\" :direction :output) (dotimes (i 3000) (format s \"line ~d~%\" i)))")
-             (ask "(delete-file \"/Volumes/finch/many/f7\")")
-             (ask "(rename-file \"/Volumes/finch/hello.txt\" \"/Volumes/finch/made/hello.txt\")")
-             (is (search "\"written on bare finch\"" (ask "(with-open-file (s \"/Volumes/finch/from-finch.txt\") (read-line s))")))
+             (is (search "(\"/Volumes/darterfly\")" (ask "(darterfly/apfs:mount-volumes :writable t)")))
+             (ask "(with-open-file (s \"/Volumes/darterfly/from-darterfly.txt\" :direction :output) (write-line \"written on bare darterfly\" s))")
+             (ask "(ensure-directories-exist \"/Volumes/darterfly/made/by/darterfly/\")")
+             (ask "(with-open-file (s \"/Volumes/darterfly/made/by/darterfly/lines.txt\" :direction :output) (dotimes (i 3000) (format s \"line ~d~%\" i)))")
+             (ask "(delete-file \"/Volumes/darterfly/many/f7\")")
+             (ask "(rename-file \"/Volumes/darterfly/hello.txt\" \"/Volumes/darterfly/made/hello.txt\")")
+             (is (search "\"written on bare darterfly\"" (ask "(with-open-file (s \"/Volumes/darterfly/from-darterfly.txt\") (read-line s))")))
              (image:send c "(sb-ext:exit)")
              (image:expect c "exit(0)" :timeout 30))
         (image:finish c 5))
       (let* ((v (first (apfs:container-volumes (apfs:open-container (apfs:file-device disk)))))
              (read (lambda (path) (map 'string #'code-char (apfs:read-file v (apfs:lookup v path))))))
-        (is (equal (format nil "written on bare finch~%") (funcall read "/from-finch.txt")))
-        (is (equal (with-output-to-string (s) (dotimes (i 3000) (format s "line ~d~%" i))) (funcall read "/made/by/finch/lines.txt")))
-        (is (equal (format nil "hello from finch~%") (funcall read "/made/hello.txt")))
+        (is (equal (format nil "written on bare darterfly~%") (funcall read "/from-darterfly.txt")))
+        (is (equal (with-output-to-string (s) (dotimes (i 3000) (format s "line ~d~%" i))) (funcall read "/made/by/darterfly/lines.txt")))
+        (is (equal (format nil "hello from darterfly~%") (funcall read "/made/hello.txt")))
         (is (null (apfs:lookup v "/many/f7")))
         (is (null (apfs:lookup v "/hello.txt")))
         (is (= 299 (length (apfs:directory-entries v (apfs:lookup v "/many")))))
-        (is (= #o100644 (apfs:inode-mode (apfs:inode v (apfs:lookup v "/from-finch.txt")))))
+        (is (= #o100644 (apfs:inode-mode (apfs:inode v (apfs:lookup v "/from-darterfly.txt")))))
         (is (= #o040755 (apfs:inode-mode (apfs:inode v (apfs:lookup v "/made/by")))))))))
 
-(test apfs-root-on-finch
-  (let* ((disk (merge-pathnames "root-keep.img" (finch-file "build/")))
+(test apfs-root-on-darterfly
+  (let* ((disk (merge-pathnames "root-keep.img" (darterfly-file "build/")))
          (c (progn (uiop:delete-file-if-exists disk) (image:bare-console :root disk))))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
       (unwind-protect
            (progn
              (image:expect c "* " :timeout 60)
-             (is (search "APFS-WVNODE" (ask "(type-of (finch/vfs:namei \"/\"))")))
-             (is (search "\"finch HD\"" (ask "(devices:get-property (find \"disk2s1\" (devices:find-entries 'finch/apfs::apfs-volume-media) :key (lambda (e) (devices:get-property e \"BSD Name\")) :test #'equal) \"FullName\")")))
+             (is (search "APFS-WVNODE" (ask "(type-of (darterfly/vfs:namei \"/\"))")))
+             (is (search "\"darterfly HD\"" (ask "(devices:get-property (find \"disk2s1\" (devices:find-entries 'darterfly/apfs::apfs-volume-media) :key (lambda (e) (devices:get-property e \"BSD Name\")) :test #'equal) \"FullName\")")))
              (is (search "#P\"/System/Library/Kernels/kernel\"" (ask "(probe-file \"/System/Library/Kernels/kernel\")")))
-             (is (search "DEV-NODE" (ask "(type-of (finch/vfs:namei \"/dev/console\"))")))
-             (is (search "T" (ask "(finch/devices::flushes (finch/devices::media-device finch/apfs::*root-media*))"))
+             (is (search "DEV-NODE" (ask "(type-of (darterfly/vfs:namei \"/dev/console\"))")))
+             (is (search "T" (ask "(darterfly/devices::flushes (darterfly/devices::media-device darterfly/apfs::*root-media*))"))
                  "the root disk takes flushes")
              (is (search ":LOADED" (ask "(progn (require :sb-rotate-byte) (require :sb-md5) :loaded)")) "contribs from SBCL_HOME")
              (is (search "2.5d0" (ask "(progn (load \"/usr/lib/sbcl/contrib/sb-posix.fasl\") (sb-posix:strtod \"2.5\"))"))
@@ -297,27 +297,27 @@
                  "/dev/urandom gives bytes from rdrand")
              (is (search "T" (ask "(not (null (probe-file \"/etc/ssl/certs/ca-certificates.crt\")))")) "the CA bundle is on the root")
              (is (search "\"0.1\"" (ask "(software-version)")))
-             (dolist (root '("/tmp/tree/" "/Users/finch/tree/"))
+             (dolist (root '("/tmp/tree/" "/Users/darterfly/tree/"))
                (is (search "(NIL)" (ask (format nil "(progn (dolist (f '(\"a/x\" \"a/b/y\" \"a/b/c/z\" \"a/b/w\")) (let ((p (concatenate 'string ~s f))) (ensure-directories-exist p) (with-open-file (s p :direction :output :if-exists :supersede) (write-line f s)))) (uiop:delete-directory-tree (pathname ~s) :validate t) (list (probe-file ~s)))" root root root)))
                    "a tree deletes while its directories are read, on ~a" root))
-             (is (search "#P\"/Users/finch/\"" (ask "(user-homedir-pathname)")))
+             (is (search "#P\"/Users/darterfly/\"" (ask "(user-homedir-pathname)")))
              (is (search "\"through a pipe\"" (ask "(multiple-value-bind (r w) (sb-posix:pipe) (let ((o (sb-sys:make-fd-stream w :output t)) (i (sb-sys:make-fd-stream r :input t))) (write-line \"through a pipe\" o) (close o) (prog1 (read-line i) (close i))))"))
                  "an fd-stream over pipe()")
              (is (search "\"hi from sh\"" (ask "(string-trim '(#\\Newline) (with-output-to-string (o) (sb-ext:run-program \"/bin/sh\" '(\"-c\" \"(princ \\\"hi from sh\\\")\") :output o)))"))
                  "run-program through posix-spawn")
-             (is (search "3" (ask "(sb-ext:process-exit-code (sb-ext:run-program \"sh\" '(\"-c\" \"(finch/bsd:exit 3)\") :search t))")))
+             (is (search "3" (ask "(sb-ext:process-exit-code (sb-ext:run-program \"sh\" '(\"-c\" \"(darterfly/bsd:exit 3)\") :search t))")))
              (is (search "\"fed in\"" (ask "(with-output-to-string (o) (sb-ext:run-program \"/bin/sh\" '(\"-c\" \"(princ (read-line))\") :input (make-string-input-stream (format nil \"fed in~%\")) :output o))"))
                  "input from a lisp stream, through an unlinked file in /tmp")
-             (ask "(with-open-file (s \"/Users/finch/notes.txt\" :direction :output) (write-line \"kept across boots\" s))")
+             (ask "(with-open-file (s \"/Users/darterfly/notes.txt\" :direction :output) (write-line \"kept across boots\" s))")
              (image:send c "(sb-ext:exit)")
              (image:expect c "exit(0)" :timeout 30))
         (image:finish c 5))
       (let ((v (first (apfs:container-volumes (apfs:open-container (apfs:file-device disk))))))
-        (is (equal "finch HD" (apfs:volume-name v)))
+        (is (equal "darterfly HD" (apfs:volume-name v)))
         (is (equal (format nil "kept across boots~%")
-                   (map 'string #'code-char (apfs:read-file v (apfs:lookup v "/Users/finch/notes.txt")))))))))
+                   (map 'string #'code-char (apfs:read-file v (apfs:lookup v "/Users/darterfly/notes.txt")))))))))
 
-(test desktop-on-finch
+(test desktop-on-darterfly
   (let ((c (image:bare-console :boot-args "init"))
         (image:*screen-size* '(1280 800)))
     (unwind-protect
@@ -356,7 +356,7 @@
     (sb-bsd-sockets:socket-listen server 5)
     (values server (nth-value 1 (sb-bsd-sockets:socket-name server)))))
 
-(test network-on-finch
+(test network-on-darterfly
   (let* ((udp (free-udp-port))
          (tcp (free-udp-port))
          (c (image:bare-console :forwards (list (list :udp udp 7) (list :tcp tcp 7)))))
@@ -364,20 +364,20 @@
       (unwind-protect
            (progn
              (image:expect c "* " :timeout 90)
-             (is (search "\"10.0.2.15\"" (ask "(progn (finch/net:start-network) (finch/net:udp-echo 7) (finch/net:tcp-echo 7) (finch/net:address-string (finch/net::interface-ip finch/net:*interface*)))")))
-             (is (search "(\"10.0.2.2\" (\"10.0.2.3\") 24)" (ask "(let ((i finch/net:*interface*)) (list (finch/net:address-string (finch/net::interface-gateway i)) (mapcar #'finch/net:address-string (finch/net::interface-dns i)) (finch/net::interface-prefix i)))"))
+             (is (search "\"10.0.2.15\"" (ask "(progn (darterfly/net:start-network) (darterfly/net:udp-echo 7) (darterfly/net:tcp-echo 7) (darterfly/net:address-string (darterfly/net::interface-ip darterfly/net:*interface*)))")))
+             (is (search "(\"10.0.2.2\" (\"10.0.2.3\") 24)" (ask "(let ((i darterfly/net:*interface*)) (list (darterfly/net:address-string (darterfly/net::interface-gateway i)) (mapcar #'darterfly/net:address-string (darterfly/net::interface-dns i)) (darterfly/net::interface-prefix i)))"))
                  "dhcp gives the gateway, the name server and the mask")
              (when (ignore-errors (sb-bsd-sockets:get-host-by-name "example.com"))
-               (is (search "(\"" (ask "(finch/net:resolve-name \"example.com\")")) "finch resolves a name through the dhcp name server"))
+               (is (search "(\"" (ask "(darterfly/net:resolve-name \"example.com\")")) "darterfly resolves a name through the dhcp name server"))
              (is (search "\"en0\"" (ask "(devices:get-property (first (devices:find-entries 'devices:ethernet-interface)) \"BSD Name\")")))
-             (is (not (search "NIL" (ask "(finch/net:ping \"10.0.2.2\")"))) "the gateway answers a ping")
+             (is (not (search "NIL" (ask "(darterfly/net:ping \"10.0.2.2\")"))) "the gateway answers a ping")
              (let ((s (make-instance 'sb-bsd-sockets:inet-socket :type :datagram :protocol :udp))
                    (buf (make-array 100 :element-type '(unsigned-byte 8))))
                (unwind-protect
                     (progn
                       (sb-bsd-sockets:socket-connect s #(127 0 0 1) udp)
-                      (sb-bsd-sockets:socket-send s (sb-ext:string-to-octets "hello finch over udp") nil)
-                      (is (equal "hello finch over udp"
+                      (sb-bsd-sockets:socket-send s (sb-ext:string-to-octets "hello darterfly over udp") nil)
+                      (is (equal "hello darterfly over udp"
                                  (handler-case (sb-sys:with-deadline (:seconds 10)
                                                  (multiple-value-bind (b n) (sb-bsd-sockets:socket-receive s buf nil)
                                                    (map 'string #'code-char (subseq b 0 n))))
@@ -393,7 +393,7 @@
                         (write-string payload stream)
                         (finish-output stream)
                         (handler-case (sb-sys:with-deadline (:seconds 15) (read-sequence got stream)) (error () nil))
-                        (is (string= payload got) "10000 bytes through finch's tcp echo")))
+                        (is (string= payload got) "10000 bytes through darterfly's tcp echo")))
                  (sb-bsd-sockets:socket-close s)))
              (multiple-value-bind (server port) (host-listener)
                (unwind-protect
@@ -404,13 +404,13 @@
                                              (let* ((conn (sb-bsd-sockets:socket-accept server))
                                                     (st (sb-bsd-sockets:socket-make-stream conn :input t :output t :element-type 'character)))
                                                (prog1 (read-line st)
-                                                 (write-line "hello finch, from the host" st)
+                                                 (write-line "hello darterfly, from the host" st)
                                                  (finish-output st)
                                                  (sb-bsd-sockets:socket-close conn))))
                                          (error (e) (princ-to-string e)))))))
-                      (is (search "hello finch, from the host"
-                                  (ask (format nil "(let ((c (finch/net:tcp-connect \"10.0.2.2\" ~d))) (finch/net:tcp-send c (sb-ext:string-to-octets (format nil \"hello host, from finch~~%\"))) (prog1 (map 'string #'code-char (finch/net:tcp-receive c :timeout 5)) (finch/net:tcp-close c)))" port))))
-                      (is (equal "hello host, from finch" (sb-thread:join-thread acceptor :default nil :timeout 20))))
+                      (is (search "hello darterfly, from the host"
+                                  (ask (format nil "(let ((c (darterfly/net:tcp-connect \"10.0.2.2\" ~d))) (darterfly/net:tcp-send c (sb-ext:string-to-octets (format nil \"hello host, from darterfly~~%\"))) (prog1 (map 'string #'code-char (darterfly/net:tcp-receive c :timeout 5)) (darterfly/net:tcp-close c)))" port))))
+                      (is (equal "hello host, from darterfly" (sb-thread:join-thread acceptor :default nil :timeout 20))))
                  (sb-bsd-sockets:socket-close server))))
         (image:finish c 5)))))
 
@@ -427,7 +427,7 @@
            (error (e) (princ-to-string e)))
       (sb-bsd-sockets:socket-close s))))
 
-(test ip6-on-finch
+(test ip6-on-darterfly
   (let* ((server (make-instance 'sb-bsd-sockets:inet6-socket :type :stream :protocol :tcp))
          (port (progn (setf (sb-bsd-sockets:sockopt-reuse-address server) t)
                       (sb-bsd-sockets:socket-bind server (sb-bsd-sockets:make-inet6-address "::1") 0)
@@ -438,34 +438,34 @@
       (unwind-protect
            (progn
              (image:expect c "* " :timeout 90)
-             (ask "(progn (finch/net:start-network) :up)")
+             (ask "(progn (darterfly/net:start-network) :up)")
              (is (search "((\"fe80::5054:ff:fe12:3456\" \"fec0::5054:ff:fe12:3456\") \"fe80::2\")"
-                         (ask "(let ((i finch/net:*interface*)) (list (mapcar #'finch/net:address-string (finch/net::interface-ip6 i)) (finch/net:address-string (finch/net::interface-router6 i))))"))
+                         (ask "(let ((i darterfly/net:*interface*)) (list (mapcar #'darterfly/net:address-string (darterfly/net::interface-ip6 i)) (darterfly/net:address-string (darterfly/net::interface-router6 i))))"))
                  "a router advertisement gives the prefix and the router")
-             (is (not (search "NIL" (ask "(finch/net:ping \"fec0::2\")"))) "the router answers an ICMPv6 echo")
+             (is (not (search "NIL" (ask "(darterfly/net:ping \"fec0::2\")"))) "the router answers an ICMPv6 echo")
              (let ((acceptor (sb-thread:make-thread
                               (lambda ()
                                 (let* ((conn (sb-bsd-sockets:socket-accept server))
                                        (st (sb-bsd-sockets:socket-make-stream conn :input t :output t :element-type 'character)))
-                                  (prog1 (read-line st) (write-line "hello finch, over ipv6" st) (finish-output st)
+                                  (prog1 (read-line st) (write-line "hello darterfly, over ipv6" st) (finish-output st)
                                     (sb-bsd-sockets:socket-close conn)))))))
-               (is (search "hello finch, over ipv6"
-                           (ask (format nil "(let ((c (finch/net:tcp-connect \"fec0::2\" ~d))) (finch/net:tcp-send c (sb-ext:string-to-octets (format nil \"hello host~~%\"))) (prog1 (map 'string #'code-char (finch/net:tcp-receive c :timeout 5)) (finch/net:tcp-close c)))" port))))
+               (is (search "hello darterfly, over ipv6"
+                           (ask (format nil "(let ((c (darterfly/net:tcp-connect \"fec0::2\" ~d))) (darterfly/net:tcp-send c (sb-ext:string-to-octets (format nil \"hello host~~%\"))) (prog1 (map 'string #'code-char (darterfly/net:tcp-receive c :timeout 5)) (darterfly/net:tcp-close c)))" port))))
                (is (equal "hello host" (sb-thread:join-thread acceptor :timeout 10 :default nil)) "tcp over ipv6 to the host"))
              (when (ignore-errors (sb-bsd-sockets:get-host-by-name "example.com"))
-               (is (search ":" (ask "(finch/net:resolve-name \"example.com\" :type :aaaa)")) "an AAAA lookup")))
+               (is (search ":" (ask "(darterfly/net:resolve-name \"example.com\" :type :aaaa)")) "an AAAA lookup")))
         (sb-bsd-sockets:socket-close server)
         (image:finish c 5)))))
 
-(test sockets-on-finch
+(test sockets-on-darterfly
   (let* ((tcp (free-udp-port))
          (c (image:bare-console :forwards (list (list :tcp tcp 8)))))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
       (unwind-protect
            (progn
              (image:expect c "* " :timeout 90)
-             (ask "(finch/net:start-network)")
-             (is (search ":LISTENING" (ask "(let ((s (finch/bsd:socket finch/bsd:+af-inet+ finch/bsd:+sock-stream+))) (finch/bsd:bind s \"0.0.0.0\" 8) (finch/bsd:listen s) (sb-thread:make-thread (lambda () (loop (let ((c (finch/bsd:accept s))) (loop for d = (finch/bsd:recv c 4096) while (plusp (length d)) do (finch/bsd:send c d)) (finch/bsd:close c)))) :name \"bsd echo\") :listening)")))
+             (ask "(darterfly/net:start-network)")
+             (is (search ":LISTENING" (ask "(let ((s (darterfly/bsd:socket darterfly/bsd:+af-inet+ darterfly/bsd:+sock-stream+))) (darterfly/bsd:bind s \"0.0.0.0\" 8) (darterfly/bsd:listen s) (sb-thread:make-thread (lambda () (loop (let ((c (darterfly/bsd:accept s))) (loop for d = (darterfly/bsd:recv c 4096) while (plusp (length d)) do (darterfly/bsd:send c d)) (darterfly/bsd:close c)))) :name \"bsd echo\") :listening)")))
              (is (equal "through accept, recv and send" (tcp-exchange tcp "through accept, recv and send")))
              (is (equal "a second connection" (tcp-exchange tcp "a second connection")))
              (multiple-value-bind (server port) (host-listener)
@@ -477,12 +477,12 @@
                                              (let* ((conn (sb-bsd-sockets:socket-accept server))
                                                     (st (sb-bsd-sockets:socket-make-stream conn :input t :output t :element-type 'character)))
                                                (prog1 (read-line st)
-                                                 (write-line "hello finch/bsd" st)
+                                                 (write-line "hello darterfly/bsd" st)
                                                  (finish-output st)
                                                  (sb-bsd-sockets:socket-close conn))))
                                          (error (e) (princ-to-string e)))))))
-                      (is (search "hello finch/bsd"
-                                  (ask (format nil "(let ((s (finch/bsd:socket finch/bsd:+af-inet+ finch/bsd:+sock-stream+))) (finch/bsd:connect s \"10.0.2.2\" ~d) (finch/bsd:send s (sb-ext:string-to-octets (format nil \"hello host, from connect~~%\"))) (prog1 (map 'string #'code-char (finch/bsd:recv s 100)) (finch/bsd:close s)))" port))))
+                      (is (search "hello darterfly/bsd"
+                                  (ask (format nil "(let ((s (darterfly/bsd:socket darterfly/bsd:+af-inet+ darterfly/bsd:+sock-stream+))) (darterfly/bsd:connect s \"10.0.2.2\" ~d) (darterfly/bsd:send s (sb-ext:string-to-octets (format nil \"hello host, from connect~~%\"))) (prog1 (map 'string #'code-char (darterfly/bsd:recv s 100)) (darterfly/bsd:close s)))" port))))
                       (is (equal "hello host, from connect" (sb-thread:join-thread acceptor :default nil :timeout 20))))
                  (sb-bsd-sockets:socket-close server)))
              (multiple-value-bind (server port) (host-listener)
@@ -500,7 +500,7 @@
                                          (error (e) (princ-to-string e)))))))
                       (is (search "\"hello sb-bsd-sockets\""
                                   (ask (format nil "(let ((s (make-instance 'sb-bsd-sockets:inet-socket :type :stream :protocol :tcp))) (sb-bsd-sockets:socket-connect s #(10 0 2 2) ~d) (let ((st (sb-bsd-sockets:socket-make-stream s :input t :output t :element-type 'character))) (write-line \"from sbcl's own sockets\" st) (finish-output st) (prog1 (read-line st) (close st))))" port)))
-                          "sb-bsd-sockets over finch's tcp")
+                          "sb-bsd-sockets over darterfly's tcp")
                       (is (equal "from sbcl's own sockets" (sb-thread:join-thread acceptor :default nil :timeout 20))))
                  (sb-bsd-sockets:socket-close server)))
              (let ((u (make-instance 'sb-bsd-sockets:inet-socket :type :datagram :protocol :udp))
@@ -517,23 +517,23 @@
                                                  (sb-bsd-sockets:socket-send u (sb-ext:string-to-octets "datagram back") nil :address (list address from))
                                                  (map 'string #'code-char (subseq b 0 n))))
                                            (error (e) (princ-to-string e)))))))
-                        (is (search "(\"datagram back\" \"10.0.2.2\"" (ask (format nil "(let ((s (finch/bsd:socket finch/bsd:+af-inet+ finch/bsd:+sock-dgram+))) (finch/bsd:sendto s (sb-ext:string-to-octets \"datagram out\") \"10.0.2.2\" ~d) (prog1 (multiple-value-bind (d a p) (finch/bsd:recvfrom s 100) (list (map 'string #'code-char d) a p)) (finch/bsd:close s)))" port))))
+                        (is (search "(\"datagram back\" \"10.0.2.2\"" (ask (format nil "(let ((s (darterfly/bsd:socket darterfly/bsd:+af-inet+ darterfly/bsd:+sock-dgram+))) (darterfly/bsd:sendto s (sb-ext:string-to-octets \"datagram out\") \"10.0.2.2\" ~d) (prog1 (multiple-value-bind (d a p) (darterfly/bsd:recvfrom s 100) (list (map 'string #'code-char d) a p)) (darterfly/bsd:close s)))" port))))
                         (is (equal "datagram out" (sb-thread:join-thread replier :default nil :timeout 20)))))
                  (sb-bsd-sockets:socket-close u)))
-             (is (search "ECONNREFUSED" (ask "(handler-case (finch/bsd:connect (finch/bsd:socket finch/bsd:+af-inet+ finch/bsd:+sock-stream+) \"10.0.2.2\" 1) (finch/bsd:errno (e) (symbol-name (finch/bsd:errno-name e))))"))))
+             (is (search "ECONNREFUSED" (ask "(handler-case (darterfly/bsd:connect (darterfly/bsd:socket darterfly/bsd:+af-inet+ darterfly/bsd:+sock-stream+) \"10.0.2.2\" 1) (darterfly/bsd:errno (e) (symbol-name (darterfly/bsd:errno-name e))))"))))
         (image:finish c 5)))))
 
-(test mach-suite-passes-on-finch
+(test mach-suite-passes-on-darterfly
   (let ((c (image:bare-console)))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 300)))
       (unwind-protect
            (progn
              (image:expect c "* " :timeout 60)
              (is (search "(T)"
-                         (ask "(list (fiveam:results-status (fiveam:run 'finch/test::mach)))"))))
+                         (ask "(list (fiveam:results-status (fiveam:run 'darterfly/test::mach)))"))))
         (image:finish c 5)))))
 
-(test session-on-finch
+(test session-on-darterfly
   (let ((c (image:bare-console :boot-args "init"))
         (image:*screen-size* '(1280 800)))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
@@ -544,7 +544,7 @@
              (is (search "3" (ask "(+ 1 2)")))
              (let ((local (format nil "~s" (multiple-value-list (decode-universal-time 3999999999)))))
                (is (search local (ask "(multiple-value-list (decode-universal-time 3999999999))")) "local time ~a" local))
-             (ask "(finch/shell:spawn \"/Applications/Hello.app/Contents/Programs/Hello\")")
+             (ask "(darterfly/shell:spawn \"/Applications/Hello.app/Contents/Programs/Hello\")")
              (let ((screen (screen-until (lambda (s) (and (< 200 (ldb (byte 8 16) (image:pixel s 300 12)))
                                                           (< 100 (dark-pixels s 586 724 626 764 90))
                                                           (/= #xff2e5c8f (image:pixel s 1218 60)))))))
@@ -583,13 +583,13 @@
              (image:pointer 282 248 nil)
              (is (= #xff2e5c8f (image:pixel (screen-until (lambda (s) (= #xff2e5c8f (image:pixel s 550 400)))) 550 400))
                  "close takes the window away")
-             (is (search "finch.windowserver" (ask "(finch/shell:run \"/bin/service\" \"list\")")))
+             (is (search "darterfly.windowserver" (ask "(darterfly/shell:run \"/bin/service\" \"list\")")))
              (image:pointer 605 744)
              (image:pointer 605 744 t)
              (image:pointer 605 744 nil)
              (flet ((screen-text (until)
                       (loop :with deadline := (+ (get-internal-real-time) (* 30 internal-time-units-per-second))
-                            :do (let ((text (ask "(progn (ignore-errors (finch/shell:cat \"/tmp/Terminal.txt\")) :done)")))
+                            :do (let ((text (ask "(progn (ignore-errors (darterfly/shell:cat \"/tmp/Terminal.txt\")) :done)")))
                                   (when (or (search until text) (> (get-internal-real-time) deadline))
                                     (return text)))
                                 (sleep 0.1))))
@@ -631,22 +631,22 @@
 
 (defun chord (&rest names)
   (flet ((key (name down)
-           (finch/qmp:dict "type" "key" "data" (finch/qmp:dict "down" down "key" (finch/qmp:dict "type" "qcode" "data" name)))))
+           (darterfly/qmp:dict "type" "key" "data" (darterfly/qmp:dict "down" down "key" (darterfly/qmp:dict "type" "qcode" "data" name)))))
     (image::qmp "input-send-event"
-                (finch/qmp:dict "events" (coerce (append (loop :for n :in names :collect (key n t))
+                (darterfly/qmp:dict "events" (coerce (append (loop :for n :in names :collect (key n t))
                                                          (loop :for n :in (reverse names) :collect (key n nil)))
                                                  'vector)))))
 
 (defun listener-text-until (c text)
   (loop :with deadline := (+ (get-internal-real-time) (* 60 internal-time-units-per-second))
-        :do (image:send c "(progn (ignore-errors (finch/shell:cat \"/tmp/Listener.txt\")) :done)")
+        :do (image:send c "(progn (ignore-errors (darterfly/shell:cat \"/tmp/Listener.txt\")) :done)")
             (let ((seen (image:expect c (format nil "~%* ") :timeout 60)))
               (when (or (search text seen) (> (get-internal-real-time) deadline))
                 (return seen)))
             (sleep 1)))
 
 (test the-running-system-saves-itself
-  (let ((esp (merge-pathnames "esp-live-save.img" (finch-file "build/")))
+  (let ((esp (merge-pathnames "esp-live-save.img" (darterfly-file "build/")))
         (image:*screen-size* '(1280 800)))
     (uiop:delete-file-if-exists esp)
     (let ((c (image:bare-console :boot-args "init" :esp esp)))
@@ -655,21 +655,21 @@
              (progn
                (is (image:expect c "init: pid 1" :timeout 120))
                (ask "(defun cl-user::made-live () :made-live)")
-               (ask "(finch/shell:spawn \"/System/Applications/Listener.app/Contents/Programs/Listener\")")
+               (ask "(darterfly/shell:spawn \"/System/Applications/Listener.app/Contents/Programs/Listener\")")
                (screen-until (lambda (s) (= #xffffffff (image:pixel s 500 300))))
                (image:send-keys (format nil "(+ 40 2)~%"))
                (is (search "42" (listener-text-until c "42")) "the listener answers before the save")
                (ask "(ignore-errors (delete-file \"/tmp/Listener.txt\"))")
-               (image:send c "(finch/install:save-generation)")
+               (image:send c "(darterfly/install:save-generation)")
                (is (image:expect c "restart: core " :timeout 300) "the running image is saved and restarted")
                (is (image:expect c "init: pid 1" :timeout 120) "the session comes back")
                (is (search ":MADE-LIVE" (ask "(cl-user::made-live)")) "what was made live is still there")
                (is (search "42" (listener-text-until c "42")) "the listener comes back with what it held")
-               (is (search "T" (ask "(loop :repeat 600 :until (equal \"gen-2\" (finch/install:current)) :do (sleep 0.5) :finally (return (equal \"gen-2\" (finch/install:current))))"))
+               (is (search "T" (ask "(loop :repeat 600 :until (equal \"gen-2\" (darterfly/install:current)) :do (sleep 0.5) :finally (return (equal \"gen-2\" (darterfly/install:current))))"))
                    "it becomes a generation")
                (let ((screen (screen-until (lambda (s) (< 200 (ldb (byte 8 16) (image:pixel s 300 12)))))))
                  (is (< 200 (ldb (byte 8 16) (image:pixel screen 300 12))) "the menu bar is back"))
-               (image:send c "(progn (finch/power:flush-disks) (sb-ext:exit))")
+               (image:send c "(progn (darterfly/power:flush-disks) (sb-ext:exit))")
                (image:expect c "exit(0)" :timeout 120))
           (image:finish c 5))))
     (let ((c (image:bare-console :boot-args "init" :esp esp)))
@@ -683,12 +683,12 @@
           (image:finish c 5))))))
 
 (test power-restarts-and-shuts-down
-  (dolist (form '("(finch/power:shut-down)" "(finch/power:restart)"))
+  (dolist (form '("(darterfly/power:shut-down)" "(darterfly/power:restart)"))
     (let ((c (image:bare-console)))
       (unwind-protect
            (progn
              (image:expect c "* " :timeout 90)
-             (is (search "T" (progn (image:send c "(integerp (finch/power::s5-sleep-type))") (image:expect c (format nil "~%* ") :timeout 60)))
+             (is (search "T" (progn (image:send c "(integerp (darterfly/power::s5-sleep-type))") (image:expect c (format nil "~%* ") :timeout 60)))
                  "the sleep type comes from the firmware's _S5")
              (image:send c form)
              (is (loop :repeat 600 :unless (uiop:process-alive-p (image::console-process c)) :return t :do (sleep 0.1))
@@ -701,18 +701,18 @@
     (labels ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60))
              (file-until (file until)
                (loop :with deadline := (+ (get-internal-real-time) (* 30 internal-time-units-per-second))
-                     :do (let ((text (ask (format nil "(progn (ignore-errors (finch/shell:cat ~s)) :done)" file))))
+                     :do (let ((text (ask (format nil "(progn (ignore-errors (darterfly/shell:cat ~s)) :done)" file))))
                            (when (or (search until text) (> (get-internal-real-time) deadline))
                              (return text)))
                          (sleep 0.5)))
-             (running (name) (ask (format nil "(if (find ~s (finch/bsd:procs) :key (function finch/bsd:proc-comm) :test (function string=)) :present :absent)" name)))
+             (running (name) (ask (format nil "(if (find ~s (darterfly/bsd:procs) :key (function darterfly/bsd:proc-comm) :test (function string=)) :present :absent)" name)))
              (until-absent (name)
                (loop :repeat 60 :until (search ":ABSENT" (running name)) :do (sleep 0.5))
                (running name)))
       (unwind-protect
            (progn
              (is (image:expect c "init: pid 1" :timeout 90))
-             (ask "(finch/shell:spawn \"/System/Applications/Listener.app/Contents/Programs/Listener\")")
+             (ask "(darterfly/shell:spawn \"/System/Applications/Listener.app/Contents/Programs/Listener\")")
              (screen-until (lambda (s) (= #xffffffff (image:pixel s 500 300))))
              (image:send-keys (format nil "(loop)~%"))
              (is (search "running" (file-until "/tmp/Listener.txt" "running")) "the listener says it is busy")
@@ -732,23 +732,23 @@
              (is (search "3" (ask "(+ 1 2)"))))
         (image:finish c 5)))))
 
-(test finch-edits-its-own-source
-  (let ((disk (merge-pathnames "self-edit.img" (finch-file "build/")))
-        (copy "(dolist (f (directory \"/usr/src/finch/**/*.*\")) (unless (uiop:directory-pathname-p f) (let ((to (concatenate 'string \"/Users/finch/src/finch/\" (subseq (namestring f) (length \"/usr/src/finch/\"))))) (ensure-directories-exist to) (uiop:copy-file f to))))")
-        (edit "(let* ((p \"/Users/finch/src/finch/src/apps/session.lisp\") (text (uiop:read-file-string p)) (at (search \"(defun clock ()\" text))) (with-open-file (s p :direction :output :if-exists :supersede) (write-string (subseq text 0 at) s) (format s \"(defun clock () \\\"edited inside finch\\\")~%(defun clock-before ()\") (write-string (subseq text (+ at (length \"(defun clock ()\"))) s)) :edited)")
-        (reload "(progn (handler-bind ((warning #'muffle-warning)) (asdf:load-system :finch/apps)) (list (namestring (asdf:system-source-file (asdf:find-system :finch/apps))) (finch/apps::clock)))"))
+(test darterfly-edits-its-own-source
+  (let ((disk (merge-pathnames "self-edit.img" (darterfly-file "build/")))
+        (copy "(dolist (f (directory \"/usr/src/darterfly/**/*.*\")) (unless (uiop:directory-pathname-p f) (let ((to (concatenate 'string \"/Users/darterfly/src/darterfly/\" (subseq (namestring f) (length \"/usr/src/darterfly/\"))))) (ensure-directories-exist to) (uiop:copy-file f to))))")
+        (edit "(let* ((p \"/Users/darterfly/src/darterfly/src/apps/session.lisp\") (text (uiop:read-file-string p)) (at (search \"(defun clock ()\" text))) (with-open-file (s p :direction :output :if-exists :supersede) (write-string (subseq text 0 at) s) (format s \"(defun clock () \\\"edited inside darterfly\\\")~%(defun clock-before ()\") (write-string (subseq text (+ at (length \"(defun clock ()\"))) s)) :edited)")
+        (reload "(progn (handler-bind ((warning #'muffle-warning)) (asdf:load-system :darterfly/apps)) (list (namestring (asdf:system-source-file (asdf:find-system :darterfly/apps))) (darterfly/apps::clock)))"))
     (uiop:delete-file-if-exists disk)
     (let ((c (image:bare-console :root disk)))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
         (unwind-protect
              (progn
                (image:expect c "* " :timeout 60)
-               (is (search "\"/Users/finch/" (ask "(namestring (asdf:apply-output-translations \"/usr/src/finch/finch.asd\"))"))
-                   "fasls land in finch's home")
+               (is (search "\"/Users/darterfly/" (ask "(namestring (asdf:apply-output-translations \"/usr/src/darterfly/darterfly.asd\"))"))
+                   "fasls land in darterfly's home")
                (ask copy)
                (is (search ":EDITED" (ask edit)))
-               (ask "(finch-asdf)")
-               (is (search "(\"/Users/finch/src/finch/finch.asd\" \"edited inside finch\")" (ask reload)))
+               (ask "(darterfly-asdf)")
+               (is (search "(\"/Users/darterfly/src/darterfly/darterfly.asd\" \"edited inside darterfly\")" (ask reload)))
                (image:send c "(sb-ext:exit)")
                (image:expect c "exit(0)" :timeout 60))
           (image:finish c 5))))
@@ -757,12 +757,12 @@
         (unwind-protect
              (progn
                (image:expect c "* " :timeout 60)
-               (is (search "(\"/Users/finch/src/finch/finch.asd\" \"edited inside finch\")" (ask reload))
+               (is (search "(\"/Users/darterfly/src/darterfly/darterfly.asd\" \"edited inside darterfly\")" (ask reload))
                    "the edit is there after a reboot"))
           (image:finish c 5))))))
 
-(test finch-installs-a-generation-and-boots-it
-  (let ((esp (merge-pathnames "esp-keep.img" (finch-file "build/"))))
+(test darterfly-installs-a-generation-and-boots-it
+  (let ((esp (merge-pathnames "esp-keep.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists esp)
     (let ((c (image:bare-console :esp esp)))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
@@ -770,9 +770,9 @@
              (progn
                (is (image:expect c "boot.efi: generation gen-1"))
                (image:expect c "* " :timeout 60)
-               (is (search "(\"gen-1\")" (ask "(finch/install:generations)")))
-               (is (search "\"gen-2\"" (ask "(finch/install:install \"/Volumes/EFI/EFI/finch/gen-1/kernel\" \"/Volumes/EFI/EFI/finch/gen-1/finch.core\")")))
-               (is (search "(\"gen-1\" \"gen-2\")" (ask "(finch/install:generations)")))
+               (is (search "(\"gen-1\")" (ask "(darterfly/install:generations)")))
+               (is (search "\"gen-2\"" (ask "(darterfly/install:install \"/Volumes/EFI/EFI/darterfly/gen-1/kernel\" \"/Volumes/EFI/EFI/darterfly/gen-1/darterfly.core\")")))
+               (is (search "(\"gen-1\" \"gen-2\")" (ask "(darterfly/install:generations)")))
                (image:send c "(sb-ext:exit)")
                (image:expect c "exit(0)" :timeout 60))
           (image:finish c 5))))
@@ -780,33 +780,33 @@
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
         (unwind-protect
              (progn
-               (is (image:expect c "boot.efi: generation gen-2") "boot.efi boots what finch installed")
+               (is (image:expect c "boot.efi: generation gen-2") "boot.efi boots what darterfly installed")
                (image:expect c "* " :timeout 60)
-               (is (search "\"gen-2\"" (ask "(finch/install:current)"))))
+               (is (search "\"gen-2\"" (ask "(darterfly/install:current)"))))
           (image:finish c 5))))
     (is (zerop (nth-value 2 (uiop:run-program (list "fsck.fat" "-n" (uiop:native-namestring esp))
                                               :ignore-error-status t :output nil :error-output nil)))
-        "fsck.fat passes the ESP finch wrote")))
+        "fsck.fat passes the ESP darterfly wrote")))
 
-(test finch-builds-its-kernel-and-boots-it
-  (let ((esp (merge-pathnames "esp-kernel.img" (finch-file "build/")))
-        (disk (merge-pathnames "guest-kernel.img" (finch-file "build/")))
-        (copy "(dolist (f (directory \"/usr/src/finch/**/*.*\")) (unless (uiop:directory-pathname-p f) (let ((to (concatenate 'string \"/Users/finch/src/finch/\" (subseq (namestring f) (length \"/usr/src/finch/\"))))) (ensure-directories-exist to) (uiop:copy-file f to))))")
-        (edit "(let* ((p \"/Users/finch/src/finch/src/kern/i386/init.lisp\") (text (uiop:read-file-string p)) (at (search \"RELEASE_X86_64\" text))) (with-open-file (s p :direction :output :if-exists :supersede) (write-string (subseq text 0 at) s) (write-string \"BUILT_IN_FINCH\" s) (write-string (subseq text (+ at (length \"RELEASE_X86_64\"))) s)) :edited)")
-        (reload "(progn (handler-bind ((warning #'muffle-warning)) (asdf:load-system :finch/kern)) (namestring (asdf:system-source-file (asdf:find-system :finch/kern))))"))
+(test darterfly-builds-its-kernel-and-boots-it
+  (let ((esp (merge-pathnames "esp-kernel.img" (darterfly-file "build/")))
+        (disk (merge-pathnames "guest-kernel.img" (darterfly-file "build/")))
+        (copy "(dolist (f (directory \"/usr/src/darterfly/**/*.*\")) (unless (uiop:directory-pathname-p f) (let ((to (concatenate 'string \"/Users/darterfly/src/darterfly/\" (subseq (namestring f) (length \"/usr/src/darterfly/\"))))) (ensure-directories-exist to) (uiop:copy-file f to))))")
+        (edit "(let* ((p \"/Users/darterfly/src/darterfly/src/kern/i386/init.lisp\") (text (uiop:read-file-string p)) (at (search \"RELEASE_X86_64\" text))) (with-open-file (s p :direction :output :if-exists :supersede) (write-string (subseq text 0 at) s) (write-string \"BUILT_IN_DARTERFLY\" s) (write-string (subseq text (+ at (length \"RELEASE_X86_64\"))) s)) :edited)")
+        (reload "(progn (handler-bind ((warning #'muffle-warning)) (asdf:load-system :darterfly/kern)) (namestring (asdf:system-source-file (asdf:find-system :darterfly/kern))))"))
     (uiop:delete-file-if-exists esp)
     (uiop:delete-file-if-exists disk)
     (let ((c (image:bare-console :esp esp :root disk)))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
         (unwind-protect
              (progn
-               (is (image:expect c "root:finch/RELEASE_X86_64"))
+               (is (image:expect c "root:darterfly/RELEASE_X86_64"))
                (image:expect c "* " :timeout 60)
                (ask copy)
                (is (search ":EDITED" (ask edit)))
-               (ask "(finch-asdf)")
-               (is (search "\"/Users/finch/src/finch/finch.asd\"" (ask reload)))
-               (is (search "\"gen-2\"" (ask "(finch/install:install (finch/install:build-kernel) \"/Volumes/EFI/EFI/finch/gen-1/finch.core\")")))
+               (ask "(darterfly-asdf)")
+               (is (search "\"/Users/darterfly/src/darterfly/darterfly.asd\"" (ask reload)))
+               (is (search "\"gen-2\"" (ask "(darterfly/install:install (darterfly/install:build-kernel) \"/Volumes/EFI/EFI/darterfly/gen-1/darterfly.core\")")))
                (image:send c "(sb-ext:exit)")
                (image:expect c "exit(0)" :timeout 60))
           (image:finish c 5))))
@@ -815,21 +815,21 @@
         (unwind-protect
              (progn
                (is (image:expect c "boot.efi: generation gen-2"))
-               (is (image:expect c "root:finch/BUILT_IN_FINCH") "the kernel finch built is the one that boots")
+               (is (image:expect c "root:darterfly/BUILT_IN_DARTERFLY") "the kernel darterfly built is the one that boots")
                (image:expect c "* " :timeout 60)
-               (is (search "\"gen-2\"" (ask "(finch/install:current)"))))
+               (is (search "\"gen-2\"" (ask "(darterfly/install:current)"))))
           (image:finish c 5))))))
 
 (defun md5-hex (path)
   (string-downcase (format nil "~{~2,'0x~}" (coerce (sb-md5:md5sum-file path) 'list))))
 
-(test finch-builds-its-c-and-boots-it
-  (let* ((esp (merge-pathnames "esp-cc.img" (finch-file "build/")))
-         (disk (merge-pathnames "guest-cc.img" (finch-file "build/")))
+(test darterfly-builds-its-c-and-boots-it
+  (let* ((esp (merge-pathnames "esp-cc.img" (darterfly-file "build/")))
+         (disk (merge-pathnames "guest-cc.img" (darterfly-file "build/")))
          (host (let ((image:*c-compiler* :tcc))
                  (image:kernel-file)
-                 (loop :for (name path) :in (finch/image::user-objects) :collect (cons name (md5-hex path)))))
-         (sums "(progn (require :sb-md5) (mapcar (lambda (name) (cons name (string-downcase (format nil \"~{~2,'0x~}\" (coerce (sb-md5:md5sum-file (concatenate 'string \"/Users/finch/objects/\" name)) 'list))))) (mapcar #'(lambda (u) (getf u :name)) (finch/cc:units))))"))
+                 (loop :for (name path) :in (darterfly/image::user-objects) :collect (cons name (md5-hex path)))))
+         (sums "(progn (require :sb-md5) (mapcar (lambda (name) (cons name (string-downcase (format nil \"~{~2,'0x~}\" (coerce (sb-md5:md5sum-file (concatenate 'string \"/Users/darterfly/objects/\" name)) 'list))))) (mapcar #'(lambda (u) (getf u :name)) (darterfly/cc:units))))"))
     (uiop:delete-file-if-exists esp)
     (uiop:delete-file-if-exists disk)
     (let ((c (image:bare-console :esp esp :root disk)))
@@ -837,11 +837,11 @@
         (unwind-protect
              (progn
                (image:expect c "* " :timeout 60)
-               (is (search "NIL" (ask "(finch/cc:compile-units \"/Users/finch/objects/\")")) "every C unit compiles inside finch")
+               (is (search "NIL" (ask "(darterfly/cc:compile-units \"/Users/darterfly/objects/\")")) "every C unit compiles inside darterfly")
                (let ((guest (read-from-string (ask sums))))
-                 (is (equal host guest) "finch's TinyCC makes the host's objects byte for byte: ~a"
+                 (is (equal host guest) "darterfly's TinyCC makes the host's objects byte for byte: ~a"
                      (set-difference guest host :test #'equal)))
-               (is (search "\"gen-2\"" (ask "(finch/install:install (finch/install:build-kernel :objects \"/Users/finch/objects/\") \"/Volumes/EFI/EFI/finch/gen-1/finch.core\")")))
+               (is (search "\"gen-2\"" (ask "(darterfly/install:install (darterfly/install:build-kernel :objects \"/Users/darterfly/objects/\") \"/Volumes/EFI/EFI/darterfly/gen-1/darterfly.core\")")))
                (image:send c "(sb-ext:exit)")
                (image:expect c "exit(0)" :timeout 60))
           (image:finish c 5))))
@@ -851,10 +851,10 @@
              (progn
                (is (image:expect c "boot.efi: generation gen-2"))
                (image:expect c "* " :timeout 60)
-               (is (search "T" (ask "(finch/cc:compile-c \"src/libsa/string.c\" \"/tmp/string.o\" :directory \"/usr/src/finch/\")")))
+               (is (search "T" (ask "(darterfly/cc:compile-c \"src/libsa/string.c\" \"/tmp/string.o\" :directory \"/usr/src/darterfly/\")")))
                (is (search (cdr (assoc "libsa/string.o" host :test #'string=))
                            (ask "(progn (require :sb-md5) (string-downcase (format nil \"~{~2,'0x~}\" (coerce (sb-md5:md5sum-file \"/tmp/string.o\") 'list))))"))
-                   "the TinyCC finch built makes the same object again"))
+                   "the TinyCC darterfly built makes the same object again"))
           (image:finish c 5))))))
 
 (defun sbcl-phase (disk form marker)
@@ -869,78 +869,78 @@
                       (progn (format t "~&sbcl-phase: no ~a; console ends:~%~a~%" marker
                                      (let ((s (image:transcript c))) (subseq s (max 0 (- (length s) 3000)))))
                              nil))
-             (image:send c "(progn (funcall (intern \"VFS-SYNC\" (or (find-package \"HOST-FINCH/VFS\") (find-package \"FINCH/VFS\")))) (format t \"~%SYNCED~%\"))")
+             (image:send c "(progn (funcall (intern \"VFS-SYNC\" (or (find-package \"HOST-DARTERFLY/VFS\") (find-package \"DARTERFLY/VFS\")))) (format t \"~%SYNCED~%\"))")
              (image:expect c "SYNCED" :timeout 300)
              (image:send c "(funcall (intern \"EXIT\" (or (find-package \"HOST-SB-EXT\") (find-package \"SB-EXT\"))))")))
       (image:finish c 30))))
 
 (defun disk-files (disk host-root guest-root relatives)
-  (let ((finch/vfs:*root* nil) (finch/vfs:*mounts* nil))
-    (finch/vfs:vfs-mount (finch/vfs:make-ram-node :vdir #o755) "/")
-    (finch/vfs:vfs-mkdir "/root" #o755)
-    (multiple-value-bind (read write) (finch/apfs:file-store disk)
-      (finch/apfs:mount-writable read write "/root"))
+  (let ((darterfly/vfs:*root* nil) (darterfly/vfs:*mounts* nil))
+    (darterfly/vfs:vfs-mount (darterfly/vfs:make-ram-node :vdir #o755) "/")
+    (darterfly/vfs:vfs-mkdir "/root" #o755)
+    (multiple-value-bind (read write) (darterfly/apfs:file-store disk)
+      (darterfly/apfs:mount-writable read write "/root"))
     (loop :for rel :in relatives
           :for path := (concatenate 'string "/root/" guest-root rel)
-          :unless (and (ignore-errors (finch/vfs:vfs-stat path))
+          :unless (and (ignore-errors (darterfly/vfs:vfs-stat path))
                        (equalp (image::octets (merge-pathnames rel host-root))
-                               (let ((fd (finch/vfs:vfs-open path (list :access :rdonly) 0)))
-                                 (unwind-protect (finch/vfs:vfs-read fd (finch/vfs:vattr-size (finch/vfs:vfs-stat path)))
-                                   (finch/vfs:vfs-close fd)))))
+                               (let ((fd (darterfly/vfs:vfs-open path (list :access :rdonly) 0)))
+                                 (unwind-protect (darterfly/vfs:vfs-read fd (darterfly/vfs:vattr-size (darterfly/vfs:vfs-stat path)))
+                                   (darterfly/vfs:vfs-close fd)))))
             :collect rel)))
 
-(test finch-generates-its-bootstrap-inputs
-  (let ((disk (merge-pathnames "inputs.img" (finch-file "build/"))))
+(test darterfly-generates-its-bootstrap-inputs
+  (let ((disk (merge-pathnames "inputs.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists disk)
-    (finch/image::root-disk disk (* 512 1048576)
-                            (append (finch/image::root-entries) (finch/image::sbcl-source-entries)
-                                    (finch/image::tree-entries (finch/image::tcc-source) "usr/src/tinycc")))
+    (darterfly/image::root-disk disk (* 512 1048576)
+                            (append (darterfly/image::root-entries) (darterfly/image::sbcl-source-entries)
+                                    (darterfly/image::tree-entries (darterfly/image::tcc-source) "usr/src/tinycc")))
     (let ((c (image:bare-console :root disk)))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
         (unwind-protect
              (progn
                (image:expect c "* " :timeout 60)
-               (ask "(defun same-files (a b names) (remove-if (lambda (n) (equalp (finch/build::file-octets (concatenate 'string a n)) (finch/build::file-octets (concatenate 'string b n)))) names))")
-               (ask "(defun source-differences (a b) (remove-if-not (lambda (d) (member (pathname-type (second d)) '(\"c\" \"h\" \"S\" \"inc\" \"def\") :test #'equal)) (finch/build:tree-differences a b)))")
+               (ask "(defun same-files (a b names) (remove-if (lambda (n) (equalp (darterfly/build::file-octets (concatenate 'string a n)) (darterfly/build::file-octets (concatenate 'string b n)))) names))")
+               (ask "(defun source-differences (a b) (remove-if-not (lambda (d) (member (pathname-type (second d)) '(\"c\" \"h\" \"S\" \"inc\" \"def\") :test #'equal)) (darterfly/build:tree-differences a b)))")
                (is (search "NIL"
-                           (ask "(let ((id (string-trim '(#\\\" #\\Newline) (uiop:read-file-string \"/usr/src/sbcl/output/build-id.inc\")))) (finch/build:write-files \"/tmp/config/\" (finch/build:sbcl-config id)) (same-files \"/tmp/config/\" \"/usr/src/sbcl/\" (mapcar #'car (finch/build:sbcl-config id))))"))
-                   "finch writes make-config's files as the host did")
+                           (ask "(let ((id (string-trim '(#\\\" #\\Newline) (uiop:read-file-string \"/usr/src/sbcl/output/build-id.inc\")))) (darterfly/build:write-files \"/tmp/config/\" (darterfly/build:sbcl-config id)) (same-files \"/tmp/config/\" \"/usr/src/sbcl/\" (mapcar #'car (darterfly/build:sbcl-config id))))"))
+                   "darterfly writes make-config's files as the host did")
                (is (search "NIL"
-                           (ask "(progn (finch/build:runtime-tree \"/usr/src/sbcl/\" \"/usr/src/finch/src/sbcl/\" \"/tmp/runtime/\" :genesis \"/usr/src/finch/build/runtime/src/runtime/genesis/\") (source-differences \"/tmp/runtime/\" \"/usr/src/finch/build/runtime/\"))"))
-                   "finch assembles the patched runtime tree from pristine SBCL")
+                           (ask "(progn (darterfly/build:runtime-tree \"/usr/src/sbcl/\" \"/usr/src/darterfly/src/sbcl/\" \"/tmp/runtime/\" :genesis \"/usr/src/darterfly/build/runtime/src/runtime/genesis/\") (source-differences \"/tmp/runtime/\" \"/usr/src/darterfly/build/runtime/\"))"))
+                   "darterfly assembles the patched runtime tree from pristine SBCL")
                (is (search "(0 NIL)"
-                           (ask "(list (finch/cc:run-c \"tools-for-build/grovel-headers.c\" :directory \"/usr/src/sbcl/\" :includes '(\"/tmp/runtime/src/runtime/\") :output \"/tmp/stuff-groveled-from-headers.lisp\") (same-files \"/tmp/\" \"/usr/src/sbcl/output/\" '(\"stuff-groveled-from-headers.lisp\")))"))
-                   "grovel-headers runs inside finch and makes the host's constants byte for byte")
+                           (ask "(list (darterfly/cc:run-c \"tools-for-build/grovel-headers.c\" :directory \"/usr/src/sbcl/\" :includes '(\"/tmp/runtime/src/runtime/\") :output \"/tmp/stuff-groveled-from-headers.lisp\") (same-files \"/tmp/\" \"/usr/src/sbcl/output/\" '(\"stuff-groveled-from-headers.lisp\")))"))
+                   "grovel-headers runs inside darterfly and makes the host's constants byte for byte")
                (is (search "(0 NIL)"
-                           (ask "(list (finch/cc:run-c \"conftest.c\" :directory \"/usr/src/tinycc/\" :defines '(\"C2STR\") :args '(\"include/tccdefs.h\" \"/tmp/tccdefs_.h\")) (progn (finch/build:libtcc-tree \"/usr/src/tinycc/\" \"/tmp/libtcc/\" \"/tmp/tccdefs_.h\") (finch/build:tree-differences \"/tmp/libtcc/\" \"/usr/src/finch/build/tcc/finch-src/\")))"))
-                   "finch builds libtcc's tree, tccdefs_.h included, as the host did")
+                           (ask "(list (darterfly/cc:run-c \"conftest.c\" :directory \"/usr/src/tinycc/\" :defines '(\"C2STR\") :args '(\"include/tccdefs.h\" \"/tmp/tccdefs_.h\")) (progn (darterfly/build:libtcc-tree \"/usr/src/tinycc/\" \"/tmp/libtcc/\" \"/tmp/tccdefs_.h\") (darterfly/build:tree-differences \"/tmp/libtcc/\" \"/usr/src/darterfly/build/tcc/darterfly-src/\")))"))
+                   "darterfly builds libtcc's tree, tccdefs_.h included, as the host did")
                (is (search "DIGESTS-MATCH"
-                           (ask (format nil "(if (equal (finch/build:digest-tree \"/usr/src/finch/src/build/\") '~s) :digests-match :digests-differ)"
-                                        (finch/build:digest-tree (finch-file "src/build/")))))
-                   "finch's digests of its sources are the host's")
-               (is (search "(3 (\"finch\" \"sbcl\" \"tinycc\"))"
-                           (ask "(let ((m (finch/build:manifest :build-id \"test\" :sources '((\"finch\" \"/usr/src/finch/src/\") (\"sbcl\" \"/usr/src/sbcl/src/\") (\"tinycc\" \"/usr/src/tinycc/\"))))) (finch/build:write-manifest \"/tmp/manifest\" m) (let ((back (with-open-file (s \"/tmp/manifest\") (read s)))) (list (length (getf back :sources)) (mapcar #'first (getf back :sources)))))"))
+                           (ask (format nil "(if (equal (darterfly/build:digest-tree \"/usr/src/darterfly/src/build/\") '~s) :digests-match :digests-differ)"
+                                        (darterfly/build:digest-tree (darterfly-file "src/build/")))))
+                   "darterfly's digests of its sources are the host's")
+               (is (search "(3 (\"darterfly\" \"sbcl\" \"tinycc\"))"
+                           (ask "(let ((m (darterfly/build:manifest :build-id \"test\" :sources '((\"darterfly\" \"/usr/src/darterfly/src/\") (\"sbcl\" \"/usr/src/sbcl/src/\") (\"tinycc\" \"/usr/src/tinycc/\"))))) (darterfly/build:write-manifest \"/tmp/manifest\" m) (let ((back (with-open-file (s \"/tmp/manifest\") (read s)))) (list (length (getf back :sources)) (mapcar #'first (getf back :sources)))))"))
                    "a manifest records every source file and reads back"))
           (image:finish c 5))))))
 
-(test finch-runs-a-core-and-keeps-its-files
-  (let ((esp (merge-pathnames "esp-run.img" (finch-file "build/")))
-        (disk (merge-pathnames "run.img" (finch-file "build/")))
+(test darterfly-runs-a-core-and-keeps-its-files
+  (let ((esp (merge-pathnames "esp-run.img" (darterfly-file "build/")))
+        (disk (merge-pathnames "run.img" (darterfly-file "build/")))
         (other (image::octets (let ((image:*c-compiler* :tcc)) (image:kernel-file))))
         (boot (image::octets (image:kernel-file)))
         (report "(with-open-file (o \"/work/runtime.txt\" :direction :output :if-exists :supersede) (prin1 (list (with-open-file (s \"/System/Library/Kernels/kernel\" :element-type '(unsigned-byte 8)) (file-length s)) (sb-sys:find-foreign-symbol-address \"build_id\")) o))")
         (stress "(progn (ensure-directories-exist \"/work/f/\") (with-open-file (keep \"/work/keep.txt\" :direction :output) (dotimes (i 3000) (with-open-file (o (format nil \"/work/f/~d.txt\" i) :direction :output) (print i o))) (write-string \"kept\" keep)) (rename-file \"/work/f/0.txt\" \"/work/renamed.txt\") (with-open-file (o \"/work/count.txt\" :direction :output) (princ (length (directory \"/work/f/*.txt\")) o)))"))
     (uiop:delete-file-if-exists esp)
     (uiop:delete-file-if-exists disk)
-    (finch/image::root-disk disk (* 256 1048576)
-                            (append (finch/image::root-entries)
-                                    (list (list :file "usr/lib/sbcl/sbcl.core" (image::octets (finch-file "build/sbcl-mt/output/sbcl.core")))
-                                          (list :file "usr/lib/finch/kernel-tcc" other))))
+    (darterfly/image::root-disk disk (* 256 1048576)
+                            (append (darterfly/image::root-entries)
+                                    (list (list :file "usr/lib/sbcl/sbcl.core" (image::octets (darterfly-file "build/sbcl-mt/output/sbcl.core")))
+                                          (list :file "usr/lib/darterfly/kernel-tcc" other))))
     (let ((c (image:bare-console :esp esp :root disk)))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600))
              (run-in-core (code &optional kernel)
-               (image:send c (format nil "(finch/run:run-core \"/usr/lib/sbcl/sbcl.core\" '~s :cwd \"/\"~@[ :kernel ~s~])"
-                                     (list "/System/Library/Kernels/kernel" "--core" "/System/Library/Kernels/finch.core"
+               (image:send c (format nil "(darterfly/run:run-core \"/usr/lib/sbcl/sbcl.core\" '~s :cwd \"/\"~@[ :kernel ~s~])"
+                                     (list "/System/Library/Kernels/kernel" "--core" "/System/Library/Kernels/darterfly.core"
                                            "--no-sysinit" "--no-userinit" "--disable-debugger" "--eval" code "--quit")
                                      kernel))
                (image:expect c "restart: core" :timeout 300)
@@ -949,36 +949,36 @@
         (unwind-protect
              (progn
                (image:expect c "* " :timeout 60)
-               (image:send c "(finch/install:save)")
-               (is (image:expect c "restart: core " :timeout 300) "finch runs from a saved core")
+               (image:send c "(darterfly/install:save)")
+               (is (image:expect c "restart: core " :timeout 300) "darterfly runs from a saved core")
                (image:expect c "* " :timeout 120)
                (ask "(progn (with-open-file (s \"/tmp/good.c\" :direction :output :if-exists :supersede) (write-line \"int good(void) { return 1; }\" s)) (with-open-file (s \"/tmp/bad.c\" :direction :output :if-exists :supersede) (write-line \"int bad(void) { return }\" s)) (ensure-directories-exist \"/tmp/u/\") (with-open-file (s \"/tmp/u/bad.o\" :direction :output :if-exists :supersede) (write-line \"stale\" s)) :written)")
                (ask "(with-open-file (s \"/tmp/hello.c\" :direction :output :if-exists :supersede) (write-line \"#include <stdio.h>\" s) (write-line \"int main(int argc, char **argv) { printf(\\\"hello %d %s\\\\n\\\", 6 * 7, argv[1]); return 3; }\" s))")
-               (is (search "(3 \"hello 42 finch"
-                           (ask "(list (finch/cc:run-c \"/tmp/hello.c\" :args '(\"finch\") :output \"/tmp/hello.out\") (uiop:read-file-string \"/tmp/hello.out\"))"))
-                   "TinyCC runs a C program inside finch")
-               (is (search "(\"bad.o\")" (ask "(finch/cc:compile-units \"/tmp/u/\" :directory \"/tmp/\" :units '((:name \"good.o\" :source \"good.c\") (:name \"bad.o\" :source \"bad.c\")))"))
+               (is (search "(3 \"hello 42 darterfly"
+                           (ask "(list (darterfly/cc:run-c \"/tmp/hello.c\" :args '(\"darterfly\") :output \"/tmp/hello.out\") (uiop:read-file-string \"/tmp/hello.out\"))"))
+                   "TinyCC runs a C program inside darterfly")
+               (is (search "(\"bad.o\")" (ask "(darterfly/cc:compile-units \"/tmp/u/\" :directory \"/tmp/\" :units '((:name \"good.o\" :source \"good.c\") (:name \"bad.o\" :source \"bad.c\")))"))
                    "the failed unit is reported")
                (is (search "(T NIL NIL)" (ask "(list (and (probe-file \"/tmp/u/good.o\") t) (probe-file \"/tmp/u/bad.o\") (probe-file \"/tmp/u/objects\"))"))
                    "a failed build leaves no stale object and no link list")
                (run-in-core stress)
-               (is (search "(:EXIT 0 :FILES 3002)" (ask "(finch/run:collect)")) "every file the run wrote comes back")
+               (is (search "(:EXIT 0 :FILES 3002)" (ask "(darterfly/run:collect)")) "every file the run wrote comes back")
                (is (search "(\"kept\" \"2999\" T)"
                            (ask "(list (uiop:read-file-string \"/work/keep.txt\") (uiop:read-file-string \"/work/count.txt\") (and (probe-file \"/work/renamed.txt\") t))"))
                    "an open file, a rename and a directory listing survive 3000 new files")
                (run-in-core "(progn (with-open-file (o \"/work/failed.txt\" :direction :output) (write-string \"partial\" o)) (sb-ext:exit :code 3))")
-               (is (search "(:EXIT 3 :FILES 0 :REJECTED 1)" (ask "(finch/run:collect)")) "a failed run's files are rejected")
+               (is (search "(:EXIT 3 :FILES 0 :REJECTED 1)" (ask "(darterfly/run:collect)")) "a failed run's files are rejected")
                (is (search "NIL" (ask "(probe-file \"/work/failed.txt\")")) "and never reach the disk")
-               (run-in-core report "/usr/lib/finch/kernel-tcc")
-               (is (search "(:EXIT 0 :FILES 1)" (ask "(finch/run:collect)")))
-               (is (search (prin1-to-string (list (length other) (finch/run::elf-symbol other "build_id")))
+               (run-in-core report "/usr/lib/darterfly/kernel-tcc")
+               (is (search "(:EXIT 0 :FILES 1)" (ask "(darterfly/run:collect)")))
+               (is (search (prin1-to-string (list (length other) (darterfly/run::elf-symbol other "build_id")))
                            (ask "(uiop:read-file-string \"/work/runtime.txt\")"))
                    "a run brings its own runtime: the child runs on the kernel file it was given")
                (run-in-core report)
-               (is (search "(:EXIT 0 :FILES 1)" (ask "(finch/run:collect)")))
-               (is (search (prin1-to-string (list (length boot) (finch/run::elf-symbol boot "build_id")))
+               (is (search "(:EXIT 0 :FILES 1)" (ask "(darterfly/run:collect)")))
+               (is (search (prin1-to-string (list (length boot) (darterfly/run::elf-symbol boot "build_id")))
                            (ask "(uiop:read-file-string \"/work/runtime.txt\")"))
-                   "and the next run is back on the runtime finch booted"))
+                   "and the next run is back on the runtime darterfly booted"))
           (image:finish c 5))))))
 
 (defvar *run-wait* 1800)
@@ -991,7 +991,7 @@
            (when script
              (image:send c (format nil "(progn (with-open-file (s ~s :direction :output :if-exists :supersede) (write-string ~s s)) :stdin)" stdin script))
              (image:expect c ":STDIN" :timeout 60))
-           (image:send c (format nil "(finch/run:run-core ~s '~s :cwd \"/usr/src/sbcl\"~:[~; :files (finch/run:tree-files \"/usr/src/sbcl/\" :keep (lambda (f) (let ((n (namestring f))) (not (or (search \"/obj/from-host/\" n) (search \"/obj/from-xc/\" n) (search \".core\" n))))))~]~@[ :stdin ~s~])"
+           (image:send c (format nil "(darterfly/run:run-core ~s '~s :cwd \"/usr/src/sbcl\"~:[~; :files (darterfly/run:tree-files \"/usr/src/sbcl/\" :keep (lambda (f) (let ((n (namestring f))) (not (or (search \"/obj/from-host/\" n) (search \"/obj/from-xc/\" n) (search \".core\" n))))))~]~@[ :stdin ~s~])"
                                  core argv files stdin))
            (image:expect c "restart: core" :timeout 300)
            (unless (ignore-errors (image:expect c "restart: core" :timeout *run-wait*))
@@ -999,68 +999,68 @@
              (finish-output)
              (return-from sbcl-run nil))
            (image:expect c "* " :timeout 120)
-           (image:send c "(finch/run:collect)")
+           (image:send c "(darterfly/run:collect)")
            (prog1 (image:expect c (format nil "~%* ") :timeout 600)
-             (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
+             (image:send c "(progn (darterfly/vfs:vfs-sync) (sb-ext:exit))")
              (image:expect c "exit(0)" :timeout 120)))
       (image:finish c 30))))
 
 (defun dump-script ()
-  (let* ((script (uiop:read-file-string (finch-file "build/sbcl-mt/make-target-2.sh")))
+  (let* ((script (uiop:read-file-string (darterfly-file "build/sbcl-mt/make-target-2.sh")))
          (start (+ (search (format nil "<<EOF~%") script) 6))
          (body (subseq script start (1+ (search (format nil "~%EOF") script :start2 start))))
          (at (search "${devel}" body)))
     (concatenate 'string (subseq body 0 at) (subseq body (+ at 8)))))
 
-(test finch-bootstraps-sbcl
-  (let ((disk (merge-pathnames "sbcl-build.img" (finch-file "build/")))
-        (host (finch-file "build/sbcl-mt/"))
+(test darterfly-bootstraps-sbcl
+  (let ((disk (merge-pathnames "sbcl-build.img" (darterfly-file "build/")))
+        (host (darterfly-file "build/sbcl-mt/"))
         (kernel "/System/Library/Kernels/kernel")
-        (core "/System/Library/Kernels/finch.core"))
+        (core "/System/Library/Kernels/darterfly.core"))
     (uiop:delete-file-if-exists disk)
-    (finch/image::root-disk disk (* 512 1048576) (append (finch/image::root-entries) (finch/image::sbcl-source-entries)))
+    (darterfly/image::root-disk disk (* 512 1048576) (append (darterfly/image::root-entries) (darterfly/image::sbcl-source-entries)))
     (is (sbcl-phase disk "(progn (cl-user::load-sbcl-file \"make-host-1.lisp\" nil) (format t \"~%HOST1-DONE~%\"))" "HOST1-DONE")
-        "make-host-1 builds the cross-compiler inside finch")
+        "make-host-1 builds the cross-compiler inside darterfly")
     (is (sbcl-phase disk "(progn (push (lambda () (throw 'after-xc t)) sb-ext:*save-hooks*) (catch 'after-xc (cl-user::load-sbcl-file \"make-host-2.lisp\" nil)) (format t \"~%HOST2-DONE~%\"))" "HOST2-DONE")
-        "make-host-2 cross-compiles the target inside finch")
+        "make-host-2 cross-compiles the target inside darterfly")
     (is (sbcl-phase disk "(progn (cl-user::load-sbcl-file \"make-genesis-2.lisp\" nil) (format t \"~%GENESIS2-DONE~%\"))" "GENESIS2-DONE")
-        "make-genesis-2 writes the cold core inside finch")
+        "make-genesis-2 writes the cold core inside darterfly")
     (flet ((relatives (pattern) (mapcar (lambda (p) (enough-namestring p host)) (directory (merge-pathnames pattern host)))))
       (let ((files (append (list "output/cold-sbcl.core")
                            (relatives "output/genesis-2/*.h") (relatives "src/runtime/genesis/*.h")
                            (relatives "obj/from-xc/**/*.lisp-obj"))))
         (is (null (disk-files disk host "usr/src/sbcl/" files))
-            "finch's cold core, headers and target fasls are the host's byte for byte (~d files)" (length files))))
+            "darterfly's cold core, headers and target fasls are the host's byte for byte (~d files)" (length files))))
     (is (search "(:EXIT 0"
                 (sbcl-run disk "/usr/src/sbcl/output/cold-sbcl.core"
                           (list kernel "--core" core "--lose-on-corruption" "--no-sysinit" "--no-userinit"
                                 "--eval" "(sb-fasl::!warm-load \"src/cold/warm.lisp\")" "--quit")))
-        "the cold core does warm init's compile phase inside finch")
+        "the cold core does warm init's compile phase inside darterfly")
     (is (search "(:EXIT 0 :FILES 1)"
                 (sbcl-run disk "/usr/src/sbcl/output/cold-sbcl.core"
                           (list kernel "--noinform" "--core" core "--lose-on-corruption" "--no-sysinit" "--no-userinit" "--noprint")
                           :stdin "/usr/src/sbcl/output/target-2-dump.lisp" :script (dump-script)))
-        "the cold core loads warm init and saves sbcl.core inside finch")
+        "the cold core loads warm init and saves sbcl.core inside darterfly")
     (sbcl-run disk "/usr/src/sbcl/output/sbcl.core"
               (list kernel "--core" core "--no-sysinit" "--no-userinit" "--disable-debugger" "--eval"
                     "(with-open-file (o \"/usr/src/sbcl/new-core.txt\" :direction :output :if-exists :supersede) (prin1 (list (lisp-implementation-version) (funcall (compile nil '(lambda (n) (loop for i from 1 to n sum (* i i)))) 100) (class-name (find-class 'standard-object))) o))"
                     "--quit")
               :files nil)
-    (is (equal "(\"2.6.4.finch\" 338350 STANDARD-OBJECT)"
+    (is (equal "(\"2.6.4.darterfly\" 338350 STANDARD-OBJECT)"
                (let ((out (disk-octets disk "usr/src/sbcl/new-core.txt"))) (and out (map 'string #'code-char out))))
-        "the sbcl.core finch built runs, compiles and has CLOS")))
+        "the sbcl.core darterfly built runs, compiles and has CLOS")))
 
 (defun disk-octets (disk relative)
-  (let ((finch/vfs:*root* nil) (finch/vfs:*mounts* nil))
-    (finch/vfs:vfs-mount (finch/vfs:make-ram-node :vdir #o755) "/")
-    (finch/vfs:vfs-mkdir "/root" #o755)
-    (multiple-value-bind (read write) (finch/apfs:file-store disk)
-      (finch/apfs:mount-writable read write "/root"))
+  (let ((darterfly/vfs:*root* nil) (darterfly/vfs:*mounts* nil))
+    (darterfly/vfs:vfs-mount (darterfly/vfs:make-ram-node :vdir #o755) "/")
+    (darterfly/vfs:vfs-mkdir "/root" #o755)
+    (multiple-value-bind (read write) (darterfly/apfs:file-store disk)
+      (darterfly/apfs:mount-writable read write "/root"))
     (let ((path (concatenate 'string "/root/" relative)))
-      (when (ignore-errors (finch/vfs:vfs-stat path))
-        (let ((fd (finch/vfs:vfs-open path (list :access :rdonly) 0)))
-          (unwind-protect (finch/vfs:vfs-read fd (finch/vfs:vattr-size (finch/vfs:vfs-stat path)))
-            (finch/vfs:vfs-close fd)))))))
+      (when (ignore-errors (darterfly/vfs:vfs-stat path))
+        (let ((fd (darterfly/vfs:vfs-open path (list :access :rdonly) 0)))
+          (unwind-protect (darterfly/vfs:vfs-read fd (darterfly/vfs:vattr-size (darterfly/vfs:vfs-stat path)))
+            (darterfly/vfs:vfs-close fd)))))))
 
 (defun host-build-octets (path host)
   (let* ((octets (image::octets path))
@@ -1101,7 +1101,7 @@
 
 (defun generation-resume (c steps)
   (loop
-    (image:send c (format nil "(format t \"~~%RESUME~~a ~~s~~%\" \"D\" (finch/generation:resume ~a))" steps))
+    (image:send c (format nil "(format t \"~~%RESUME~~a ~~s~~%\" \"D\" (darterfly/generation:resume ~a))" steps))
     (multiple-value-bind (seen found) (image:expect c (list "RESUMED " "restart: core") :timeout 1200)
       (declare (ignore seen))
       (when (string= found "RESUMED ")
@@ -1118,30 +1118,30 @@
         (return nil))
       (image:expect c "* " :timeout 120))))
 
-(test finch-builds-its-contribs
-  (let ((disk (merge-pathnames "sbcl-build.img" (finch-file "build/")))
-        (host (finch-file "build/sbcl-mt/"))
+(test darterfly-builds-its-contribs
+  (let ((disk (merge-pathnames "sbcl-build.img" (darterfly-file "build/")))
+        (host (darterfly-file "build/sbcl-mt/"))
         (fasls '("uiop" "asdf" "sb-rotate-byte" "sb-md5" "sb-posix" "sb-bsd-sockets")))
-    (is (disk-octets disk "usr/src/sbcl/output/sbcl.core") "finch-bootstraps-sbcl left finch's own sbcl.core")
+    (is (disk-octets disk "usr/src/sbcl/output/sbcl.core") "darterfly-bootstraps-sbcl left darterfly's own sbcl.core")
     (let ((c (image:bare-console :root disk)))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
         (unwind-protect
              (progn
                (image:expect c "* " :timeout 60)
-               (ask "(uiop:delete-file-if-exists finch/generation:*state*)")
+               (ask "(uiop:delete-file-if-exists darterfly/generation:*state*)")
                (ask "(progn (mapc #'delete-file (directory \"/usr/src/sbcl/obj/sbcl-home/contrib/*.*\")) (uiop:delete-directory-tree #p\"/usr/src/sbcl/obj/from-self/\" :validate t :if-does-not-exist :ignore))")
                (is (search "NIL" (ask "(append (directory \"/usr/src/sbcl/obj/sbcl-home/contrib/*.*\") (directory \"/usr/src/sbcl/obj/from-self/**/*.*\"))")) "no contrib output is left from before")
-               (let ((result (generation-resume c "(finch/generation:contrib-steps \"/usr/src/sbcl/\")")))
+               (let ((result (generation-resume c "(darterfly/generation:contrib-steps \"/usr/src/sbcl/\")")))
                  (is (eq :done (first result)) "every contrib step finishes: ~s" result))
-               (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
+               (image:send c "(progn (darterfly/vfs:vfs-sync) (sb-ext:exit))")
                (image:expect c "exit(0)" :timeout 120))
           (image:finish c 30))))
     (dolist (name '("sb-posix" "sb-bsd-sockets"))
       (let ((rel (format nil "obj/from-self/contrib/~a/generated-constants.lisp" name)))
         (is (equalp (image::octets (merge-pathnames rel host)) (disk-octets disk (concatenate 'string "usr/src/sbcl/" rel)))
-            "~a's grovel output in finch is the host's byte for byte" name)))
+            "~a's grovel output in darterfly is the host's byte for byte" name)))
     (let ((built (remove-if-not (lambda (name) (disk-octets disk (format nil "usr/src/sbcl/obj/sbcl-home/contrib/~a.fasl" name))) fasls)))
-      (is (equal fasls built) "finch built ~a" built)
+      (is (equal fasls built) "darterfly built ~a" built)
       (flet ((differing (name)
                (let ((h (generated-date-blanked (host-build-octets (merge-pathnames (format nil "obj/sbcl-home/contrib/~a.fasl" name) host) host)))
                      (g (generated-date-blanked (disk-octets disk (format nil "usr/src/sbcl/obj/sbcl-home/contrib/~a.fasl" name)))))
@@ -1149,30 +1149,30 @@
         (dolist (name fasls)
           (is (eql 0 (differing name)) "~a.fasl is the host's byte for byte, but for where each runtime and source tree lives and when its constants were grovelled" name))))
     (sbcl-run disk "/usr/src/sbcl/output/sbcl.core"
-              (list "/System/Library/Kernels/kernel" "--core" "/System/Library/Kernels/finch.core" "--no-sysinit" "--no-userinit" "--disable-debugger" "--eval"
+              (list "/System/Library/Kernels/kernel" "--core" "/System/Library/Kernels/darterfly.core" "--no-sysinit" "--no-userinit" "--disable-debugger" "--eval"
                     "(progn (setf sb-sys::*sbcl-homedir-pathname* #p\"/usr/src/sbcl/obj/sbcl-home/\") (require :asdf) (require :sb-md5) (require :sb-posix) (require :sb-bsd-sockets))"
-                    "--eval" "(with-open-file (o \"/usr/src/sbcl/contribs.txt\" :direction :output :if-exists :supersede) (write (list (asdf:asdf-version) (sb-md5:md5sum-string \"finch\") (integerp (sb-posix:getpid)) (sb-bsd-sockets:make-inet-address \"10.0.2.2\")) :stream o :pretty nil))"
+                    "--eval" "(with-open-file (o \"/usr/src/sbcl/contribs.txt\" :direction :output :if-exists :supersede) (write (list (asdf:asdf-version) (sb-md5:md5sum-string \"darterfly\") (integerp (sb-posix:getpid)) (sb-bsd-sockets:make-inet-address \"10.0.2.2\")) :stream o :pretty nil))"
                     "--quit"))
     (is (equal "(\"3.3.1\" #(192 65 240 164 75 149 198 213 199 195 255 71 232 234 151 51) T #(10 0 2 2))"
                (let ((out (disk-octets disk "usr/src/sbcl/contribs.txt"))) (and out (map 'string #'code-char out))))
-        "finch's sbcl.core loads the contribs finch built, and they work")))
+        "darterfly's sbcl.core loads the contribs darterfly built, and they work")))
 
-(test finch-builds-its-core-and-boots-it
-  (let ((disk (merge-pathnames "sbcl-build.img" (finch-file "build/")))
-        (esp (merge-pathnames "esp-native.img" (finch-file "build/")))
-        (compiled-from "(sb-di::debug-source-namestring (sb-di::code-location-debug-source (sb-di:debug-fun-start-location (sb-di:fun-debug-fun #'finch/install:install))))"))
-    (is (disk-octets disk "usr/src/sbcl/obj/sbcl-home/contrib/sb-posix.fasl") "finch-builds-its-contribs left finch's own contribs")
+(test darterfly-builds-its-core-and-boots-it
+  (let ((disk (merge-pathnames "sbcl-build.img" (darterfly-file "build/")))
+        (esp (merge-pathnames "esp-native.img" (darterfly-file "build/")))
+        (compiled-from "(sb-di::debug-source-namestring (sb-di::code-location-debug-source (sb-di:debug-fun-start-location (sb-di:fun-debug-fun #'darterfly/install:install))))"))
+    (is (disk-octets disk "usr/src/sbcl/obj/sbcl-home/contrib/sb-posix.fasl") "darterfly-builds-its-contribs left darterfly's own contribs")
     (uiop:delete-file-if-exists esp)
     (let ((c (image:bare-console :root disk :esp esp)))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
         (unwind-protect
              (progn
                (image:expect c "* " :timeout 60)
-               (ask "(progn (uiop:delete-file-if-exists finch/generation:*state*) (uiop:delete-file-if-exists \"/Users/finch/generation/finch.core\"))")
-               (let ((result (generation-resume c "(finch/generation:core-steps \"/usr/src/sbcl/\" \"/Users/finch/generation/finch.core\")")))
-                 (is (eq :done (first result)) "finch's sbcl.core builds finch.core: ~s" result))
-               (is (search "\"gen-2\"" (ask "(finch/install:install \"/System/Library/Kernels/kernel\" \"/Users/finch/generation/finch.core\")")))
-               (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
+               (ask "(progn (uiop:delete-file-if-exists darterfly/generation:*state*) (uiop:delete-file-if-exists \"/Users/darterfly/generation/darterfly.core\"))")
+               (let ((result (generation-resume c "(darterfly/generation:core-steps \"/usr/src/sbcl/\" \"/Users/darterfly/generation/darterfly.core\")")))
+                 (is (eq :done (first result)) "darterfly's sbcl.core builds darterfly.core: ~s" result))
+               (is (search "\"gen-2\"" (ask "(darterfly/install:install \"/System/Library/Kernels/kernel\" \"/Users/darterfly/generation/darterfly.core\")")))
+               (image:send c "(progn (darterfly/vfs:vfs-sync) (sb-ext:exit))")
                (image:expect c "exit(0)" :timeout 120))
           (image:finish c 30))))
     (let ((c (image:bare-console :root disk :esp esp)))
@@ -1181,34 +1181,34 @@
              (progn
                (is (image:expect c "boot.efi: generation gen-2" :timeout 60))
                (image:expect c "* " :timeout 120)
-               (is (search "\"/usr/src/finch/src/install/install.lisp\"" (ask compiled-from))
-                   "the running core was compiled inside finch")
-               (let ((counts (ask "(let ((r (let ((*standard-output* (make-broadcast-stream))) (append (5am:run 'finch/test::mach))))) (list (count-if-not (lambda (x) (typep x 'it.bese.fiveam::test-passed)) r) (length r)))")))
-                 (is (search "(0 " counts) "finch's own core passes the mach suite: ~a" counts))
-               (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
+               (is (search "\"/usr/src/darterfly/src/install/install.lisp\"" (ask compiled-from))
+                   "the running core was compiled inside darterfly")
+               (let ((counts (ask "(let ((r (let ((*standard-output* (make-broadcast-stream))) (append (5am:run 'darterfly/test::mach))))) (list (count-if-not (lambda (x) (typep x 'it.bese.fiveam::test-passed)) r) (length r)))")))
+                 (is (search "(0 " counts) "darterfly's own core passes the mach suite: ~a" counts))
+               (image:send c "(progn (darterfly/vfs:vfs-sync) (sb-ext:exit))")
                (image:expect c "exit(0)" :timeout 120))
           (image:finish c 30))))))
 
-(test finch-builds-a-generation
-  (let ((disk (merge-pathnames "generation.img" (finch-file "build/")))
-        (esp (merge-pathnames "esp-generation.img" (finch-file "build/")))
-        (compiled-from "(sb-di::debug-source-namestring (sb-di::code-location-debug-source (sb-di:debug-fun-start-location (sb-di:fun-debug-fun #'finch/install:install))))"))
+(test darterfly-builds-a-generation
+  (let ((disk (merge-pathnames "generation.img" (darterfly-file "build/")))
+        (esp (merge-pathnames "esp-generation.img" (darterfly-file "build/")))
+        (compiled-from "(sb-di::debug-source-namestring (sb-di::code-location-debug-source (sb-di:debug-fun-start-location (sb-di:fun-debug-fun #'darterfly/install:install))))"))
     (uiop:delete-file-if-exists disk)
     (uiop:delete-file-if-exists esp)
-    (finch/image::root-disk disk (* 1024 1048576)
-                            (append (finch/image::root-entries) (finch/image::sbcl-source-entries)
-                                    (finch/image::tree-entries (finch/image::tcc-source) "usr/src/tinycc")))
+    (darterfly/image::root-disk disk (* 1024 1048576)
+                            (append (darterfly/image::root-entries) (darterfly/image::sbcl-source-entries)
+                                    (darterfly/image::tree-entries (darterfly/image::tcc-source) "usr/src/tinycc")))
     (let ((c (image:bare-console :root disk :esp esp)))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
         (unwind-protect
              (progn
                (image:expect c "* " :timeout 60)
-               (let ((result (generation-resume c "(finch/generation:generation-steps)")))
-                 (is (eq :done (first result)) "finch builds a whole generation from source: ~s" result))
-               (is (search "(\"gen-1\" \"gen-2\")" (ask "(finch/install:generations)")))
-               (is (search "T" (ask "(equalp (finch/install::read-octets \"/Users/finch/generation/boot.efi\") (finch/boot:boot-image))"))
-                   "the loader finch built is the one its running code makes")
-               (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
+               (let ((result (generation-resume c "(darterfly/generation:generation-steps)")))
+                 (is (eq :done (first result)) "darterfly builds a whole generation from source: ~s" result))
+               (is (search "(\"gen-1\" \"gen-2\")" (ask "(darterfly/install:generations)")))
+               (is (search "T" (ask "(equalp (darterfly/install::read-octets \"/Users/darterfly/generation/boot.efi\") (darterfly/boot:boot-image))"))
+                   "the loader darterfly built is the one its running code makes")
+               (image:send c "(progn (darterfly/vfs:vfs-sync) (sb-ext:exit))")
                (image:expect c "exit(0)" :timeout 120))
           (image:finish c 30))))
     (let ((c (image:bare-console :root disk :esp esp)))
@@ -1217,37 +1217,37 @@
              (progn
                (is (image:expect c "boot.efi: generation gen-2" :timeout 60))
                (image:expect c "* " :timeout 120)
-               (is (search "\"/usr/src/finch/src/install/install.lisp\"" (ask compiled-from))
-                   "generation 2 runs a core compiled inside finch")
-               (is (search "T" (ask "(equal (progn (finch/install::esp) (getf (with-open-file (s \"/Volumes/EFI/EFI/finch/gen-2/manifest\") (read s)) :build-id)) (finch/generation::runtime-build-id))"))
+               (is (search "\"/usr/src/darterfly/src/install/install.lisp\"" (ask compiled-from))
+                   "generation 2 runs a core compiled inside darterfly")
+               (is (search "T" (ask "(equal (progn (darterfly/install::esp) (getf (with-open-file (s \"/Volumes/EFI/EFI/darterfly/gen-2/manifest\") (read s)) :build-id)) (darterfly/generation::runtime-build-id))"))
                    "generation 2's runtime carries the build id its manifest records")
-               (let ((counts (ask "(let ((r (let ((*standard-output* (make-broadcast-stream))) (append (5am:run 'finch/test::mach))))) (list (count-if-not (lambda (x) (typep x 'it.bese.fiveam::test-passed)) r) (length r)))")))
+               (let ((counts (ask "(let ((r (let ((*standard-output* (make-broadcast-stream))) (append (5am:run 'darterfly/test::mach))))) (list (count-if-not (lambda (x) (typep x 'it.bese.fiveam::test-passed)) r) (length r)))")))
                  (is (search "(0 " counts) "generation 2 passes the mach suite: ~a" counts))
-               (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
+               (image:send c "(progn (darterfly/vfs:vfs-sync) (sb-ext:exit))")
                (image:expect c "exit(0)" :timeout 120))
           (image:finish c 30))))))
 
-(test finch-generation-builds-the-next
-  (let ((disk (merge-pathnames "generation.img" (finch-file "build/")))
-        (esp (merge-pathnames "esp-generation.img" (finch-file "build/")))
-        (same "(lambda (a b) (equalp (finch/install::read-octets a) (finch/install::read-octets b)))"))
+(test darterfly-generation-builds-the-next
+  (let ((disk (merge-pathnames "generation.img" (darterfly-file "build/")))
+        (esp (merge-pathnames "esp-generation.img" (darterfly-file "build/")))
+        (same "(lambda (a b) (equalp (darterfly/install::read-octets a) (darterfly/install::read-octets b)))"))
     (let ((c (image:bare-console :root disk :esp esp)))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
         (unwind-protect
              (progn
-               (is (image:expect c "boot.efi: generation gen-2" :timeout 60) "finch-builds-a-generation left B installed")
+               (is (image:expect c "boot.efi: generation gen-2" :timeout 60) "darterfly-builds-a-generation left B installed")
                (image:expect c "* " :timeout 120)
-               (ask "(uiop:delete-file-if-exists finch/generation:*state*)")
-               (let ((result (generation-resume c "(finch/generation:generation-steps :out \"/Users/finch/generation-c/\")")))
+               (ask "(uiop:delete-file-if-exists darterfly/generation:*state*)")
+               (let ((result (generation-resume c "(darterfly/generation:generation-steps :out \"/Users/darterfly/generation-c/\")")))
                  (is (eq :done (first result)) "generation B builds generation C: ~s" result))
-               (is (search "(\"gen-1\" \"gen-2\" \"gen-3\")" (ask "(finch/install:generations)")))
-               (is (search "T" (ask (format nil "(funcall ~a \"/Users/finch/generation/boot.efi\" \"/Users/finch/generation-c/boot.efi\")" same)))
+               (is (search "(\"gen-1\" \"gen-2\" \"gen-3\")" (ask "(darterfly/install:generations)")))
+               (is (search "T" (ask (format nil "(funcall ~a \"/Users/darterfly/generation/boot.efi\" \"/Users/darterfly/generation-c/boot.efi\")" same)))
                    "B and C build the same boot.efi")
-               (is (search "NIL" (ask (format nil "(let ((f ~a)) (remove-if (lambda (n) (funcall f (concatenate 'string \"/Users/finch/generation/objects/\" n) (concatenate 'string \"/Users/finch/generation-c/objects/\" n))) (mapcar (lambda (u) (getf u :name)) (finch/cc:units))))" same)))
+               (is (search "NIL" (ask (format nil "(let ((f ~a)) (remove-if (lambda (n) (funcall f (concatenate 'string \"/Users/darterfly/generation/objects/\" n) (concatenate 'string \"/Users/darterfly/generation-c/objects/\" n))) (mapcar (lambda (u) (getf u :name)) (darterfly/cc:units))))" same)))
                    "B and C compile every C unit to the same object")
-               (format t "~&B and C finch.core identical: ~a~%"
-                       (ask (format nil "(funcall ~a \"/Users/finch/generation/finch.core\" \"/Users/finch/generation-c/finch.core\")" same)))
-               (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
+               (format t "~&B and C darterfly.core identical: ~a~%"
+                       (ask (format nil "(funcall ~a \"/Users/darterfly/generation/darterfly.core\" \"/Users/darterfly/generation-c/darterfly.core\")" same)))
+               (image:send c "(progn (darterfly/vfs:vfs-sync) (sb-ext:exit))")
                (image:expect c "exit(0)" :timeout 120))
           (image:finish c 30))))
     (let ((c (image:bare-console :root disk :esp esp)))
@@ -1256,28 +1256,28 @@
              (progn
                (is (image:expect c "boot.efi: generation gen-3" :timeout 60))
                (image:expect c "* " :timeout 120)
-               (is (search "\"gen-2\"" (ask "(progn (finch/install::esp) (getf (with-open-file (s \"/Volumes/EFI/EFI/finch/gen-3/manifest\") (read s)) :parent))"))
+               (is (search "\"gen-2\"" (ask "(progn (darterfly/install::esp) (getf (with-open-file (s \"/Volumes/EFI/EFI/darterfly/gen-3/manifest\") (read s)) :parent))"))
                    "C's manifest names B as its parent")
-               (let ((counts (ask "(let ((r (let ((*standard-output* (make-broadcast-stream))) (append (5am:run 'finch/test::mach))))) (list (count-if-not (lambda (x) (typep x 'it.bese.fiveam::test-passed)) r) (length r)))")))
+               (let ((counts (ask "(let ((r (let ((*standard-output* (make-broadcast-stream))) (append (5am:run 'darterfly/test::mach))))) (list (count-if-not (lambda (x) (typep x 'it.bese.fiveam::test-passed)) r) (length r)))")))
                  (is (search "(0 " counts) "generation C passes the mach suite: ~a" counts))
-               (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
+               (image:send c "(progn (darterfly/vfs:vfs-sync) (sb-ext:exit))")
                (image:expect c "exit(0)" :timeout 120))
           (image:finish c 30))))))
 
-(test finch-saves-itself-and-boots-the-save
-  (let ((esp (merge-pathnames "esp-save.img" (finch-file "build/"))))
+(test darterfly-saves-itself-and-boots-the-save
+  (let ((esp (merge-pathnames "esp-save.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists esp)
     (let ((c (image:bare-console :esp esp)))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
         (unwind-protect
              (progn
                (image:expect c "* " :timeout 60)
-               (ask "(defvar cl-user::*made-in-finch* :made-in-finch)")
-               (image:send c "(finch/install:save)")
+               (ask "(defvar cl-user::*made-in-darterfly* :made-in-darterfly)")
+               (image:send c "(darterfly/install:save)")
                (is (image:expect c "restart: core " :timeout 300) "the save restarts the runtime on it")
                (image:expect c "* " :timeout 120)
-               (is (search ":MADE-IN-FINCH" (ask "cl-user::*made-in-finch*")) "the restarted image is the saved one")
-               (is (search "\"gen-2\"" (ask "(finch/install:install \"/System/Library/Kernels/kernel\" \"/System/Library/Kernels/finch.core\")")))
+               (is (search ":MADE-IN-DARTERFLY" (ask "cl-user::*made-in-darterfly*")) "the restarted image is the saved one")
+               (is (search "\"gen-2\"" (ask "(darterfly/install:install \"/System/Library/Kernels/kernel\" \"/System/Library/Kernels/darterfly.core\")")))
                (image:send c "(sb-ext:exit)")
                (image:expect c "exit(0)" :timeout 60))
           (image:finish c 5))))
@@ -1287,21 +1287,21 @@
              (progn
                (is (image:expect c "boot.efi: generation gen-2"))
                (image:expect c "* " :timeout 60)
-               (is (search ":MADE-IN-FINCH" (ask "cl-user::*made-in-finch*")) "gen-2 is the image finch saved"))
+               (is (search ":MADE-IN-DARTERFLY" (ask "cl-user::*made-in-darterfly*")) "gen-2 is the image darterfly saved"))
           (image:finish c 5))))))
 
 (defun listener-line (file prefix)
   (position-if (lambda (line) (uiop:string-prefix-p prefix line))
                (uiop:split-string (or (ignore-errors (uiop:read-file-string file)) "") :separator '(#\Newline))))
 
-(test listener-on-finch
+(test listener-on-darterfly
   (let ((c (image:bare-console :boot-args "init")))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60))
            (click (x y) (image:pointer x y) (image:pointer x y t) (image:pointer x y nil))
            (type-slowly (text) (loop :for ch :across text :do (image:send-keys (string ch)) (sleep 0.002))))
       (flet ((transcript (file until)
                (loop :with deadline := (+ (get-internal-real-time) (* 30 internal-time-units-per-second))
-                     :do (let ((text (ask (format nil "(progn (ignore-errors (finch/shell:cat ~s)) :done)" file))))
+                     :do (let ((text (ask (format nil "(progn (ignore-errors (darterfly/shell:cat ~s)) :done)" file))))
                            (when (or (search until text) (> (get-internal-real-time) deadline))
                              (return text)))
                          (sleep 0.2)))
@@ -1320,7 +1320,7 @@
                (type-slowly (format nil "(list 1 \"two\" :three)~%"))
                (let ((text (transcript "/tmp/Listener.txt" "> (1 \"two\" :THREE)")))
                  (is (search "> (1 \"two\" :THREE)" text) "the value is a presentation: ~s" text))
-               (let ((index (ask (format nil "(finch/test::listener-line \"/tmp/Listener.txt\" \"> (1\")"))))
+               (let ((index (ask (format nil "(darterfly/test::listener-line \"/tmp/Listener.txt\" \"> (1\")"))))
                  (click 260 (line-y (parse-integer index :junk-allowed t :start (position-if #'digit-char-p index)))))
                (let ((text (transcript "/tmp/Inspector.txt" "0: 1")))
                  (is (search ">   0: 1" text) "clicking the value inspects it: ~s" text)
@@ -1330,7 +1330,7 @@
                (let ((text (transcript "/tmp/Listener.txt" "restart: Return to the listener")))
                  (is (search "> error: " text) "~s" text)
                  (is (search "restart: Return to the listener" text)))
-               (let ((index (ask (format nil "(finch/test::listener-line \"/tmp/Listener.txt\" \">   restart: Return to the listener\")"))))
+               (let ((index (ask (format nil "(darterfly/test::listener-line \"/tmp/Listener.txt\" \">   restart: Return to the listener\")"))))
                  (click 260 (line-y (parse-integer index :junk-allowed t :start (position-if #'digit-char-p index)))))
                (click 400 500)
                (type-slowly (format nil "(+ 2 3)~%"))
@@ -1341,21 +1341,21 @@
                (type-slowly (format nil "(boom 21)~%"))
                (let ((text (transcript "/tmp/Listener.txt" "frame: (BOOM 21)")))
                  (is (search ">   frame: (BOOM 21)" text) "the error shows its frames: ~s" text))
-               (let ((index (ask (format nil "(finch/test::listener-line \"/tmp/Listener.txt\" \">   frame: (BOOM 21)\")"))))
+               (let ((index (ask (format nil "(darterfly/test::listener-line \"/tmp/Listener.txt\" \">   frame: (BOOM 21)\")"))))
                  (click 260 (line-y (parse-integer index :junk-allowed t :start (position-if #'digit-char-p index)))))
                (let ((text (transcript "/tmp/Inspector.txt" "arg 0: 21")))
                  (is (search ">   arg 0: 21" text) "clicking a frame inspects its arguments: ~s" text)
                  (is (search "function: BOOM" text))))
           (image:finish c 5))))))
 
-(test editor-on-finch
+(test editor-on-darterfly
   (let ((c (image:bare-console :boot-args "init")))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60))
            (click (x y) (image:pointer x y) (image:pointer x y t) (image:pointer x y nil))
            (type-slowly (text) (loop :for ch :across text :do (image:send-keys (string ch)) (sleep 0.002))))
       (flet ((transcript (file until)
                (loop :with deadline := (+ (get-internal-real-time) (* 30 internal-time-units-per-second))
-                     :do (let ((text (ask (format nil "(progn (ignore-errors (finch/shell:cat ~s)) :done)" file))))
+                     :do (let ((text (ask (format nil "(progn (ignore-errors (darterfly/shell:cat ~s)) :done)" file))))
                            (when (or (search until text) (> (get-internal-real-time) deadline))
                              (return text)))
                          (sleep 0.2))))
@@ -1375,7 +1375,7 @@
                (type-slowly (coerce (list (code-char 24) (code-char 19)) 'string))
                (let ((text (transcript "/tmp/Editor.txt" "wrote /tmp/twice.lisp")))
                  (is (search "wrote /tmp/twice.lisp" text) "C-x C-s saves: ~s" text))
-               (is (search (format nil "(defun twice (x)~%(* 2 x))") (ask "(progn (finch/shell:cat \"/tmp/twice.lisp\") :done)")))
+               (is (search (format nil "(defun twice (x)~%(* 2 x))") (ask "(progn (darterfly/shell:cat \"/tmp/twice.lisp\") :done)")))
                (type-slowly (coerce (list (code-char #xF700) (code-char 3) (code-char 3)) 'string))
                (let ((text (transcript "/tmp/Editor.txt" "TWICE")))
                  (is (search "TWICE" text) "C-c C-c evaluates the form: ~s" text))
@@ -1385,15 +1385,15 @@
                  (is (search "> 42" text) "the listener calls what the editor defined: ~s" text)))
           (image:finish c 5))))))
 
-(test generations-on-finch
-  (let ((esp (merge-pathnames "esp-generations.img" (finch-file "build/"))))
+(test generations-on-darterfly
+  (let ((esp (merge-pathnames "esp-generations.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists esp)
     (let ((c (image:bare-console :boot-args "init" :esp esp)))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120))
              (click (x y) (image:pointer x y) (image:pointer x y t) (image:pointer x y nil)))
         (flet ((transcript (until)
                  (loop :with deadline := (+ (get-internal-real-time) (* 30 internal-time-units-per-second))
-                       :do (let ((text (ask "(progn (ignore-errors (finch/shell:cat \"/tmp/Generations.txt\")) :done)")))
+                       :do (let ((text (ask "(progn (ignore-errors (darterfly/shell:cat \"/tmp/Generations.txt\")) :done)")))
                              (when (or (search until text) (> (get-internal-real-time) deadline))
                                (return text)))
                            (sleep 0.5)))
@@ -1401,20 +1401,20 @@
           (unwind-protect
                (progn
                  (is (image:expect c "init: pid 1" :timeout 90))
-                 (ask "(with-open-file (s \"/tmp/manifest\" :direction :output :if-exists :supersede) (prin1 '(:build-id \"finch-test\" :parent \"gen-1\") s))")
-                 (is (search "\"gen-2\"" (ask "(finch/install:install \"/Volumes/EFI/EFI/finch/gen-1/kernel\" \"/Volumes/EFI/EFI/finch/gen-1/finch.core\" :manifest \"/tmp/manifest\")")))
-                 (ask "(progn (uiop:delete-file-if-exists finch/generation:*state*) (finch/generation::note :build :out \"/Users/finch/generation-3/\") (finch/generation::note :done \"config\" \"finch-test\") (finch/generation::note :running \"make-host-1\"))")
-                 (ask "(finch/install::put-line \"failed\" \"gen-2\")")
+                 (ask "(with-open-file (s \"/tmp/manifest\" :direction :output :if-exists :supersede) (prin1 '(:build-id \"darterfly-test\" :parent \"gen-1\") s))")
+                 (is (search "\"gen-2\"" (ask "(darterfly/install:install \"/Volumes/EFI/EFI/darterfly/gen-1/kernel\" \"/Volumes/EFI/EFI/darterfly/gen-1/darterfly.core\" :manifest \"/tmp/manifest\")")))
+                 (ask "(progn (uiop:delete-file-if-exists darterfly/generation:*state*) (darterfly/generation::note :build :out \"/Users/darterfly/generation-3/\") (darterfly/generation::note :done \"config\" \"darterfly-test\") (darterfly/generation::note :running \"make-host-1\"))")
+                 (ask "(darterfly/install::put-line \"failed\" \"gen-2\")")
                  (sleep 3)
                  (click 742 744)
                  (let ((text (transcript "gen-2 (current)")))
-                   (is (search "> gen-2 (current) finch-test from gen-1 (never came up)" text) "the window lists generations from their manifests: ~s" text)
+                   (is (search "> gen-2 (current) darterfly-test from gen-1 (never came up)" text) "the window lists generations from their manifests: ~s" text)
                    (is (search "> gen-1" text))
                    (is (search "1 of 23 steps done, running make-host-1" text) "and shows the build's progress: ~s" text))
                  (click 260 (line-y 1))
                  (is (search "gen-1 (current)" (transcript "gen-1 (current)")) "clicking a generation selects it")
-                 (is (search "\"gen-1\"" (ask "(finch/install:current)")))
-                 (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
+                 (is (search "\"gen-1\"" (ask "(darterfly/install:current)")))
+                 (image:send c "(progn (darterfly/vfs:vfs-sync) (sb-ext:exit))")
                  (image:expect c "exit(0)" :timeout 60))
             (image:finish c 5)))))
     (let ((c (image:bare-console :esp esp)))
@@ -1422,20 +1422,20 @@
            (is (image:expect c "boot.efi: generation gen-1" :timeout 60) "the selection holds across a reboot")
         (image:finish c 5)))))
 
-(test finch-builds-from-the-desktop
-  (let ((disk (merge-pathnames "desktop-build.img" (finch-file "build/")))
-        (esp (merge-pathnames "esp-desktop-build.img" (finch-file "build/"))))
+(test darterfly-builds-from-the-desktop
+  (let ((disk (merge-pathnames "desktop-build.img" (darterfly-file "build/")))
+        (esp (merge-pathnames "esp-desktop-build.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists disk)
     (uiop:delete-file-if-exists esp)
-    (finch/image::root-disk disk (* 1024 1048576)
-                            (append (finch/image::root-entries) (finch/image::sbcl-source-entries)
-                                    (finch/image::tree-entries (finch/image::tcc-source) "usr/src/tinycc")))
+    (darterfly/image::root-disk disk (* 1024 1048576)
+                            (append (darterfly/image::root-entries) (darterfly/image::sbcl-source-entries)
+                                    (darterfly/image::tree-entries (darterfly/image::tcc-source) "usr/src/tinycc")))
     (let ((c (image:bare-console :boot-args "init" :root disk :esp esp)))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120))
              (click (x y) (image:pointer x y) (image:pointer x y t) (image:pointer x y nil)))
         (flet ((transcript (until)
                  (loop :with deadline := (+ (get-internal-real-time) (* 60 internal-time-units-per-second))
-                       :do (let ((text (ask "(progn (ignore-errors (finch/shell:cat \"/tmp/Generations.txt\")) :done)")))
+                       :do (let ((text (ask "(progn (ignore-errors (darterfly/shell:cat \"/tmp/Generations.txt\")) :done)")))
                              (when (or (search until text) (> (get-internal-real-time) deadline))
                                (return text)))
                            (sleep 0.5)))
@@ -1453,10 +1453,10 @@
                    (is (search "(:DONE 23)" (image:expect c (string #\Newline) :timeout 60))
                        "a build started from the desktop runs to the end across every restart"))
                  (sleep 5)
-                 (is (search "(\"gen-1\" \"gen-2\")" (ask "(finch/install:generations)")))
+                 (is (search "(\"gen-1\" \"gen-2\")" (ask "(darterfly/install:generations)")))
                  (click 742 744)
                  (is (search "23 of 23 steps done, finished" (transcript "finished")) "the window shows it finished")
-                 (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
+                 (image:send c "(progn (darterfly/vfs:vfs-sync) (sb-ext:exit))")
                  (image:expect c "exit(0)" :timeout 60))
             (image:finish c 30)))))
     (let ((c (image:bare-console :boot-args "init" :root disk :esp esp)))
@@ -1473,7 +1473,7 @@
            (type-slowly (text) (loop :for ch :across text :do (image:send-keys (string ch)) (sleep 0.002))))
       (flet ((transcript (file until)
                (loop :with deadline := (+ (get-internal-real-time) (* 60 internal-time-units-per-second))
-                     :do (let ((text (ask (format nil "(progn (ignore-errors (finch/shell:cat ~s)) :done)" file))))
+                     :do (let ((text (ask (format nil "(progn (ignore-errors (darterfly/shell:cat ~s)) :done)" file))))
                            (when (or (search until text) (> (get-internal-real-time) deadline))
                              (return text)))
                          (sleep 0.3))))
@@ -1522,26 +1522,26 @@
   (let* ((stick (image:usb-image))
          (image:*screen-size* '(1280 800))
          (c (image:console :args (list "qemu-system-x86_64" "-enable-kvm" "-cpu" "host" "-m" "4096" "-smp" "4" "-machine" "q35"
-                                       "-drive" (format nil "if=pflash,format=raw,readonly=on,file=~a" (finch/image::firmware "ovmf_code_x64.bin"))
-                                       "-drive" (format nil "if=pflash,format=raw,snapshot=on,file=~a" (finch/image::firmware "ovmf_vars_x64.bin"))
+                                       "-drive" (format nil "if=pflash,format=raw,readonly=on,file=~a" (darterfly/image::firmware "ovmf_code_x64.bin"))
+                                       "-drive" (format nil "if=pflash,format=raw,snapshot=on,file=~a" (darterfly/image::firmware "ovmf_vars_x64.bin"))
                                        "-device" "qemu-xhci,id=xhci"
                                        "-drive" (format nil "if=none,id=stick,format=raw,snapshot=on,file=~a" (uiop:native-namestring stick))
                                        "-device" "usb-storage,bus=xhci.0,drive=stick,bootindex=0"
                                        "-netdev" "user,id=net0" "-device" "usb-net,netdev=net0,bus=xhci.0"
                                        "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
-                                       "-monitor" (format nil "unix:~a,server=on,wait=off" (finch/image::monitor-path))
-                                       "-qmp" (format nil "unix:~a,server=on,wait=off" (finch/image::qmp-path))
+                                       "-monitor" (format nil "unix:~a,server=on,wait=off" (darterfly/image::monitor-path))
+                                       "-qmp" (format nil "unix:~a,server=on,wait=off" (darterfly/image::qmp-path))
                                        "-display" "none" "-serial" "stdio" "-no-reboot"))))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
       (unwind-protect
            (progn
              (is (image:expect c "boot.efi: generation gen-1" :timeout 60) "the firmware boots boot.efi from the USB stick")
              (is (image:expect c "init: pid 1" :timeout 120) "init starts from the root image in memory")
-             (is (search "10.0.2.15" (ask "(progn (loop :repeat 100 :until finch/nrepl::*thread* :do (sleep 0.1)) (and finch/nrepl::*thread* (finch/net:address-string (finch/net::interface-ip finch/net:*interface*))))"))
+             (is (search "10.0.2.15" (ask "(progn (loop :repeat 100 :until darterfly/nrepl::*thread* :do (sleep 0.1)) (and darterfly/nrepl::*thread* (darterfly/net:address-string (darterfly/net::interface-ip darterfly/net:*interface*))))"))
                  "nrepl starts at boot from the key in the boot args")
              (let ((screen (screen-until (lambda (s) (= #xff2e5c8f (image:pixel s 5 300))) 60)))
                (is (= #xff2e5c8f (image:pixel screen 5 300)) "the desktop is on the screen ~x" (image:pixel screen 5 300)))
-             (ask "(finch/bsd:posix-spawn \"/System/Applications/Utilities/Terminal.app/Contents/Programs/Terminal\" (list \"Terminal\") nil)")
+             (ask "(darterfly/bsd:posix-spawn \"/System/Applications/Utilities/Terminal.app/Contents/Programs/Terminal\" (list \"Terminal\") nil)")
              (let ((screen (screen-until (lambda (s) (= #xffffffff (image:pixel s 500 300))) 30)))
                (is (= #xffffffff (image:pixel screen 500 300)) "the terminal opens ~x" (image:pixel screen 500 300)))
              (let ((before (dark-pixels (image:screendump) 172 160 300 200 100)))
@@ -1551,9 +1551,9 @@
                    "typing on the PS/2 keyboard reaches the terminal")))
         (image:finish c 5)))))
 
-(test nvme-on-finch
-  (let ((stick (merge-pathnames "nvme-stick.img" (finch-file "build/")))
-        (blank (merge-pathnames "nvme-blank.img" (finch-file "build/"))))
+(test nvme-on-darterfly
+  (let ((stick (merge-pathnames "nvme-stick.img" (darterfly-file "build/")))
+        (blank (merge-pathnames "nvme-blank.img" (darterfly-file "build/"))))
     (uiop:copy-file (image:usb-image) stick)
     (with-open-file (s blank :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
       (file-position s (1- (* 8 1048576)))
@@ -1563,35 +1563,35 @@
         (unwind-protect
              (progn
                (image:expect c "* " :timeout 60)
-               (is (search "2" (ask "(length (finch/devices:find-entries 'finch/devices::nvme-disk))"))
+               (is (search "2" (ask "(length (darterfly/devices:find-entries 'darterfly/devices::nvme-disk))"))
                    "both NVMe controllers are found")
-               (is (search "(\"EFI\")" (ask "(mapcar #'finch/devices:entry-name (remove-if-not (lambda (m) (and (typep (finch/devices::media-device m) 'finch/devices::nvme-disk) (not (finch/devices:get-property m \"Whole\")))) (finch/devices:find-entries 'finch/devices::media)))"))
+               (is (search "(\"EFI\")" (ask "(mapcar #'darterfly/devices:entry-name (remove-if-not (lambda (m) (and (typep (darterfly/devices::media-device m) 'darterfly/devices::nvme-disk) (not (darterfly/devices:get-property m \"Whole\")))) (darterfly/devices:find-entries 'darterfly/devices::media)))"))
                    "the GPT on an NVMe disk publishes its partition")
-               (is (search "\"FAT32   \"" (ask "(let ((m (find \"EFI\" (finch/devices:find-entries 'finch/devices::media) :key #'finch/devices:entry-name :test #'equal))) (map 'string #'code-char (subseq (finch/devices::media-read m 0 512) 82 90)))"))
+               (is (search "\"FAT32   \"" (ask "(let ((m (find \"EFI\" (darterfly/devices:find-entries 'darterfly/devices::media) :key #'darterfly/devices:entry-name :test #'equal))) (map 'string #'code-char (subseq (darterfly/devices::media-read m 0 512) 82 90)))"))
                    "and reads its FAT boot sector")
-               (is (search "T" (ask "(let ((m (find-if (lambda (m) (and (typep (finch/devices::media-device m) 'finch/devices::nvme-disk) (= (finch/devices:get-property m \"Size\") (* 8 1048576)))) (finch/devices:find-entries 'finch/devices::media)))) (finch/devices::media-write m (* 512 100) (make-array 4096 :element-type '(unsigned-byte 8) :initial-element 165)) (finch/devices::media-flush m) (every (lambda (b) (= b 165)) (finch/devices::media-read m (* 512 100) 4096)))"))
+               (is (search "T" (ask "(let ((m (find-if (lambda (m) (and (typep (darterfly/devices::media-device m) 'darterfly/devices::nvme-disk) (= (darterfly/devices:get-property m \"Size\") (* 8 1048576)))) (darterfly/devices:find-entries 'darterfly/devices::media)))) (darterfly/devices::media-write m (* 512 100) (make-array 4096 :element-type '(unsigned-byte 8) :initial-element 165)) (darterfly/devices::media-flush m) (every (lambda (b) (= b 165)) (darterfly/devices::media-read m (* 512 100) 4096)))"))
                    "a write reads back")
                (image:send c "(sb-ext:exit)")
                (image:expect c "exit(0)" :timeout 60))
           (image:finish c 5))))
     (is (every (lambda (b) (= b 165)) (subseq (image::octets blank) (* 512 100) (+ (* 512 100) 4096)))
-        "and is on the disk after finch exits")))
+        "and is on the disk after darterfly exits")))
 
-(test usb-mouse-and-keyboard-on-finch
+(test usb-mouse-and-keyboard-on-darterfly
   (let ((image:*input-devices* '("qemu-xhci,id=xhci" "usb-kbd,bus=xhci.0" "usb-mouse,bus=xhci.0"))
         (image:*screen-size* '(1280 800)))
     (let ((c (image:bare-console :boot-args "init")))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120))
              (rel (dx dy) (image:qmp "input-send-event"
-                                     (finch/qmp:dict "events" (vector (finch/qmp:dict "type" "rel" "data" (finch/qmp:dict "axis" "x" "value" dx))
-                                                                      (finch/qmp:dict "type" "rel" "data" (finch/qmp:dict "axis" "y" "value" dy))))))
+                                     (darterfly/qmp:dict "events" (vector (darterfly/qmp:dict "type" "rel" "data" (darterfly/qmp:dict "axis" "x" "value" dx))
+                                                                      (darterfly/qmp:dict "type" "rel" "data" (darterfly/qmp:dict "axis" "y" "value" dy))))))
              (button (down) (image:qmp "input-send-event"
-                                       (finch/qmp:dict "events" (vector (finch/qmp:dict "type" "btn" "data" (finch/qmp:dict "button" "left" "down" down)))))))
+                                       (darterfly/qmp:dict "events" (vector (darterfly/qmp:dict "type" "btn" "data" (darterfly/qmp:dict "button" "left" "down" down)))))))
         (unwind-protect
              (progn
                (is (image:expect c "init: pid 1" :timeout 90))
                (is (search "(\"Keyboard\" \"Mouse\")"
-                           (ask "(mapcar #'finch/devices:entry-name (finch/devices:find-entries 'finch/devices::usb-hid-device))"))
+                           (ask "(mapcar #'darterfly/devices:entry-name (darterfly/devices:find-entries 'darterfly/devices::usb-hid-device))"))
                    "the USB keyboard and mouse enumerate behind xHCI")
                (screen-until (lambda (s) (= #xff2e5c8f (image:pixel s 5 300))) 60)
                (sleep 2)
@@ -1612,26 +1612,26 @@
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60))
            (client (key code)
              (multiple-value-bind (out err)
-                 (uiop:run-program (list "timeout" "60" "sbcl" "--script" (namestring (finch-file "tools/nrepl.lisp"))
+                 (uiop:run-program (list "timeout" "60" "sbcl" "--script" (namestring (darterfly-file "tools/nrepl.lisp"))
                                          "eval" "--new" "--host" "127.0.0.1" "--port" (princ-to-string port) "--key" key code)
                                    :output :string :error-output :string :ignore-error-status t)
                (concatenate 'string out err))))
       (unwind-protect
            (progn
              (image:expect c "* " :timeout 90)
-             (is (search "10.0.2.15:4011" (ask "(finch/nrepl:start :key \"test-key\")")))
-             (is (search "=> 3" (client "test-key" "(+ 1 2)")) "the host evaluates a form on finch")
-             (is (search (format nil "=> ~s" ip) (client "test-key" "(finch/net:address-string (finch/net::interface-ip finch/net:*interface*))")) "in finch's own image")
+             (is (search "10.0.2.15:4011" (ask "(darterfly/nrepl:start :key \"test-key\")")))
+             (is (search "=> 3" (client "test-key" "(+ 1 2)")) "the host evaluates a form on darterfly")
+             (is (search (format nil "=> ~s" ip) (client "test-key" "(darterfly/net:address-string (darterfly/net::interface-ip darterfly/net:*interface*))")) "in darterfly's own image")
              (is (not (search "=>" (client "wrong" "(+ 1 2)"))) "and a wrong key evaluates nothing")
              (is (search "NOSUCHPKG" (client "test-key" "nosuchpkg::x")) "a read error comes back instead of hanging")
              (when status
-               (is (search ":IN :RUNNING :OUT :RUNNING" (client "test-key" "(finch/devices:ecm-status)"))))
+               (is (search ":IN :RUNNING :OUT :RUNNING" (client "test-key" "(darterfly/devices:ecm-status)"))))
              (is (search "=> 200000" (client "test-key" "(length (make-string 200000 :initial-element #\\x))")))
              (let ((big (client "test-key" "(make-string 100000 :initial-element #\\y)")))
                (is (search (make-string 100000 :initial-element #\y) big) "a 100 KB answer comes back whole")))
         (image:finish c 5)))))
 
-(test nrepl-on-finch
+(test nrepl-on-darterfly
   (nrepl-check))
 
 (test nrepl-over-usb-ethernet
@@ -1643,19 +1643,19 @@
 
 (defun stick-machine (&rest devices)
   (image:console :args (append (list "qemu-system-x86_64" "-enable-kvm" "-cpu" "host" "-m" "4096" "-smp" "4" "-machine" "q35"
-                                     "-drive" (format nil "if=pflash,format=raw,readonly=on,file=~a" (finch/image::firmware "ovmf_code_x64.bin"))
-                                     "-drive" (format nil "if=pflash,format=raw,snapshot=on,file=~a" (finch/image::firmware "ovmf_vars_x64.bin"))
+                                     "-drive" (format nil "if=pflash,format=raw,readonly=on,file=~a" (darterfly/image::firmware "ovmf_code_x64.bin"))
+                                     "-drive" (format nil "if=pflash,format=raw,snapshot=on,file=~a" (darterfly/image::firmware "ovmf_vars_x64.bin"))
                                      "-device" "qemu-xhci,id=xhci"
                                      "-netdev" *stick-netdev* "-device" "usb-net,netdev=net0,bus=xhci.0")
                                devices
                                (list "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
-                                     "-monitor" (format nil "unix:~a,server=on,wait=off" (finch/image::monitor-path))
-                                     "-qmp" (format nil "unix:~a,server=on,wait=off" (finch/image::qmp-path))
+                                     "-monitor" (format nil "unix:~a,server=on,wait=off" (darterfly/image::monitor-path))
+                                     "-qmp" (format nil "unix:~a,server=on,wait=off" (darterfly/image::qmp-path))
                                      "-display" "none" "-serial" "stdio" "-no-reboot"))))
 
 (test install-on-nvme
   (let* ((stick (image:usb-image))
-         (disk (merge-pathnames "install-nvme.img" (finch-file "build/")))
+         (disk (merge-pathnames "install-nvme.img" (darterfly-file "build/")))
          (image:*screen-size* '(1280 800))
          (junk (make-array 1048576 :element-type '(unsigned-byte 8) :initial-element #xA5)))
     (with-open-file (s disk :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
@@ -1672,7 +1672,7 @@
         (unwind-protect
              (progn
                (is (image:expect c "init: pid 1" :timeout 120))
-               (is (search "\"" (ask "(finch/install:install-disk)")) "the installer writes the NVMe")
+               (is (search "\"" (ask "(darterfly/install:install-disk)")) "the installer writes the NVMe")
                (image:send c "(sb-ext:exit)")
                (image:expect c "exit(0)" :timeout 120))
           (image:finish c 5))))
@@ -1683,17 +1683,17 @@
              (progn
                (is (image:expect c "boot.efi: generation gen-1" :timeout 60) "the firmware boots the NVMe")
                (is (image:expect c "init: pid 1" :timeout 120) "init starts from the NVMe root")
-               (is (search "NVME" (ask "(string-upcase (type-of (finch/devices:media-device finch/apfs::*root-media*)))"))
+               (is (search "NVME" (ask "(string-upcase (type-of (darterfly/devices:media-device darterfly/apfs::*root-media*)))"))
                    "the root is on the NVMe")
-               (is (search "(\"gen-1\")" (ask "(finch/install:generations)")) "the installed system finds its own ESP")
-               (is (search "T" (ask "(progn (with-open-file (s \"/Users/finch/kept\" :direction :output :if-exists :supersede) (write-line \"kept\" s)) (finch/vfs:vfs-sync) (probe-file \"/Users/finch/kept\") t)")))
+               (is (search "(\"gen-1\")" (ask "(darterfly/install:generations)")) "the installed system finds its own ESP")
+               (is (search "T" (ask "(progn (with-open-file (s \"/Users/darterfly/kept\" :direction :output :if-exists :supersede) (write-line \"kept\" s)) (darterfly/vfs:vfs-sync) (probe-file \"/Users/darterfly/kept\") t)")))
                (let ((screen (screen-until (lambda (s) (= #xff2e5c8f (image:pixel s 5 300))) 60)))
                  (is (= #xff2e5c8f (image:pixel screen 5 300)) "the desktop comes up from the installed disk"))
-               (is (search "10.0.2.15" (ask "(progn (loop :repeat 100 :until finch/nrepl::*thread* :do (sleep 0.1)) (and finch/nrepl::*thread* (finch/net:address-string (finch/net::interface-ip finch/net:*interface*))))"))
+               (is (search "10.0.2.15" (ask "(progn (loop :repeat 100 :until darterfly/nrepl::*thread* :do (sleep 0.1)) (and darterfly/nrepl::*thread* (darterfly/net:address-string (darterfly/net::interface-ip darterfly/net:*interface*))))"))
                    "and nrepl starts with the stick's key")
-               (is (search "\"gen-2\"" (ask "(finch/install:install \"/System/Library/Kernels/kernel\" \"/System/Library/Kernels/finch.core\")"))
+               (is (search "\"gen-2\"" (ask "(darterfly/install:install \"/System/Library/Kernels/kernel\" \"/System/Library/Kernels/darterfly.core\")"))
                    "it installs a generation onto its own ESP partition")
-               (image:send c "(progn (finch/vfs:vfs-sync) (sb-ext:exit))")
+               (image:send c "(progn (darterfly/vfs:vfs-sync) (sb-ext:exit))")
                (image:expect c "exit(0)" :timeout 120))
           (image:finish c 5))))
     (let ((c (stick-machine "-drive" (format nil "if=none,id=disk,format=raw,file=~a" (uiop:native-namestring disk))
@@ -1703,12 +1703,12 @@
              (progn
                (is (image:expect c "boot.efi: generation gen-2" :timeout 60) "the firmware boots the generation it installed")
                (is (image:expect c "init: pid 1" :timeout 120))
-               (is (search "(\"gen-1\" \"gen-2\")" (ask "(finch/install:generations)"))))
+               (is (search "(\"gen-1\" \"gen-2\")" (ask "(darterfly/install:generations)"))))
           (image:finish c 5))))))
 
 (test deploy-updates-an-installed-system
   (let* ((stick (image:usb-image))
-         (disk (merge-pathnames "deploy-nvme.img" (finch-file "build/")))
+         (disk (merge-pathnames "deploy-nvme.img" (darterfly-file "build/")))
          (port (free-udp-port)))
     (with-open-file (s disk :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
       (file-position s (1- (* 4096 1048576)))
@@ -1721,7 +1721,7 @@
         (unwind-protect
              (progn
                (is (image:expect c "init: pid 1" :timeout 120))
-               (is (search "\"" (ask "(finch/install:install-disk)")))
+               (is (search "\"" (ask "(darterfly/install:install-disk)")))
                (image:send c "(sb-ext:exit)")
                (image:expect c "exit(0)" :timeout 120))
           (image:finish c 5))))
@@ -1732,8 +1732,8 @@
         (unwind-protect
              (progn
                (is (image:expect c "init: pid 1" :timeout 120))
-               (ask "(progn (loop :repeat 100 :until finch/nrepl::*thread* :do (sleep 0.1)) :ready)")
-               (ask "(with-open-file (s \"/Users/finch/kept\" :direction :output :if-exists :supersede) (write-line \"kept\" s))")
+               (ask "(progn (loop :repeat 100 :until darterfly/nrepl::*thread* :do (sleep 0.1)) :ready)")
+               (ask "(with-open-file (s \"/Users/darterfly/kept\" :direction :output :if-exists :supersede) (write-line \"kept\" s))")
                (let ((result (image:deploy "127.0.0.1" :from "10.0.2.2" :nrepl-port port)))
                  (is (search ":GENERATION \"gen-2\"" result) "~a" result))
                (is (loop :repeat 1200 :unless (uiop:process-alive-p (image::console-process c)) :return t :do (sleep 0.1))
@@ -1746,13 +1746,13 @@
              (progn
                (is (image:expect c "boot.efi: generation gen-2" :timeout 60) "the deployed generation boots")
                (is (image:expect c "init: pid 1" :timeout 120))
-               (is (search "\"kept\"" (ask "(with-open-file (s \"/Users/finch/kept\") (read-line s))")) "user files survive")
-               (is (search "T" (ask "(and (probe-file \"/usr/src/finch/src/install/deploy.lisp\") t)"))))
+               (is (search "\"kept\"" (ask "(with-open-file (s \"/Users/darterfly/kept\") (read-line s))")) "user files survive")
+               (is (search "T" (ask "(and (probe-file \"/usr/src/darterfly/src/install/deploy.lisp\") t)"))))
           (image:finish c 5))))))
 
 (test install-from-the-desktop
   (let* ((stick (image:usb-image))
-         (disk (merge-pathnames "install-ui.img" (finch-file "build/")))
+         (disk (merge-pathnames "install-ui.img" (darterfly-file "build/")))
          (image:*screen-size* '(1280 800)))
     (with-open-file (s disk :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
       (file-position s (1- (* 4096 1048576)))
@@ -1763,10 +1763,10 @@
                             "-device" "nvme,serial=disk,drive=disk")))
       (labels ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120))
                (rel (dx dy) (image:qmp "input-send-event"
-                                       (finch/qmp:dict "events" (vector (finch/qmp:dict "type" "rel" "data" (finch/qmp:dict "axis" "x" "value" dx))
-                                                                        (finch/qmp:dict "type" "rel" "data" (finch/qmp:dict "axis" "y" "value" dy))))))
+                                       (darterfly/qmp:dict "events" (vector (darterfly/qmp:dict "type" "rel" "data" (darterfly/qmp:dict "axis" "x" "value" dx))
+                                                                        (darterfly/qmp:dict "type" "rel" "data" (darterfly/qmp:dict "axis" "y" "value" dy))))))
                (button (down) (image:qmp "input-send-event"
-                                         (finch/qmp:dict "events" (vector (finch/qmp:dict "type" "btn" "data" (finch/qmp:dict "button" "left" "down" down))))))
+                                         (darterfly/qmp:dict "events" (vector (darterfly/qmp:dict "type" "btn" "data" (darterfly/qmp:dict "button" "left" "down" down))))))
                (click (x y)
                  (dotimes (i 40) (rel -100 -100) (sleep 0.01))
                  (loop :with at-x := 0 :with at-y := 0
@@ -1782,9 +1782,9 @@
                (sleep 2)
                (click 654 236)
                (click 654 236)
-               (is (search "\"EFI PART\"" (ask "(loop :repeat 600 :until (equal \"EFI PART\" (map 'string #'code-char (finch/devices:media-read (finch/install:internal-disk) 512 8))) :do (sleep 0.5) :finally (return (map 'string #'code-char (finch/devices:media-read (finch/install:internal-disk) 512 8))))"))
+               (is (search "\"EFI PART\"" (ask "(loop :repeat 600 :until (equal \"EFI PART\" (map 'string #'code-char (darterfly/devices:media-read (darterfly/install:internal-disk) 512 8))) :do (sleep 0.5) :finally (return (map 'string #'code-char (darterfly/devices:media-read (darterfly/install:internal-disk) 512 8))))"))
                    "Install... then Erase and Install writes the disk")
                (sleep 20)
                (image:screendump)
-               (uiop:copy-file (finch/image::build-path "screen.ppm") (finch-file "build/install-done.ppm")))
+               (uiop:copy-file (darterfly/image::build-path "screen.ppm") (darterfly-file "build/install-done.ppm")))
           (image:finish c 5))))))

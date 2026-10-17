@@ -1,7 +1,7 @@
-(in-package #:finch/image)
+(in-package #:darterfly/image)
 
 (defun source (name)
-  (uiop:native-namestring (asdf:system-relative-pathname :finch name)))
+  (uiop:native-namestring (asdf:system-relative-pathname :darterfly name)))
 
 (defun run (&rest args)
   (multiple-value-bind (out err code)
@@ -19,28 +19,28 @@
   (let ((out (build-path "efi/boot.efi")))
     (ensure-directories-exist out)
     (with-open-file (s out :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
-      (write-sequence (finch/boot:boot-image) s))
+      (write-sequence (darterfly/boot:boot-image) s))
     out))
 
-(defun finch-sources ()
+(defun darterfly-sources ()
   (cons (source "tests/")
         (remove-if-not (lambda (dir) (uiop:directory-files dir "*.lisp"))
                        (uiop:subdirectories (source "src/")))))
 
-(defun finch-core ()
-  (let ((core (build-path "finch.core")))
+(defun darterfly-core ()
+  (let ((core (build-path "darterfly.core")))
     (unless (and (probe-file core)
-                 (> (file-write-date core) (max (newest (finch-sources))
+                 (> (file-write-date core) (max (newest (darterfly-sources))
                                                 (file-write-date (merge-pathnames "output/sbcl.core" (sbcl-tree))))))
       (run "sh" "-c"
-           (format nil "CL_SOURCE_REGISTRY=\"~a//:$GUIX_ENVIRONMENT/share/common-lisp//\" ASDF_OUTPUT_TRANSLATIONS=\"/:$HOME/.cache/common-lisp/finch-mt/\" ~a --non-interactive --no-userinit --load ~a ~a"
+           (format nil "CL_SOURCE_REGISTRY=\"~a//:$GUIX_ENVIRONMENT/share/common-lisp//\" ASDF_OUTPUT_TRANSLATIONS=\"/:$HOME/.cache/common-lisp/darterfly-mt/\" ~a --non-interactive --no-userinit --load ~a ~a"
                    (string-right-trim "/" (source ""))
                    (uiop:native-namestring (merge-pathnames "run-sbcl.sh" (sbcl-tree)))
-                   (source "src/image/finch-core.lisp")
+                   (source "src/image/darterfly-core.lisp")
                    (uiop:native-namestring core))))
     core))
 
-(defun host-units () (finch/cc:units :libtcc1 (eq *c-compiler* :tcc)))
+(defun host-units () (darterfly/cc:units :libtcc1 (eq *c-compiler* :tcc)))
 
 (defun unit-object (unit) (build-path (format nil "~a/~a" (object-dir "objects") (getf unit :name))))
 
@@ -87,7 +87,7 @@
     (when (and (probe-file out) (> (file-write-date out) (newest (kernel-inputs))))
       (return-from kernel-file out))
     (c-objects)
-    (let ((image (finch/install:kernel-image (loop :for (name path) :in (user-objects) :collect (cons name (octets path))))))
+    (let ((image (darterfly/install:kernel-image (loop :for (name path) :in (user-objects) :collect (cons name (octets path))))))
       (ensure-directories-exist out)
       (with-open-file (s out :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
         (write-sequence image s)))
@@ -95,9 +95,9 @@
 
 (defun compiler-entries ()
   (flet ((sources (file) (member (pathname-type file) '("c" "h" "S" "inc" "def") :test #'string=)))
-    (append (tree-entries (build-path "runtime/") "usr/src/finch/build/runtime" :keep #'sources)
-            (tree-entries (libtcc-tree) "usr/src/finch/build/tcc/finch-src")
-            (tree-entries (merge-pathnames "lib/" (tcc-stage 2)) "usr/src/finch/build/tcc/stage2/lib" :keep #'sources)
+    (append (tree-entries (build-path "runtime/") "usr/src/darterfly/build/runtime" :keep #'sources)
+            (tree-entries (libtcc-tree) "usr/src/darterfly/build/tcc/darterfly-src")
+            (tree-entries (merge-pathnames "lib/" (tcc-stage 2)) "usr/src/darterfly/build/tcc/stage2/lib" :keep #'sources)
             (tree-entries (merge-pathnames "include/" (tcc-stage 2)) "usr/lib/tcc/include")
             (list (list :file "usr/lib/tcc/libc.a" (text (format nil "!<arch>~%")))
                   (list :file "usr/lib/tcc/libtcc1.a" (text (format nil "!<arch>~%")))))))
@@ -105,20 +105,20 @@
 (defun object-entries ()
   (kernel-file)
   (let ((objects (user-objects)))
-    (cons (list :file "usr/lib/finch/objects/objects" (text (format nil "~{~a~%~}" (mapcar #'first objects))))
+    (cons (list :file "usr/lib/darterfly/objects/objects" (text (format nil "~{~a~%~}" (mapcar #'first objects))))
           (loop :for (name path) :in objects
-                :collect (list :file (concatenate 'string "usr/lib/finch/objects/" name) (octets path))))))
+                :collect (list :file (concatenate 'string "usr/lib/darterfly/objects/" name) (octets path))))))
 
 (defun boot-conf (boot-args &optional root-image)
-  (format nil "kernel-flags=~a -- --core /System/Library/Kernels/finch.core~%ramdisk=/System/Library/RAMDisk/root.cpio~%~@[root-image=~a~%~]"
+  (format nil "kernel-flags=~a -- --core /System/Library/Kernels/darterfly.core~%ramdisk=/System/Library/RAMDisk/root.cpio~%~@[root-image=~a~%~]"
           boot-args (and root-image "/System/Library/RAMDisk/root.img")))
 
 (defun ramdisk ()
-  (write-cpio (build-path "root.cpio") (list '(:dir "tmp") '(:dir "Users/finch"))))
+  (write-cpio (build-path "root.cpio") (list '(:dir "tmp") '(:dir "Users/darterfly"))))
 
 (defun desktop-entries ()
   (append (loop :for (path program) :in *programs*
-                :collect (list :file path (text (format nil "#!finch ~a~%" program)) #o755))
+                :collect (list :file path (text (format nil "#!darterfly ~a~%" program)) #o755))
           (desktop-jobs) (fonts) (icons)))
 
 (defun contribs ()
@@ -154,9 +154,9 @@
                        (library-entries)
                        (object-entries)
                        (compiler-entries)
-                       (tree-entries (asdf:system-relative-pathname :finch "") "usr/src/finch"
+                       (tree-entries (asdf:system-relative-pathname :darterfly "") "usr/src/darterfly"
                                      :skip '(".git" "build"))))
-        (dirs (list "tmp" "Users" "Users/finch" "dev" "Volumes" "System" "System/Library" "System/Library/Kernels")))
+        (dirs (list "tmp" "Users" "Users/darterfly" "dev" "Volumes" "System" "System/Library" "System/Library/Kernels")))
     (dolist (f files)
       (let ((path (second f)))
         (loop for slash = (position #\/ path) then (position #\/ path :start (1+ slash))
@@ -178,24 +178,24 @@
                                  (file-time (merge-pathnames file tree)))))))
 
 (defun root-disk (&optional (path (build-path "root.img")) (size (* 128 1048576)) (entries (root-entries)))
-  (finch/apfs:newfs path :size size :volume-name "finch HD" :entries entries
+  (darterfly/apfs:newfs path :size size :volume-name "darterfly HD" :entries entries
                          :container-uuid "F1C40000-0000-4000-8000-000000000001"
                          :volume-uuid "F1C40000-0000-4000-8000-000000000002"))
 
 (defun same-content-p (path octets)
-  (let ((attr (ignore-errors (finch/vfs:vfs-stat path))))
-    (and attr (= (finch/vfs:vattr-size attr) (length octets))
-         (let ((fd (finch/vfs:vfs-open path (list :access :rdonly) 0)))
-           (unwind-protect (equalp (finch/vfs:vfs-read fd (length octets)) octets)
-             (finch/vfs:vfs-close fd))))))
+  (let ((attr (ignore-errors (darterfly/vfs:vfs-stat path))))
+    (and attr (= (darterfly/vfs:vattr-size attr) (length octets))
+         (let ((fd (darterfly/vfs:vfs-open path (list :access :rdonly) 0)))
+           (unwind-protect (equalp (darterfly/vfs:vfs-read fd (length octets)) octets)
+             (darterfly/vfs:vfs-close fd))))))
 
 (defun update-root (path &optional (entries (root-entries)))
-  (let ((finch/vfs:*root* nil) (finch/vfs:*mounts* nil))
-    (finch/vfs:vfs-mount (finch/vfs:make-ram-node :vdir #o755) "/")
-    (finch/vfs:vfs-mkdir "/root" #o755)
-    (multiple-value-bind (read write) (finch/apfs:file-store path)
-      (finch/apfs:mount-writable read write "/root"))
-    (finch/apfs:with-batch
+  (let ((darterfly/vfs:*root* nil) (darterfly/vfs:*mounts* nil))
+    (darterfly/vfs:vfs-mount (darterfly/vfs:make-ram-node :vdir #o755) "/")
+    (darterfly/vfs:vfs-mkdir "/root" #o755)
+    (multiple-value-bind (read write) (darterfly/apfs:file-store path)
+      (darterfly/apfs:mount-writable read write "/root"))
+    (darterfly/apfs:with-batch
       (update-entries entries))
     path))
 
@@ -203,13 +203,13 @@
   (dolist (entry entries)
     (let ((at (format nil "/root/~a" (second entry))))
       (ecase (first entry)
-        (:dir (unless (ignore-errors (finch/vfs:vfs-stat at)) (finch/vfs:vfs-mkdir at #o755)))
+        (:dir (unless (ignore-errors (darterfly/vfs:vfs-stat at)) (darterfly/vfs:vfs-mkdir at #o755)))
         (:file (destructuring-bind (octets &optional (mode #o644) time) (cddr entry)
                  (declare (ignore time))
                  (unless (same-content-p at octets)
-                   (let ((fd (finch/vfs:vfs-open at (list :access :wronly :creat t :trunc t) (logand mode #o7777))))
-                     (unwind-protect (finch/vfs:vfs-write fd octets)
-                       (finch/vfs:vfs-close fd))))))))))
+                   (let ((fd (darterfly/vfs:vfs-open at (list :access :wronly :creat t :trunc t) (logand mode #o7777))))
+                     (unwind-protect (darterfly/vfs:vfs-write fd octets)
+                       (darterfly/vfs:vfs-close fd))))))))))
 
 (defun esp (&key (boot-args "") root-image)
   (let ((root (build-path "esp/")))
@@ -220,13 +220,13 @@
                (uiop:copy-file from path))))
       (let ((efi (boot-efi)))
         (put efi "EFI/BOOT/BOOTX64.EFI"))
-      (put (kernel-file) "EFI/finch/gen-1/kernel")
-      (put (finch-core) "EFI/finch/gen-1/finch.core")
+      (put (kernel-file) "EFI/darterfly/gen-1/kernel")
+      (put (darterfly-core) "EFI/darterfly/gen-1/darterfly.core")
       (put (ramdisk) "System/Library/RAMDisk/root.cpio")
       (when root-image (put root-image "System/Library/RAMDisk/root.img")))
-    (with-open-file (s (merge-pathnames "EFI/finch/current" root) :direction :output)
+    (with-open-file (s (merge-pathnames "EFI/darterfly/current" root) :direction :output)
       (write-line "gen-1" s))
-    (with-open-file (s (merge-pathnames "EFI/finch/boot.conf" root) :direction :output :if-exists :supersede)
+    (with-open-file (s (merge-pathnames "EFI/darterfly/boot.conf" root) :direction :output :if-exists :supersede)
       (write-string (boot-conf boot-args root-image) s))
     root))
 
@@ -246,7 +246,7 @@
                                  v)))
                        entries))))
       (walk root))
-    (finch/fat:newfs image :size size :label "EFI" :entries (nreverse entries))))
+    (darterfly/fat:newfs image :size size :label "EFI" :entries (nreverse entries))))
 
 (defun nrepl-key ()
   (let ((file (build-path "nrepl.key")))
@@ -257,17 +257,17 @@
     (with-open-file (s file) (read-line s))))
 
 (defun boot-payload ()
-  (flet ((file (name path) (list :file (concatenate 'string "usr/lib/finch/boot/" name) (octets path))))
-    (list (list :dir "usr/lib/finch/boot")
+  (flet ((file (name path) (list :file (concatenate 'string "usr/lib/darterfly/boot/" name) (octets path))))
+    (list (list :dir "usr/lib/darterfly/boot")
           (file "boot.efi" (boot-efi)) (file "kernel" (kernel-file))
-          (file "finch.core" (finch-core)) (file "root.cpio" (ramdisk)))))
+          (file "darterfly.core" (darterfly-core)) (file "root.cpio" (ramdisk)))))
 
-(defun usb-image (&key (path (build-path "finch-usb.img")) (boot-args (format nil "rd=ram init nrepl-key=~a" (nrepl-key))))
+(defun usb-image (&key (path (build-path "darterfly-usb.img")) (boot-args (format nil "rd=ram init nrepl-key=~a" (nrepl-key))))
   (let ((fat (esp-image (esp :boot-args boot-args
                              :root-image (root-disk (build-path "usb-root.img") (* 256 1048576)
                                                     (append (root-entries) (boot-payload))))
                         (build-path "usb-esp.img") (* 512 1048576))))
-    (finch/gpt:write-disk path (list (list finch/gpt:+esp-type+ "F1C40000-0000-4000-8000-000000000011" "EFI" fat)))
+    (darterfly/gpt:write-disk path (list (list darterfly/gpt:+esp-type+ "F1C40000-0000-4000-8000-000000000011" "EFI" fat)))
     (delete-file fat)
     path))
 
@@ -340,18 +340,18 @@
       (walk (uiop:ensure-directory-pathname from) (string-trim "/" to) ""))
     (nreverse entries)))
 
-(defun copy-in (from to &key (disk (build-path "finch-hd.img")) (skip '(".git")))
+(defun copy-in (from to &key (disk (build-path "darterfly-hd.img")) (skip '(".git")))
   (when (in-use-p disk)
-    (error "~a is in use by a running finch; quit that one first" (uiop:native-namestring disk)))
+    (error "~a is in use by a running darterfly; quit that one first" (uiop:native-namestring disk)))
   (update-root disk (tree-entries from to :skip skip)))
 
 (defun in-use-p (disk)
   (not (zerop (nth-value 2 (uiop:run-program (list "qemu-io" "-f" "raw" "-c" "quit" (uiop:native-namestring disk))
                                              :ignore-error-status t :output nil :error-output nil)))))
 
-(defun desktop (&key (disk (build-path "finch-hd.img")))
+(defun desktop (&key (disk (build-path "darterfly-hd.img")))
   (when (and (probe-file disk) (in-use-p disk))
-    (error "~a is in use by a running finch; quit that one first" (uiop:native-namestring disk)))
+    (error "~a is in use by a running darterfly; quit that one first" (uiop:native-namestring disk)))
   (let ((root (if (probe-file disk) (update-root disk) (root-disk disk (* 1024 1048576))))
         (esp (build-path "desktop/esp/")))
     (uiop:delete-directory-tree esp :validate t :if-does-not-exist :ignore)

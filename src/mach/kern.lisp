@@ -1,4 +1,4 @@
-(defpackage #:finch/mach
+(defpackage #:darterfly/mach
   (:use #:cl)
   (:export
    #:task #:make-task #:task-name #:*task* #:mach-task-self
@@ -18,7 +18,7 @@
    #:msgh-body #:msgh-descriptors
    #:mach-msg-send #:mach-msg-receive
    #:+mach-port-qlimit-default+))
-(in-package #:finch/mach)
+(in-package #:darterfly/mach)
 
 (defparameter +kern-return+
   '((:kern-success . 0)

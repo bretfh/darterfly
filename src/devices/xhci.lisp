@@ -1,4 +1,4 @@
-(in-package #:finch/devices)
+(in-package #:darterfly/devices)
 
 (defconstant +trbs+ 256)
 

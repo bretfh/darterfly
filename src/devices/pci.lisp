@@ -1,4 +1,4 @@
-(in-package #:finch/devices)
+(in-package #:darterfly/devices)
 
 (define-device-class platform-device "PlatformExpertDevice" (device))
 (define-device-class acpi-device "ACPIPlatformDevice" (device))
@@ -164,7 +164,7 @@
 
 (defun %start-devices ()
   (let* ((root (make-instance 'entry :name "Root"))
-         (expert (attach (make-instance 'platform-device :name "finch") root))
+         (expert (attach (make-instance 'platform-device :name "darterfly") root))
          (mcfg (acpi-table "MCFG"))
          (pci0 (attach (make-instance 'acpi-device :name "PCI0") expert))
          (bridge (attach (make-instance 'acpi-pci :ecam (ml-phys-read-64 (+ mcfg 44))) pci0)))

@@ -1,5 +1,5 @@
-(defpackage #:finch/low
-  (:use #:cl #:finch/asm)
+(defpackage #:darterfly/low
+  (:use #:cl #:darterfly/asm)
   (:shadow #:compile)
   (:export #:define-low #:define-global #:low-object #:inb #:outb #:ref #:mem #:pause #:result #:while
            #:package-object #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:monitor #:sti-mwait #:outw #:address
@@ -7,7 +7,7 @@
            #:invlpg #:set-cr3 #:cpuid-edx #:cpuid #:cpu-data #:fxsave #:fxrstor #:code-address #:call-pointer #:read-cr #:set-cr #:fninit #:compare-and-swap #:rdrand #:int3 #:build-date #:*build-date* #:lidt #:ltr
            #:efi-call #:wide #:define-efi-entry #:package-image
            #:signed< #:signed<= #:signed> #:signed>= #:sar #:sign-extend #:signed-truncate #:signed-rem))
-(in-package #:finch/low)
+(in-package #:darterfly/low)
 
 (defvar *functions* (make-hash-table :test 'equal))
 (defvar *globals* (make-hash-table :test 'equal))
@@ -89,7 +89,7 @@
         (inst lea rax-tn (data (global-name g)))
         (global-type g))
       (destructuring-bind (op target index) place
-        (ecase (or (find-symbol (symbol-name op) '#:finch/low) op)
+        (ecase (or (find-symbol (symbol-name op) '#:darterfly/low) op)
           (mem (compile index)
                target)
           (ref (let ((g (global-of target)))
@@ -153,7 +153,7 @@
                (let ((type (address-of form))) (load-into-rax type)))))
         (t
          (destructuring-bind (op &rest args) form
-           (case (or (find-symbol (symbol-name op) '#:finch/low) op)
+           (case (or (find-symbol (symbol-name op) '#:darterfly/low) op)
              ((+ - logand logior logxor *)
               (if (cddr args)
                   (compile `(,op (,op ,(first args) ,(second args)) ,@(cddr args)))
@@ -165,7 +165,7 @@
               (compile (first args))
               (spop rcx-tn)
               (inst cmp rax-tn rcx-tn)
-              (inst set (ecase (find-symbol (symbol-name op) '#:finch/low)
+              (inst set (ecase (find-symbol (symbol-name op) '#:darterfly/low)
                           (signed< :l) (signed<= :le) (signed> :g) (signed>= :ge))
                     (reg :byte 0))
               (inst movzx '(:byte :dword) (reg :dword 0) (reg :byte 0)))
@@ -186,7 +186,7 @@
               (spop rcx-tn)
               (inst cqo)
               (inst idiv rcx-tn)
-              (when (eq (find-symbol (symbol-name op) '#:finch/low) 'signed-rem) (inst mov rax-tn rdx-tn)))
+              (when (eq (find-symbol (symbol-name op) '#:darterfly/low) 'signed-rem) (inst mov rax-tn rdx-tn)))
              (not (compile (first args))
                   (inst test rax-tn rax-tn)
                   (inst set :e (reg :byte 0))
@@ -290,7 +290,7 @@
                         (spush rax-tn)
                         (compile (first args))
                         (spop rcx-tn)
-                        (if (eq (find-symbol (symbol-name op) '#:finch/low) 'shl)
+                        (if (eq (find-symbol (symbol-name op) '#:darterfly/low) 'shl)
                             (inst shl rax-tn :cl)
                             (inst shr rax-tn :cl)))
              (rdmsr (compile (first args))
@@ -330,7 +330,7 @@
               (spop rcx-tn)
               (inst mov rax-tn rsi-tn)
               (inst byte #xF3)
-              (inst byte (if (eq (find-symbol (symbol-name op) '#:finch/low) 'rep-movsb) #xA4 #xAA)))
+              (inst byte (if (eq (find-symbol (symbol-name op) '#:darterfly/low) 'rep-movsb) #xA4 #xAA)))
              (wbinvd (inst byte #x0F) (inst byte #x09))
              (rdtsc (inst byte #x0F) (inst byte #x31)
                     (inst shl rdx-tn 32)

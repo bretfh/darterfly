@@ -1,4 +1,4 @@
-(in-package #:finch/platform)
+(in-package #:darterfly/platform)
 
 (defconstant +physmap-base+ #xFFFF800000000000)
 (defconstant +video+ 1192)

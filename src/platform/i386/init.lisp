@@ -1,4 +1,4 @@
-(in-package #:finch/platform)
+(in-package #:darterfly/platform)
 
 (define-global |platform_boot_args| :u64 :extern t)
 
@@ -56,4 +56,4 @@
         (result 0)))))
 
 (defun platform-object ()
-  (package-object "FINCH/PLATFORM"))
+  (package-object "DARTERFLY/PLATFORM"))

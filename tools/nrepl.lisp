@@ -1,8 +1,8 @@
 (require :sb-bsd-sockets)
 
-(defpackage #:finch/tools/nrepl
+(defpackage #:darterfly/tools/nrepl
   (:use #:cl))
-(in-package #:finch/tools/nrepl)
+(in-package #:darterfly/tools/nrepl)
 
 (defconstant +i+ (char-code #\i))
 (defconstant +l+ (char-code #\l))
@@ -105,13 +105,13 @@
          sock :input t :output t :element-type '(unsigned-byte 8)))
     (error (c)
       (format *error-output*
-              "~&nrepl: can't reach ~a:~d (~a) -- is (finch/nrepl:start) running?~%"
+              "~&nrepl: can't reach ~a:~d (~a) -- is (darterfly/nrepl:start) running?~%"
               *host* port c)
       (sb-ext:exit :code 2))))
 
 (defun cache-dir ()
   (ensure-directories-exist
-   (merge-pathnames ".cache/finch-nrepl/" (user-homedir-pathname))))
+   (merge-pathnames ".cache/darterfly-nrepl/" (user-homedir-pathname))))
 
 (defun cache-path (port)
   (merge-pathnames (format nil "~a-~d.session" *host* port) (cache-dir)))

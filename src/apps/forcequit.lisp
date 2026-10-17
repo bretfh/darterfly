@@ -1,7 +1,7 @@
-(in-package #:finch/apps)
+(in-package #:darterfly/apps)
 
 (defparameter *system-programs*
-  '("kernel" "init" "WindowServer" "Session" "Dock" "MenuBar" "Files" "finch-gui" "Force Quit"))
+  '("kernel" "init" "WindowServer" "Session" "Dock" "MenuBar" "Files" "darterfly-gui" "Force Quit"))
 
 (defun quittable ()
   (remove-if (lambda (proc) (or (<= (bsd:proc-pid proc) 1)

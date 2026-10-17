@@ -1,7 +1,7 @@
-(in-package #:finch/image)
+(in-package #:darterfly/image)
 
 (defun source-entries ()
-  (tree-entries (asdf:system-relative-pathname :finch "") "usr/src/finch" :skip '(".git" "build")))
+  (tree-entries (asdf:system-relative-pathname :darterfly "") "usr/src/darterfly" :skip '(".git" "build")))
 
 (defun deployment (&key (generation t))
   (append (loop for entry in (if generation (root-entries) (source-entries))
@@ -11,7 +11,7 @@
                             (list "file" path octets mode)))
           (and generation
                (list (list "gen" "kernel" (octets (kernel-file)) #o644)
-                     (list "gen" "finch.core" (octets (finch-core)) #o644)
+                     (list "gen" "darterfly.core" (octets (darterfly-core)) #o644)
                      (list "gen" "boot.efi" (octets (boot-efi)) #o644)))))
 
 (defun serve-deployment (entries port)
@@ -45,13 +45,13 @@
 (defparameter *receiver-sources* '("src/power/power.lisp" "src/install/deploy.lisp"))
 
 (defun receiver-code ()
-  (format nil "(progn ~{(with-input-from-string (s ~s) (let ((*package* (find-package \"FINCH/INSTALL\"))) (loop for f = (read s nil s) until (eq f s) do (eval f)))) ~})"
+  (format nil "(progn ~{(with-input-from-string (s ~s) (let ((*package* (find-package \"DARTERFLY/INSTALL\"))) (loop for f = (read s nil s) until (eq f s) do (eval f)))) ~})"
           (mapcar (lambda (f) (uiop:read-file-string (source f))) *receiver-sources*)))
 
 (defun deploy (host &key (from "10.42.0.1") (port 47100) (nrepl-port 4011) (restart t) (reload nil))
   (let* ((entries (deployment :generation (not reload)))
          (server (serve-deployment entries port))
-         (result (device-eval host (format nil "(progn ~a (let ((r (finch/install::receive-deployment ~s ~d))) (cond (~a (append r (finch/install::reload-systems))) (~a (finch/install::restart-soon) r) (t r))))"
+         (result (device-eval host (format nil "(progn ~a (let ((r (darterfly/install::receive-deployment ~s ~d))) (cond (~a (append r (darterfly/install::reload-systems))) (~a (darterfly/install::restart-soon) r) (t r))))"
                                            (receiver-code) from port (and reload t) (and restart t))
                               :nrepl-port nrepl-port)))
     (sb-thread:join-thread server :default nil :timeout 5)

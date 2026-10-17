@@ -1,10 +1,10 @@
-(defpackage #:finch/io
+(defpackage #:darterfly/io
   (:use #:cl)
   (:export #:framebuffer #:open-framebuffer #:framebuffer-width #:framebuffer-height
            #:framebuffer-pixels #:flush #:fill-rect #:test-pattern
            #:read-events #:wait-for-events #:hid-event #:event-type #:event-code #:event-value #:blend-rect
            #:input-devices #:abs-range #:event-fd #:blit-image #:key-character #:shift-key-p #:control-key-p #:alt-key-p #:meta-key-p #:+key-esc+ #:shadow-under #:save-corners #:restore-corners #:*clip*))
-(in-package #:finch/io)
+(in-package #:darterfly/io)
 
 (defclass framebuffer ()
   ((width :initarg :width :reader framebuffer-width)
@@ -15,9 +15,9 @@
    (pixels :initarg :pixels :reader framebuffer-pixels)))
 
 (defun open-framebuffer ()
-  (destructuring-bind (&key row-bytes width height depth base) (finch/devices:boot-video)
+  (destructuring-bind (&key row-bytes width height depth base) (darterfly/devices:boot-video)
     (make-instance 'framebuffer :width width :height height :depth depth :stride row-bytes
-                                :sap (sb-sys:int-sap (finch/devices:ml-io-map-wcomb base (* row-bytes height)))
+                                :sap (sb-sys:int-sap (darterfly/devices:ml-io-map-wcomb base (* row-bytes height)))
                                 :pixels (make-array (* width height) :element-type '(unsigned-byte 32)
                                                                      :initial-element #xff000000))))
 

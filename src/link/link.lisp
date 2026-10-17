@@ -1,7 +1,7 @@
-(defpackage #:finch/link
+(defpackage #:darterfly/link
   (:use #:cl)
   (:export #:read-object #:link-kernel))
-(in-package #:finch/link)
+(in-package #:darterfly/link)
 
 (defun u (v at n) (loop :for i :below n :sum (ash (aref v (+ at i)) (* 8 i))))
 

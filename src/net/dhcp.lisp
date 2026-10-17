@@ -1,4 +1,4 @@
-(in-package #:finch/net)
+(in-package #:darterfly/net)
 
 (defconstant +dhcp-magic+ #x63825363)
 

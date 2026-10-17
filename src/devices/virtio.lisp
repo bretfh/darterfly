@@ -1,4 +1,4 @@
-(in-package #:finch/devices)
+(in-package #:darterfly/devices)
 
 (defun add-personality (&rest kv)
   (let ((p (apply #'personality kv)))

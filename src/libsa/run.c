@@ -372,7 +372,7 @@ const char *__libsa_run_start(int *argc, char **argv, int max) {
   __libsa_run_core((const char *)r->core, r->core_size);
   if (r->result) return 0;
   load_archive((const char *)r->archive, r->archive_size);
-  struct node *core = add("/System/Library/Kernels/finch.core", S_IFREG | 0444);
+  struct node *core = add("/System/Library/Kernels/darterfly.core", S_IFREG | 0444);
   core->data = (char *)r->core;
   core->size = r->core_size;
   uint64_t kernel[2] = {0, 0};

@@ -1,4 +1,4 @@
-(in-package #:finch/bsd)
+(in-package #:darterfly/bsd)
 
 (defvar *programs* (make-hash-table :test 'equal))
 (defvar *process-variables* nil)
@@ -38,8 +38,8 @@
     (unless (and (= (logand mode +s-ifmt+) +s-ifreg+) (logtest mode +s-ixall+))
       (fail :eacces))
     (let ((line (first-line full)))
-      (or (and (uiop:string-prefix-p "#!finch " line)
-               (gethash (string-trim " " (subseq line 8)) *programs*))
+      (or (and (uiop:string-prefix-p "#!darterfly " line)
+               (gethash (string-trim " " (subseq line (length "#!darterfly "))) *programs*))
           (fail :enoexec)))))
 
 (defun basename (name)

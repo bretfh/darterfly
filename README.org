@@ -1,4 +1,4 @@
-#+TITLE: finch
+#+TITLE: Darterfly
 
 A live, hackable operating system for x86-64, written in Common Lisp from the
 boot loader up and running on SBCL. The loader and the kernel (boot, paging,
@@ -20,8 +20,9 @@ Icons and fonts are GNOME's Adwaita.
 
 #+begin_src sh
   make repl
-  make check   # loads with no warnings from finch's own code
+  make check   # loads with no warnings from darterfly's own code
+  make sbcl    # first build: prepare the SBCL compiler/core used by the bootable image
   make test    # the whole suite, including boots of the image under QEMU
   make bare    # build the image and boot it to a REPL on the terminal
-  make desktop # the desktop in a window, on build/finch-hd.img, which keeps your files
+  make desktop # the desktop in a window, on build/darterfly-hd.img, which keeps your files
 #+end_src

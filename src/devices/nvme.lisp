@@ -1,4 +1,4 @@
-(in-package #:finch/devices)
+(in-package #:darterfly/devices)
 
 (defconstant +nvme-queue-size+ 64)
 (defconstant +nvme-pages+ 8)

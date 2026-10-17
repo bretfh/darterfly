@@ -1,4 +1,4 @@
-(in-package #:finch/bsd)
+(in-package #:darterfly/bsd)
 
 (defvar *bsd* (sb-thread:make-mutex :name "bsd"))
 (defvar *changed* (sb-thread:make-waitqueue))
@@ -39,7 +39,7 @@
 
 (defvar *procs* (make-hash-table))
 (defvar *next-pid* 0)
-(defvar *proc0* (setf (gethash 0 *procs*) (make-instance 'proc :pid 0 :task finch/mach:*task*)))
+(defvar *proc0* (setf (gethash 0 *procs*) (make-instance 'proc :pid 0 :task darterfly/mach:*task*)))
 (defvar *proc* *proc0*)
 
 (defun next-pid ()
@@ -145,7 +145,7 @@
 
 (defun proc-main (proc fn)
   (let ((*proc* proc)
-        (finch/mach:*task* (proc-task proc)))
+        (darterfly/mach:*task* (proc-task proc)))
     (call-with-bindings (proc-bindings proc) (lambda () (proc-body proc fn)))))
 
 (defun proc-body (proc fn)
@@ -166,7 +166,7 @@
   (with-bsd
     (let* ((parent *proc*)
            (child (make-instance 'proc :pid (next-pid) :parent parent
-                                       :task (finch/mach:task-create (proc-task parent)))))
+                                       :task (darterfly/mach:task-create (proc-task parent)))))
       (setf (gethash (proc-pid child) *procs*) child)
       (push child (proc-children parent))
       (loop :for slot :across (proc-fds parent)
@@ -188,10 +188,10 @@
 
 (defun bsdthread-create (fn &optional (name "thread"))
   (let* ((proc *proc*)
-         (task finch/mach:*task*)
+         (task darterfly/mach:*task*)
          (bindings (proc-bindings proc))
          (thread (sb-thread:make-thread (lambda ()
-                                          (let ((*proc* proc) (finch/mach:*task* task))
+                                          (let ((*proc* proc) (darterfly/mach:*task* task))
                                             (catch proc (call-with-bindings bindings fn))))
                                         :name name)))
     (with-bsd (push thread (proc-threads proc)))
@@ -206,7 +206,7 @@
     (loop :for fd :below (length (proc-fds proc))
           :when (aref (proc-fds proc) fd)
             :do (release-fd proc fd))
-    (finch/mach:task-terminate (proc-task proc))
+    (darterfly/mach:task-terminate (proc-task proc))
     (let ((init (or (pfind 1) *proc0*)))
       (dolist (child (proc-children proc))
         (setf (proc-parent child) init)
@@ -285,8 +285,8 @@
         *changed* (sb-thread:make-waitqueue)
         *procs* (make-hash-table)
         *next-pid* 0
-        finch/mach:*task* (finch/mach:make-task "self")
-        *proc0* (setf (gethash 0 *procs*) (make-instance 'proc :pid 0 :task finch/mach:*task*))
+        darterfly/mach:*task* (darterfly/mach:make-task "self")
+        *proc0* (setf (gethash 0 *procs*) (make-instance 'proc :pid 0 :task darterfly/mach:*task*))
         *proc* *proc0*))
 
 (pushnew 'forget-processes sb-ext:*save-hooks*)

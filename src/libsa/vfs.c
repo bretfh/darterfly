@@ -27,7 +27,7 @@ static vfs_entry vfs;
 void __libsa_vfs_register(vfs_entry entry) { vfs = entry; }
 
 #define KERNEL_PATH "/System/Library/Kernels/kernel"
-#define CORE_PATH "/System/Library/Kernels/finch.core"
+#define CORE_PATH "/System/Library/Kernels/darterfly.core"
 #define SAVE_PATH "/System/Library/Kernels/saved.core"
 #define SAVE_BASE 0x0000300000000000ul
 #define SAVE_SPACE (16ul << 30)

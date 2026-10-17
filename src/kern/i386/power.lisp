@@ -1,4 +1,4 @@
-(in-package #:finch/kern)
+(in-package #:darterfly/kern)
 
 (defconstant +ia32-pm-enable+ #x770)
 (defconstant +ia32-hwp-capabilities+ #x771)

@@ -1,4 +1,4 @@
-(in-package #:finch/kern)
+(in-package #:darterfly/kern)
 
 (defconstant +pte-valid+ 1)
 (defconstant +pte-write+ 2)

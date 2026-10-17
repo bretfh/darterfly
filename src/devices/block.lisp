@@ -1,4 +1,4 @@
-(in-package #:finch/devices)
+(in-package #:darterfly/devices)
 
 (defconstant +virtio-f-version-1+ (ash 1 32))
 (defconstant +virtio-blk-f-flush+ (ash 1 9))

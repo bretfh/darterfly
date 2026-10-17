@@ -1,4 +1,4 @@
-(in-package #:finch/vfs)
+(in-package #:darterfly/vfs)
 
 (defclass host-node (vnode)
   ((path :initarg :path :reader host-path)))

@@ -1,4 +1,4 @@
-(in-package #:finch/kern)
+(in-package #:darterfly/kern)
 
 (define-low digit ((d :u8))
   (if (< d 10) (+ 48 d) (+ 87 d)))

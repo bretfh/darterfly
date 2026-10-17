@@ -1,4 +1,4 @@
-(in-package #:finch/net)
+(in-package #:darterfly/net)
 
 (defun dns-name (name)
   (apply #'octets (append (loop for label in (uiop:split-string name :separator ".")

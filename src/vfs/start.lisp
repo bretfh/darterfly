@@ -1,4 +1,4 @@
-(in-package #:finch/vfs)
+(in-package #:darterfly/vfs)
 
 (defparameter +errno+
   '((:eperm . 1) (:enoent . 2) (:esrch . 3) (:eintr . 4) (:eio . 5) (:enxio . 6) (:e2big . 7) (:enoexec . 8)
@@ -53,7 +53,7 @@
 (defun make-procfs ()
   (let* ((proc (make-ram-node :vdir #o555))
          (kernel (mkdirs proc "sys/kernel")))
-    (ram-file kernel "ostype" (format nil "finch~%"))
+    (ram-file kernel "ostype" (format nil "darterfly~%"))
     (ram-file kernel "osrelease" (format nil "0.1~%"))
     proc))
 
@@ -64,7 +64,7 @@
         (setf (node-external k) (sb-sys:int-sap address) (node-size k) size)))
     (multiple-value-bind (address size) (core-range)
       (when (plusp address)
-        (let ((k (vnop-create dir "finch.core" #o444)))
+        (let ((k (vnop-create dir "darterfly.core" #o444)))
           (setf (node-external k) (sb-sys:int-sap address) (node-size k) size))))
     dir))
 

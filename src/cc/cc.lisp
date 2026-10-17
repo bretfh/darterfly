@@ -1,11 +1,11 @@
-(defpackage #:finch/cc
+(defpackage #:darterfly/cc
   (:use #:cl)
   (:export #:arguments #:compile-c #:run-c #:units #:compile-units))
-(in-package #:finch/cc)
+(in-package #:darterfly/cc)
 
 (defun arguments (source &key includes defines (compat t) tcc-dir libsa-dir)
   (let ((asm (member (pathname-type source) '("S" "s") :test #'string=)))
-    (append (list (format nil "-B~a" tcc-dir) "-nostdinc" "-D__finch__"
+    (append (list (format nil "-B~a" tcc-dir) "-nostdinc" "-D__darterfly__"
                   "-U__linux__" "-U__linux" "-U__unix__" "-U__unix")
             (cond (asm (list "-fno-dollars-in-identifiers"))
                   (compat (list "-include" (format nil "~ainclude/tinycc.h" libsa-dir))))
@@ -19,7 +19,7 @@
     ,@(mapcar #'second args)))
 
 (defun compile-c (source object &key includes defines (compat t) directory
-                                     (tcc-dir "/usr/lib/tcc/") (libsa-dir "/usr/src/finch/src/libsa/"))
+                                     (tcc-dir "/usr/lib/tcc/") (libsa-dir "/usr/src/darterfly/src/libsa/"))
   (let ((options (format nil "~{~a~^ ~}" (arguments source :includes includes :defines defines :compat compat
                                                              :tcc-dir tcc-dir :libsa-dir libsa-dir)))
         (state (tcc "tcc_new" sb-sys:system-area-pointer))
@@ -47,7 +47,7 @@
     "runtime.c" "safepoint.c" "save.c" "sc-offset.c" "search.c" "stringspace.c" "thread.c"
     "stop-the-world.c" "validate.c" "var-io.c" "vars.c" "wrap.c" "run-program.c" "sprof.c"
     "x86-64-arch.c" "fullcgc.c" "gencgc.c" "traceroot.c" "immobile-space.c" "tlsf.c"
-    "finch-os.c" "x86-64-finch-os.c" "x86-64-assem.S"))
+    "darterfly-os.c" "x86-64-darterfly-os.c" "x86-64-assem.S"))
 
 (defparameter *libtcc1-sources* '("libtcc1.c" "va_list.c" "stdatomic.c" "atomic.S" "builtin.c" "alloca.S"))
 
@@ -58,12 +58,12 @@
             (mapcar (lambda (f) (unit "runtime" "build/runtime/src/runtime/" f
                                       :includes '("build/runtime/src/runtime/" "build/runtime/tlsf-bsd/tlsf/")))
                     *runtime-sources*)
-            (list (unit "libtcc" "build/tcc/finch-src/" "libtcc.c" :includes '("build/tcc/finch-src/" "src/libsa/")
+            (list (unit "libtcc" "build/tcc/darterfly-src/" "libtcc.c" :includes '("build/tcc/darterfly-src/" "src/libsa/")
                         :defines '("ONE_SOURCE=1" "TCC_TARGET_X86_64=1" "CONFIG_TCC_BACKTRACE=0")))
             (when libtcc1
               (mapcar (lambda (f) (unit "libtcc1" "build/tcc/stage2/lib/" f :compat nil)) *libtcc1-sources*)))))
 
-(defun compile-units (out &key (directory "/usr/src/finch/") (units (units)))
+(defun compile-units (out &key (directory "/usr/src/darterfly/") (units (units)))
   (let ((failed (loop :for unit :in units
                       :for object := (concatenate 'string out (getf unit :name))
                       :do (ensure-directories-exist object)
@@ -78,7 +78,7 @@
     failed))
 
 (defun run-c (source &key args output includes defines (compat t) directory
-                          (tcc-dir "/usr/lib/tcc/") (libsa-dir "/usr/src/finch/src/libsa/"))
+                          (tcc-dir "/usr/lib/tcc/") (libsa-dir "/usr/src/darterfly/src/libsa/"))
   (let ((options (format nil "~{~a~^ ~}" (arguments source :includes includes :defines defines :compat compat
                                                                        :tcc-dir tcc-dir :libsa-dir libsa-dir)))
         (state (tcc "tcc_new" sb-sys:system-area-pointer))

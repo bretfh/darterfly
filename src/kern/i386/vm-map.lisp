@@ -1,4 +1,4 @@
-(in-package #:finch/kern)
+(in-package #:darterfly/kern)
 
 (defconstant +max-entries+ 1024)
 (defconstant +user-mmap-base+ #x0000200000000000)

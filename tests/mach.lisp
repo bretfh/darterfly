@@ -1,4 +1,4 @@
-(in-package #:finch/test)
+(in-package #:darterfly/test)
 
 (def-suite mach :in all)
 (in-suite mach)

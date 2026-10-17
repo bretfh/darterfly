@@ -1,4 +1,4 @@
-(in-package #:finch/devices)
+(in-package #:darterfly/devices)
 
 (defun aml-region-names (v space)
   (loop for at below (- (length v) 7)

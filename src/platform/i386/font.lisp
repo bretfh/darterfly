@@ -1,4 +1,4 @@
-(in-package #:finch/platform)
+(in-package #:darterfly/platform)
 
 (defparameter +console-font+
   #.(coerce '(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0

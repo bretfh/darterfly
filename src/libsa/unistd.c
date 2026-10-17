@@ -83,16 +83,16 @@ int execvp(const char *p, char *const a[]) { (void)p; (void)a; errno = ENOSYS; r
 pid_t wait(int *s) { (void)s; errno = ECHILD; return -1; }
 
 int gethostname(char *b, size_t n) {
-  strncpy(b, "finch", n);
+  strncpy(b, "darterfly", n);
   return 0;
 }
 
 int uname(struct utsname *u) {
   memset(u, 0, sizeof *u);
-  strcpy(u->sysname, "finch");
-  strcpy(u->nodename, "finch");
+  strcpy(u->sysname, "darterfly");
+  strcpy(u->nodename, "darterfly");
   strcpy(u->release, "0.1");
-  strcpy(u->version, "finch Kernel Version 0.1");
+  strcpy(u->version, "darterfly Kernel Version 0.1");
   strcpy(u->machine, "x86_64");
   return 0;
 }
@@ -146,7 +146,7 @@ int posix_spawn_file_actions_addopen(posix_spawn_file_actions_t *f, int fd, cons
 int posix_spawn_file_actions_addclose(posix_spawn_file_actions_t *f, int fd) { (void)f; (void)fd; return 0; }
 int posix_spawn_file_actions_addclosefrom_np(posix_spawn_file_actions_t *f, int fd) { (void)f; (void)fd; return 0; }
 
-static char dl_error[] = "no dynamic loading on finch";
+static char dl_error[] = "no dynamic loading on darterfly";
 static int dl_failed;
 static int runtime_handle;
 

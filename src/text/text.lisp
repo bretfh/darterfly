@@ -1,8 +1,8 @@
-(defpackage #:finch/text
+(defpackage #:darterfly/text
   (:use #:cl)
   (:export #:font #:font-size #:string-width #:draw-string #:bitmap #:make-bitmap #:fill-ellipse #:fill-round-rect #:fill-rect
            #:bitmap-width #:bitmap-height #:bitmap-pixels #:fill-bitmap #:font-ascent #:font-descent))
-(in-package #:finch/text)
+(in-package #:darterfly/text)
 
 (defparameter *fonts-dir* "/System/Library/Fonts/")
 (defvar *loaders* (make-hash-table :test 'equal))

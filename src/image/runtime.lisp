@@ -1,6 +1,6 @@
-(in-package #:finch/image)
+(in-package #:darterfly/image)
 
-(defun sbcl-tree () (asdf:system-relative-pathname :finch "build/sbcl-mt/"))
+(defun sbcl-tree () (build-path "sbcl-mt/"))
 
 (defun build-sbcl ()
   (let ((source (format nil "~a/share/sbcl-source/" (uiop:getenv "GUIX_ENVIRONMENT")))
@@ -9,7 +9,7 @@
     (run "cp" "-r" "--preserve=timestamps" source (uiop:native-namestring (string-right-trim "/" (uiop:native-namestring tree))))
     (run "chmod" "-R" "u+w" (uiop:native-namestring tree))
     (with-open-file (s (merge-pathnames "version.lisp-expr" tree) :direction :output :if-exists :supersede)
-      (prin1 finch/build:*sbcl-version* s)
+      (prin1 darterfly/build:*sbcl-version* s)
       (terpri s))
     (with-open-file (log (build-path "sbcl-mt-build.log") :direction :output :if-exists :supersede)
       (uiop:run-program (list "env" "CC=gcc" "sh" "make.sh" "--xc-host=sbcl --no-userinit --no-sysinit")
@@ -21,12 +21,12 @@
 (defun runtime-dir () (build-path "runtime/src/runtime/"))
 
 (defun runtime-tree ()
-  (finch/build:runtime-tree (namestring (sbcl-tree)) (source "src/sbcl/") (namestring (build-path "runtime/"))))
+  (darterfly/build:runtime-tree (namestring (sbcl-tree)) (source "src/sbcl/") (namestring (build-path "runtime/"))))
 
 (defun runtime-flags ()
   (append (list "-target" "x86_64-unknown-none-elf" "-ffreestanding" "-fPIE" "-mno-red-zone"
                 "-fno-stack-protector" "-fno-omit-frame-pointer" "-O2" "-g0"
-                "-Wno-everything" "-Werror=implicit-function-declaration" "-Werror=implicit-int" "-D__finch__")
+                "-Wno-everything" "-Werror=implicit-function-declaration" "-Werror=implicit-int" "-D__darterfly__")
           (list "-isystem" (source "src/libsa/include"))
           (freestanding)))
 

@@ -1,4 +1,4 @@
-(defpackage #:finch/devices
+(defpackage #:darterfly/devices
   (:use #:cl)
   (:nicknames #:devices)
   (:export #:brightness #:set-brightness #:restore-brightness #:machdep
@@ -18,7 +18,7 @@
    #:virtio-network #:ethernet-controller #:ecm-status #:battery #:ethernet-interface #:network-send #:network-receive #:network-mac
    #:define-device-class #:add-personality #:personality #:publish-media #:partition-scheme
    #:media-device #:media-base #:next-bsd-unit #:node-class #:media-node))
-(in-package #:finch/devices)
+(in-package #:darterfly/devices)
 
 (defconstant +physmap-base+ #xffff800000000000)
 

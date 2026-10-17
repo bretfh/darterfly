@@ -1,4 +1,4 @@
-(in-package #:finch/apfs)
+(in-package #:darterfly/apfs)
 
 (defconstant +block-size+ 4096)
 
@@ -279,7 +279,7 @@ data blocks as (block . octets), the next inode number and counts."
 
 (defun newfs (path &key (size (* 16 1048576)) (volume-name "untitled") (container-uuid "00000000-0000-0000-0000-000000000001")
                         (volume-uuid "00000000-0000-0000-0000-000000000002")
-                        (time (* 1000000000 1791936000)) (formatted-by "finch newfs") (owner 501) (group 20)
+                        (time (* 1000000000 1791936000)) (formatted-by "darterfly newfs") (owner 501) (group 20)
                         entries)
   (let* ((blocks (floor size +block-size+)) (xid 1)
          (layout (layout blocks))

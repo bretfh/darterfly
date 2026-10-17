@@ -1,8 +1,8 @@
-(defpackage #:finch/server
+(defpackage #:darterfly/server
   (:use #:cl)
   (:export #:key-event #:mouse-event #:event-type #:event-value #:event-character
            #:event-location #:event-window-location))
-(in-package #:finch/server)
+(in-package #:darterfly/server)
 
 (defun key-event (down keycode character &key (timestamp 0) (location '(0 0)))
   (list :type (if down :key-down :key-up) :keycode keycode :character character

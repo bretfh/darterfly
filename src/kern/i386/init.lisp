@@ -1,4 +1,4 @@
-(in-package #:finch/kern)
+(in-package #:darterfly/kern)
 
 (defconstant +user-stack-top+ #x00007FF000000000)
 (defconstant +user-stack-size+ (ash 8 20))
@@ -155,7 +155,7 @@
   (funnel-lock)
   (setf |platform_boot_args| args)
   (serial-init)
-  (kprintf "finch Kernel Version 0.1: %s; root:finch/RELEASE_X86_64
+  (kprintf "darterfly Kernel Version 0.1: %s; root:darterfly/RELEASE_X86_64
 " (build-date))
   (kprintf "boot_args: Revision %u Version %u efiMode %u
 " (mem :u16 args) (mem :u16 (+ args 2)) (mem :u8 (+ args 4)))

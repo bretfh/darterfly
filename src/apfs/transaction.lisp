@@ -1,4 +1,4 @@
-(in-package #:finch/apfs)
+(in-package #:darterfly/apfs)
 
 (defstruct nx
   read write block-count sb xid next-oid
@@ -163,7 +163,7 @@
       (funcall *clock*)
       (multiple-value-bind (sec usec) (sb-ext:get-time-of-day) (+ (* sec 1000000000) (* usec 1000)))))
 
-(defun commit (nx &key (modified-by "finch") also-free)
+(defun commit (nx &key (modified-by "darterfly") also-free)
   (let* ((xid (1+ (nx-xid nx)))
          (sm (nx-sm nx))
          (writes nil))

@@ -1,6 +1,6 @@
-(defpackage #:finch/low-test
-  (:use #:cl #:finch/low))
-(in-package #:finch/low-test)
+(defpackage #:darterfly/low-test
+  (:use #:cl #:darterfly/low))
+(in-package #:darterfly/low-test)
 
 (define-low low-add8 (a b c d e f g h) (+ a b c d e f g h))
 
@@ -24,7 +24,7 @@
 
 (define-low low-callback (x) (+ (c-apply (code-address c-twice) x) (c-apply (code-address c-twice) (+ 1 x))))
 
-(in-package #:finch/test)
+(in-package #:darterfly/test)
 
 (def-suite low :in all)
 (in-suite low)
@@ -34,9 +34,9 @@
          (object (merge-pathnames "low.o" dir))
          (program (merge-pathnames "low-test" dir)))
     (with-open-file (s object :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
-      (write-sequence (finch/low:package-object "FINCH/LOW-TEST") s))
+      (write-sequence (darterfly/low:package-object "DARTERFLY/LOW-TEST") s))
     (sh "clang" "-O0" "-fno-omit-frame-pointer" "-o" (uiop:native-namestring program)
-        (uiop:native-namestring (finch-file "tests/low-harness.c")) (uiop:native-namestring object))
+        (uiop:native-namestring (darterfly-file "tests/low-harness.c")) (uiop:native-namestring object))
     (let ((out (sh (uiop:native-namestring program))))
       (flet ((line (key) (find-if (lambda (l) (uiop:string-prefix-p key l)) (uiop:split-string out :separator '(#\Newline)))))
         (is (equal "add8 36" (line "add8 ")) "eight arguments, two on the stack")
@@ -48,6 +48,6 @@
         (is (equal "divide -31" (line "divide ")) "idiv truncates toward zero")
         (is (equal "deep 49" (line "deep ")))
         (is (equal "pointer 9" (line "pointer ")))
-        (is (equal "callback 84" (line "callback ")) "C calls back into finch/low")
+        (is (equal "callback 84" (line "callback ")) "C calls back into darterfly/low")
         (is (equal "preserved 1" (line "preserved ")) "rbx and r12-r15 survive")
         (is (equal "misaligned 0" (line "misaligned ")) "every C callee sees a 16-byte aligned stack")))))

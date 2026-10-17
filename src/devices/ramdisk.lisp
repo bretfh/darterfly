@@ -1,4 +1,4 @@
-(in-package #:finch/devices)
+(in-package #:darterfly/devices)
 
 (defconstant +root-image-start+ 1576)
 (defconstant +root-image-size+ 1584)

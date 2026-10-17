@@ -1,8 +1,8 @@
-(defpackage #:finch/windowserver
+(defpackage #:darterfly/windowserver
   (:use #:cl)
-  (:local-nicknames (#:bsd #:finch/bsd) (#:mach #:finch/mach) (#:layer #:finch/layer) (#:io #:finch/io) (#:server #:finch/server)
-                    (#:init #:finch/init)))
-(in-package #:finch/windowserver)
+  (:local-nicknames (#:bsd #:darterfly/bsd) (#:mach #:darterfly/mach) (#:layer #:darterfly/layer) (#:io #:darterfly/io) (#:server #:darterfly/server)
+                    (#:init #:darterfly/init)))
+(in-package #:darterfly/windowserver)
 
 (defconstant +mach-notify-no-senders+ #o106)
 (defparameter +desktop+ #(0.18 0.36 0.56))
@@ -448,7 +448,7 @@
       (let ((port (init:bootstrap-check-in name)))
         (when port (mach:mach-port-move-member mach:*task* port set))))
     (mach:mach-port-move-member mach:*task* render-server set)
-    (finch/init:bootstrap-look-up "Session")
+    (darterfly/init:bootstrap-look-up "Session")
     (format t "WindowServer: ~dx~d, render server #x~x~%"
             (io:framebuffer-width *framebuffer*) (io:framebuffer-height *framebuffer*) render-server)
     (finish-output)

@@ -1,7 +1,7 @@
-(defpackage #:finch/qmp
+(defpackage #:darterfly/qmp
   (:use #:cl)
   (:export #:qmp #:dict))
-(in-package #:finch/qmp)
+(in-package #:darterfly/qmp)
 
 (defun dict (&rest kv)
   (let ((h (make-hash-table :test 'equal)))

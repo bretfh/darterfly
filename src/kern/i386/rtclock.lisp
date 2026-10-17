@@ -1,4 +1,4 @@
-(in-package #:finch/kern)
+(in-package #:darterfly/kern)
 
 (define-global commpage :u64 :count 3 :alignment 4096 :export t)
 

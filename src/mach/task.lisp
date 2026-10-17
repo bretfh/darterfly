@@ -1,4 +1,4 @@
-(in-package #:finch/mach)
+(in-package #:darterfly/mach)
 
 (defclass thread ()
   ((port :reader thread-port)))

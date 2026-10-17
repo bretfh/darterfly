@@ -1,4 +1,4 @@
-(in-package #:finch/apps)
+(in-package #:darterfly/apps)
 
 (defparameter +terminal-font+ "AdwaitaMono-Regular")
 (defparameter +terminal-size+ 13)

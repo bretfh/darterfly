@@ -1,4 +1,4 @@
-(in-package #:finch/kern)
+(in-package #:darterfly/kern)
 
 (defconstant +kernel-stack-bytes+ 65536)
 (defconstant +c-gdt+ 48)

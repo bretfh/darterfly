@@ -1,10 +1,10 @@
-(defpackage #:finch/net
+(defpackage #:darterfly/net
   (:use #:cl)
   (:export #:start-network #:*interface* #:ping #:udp-bind #:udp-close #:udp-send #:udp-receive #:udp-echo
            #:ip-address #:address-string #:dhcp #:resolve-name
            #:if-output #:net-error #:net-errno #:listener #:connection #:port
            #:tcp-listen #:tcp-unlisten #:tcp-peer #:tcp-reset-p #:tcp-accept #:tcp-connect #:tcp-send #:tcp-receive #:tcp-close #:tcp-echo))
-(in-package #:finch/net)
+(in-package #:darterfly/net)
 
 (defstruct interface device mac (ip 0) (prefix 0) (gateway 0) dns lease ip6 router6 dns6
   (arp (make-hash-table)) (nd6 (make-hash-table :test 'equalp)) (ports (make-hash-table)) (pings (make-hash-table :test 'equalp))
@@ -59,8 +59,8 @@
 
 (defgeneric if-output (device frame))
 
-(defmethod if-output ((device finch/devices:ethernet-controller) frame)
-  (finch/devices:network-send device frame))
+(defmethod if-output ((device darterfly/devices:ethernet-controller) frame)
+  (darterfly/devices:network-send device frame))
 
 (defun send-frame (dst type payload)
   (if-output (interface-device *interface*) (octets dst (interface-mac *interface*) (be type 2) payload)))
@@ -121,7 +121,7 @@
 
 (defun ping (address &key (id 1) (sequence 1) (timeout 2))
   (let* ((dst (if (stringp address) (ip-address address) address))
-         (body (octets (be id 2) (be sequence 2) (map '(vector (unsigned-byte 8)) #'char-code "finch")))
+         (body (octets (be id 2) (be sequence 2) (map '(vector (unsigned-byte 8)) #'char-code "darterfly")))
          (if *interface*)
          (key (list dst id sequence))
          (sent (get-internal-real-time)))
@@ -191,19 +191,19 @@
 
 (defun input-loop ()
   (let* ((device (interface-device *interface*))
-         (vector (finch/devices:interrupt-vector device)))
+         (vector (darterfly/devices:interrupt-vector device)))
     (loop
-      (let ((frames (finch/devices:network-receive device)))
+      (let ((frames (darterfly/devices:network-receive device)))
         (cond (frames (dolist (f frames) (ignore-errors (receive-frame f))))
-              (vector (finch/devices:wait-for-interrupt (list vector)))
+              (vector (darterfly/devices:wait-for-interrupt (list vector)))
               (t (sleep 0.002)))))))
 
 (defun start-network (&key ip (prefix 24) gateway)
   (when *interface* (return-from start-network *interface*))
-  (finch/devices:start-devices)
-  (let ((device (first (finch/devices:find-entries 'finch/devices:ethernet-controller))))
+  (darterfly/devices:start-devices)
+  (let ((device (first (darterfly/devices:find-entries 'darterfly/devices:ethernet-controller))))
     (unless device (net-fail :enetdown "no network device"))
-    (setf *interface* (make-interface :device device :mac (finch/devices:network-mac device)))
+    (setf *interface* (make-interface :device device :mac (darterfly/devices:network-mac device)))
     (setf (interface-thread *interface*) (sb-thread:make-thread #'input-loop :name "net input"))
     (start-ip6)
     (if ip

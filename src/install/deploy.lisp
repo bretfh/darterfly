@@ -1,6 +1,6 @@
-(in-package #:finch/install)
+(in-package #:darterfly/install)
 
-(defparameter *deploy-dir* "/Users/finch/deploy/")
+(defparameter *deploy-dir* "/Users/darterfly/deploy/")
 
 (defun read-header (stream)
   (let ((octets (loop for b = (read-byte stream nil)
@@ -18,23 +18,23 @@
     v))
 
 (defun same-octets-p (path octets)
-  (let ((attr (ignore-errors (finch/vfs:vfs-stat path))))
-    (and attr (= (finch/vfs:vattr-size attr) (length octets))
-         (let ((fd (finch/vfs:vfs-open path (list :access :rdonly) 0)))
-           (unwind-protect (equalp (finch/vfs:vfs-read fd (length octets)) octets)
-             (finch/vfs:vfs-close fd))))))
+  (let ((attr (ignore-errors (darterfly/vfs:vfs-stat path))))
+    (and attr (= (darterfly/vfs:vattr-size attr) (length octets))
+         (let ((fd (darterfly/vfs:vfs-open path (list :access :rdonly) 0)))
+           (unwind-protect (equalp (darterfly/vfs:vfs-read fd (length octets)) octets)
+             (darterfly/vfs:vfs-close fd))))))
 
 (defun put-octets (path octets mode)
   (unless (same-octets-p path octets)
     (ensure-directories-exist path)
-    (let ((fd (finch/vfs:vfs-open path (list :access :wronly :creat t :trunc t) mode)))
-      (unwind-protect (finch/vfs:vfs-write fd octets)
-        (finch/vfs:vfs-close fd)))
+    (let ((fd (darterfly/vfs:vfs-open path (list :access :wronly :creat t :trunc t) mode)))
+      (unwind-protect (darterfly/vfs:vfs-write fd octets)
+        (darterfly/vfs:vfs-close fd)))
     t))
 
 (defun deployed-boot-conf ()
-  (let ((flags (subseq (finch/devices:kernel-flags) 0 (search " -- " (finch/devices:kernel-flags)))))
-    (format nil "kernel-flags=~{~a~^ ~} -- --core /System/Library/Kernels/finch.core~%ramdisk=/System/Library/RAMDisk/root.cpio~%"
+  (let ((flags (subseq (darterfly/devices:kernel-flags) 0 (search " -- " (darterfly/devices:kernel-flags)))))
+    (format nil "kernel-flags=~{~a~^ ~} -- --core /System/Library/Kernels/darterfly.core~%ramdisk=/System/Library/RAMDisk/root.cpio~%"
             (substitute "init" "launchd" (uiop:split-string flags :separator " ") :test #'string=))))
 
 (defun receive-deployment (host port)
@@ -57,7 +57,7 @@
       (sb-bsd-sockets:socket-close socket))
     (flush-disks)
     (if generation
-        (let ((name (install (concatenate 'string *deploy-dir* "kernel") (concatenate 'string *deploy-dir* "finch.core")
+        (let ((name (install (concatenate 'string *deploy-dir* "kernel") (concatenate 'string *deploy-dir* "darterfly.core")
                              :loader (concatenate 'string *deploy-dir* "boot.efi"))))
           (with-open-file (s (esp-path "boot.conf") :direction :output :if-exists :supersede)
             (write-string (deployed-boot-conf) s))
@@ -71,8 +71,8 @@
     (handler-bind ((warning (lambda (w)
                               (unless (typep w 'style-warning) (push (princ-to-string w) problems))
                               (muffle-warning w))))
-      (asdf:load-system :finch))
+      (asdf:load-system :darterfly))
     (list :seconds (/ (round (- (get-internal-real-time) t0) 100000) 10.0) :warnings (reverse problems))))
 
-(defun flush-disks () (finch/power:flush-disks))
-(defun restart-soon (&optional (seconds 2)) (finch/power:restart-soon seconds))
+(defun flush-disks () (darterfly/power:flush-disks))
+(defun restart-soon (&optional (seconds 2)) (darterfly/power:restart-soon seconds))

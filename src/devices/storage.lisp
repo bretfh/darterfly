@@ -1,4 +1,4 @@
-(in-package #:finch/devices)
+(in-package #:darterfly/devices)
 
 (define-device-class block-device "BlockStorageDevice" (device))
 (define-device-class block-driver "BlockStorageDriver" (device))

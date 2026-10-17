@@ -1,4 +1,4 @@
-(in-package #:finch/devices)
+(in-package #:darterfly/devices)
 
 (defun efi-system-table ()
   (sb-sys:sap-ref-32 (sb-sys:int-sap (boot-args)) 1104))

@@ -1,4 +1,4 @@
-(in-package #:finch/kern)
+(in-package #:darterfly/kern)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
 (defun layout (items)
@@ -65,15 +65,15 @@
 
 (defun start-routines ()
   (list
-   (finch/asm:routine "_start"
-     (finch/asm:inst byte #xFA)
-     (finch/asm:inst lea finch/asm:rsp-tn (finch/asm:rip-relative-ea (sb-c:make-fixup "stack" :foreign-dataref 65536)))
-     (finch/asm:inst xor :dword (finch/asm:reg :dword 5) (finch/asm:reg :dword 5))
-     (finch/asm:inst call (finch/asm:external "i386_init"))
+   (darterfly/asm:routine "_start"
+     (darterfly/asm:inst byte #xFA)
+     (darterfly/asm:inst lea darterfly/asm:rsp-tn (darterfly/asm:rip-relative-ea (sb-c:make-fixup "stack" :foreign-dataref 65536)))
+     (darterfly/asm:inst xor :dword (darterfly/asm:reg :dword 5) (darterfly/asm:reg :dword 5))
+     (darterfly/asm:inst call (darterfly/asm:external "i386_init"))
      halt
-     (finch/asm:inst byte #xF4)
-     (finch/asm:inst jmp halt))
-   (finch/asm:routine "slave_boot_base"
-     (loop :for b :across (layout +trampoline+) :do (finch/asm:inst byte b)))
-   (finch/asm:routine "libsa_start_address"
-     (finch/asm:quad "_libsa_start"))))
+     (darterfly/asm:inst byte #xF4)
+     (darterfly/asm:inst jmp halt))
+   (darterfly/asm:routine "slave_boot_base"
+     (loop :for b :across (layout +trampoline+) :do (darterfly/asm:inst byte b)))
+   (darterfly/asm:routine "libsa_start_address"
+     (darterfly/asm:quad "_libsa_start"))))

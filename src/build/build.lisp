@@ -1,10 +1,10 @@
-(defpackage #:finch/build
+(defpackage #:darterfly/build
   (:use #:cl)
   (:export #:*sbcl-version* #:sbcl-config #:write-files #:runtime-tree #:libtcc-tree #:tree-files #:tree-differences
            #:digest #:digest-tree #:manifest #:write-manifest))
-(in-package #:finch/build)
+(in-package #:darterfly/build)
 
-(defparameter *sbcl-version* "2.6.4.finch")
+(defparameter *sbcl-version* "2.6.4.darterfly")
 
 (defparameter *sbcl-features* ";;;; This is a machine-generated file.
 ;;;; Please do not edit it by hand.
@@ -57,18 +57,18 @@ SBCL_CONTRIB_BLOCKLIST=\"\"; export SBCL_CONTRIB_BLOCKLIST
     ("x86-64-arch.c" "__asm__(\"xgetbv;\"" "__asm__(\".byte 0x0f, 0x01, 0xd0;\"")
     ("x86-64-assem.S" "#if defined(LISP_FEATURE_DARWIN) || defined(LISP_FEATURE_WIN32)
 #define LOAD_PIC_VAR"
-     "#if defined __finch__ || defined(LISP_FEATURE_DARWIN) || defined(LISP_FEATURE_WIN32)
+     "#if defined __darterfly__ || defined(LISP_FEATURE_DARWIN) || defined(LISP_FEATURE_WIN32)
 #define LOAD_PIC_VAR")
     ("x86-64-arch.c" "#if defined __linux__
-    /* KLUDGE" "#if defined __finch__
+    /* KLUDGE" "#if defined __darterfly__
 #   define CONTEXT_FLAGS(c) c->rflags
 #elif defined __linux__
     /* KLUDGE")
     ("x86-64-assem.S" "#if defined __linux__  || defined LISP_FEATURE_HAIKU"
-     "#if defined __finch__ || defined __linux__  || defined LISP_FEATURE_HAIKU")
+     "#if defined __darterfly__ || defined __linux__  || defined LISP_FEATURE_HAIKU")
     ("run-program.c" "    pid = fork();
     if (pid) {"
-     "#if defined __finch__
+     "#if defined __darterfly__
     extern int __libsa_spawn(char *, char **, int, int, int, int, char **, char *);
     (void)sset; (void)failure_code; (void)pty_name; (void)dont_close;
     return __libsa_spawn(program, argv, sin, sout, serr, search, envp, pwd);
@@ -80,7 +80,7 @@ SBCL_CONTRIB_BLOCKLIST=\"\"; export SBCL_CONTRIB_BLOCKLIST
     return addr;"
      "        ALIEN_LINKAGE_SPACE_START = (uword_t)addr - ALIEN_LINKAGE_SPACE_SIZE;
     }
-#if defined __finch__
+#if defined __darterfly__
     if (space_id == STATIC_CORE_SPACE_ID && lisp_code_in_elf()) {
         os_vm_address_t near = os_alloc_gc_space(ALIEN_LINKAGE_TABLE_CORE_SPACE_ID, NOT_MOVABLE,
                                                  (os_vm_address_t)(0x100000000000UL - ALIEN_LINKAGE_SPACE_SIZE),
@@ -94,7 +94,7 @@ SBCL_CONTRIB_BLOCKLIST=\"\"; export SBCL_CONTRIB_BLOCKLIST
   (ensure-directories-exist to)
   (uiop:copy-file from to))
 
-(defun runtime-tree (sbcl-root finch-sbcl out-root &key (genesis (concatenate 'string sbcl-root "src/runtime/genesis/")))
+(defun runtime-tree (sbcl-root darterfly-sbcl out-root &key (genesis (concatenate 'string sbcl-root "src/runtime/genesis/")))
   (let ((from (concatenate 'string sbcl-root "src/runtime/"))
         (to (concatenate 'string out-root "src/runtime/")))
     (uiop:delete-directory-tree (pathname out-root) :validate t :if-does-not-exist :ignore)
@@ -110,10 +110,10 @@ SBCL_CONTRIB_BLOCKLIST=\"\"; export SBCL_CONTRIB_BLOCKLIST
       (copy-into f (concatenate 'string out-root "tlsf-bsd/tlsf/" (file-namestring f))))
     (copy-into (concatenate 'string sbcl-root "tlsf-bsd/tlsf/tlsf.c") (merge-pathnames "tlsf.c" to))
     (copy-into (concatenate 'string sbcl-root "output/build-id.inc") (concatenate 'string out-root "output/build-id.inc"))
-    (dolist (f (uiop:directory-files finch-sbcl))
+    (dolist (f (uiop:directory-files darterfly-sbcl))
       (copy-into f (merge-pathnames (file-namestring f) to)))
-    (uiop:copy-file (merge-pathnames "finch-os.h" to) (merge-pathnames "target-os.h" to))
-    (uiop:copy-file (merge-pathnames "x86-64-finch-os.h" to) (merge-pathnames "target-arch-os.h" to))
+    (uiop:copy-file (merge-pathnames "darterfly-os.h" to) (merge-pathnames "target-os.h" to))
+    (uiop:copy-file (merge-pathnames "x86-64-darterfly-os.h" to) (merge-pathnames "target-arch-os.h" to))
     (loop :for (file old new) :in *runtime-patches*
           :for path := (merge-pathnames file to)
           :for text := (uiop:read-file-string path)

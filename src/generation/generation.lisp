@@ -1,15 +1,15 @@
-(defpackage #:finch/generation
+(defpackage #:darterfly/generation
   (:use #:cl)
   (:export #:resume #:contrib-steps #:core-steps #:generation-steps #:*state* #:start #:progress #:pending-build #:resume-build))
-(in-package #:finch/generation)
+(in-package #:darterfly/generation)
 
-(defvar *state* "/Users/finch/generation.state")
+(defvar *state* "/Users/darterfly/generation.state")
 
 (defvar *kernel* "/System/Library/Kernels/kernel")
 
-(defvar *run-core* "/System/Library/Kernels/finch.core")
+(defvar *run-core* "/System/Library/Kernels/darterfly.core")
 
-(defvar *contrib-script* "/usr/src/finch/src/generation/contrib.lisp")
+(defvar *contrib-script* "/usr/src/darterfly/src/generation/contrib.lisp")
 
 (defvar *runtime* nil)
 
@@ -27,7 +27,7 @@
 (defun note (&rest entry)
   (with-open-file (s *state* :direction :output :if-exists :append :if-does-not-exist :create)
     (with-standard-io-syntax (prin1 entry s) (terpri s)))
-  (finch/vfs:vfs-sync))
+  (darterfly/vfs:vfs-sync))
 
 (defun step-name (step) (first step))
 
@@ -38,7 +38,7 @@
   (let* ((state (state))
          (last (car (last state))))
     (when (eq (first last) :running)
-      (let* ((result (finch/run:collect))
+      (let* ((result (darterfly/run:collect))
              (step (find (second last) steps :key #'step-name :test #'string=))
              (missing (and step (missing step))))
         (if (and result (eql 0 (getf result :exit)) (null missing))
@@ -65,13 +65,13 @@
 
 (defun contrib-files (root)
   (append (list (pathname *contrib-script*))
-          (mapcan (lambda (dir) (when (probe-file dir) (finch/run:tree-files dir)))
+          (mapcan (lambda (dir) (when (probe-file dir) (darterfly/run:tree-files dir)))
                   (list (concatenate 'string root "contrib/")
                         (concatenate 'string root "obj/sbcl-home/")
                         (concatenate 'string root "obj/from-self/")))))
 
 (defun sbcl-run (root core cwd &rest args)
-  (finch/run:run-core core (list* *kernel* "--core" *run-core* "--noinform" "--disable-debugger" "--no-sysinit" "--no-userinit" args)
+  (darterfly/run:run-core core (list* *kernel* "--core" *run-core* "--noinform" "--disable-debugger" "--no-sysinit" "--no-userinit" args)
                       :kernel *runtime*
                       :cwd (concatenate 'string root cwd) :files (contrib-files root)))
 
@@ -99,7 +99,7 @@
   (let ((dir (format nil "~aobj/from-self/contrib/~a/" root name)))
     (list (format nil "~a-grovel" name) :lisp
           (lambda ()
-            (finch/cc:run-c (concatenate 'string dir "runme.c")
+            (darterfly/cc:run-c (concatenate 'string dir "runme.c")
                             :args (list (concatenate 'string dir "generated-constants.lisp")))
             (probe-file (concatenate 'string dir "generated-constants.lisp"))))))
 
@@ -124,40 +124,40 @@
         (contrib-step root core "sb-bsd-sockets")))
 
 (defun core-steps (root out &optional (core (concatenate 'string root "output/sbcl.core")))
-  (list (list "finch.core" :run
+  (list (list "darterfly.core" :run
               (lambda ()
-                (finch/run:run-core
+                (darterfly/run:run-core
                  core
                  (list *kernel* "--core" *run-core* "--noinform" "--disable-debugger" "--no-sysinit" "--no-userinit"
                        "--eval" (format nil "(setf sb-sys::*sbcl-homedir-pathname* #p~s)" (concatenate 'string root "obj/sbcl-home/"))
                        "--eval" "(require :asdf)"
-                       "--eval" "(asdf:initialize-source-registry '(:source-registry (:tree \"/usr/src/finch/\") (:tree \"/usr/share/common-lisp/sbcl/\") :ignore-inherited-configuration))"
+                       "--eval" "(asdf:initialize-source-registry '(:source-registry (:tree \"/usr/src/darterfly/\") (:tree \"/usr/share/common-lisp/sbcl/\") :ignore-inherited-configuration))"
                        "--eval" (format nil "(ensure-directories-exist ~s)" out)
-                       "--load" "/usr/src/finch/src/image/finch-core.lisp" out)
-                 :cwd "/Users/finch"
+                       "--load" "/usr/src/darterfly/src/image/darterfly-core.lisp" out)
+                 :cwd "/Users/darterfly"
                  :kernel *runtime*
-                 :files (append (finch/run:tree-files "/usr/src/finch/")
-                                (finch/run:tree-files "/usr/share/common-lisp/sbcl/")
-                                (finch/run:tree-files (concatenate 'string root "obj/sbcl-home/")))))
+                 :files (append (darterfly/run:tree-files "/usr/src/darterfly/")
+                                (darterfly/run:tree-files "/usr/share/common-lisp/sbcl/")
+                                (darterfly/run:tree-files (concatenate 'string root "obj/sbcl-home/")))))
               :outputs (list out))))
 
-(defvar *finch-core* "/System/Library/Kernels/finch.core")
+(defvar *darterfly-core* "/System/Library/Kernels/darterfly.core")
 
 (defun phase-step (name sbcl form &rest outputs)
   (list* name :run
         (lambda ()
-          (finch/run:run-core
-           *finch-core*
+          (darterfly/run:run-core
+           *darterfly-core*
            (list *kernel* "--core" *run-core* "--disable-debugger"
                  "--eval" (format nil "(progn (setf *default-pathname-defaults* #p~s) (load \"loader.lisp\"))" sbcl)
                  "--eval" form
-                 "--eval" "(funcall (intern \"VFS-SYNC\" (or (find-package \"HOST-FINCH/VFS\") (find-package \"FINCH/VFS\"))))"
+                 "--eval" "(funcall (intern \"VFS-SYNC\" (or (find-package \"HOST-DARTERFLY/VFS\") (find-package \"DARTERFLY/VFS\"))))"
                  "--quit")
            :cwd sbcl))
         (when outputs (list :outputs outputs))))
 
 (defun target-files (sbcl)
-  (finch/run:tree-files sbcl :keep (lambda (f) (let ((n (namestring f)))
+  (darterfly/run:tree-files sbcl :keep (lambda (f) (let ((n (namestring f)))
                                                  (not (or (search "/obj/from-host/" n) (search "/obj/from-xc/" n)
                                                           (search "/obj/sbcl-home/" n) (search ".core" n)))))))
 
@@ -168,14 +168,14 @@
          (at (search "${devel}" body)))
     (concatenate 'string (subseq body 0 at) (subseq body (+ at 8)))))
 
-(defun source-build-id (sbcl finch)
-  (let ((trees (list (finch/build:digest-tree (concatenate 'string sbcl "src/")
+(defun source-build-id (sbcl darterfly)
+  (let ((trees (list (darterfly/build:digest-tree (concatenate 'string sbcl "src/")
                                               :keep (lambda (f) (not (or (search "/runtime/genesis/" (namestring f))
                                                                          (member (pathname-type f) '("o" "d") :test #'equal)))))
-                     (finch/build:digest-tree (concatenate 'string finch "src/sbcl/"))
-                     (finch/build:digest-tree (concatenate 'string finch "src/libsa/"))
-                     (finch/build:digest (concatenate 'string finch "src/build/build.lisp")))))
-    (format nil "finch-~(~{~2,'0x~}~)" (coerce (subseq (sb-md5:md5sum-string (prin1-to-string trees)) 0 8) 'list))))
+                     (darterfly/build:digest-tree (concatenate 'string darterfly "src/sbcl/"))
+                     (darterfly/build:digest-tree (concatenate 'string darterfly "src/libsa/"))
+                     (darterfly/build:digest (concatenate 'string darterfly "src/build/build.lisp")))))
+    (format nil "darterfly-~(~{~2,'0x~}~)" (coerce (subseq (sb-md5:md5sum-string (prin1-to-string trees)) 0 8) 'list))))
 
 (defun runtime-build-id ()
   (let ((sap (sb-sys:int-sap (sb-sys:find-foreign-symbol-address "build_id"))))
@@ -187,26 +187,26 @@
     (write-sequence octets s))
   path)
 
-(defun generation-steps (&key (sbcl "/usr/src/sbcl/") (finch "/usr/src/finch/") (tinycc "/usr/src/tinycc/")
-                              (out "/Users/finch/generation/"))
+(defun generation-steps (&key (sbcl "/usr/src/sbcl/") (darterfly "/usr/src/darterfly/") (tinycc "/usr/src/tinycc/")
+                              (out "/Users/darterfly/generation/"))
   (flet ((in (root path) (concatenate 'string root path)))
     (let ((cold (in sbcl "output/cold-sbcl.core"))
-          (runtime (in finch "build/runtime/"))
+          (runtime (in darterfly "build/runtime/"))
           (objects (in out "objects/"))
           (kernel (in out "kernel")))
       (flet ((runtime-tree ()
-               (finch/build:runtime-tree sbcl (in finch "src/sbcl/") runtime)))
+               (darterfly/build:runtime-tree sbcl (in darterfly "src/sbcl/") runtime)))
         (append
          (list (list "config" :lisp
                      (lambda ()
-                       (let ((id (source-build-id sbcl finch)))
-                         (finch/build:write-files sbcl (finch/build:sbcl-config id))
+                       (let ((id (source-build-id sbcl darterfly)))
+                         (darterfly/build:write-files sbcl (darterfly/build:sbcl-config id))
                          id)))
                (phase-step "make-host-1" sbcl "(cl-user::load-sbcl-file \"make-host-1.lisp\" nil)")
                (list "grovel" :lisp
                      (lambda ()
                        (runtime-tree)
-                       (eql 0 (finch/cc:run-c "tools-for-build/grovel-headers.c" :directory sbcl
+                       (eql 0 (darterfly/cc:run-c "tools-for-build/grovel-headers.c" :directory sbcl
                                               :includes (list (in runtime "src/runtime/"))
                                               :output (in sbcl "output/stuff-groveled-from-headers.lisp")))))
                (phase-step "make-host-2" sbcl "(progn (push (lambda () (throw 'after-xc t)) sb-ext:*save-hooks*) (catch 'after-xc (cl-user::load-sbcl-file \"make-host-2.lisp\" nil)))")
@@ -216,19 +216,19 @@
                        (ensure-directories-exist out)
                        (runtime-tree)
                        (let ((tccdefs (in out "tccdefs_.h")))
-                         (finch/cc:run-c "conftest.c" :directory tinycc :defines '("C2STR")
+                         (darterfly/cc:run-c "conftest.c" :directory tinycc :defines '("C2STR")
                                          :args (list "include/tccdefs.h" tccdefs))
-                         (finch/build:libtcc-tree tinycc (in finch "build/tcc/finch-src/") tccdefs))
-                       (null (finch/cc:compile-units objects :directory finch))))
+                         (darterfly/build:libtcc-tree tinycc (in darterfly "build/tcc/darterfly-src/") tccdefs))
+                       (null (darterfly/cc:compile-units objects :directory darterfly))))
                (list "kernel" :lisp
-                     (lambda () (finch/install:build-kernel :objects objects :out kernel))
+                     (lambda () (darterfly/install:build-kernel :objects objects :out kernel))
                      :outputs (list kernel)))
          (on-runtime
           kernel
           (append
            (list (list "warm" :run
                        (lambda ()
-                         (finch/run:run-core cold (list *kernel* "--core" *run-core* "--lose-on-corruption" "--no-sysinit" "--no-userinit"
+                         (darterfly/run:run-core cold (list *kernel* "--core" *run-core* "--lose-on-corruption" "--no-sysinit" "--no-userinit"
                                                         "--eval" "(sb-fasl::!warm-load \"src/cold/warm.lisp\")" "--quit")
                                              :cwd (string-right-trim "/" sbcl) :files (target-files sbcl) :kernel *runtime*)))
                  (list "sbcl.core" :run
@@ -236,38 +236,38 @@
                          (let ((stdin (in sbcl "output/target-2-dump.lisp")))
                            (with-open-file (s stdin :direction :output :if-exists :supersede)
                              (write-string (dump-script sbcl) s))
-                           (finch/run:run-core cold (list *kernel* "--noinform" "--core" *run-core* "--lose-on-corruption"
+                           (darterfly/run:run-core cold (list *kernel* "--noinform" "--core" *run-core* "--lose-on-corruption"
                                                           "--no-sysinit" "--no-userinit" "--noprint")
                                                :cwd (string-right-trim "/" sbcl) :files (target-files sbcl) :stdin stdin
                                                :kernel *runtime*)))
                        :outputs (list (in sbcl "output/sbcl.core"))))
            (contrib-steps sbcl)
-           (core-steps sbcl (in out "finch.core"))))
+           (core-steps sbcl (in out "darterfly.core"))))
          (list (list "boot.efi" :lisp
-                     (lambda () (write-octets (in out "boot.efi") (finch/boot:boot-image))))
+                     (lambda () (write-octets (in out "boot.efi") (darterfly/boot:boot-image))))
                (list "manifest" :lisp
                      (lambda ()
-                       (finch/build:write-manifest
+                       (darterfly/build:write-manifest
                         (in out "manifest")
-                        (finch/build:manifest
+                        (darterfly/build:manifest
                          :build-id (string-trim '(#\" #\Newline) (uiop:read-file-string (in sbcl "output/build-id.inc")))
-                         :parent (ignore-errors (finch/install:current))
-                         :sources (list (list "finch" (in finch "src/")) (list "sbcl" (in sbcl "src/"))
+                         :parent (ignore-errors (darterfly/install:current))
+                         :sources (list (list "darterfly" (in darterfly "src/")) (list "sbcl" (in sbcl "src/"))
                                         (list "contrib" (in sbcl "contrib/")) (list "tinycc" tinycc)
                                         (list "libraries" "/usr/share/common-lisp/sbcl/"))
-                         :outputs (list (list "kernel" kernel) (list "finch.core" (in out "finch.core"))
+                         :outputs (list (list "kernel" kernel) (list "darterfly.core" (in out "darterfly.core"))
                                         (list "boot.efi" (in out "boot.efi")))))))
                (list "install" :lisp
                      (lambda ()
-                       (finch/install:install kernel (in out "finch.core")
+                       (darterfly/install:install kernel (in out "darterfly.core")
                                               :loader (in out "boot.efi") :manifest (in out "manifest"))))))))))
 
 (defun build-arguments ()
   (rest (find :build (state) :key #'first)))
 
 (defun next-out ()
-  (format nil "/Users/finch/generation-~d/"
-          (1+ (reduce #'max (finch/install:generations) :key (lambda (g) (parse-integer g :start 4)) :initial-value 0))))
+  (format nil "/Users/darterfly/generation-~d/"
+          (1+ (reduce #'max (darterfly/install:generations) :key (lambda (g) (parse-integer g :start 4)) :initial-value 0))))
 
 (defun resume-build ()
   (let ((args (build-arguments)))
@@ -291,7 +291,7 @@
 (defun progress ()
   (let* ((state (state))
          (args (build-arguments))
-         (names (mapcar #'step-name (generation-steps :out (or (getf args :out) "/Users/finch/generation/")))))
+         (names (mapcar #'step-name (generation-steps :out (or (getf args :out) "/Users/darterfly/generation/")))))
     (when state
       (list :out (getf args :out)
             :finished (and (find :finished state :key #'first) t)

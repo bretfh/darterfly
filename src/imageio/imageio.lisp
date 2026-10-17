@@ -1,7 +1,7 @@
-(defpackage #:finch/imageio
+(defpackage #:darterfly/imageio
   (:use #:cl)
   (:export #:read-icns #:icon #:scale-rgba))
-(in-package #:finch/imageio)
+(in-package #:darterfly/imageio)
 
 (defun be32 (octets at)
   (logior (ash (aref octets at) 24) (ash (aref octets (+ at 1)) 16)

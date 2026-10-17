@@ -1,4 +1,4 @@
-(in-package #:finch/net)
+(in-package #:darterfly/net)
 
 (defconstant +fin+ 1)
 (defconstant +syn+ 2)

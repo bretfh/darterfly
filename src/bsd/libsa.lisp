@@ -1,4 +1,4 @@
-(in-package #:finch/bsd)
+(in-package #:darterfly/bsd)
 
 (defparameter +libsa-ops+
   #(nil :open :close :read :write :pread :pwrite :lseek :stat :lstat :fstat :readlink :symlink :mkdir :rmdir
@@ -138,7 +138,7 @@
 (defun put-sockaddr (ip port address length-address)
   (unless (zerop address)
     (let ((sap (sb-sys:int-sap address))
-          (ip (if (stringp ip) (finch/net:ip-address ip) ip)))
+          (ip (if (stringp ip) (darterfly/net:ip-address ip) ip)))
       (dotimes (i 28) (setf (sb-sys:sap-ref-8 sap i) 0))
       (setf (sb-sys:sap-ref-8 sap 2) (ldb (byte 8 8) port)
             (sb-sys:sap-ref-8 sap 3) (ldb (byte 8 0) port))
@@ -161,20 +161,20 @@
 (defun socket-addresses (fd)
   (let* ((s (fd-socket fd))
          (pcb (socket-pcb s)))
-    (if (typep pcb 'finch/net:connection)
-        (multiple-value-list (finch/net:tcp-peer pcb))
+    (if (typep pcb 'darterfly/net:connection)
+        (multiple-value-list (darterfly/net:tcp-peer pcb))
         (socket-peer s))))
 
 (defun libsa-resolve (name addresses families encoded)
   (let* ((max (ldb (byte 8 0) encoded))
          (family (ldb (byte 8 8) encoded))
-         (ips (or (ignore-errors (list (finch/net:ip-address name)))
-                  (append (unless (= family 10) (ignore-errors (finch/net:resolve-name name :type :a)))
-                          (unless (= family 2) (ignore-errors (finch/net:resolve-name name :type :aaaa))))))
+         (ips (or (ignore-errors (list (darterfly/net:ip-address name)))
+                  (append (unless (= family 10) (ignore-errors (darterfly/net:resolve-name name :type :a)))
+                          (unless (= family 2) (ignore-errors (darterfly/net:resolve-name name :type :aaaa))))))
          (ips (subseq ips 0 (min max (length ips)))))
     (loop :for ip :in ips
           :for i :from 0
-          :for v := (if (stringp ip) (finch/net:ip-address ip) ip)
+          :for v := (if (stringp ip) (darterfly/net:ip-address ip) ip)
           :do (let ((sap (sb-sys:int-sap (+ addresses (* 16 i)))))
                 (if (integerp v)
                     (progn (dotimes (k 4) (setf (sb-sys:sap-ref-8 sap k) (ldb (byte 8 (* 8 (- 3 k))) v)))

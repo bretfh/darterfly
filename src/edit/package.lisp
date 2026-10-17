@@ -1,4 +1,4 @@
-(defpackage #:finch/edit
+(defpackage #:darterfly/edit
   (:use #:cl)
   (:export
    #:buffer #:make-buffer #:buffer-lines #:buffer-line #:buffer-line-count #:buffer-text

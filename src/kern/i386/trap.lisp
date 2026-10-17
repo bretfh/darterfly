@@ -1,4 +1,4 @@
-(in-package #:finch/kern)
+(in-package #:darterfly/kern)
 
 (defconstant +sigill+ 4)
 (defconstant +sigtrap+ 5)

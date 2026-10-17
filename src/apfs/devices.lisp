@@ -1,4 +1,4 @@
-(in-package #:finch/apfs)
+(in-package #:darterfly/apfs)
 
 (defparameter +apfs-partition+ "7C3457EF-0000-11AA-AA11-00306543ECAC")
 (defparameter +apfs-container+ "EF57347C-0000-11AA-AA11-00306543ECAC")

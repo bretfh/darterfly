@@ -1,7 +1,7 @@
-(defpackage #:finch/nrepl
+(defpackage #:darterfly/nrepl
   (:use #:cl)
   (:export #:start #:stop #:running-p #:*port*))
-(in-package #:finch/nrepl)
+(in-package #:darterfly/nrepl)
 
 (defclass tcp-stream (sb-gray:fundamental-binary-input-stream sb-gray:fundamental-binary-output-stream)
   ((connection :initarg :connection :reader connection)
@@ -13,7 +13,7 @@
 
 (defmethod sb-gray:stream-read-byte ((s tcp-stream))
   (loop while (or (null (in s)) (>= (at s) (length (in s))))
-        do (let ((data (finch/net:tcp-receive (connection s))))
+        do (let ((data (darterfly/net:tcp-receive (connection s))))
              (unless data (return-from sb-gray:stream-read-byte :eof))
              (setf (in s) data (at s) 0)))
   (prog1 (aref (in s) (at s)) (incf (at s))))
@@ -28,7 +28,7 @@
 
 (defmethod sb-gray:stream-finish-output ((s tcp-stream))
   (when (plusp (length (out s)))
-    (finch/net:tcp-send (connection s) (coerce (out s) '(simple-array (unsigned-byte 8) (*))))
+    (darterfly/net:tcp-send (connection s) (coerce (out s) '(simple-array (unsigned-byte 8) (*))))
     (setf (fill-pointer (out s)) 0))
   nil)
 
@@ -246,7 +246,7 @@
         ((equal op "describe")
          (emit "ops" (%msg "clone" (%msg) "eval" (%msg) "describe" (%msg)
                             "close" (%msg) "interrupt" (%msg))
-               "versions" (%msg "finch-nrepl" (%msg "major" 0 "minor" 1))
+               "versions" (%msg "darterfly-nrepl" (%msg "major" 0 "minor" 1))
                "status" (list "done")))
         ((equal op "interrupt")
          (let ((thread (%running-thread sess-id)))
@@ -276,10 +276,10 @@
                    (unless (%handle-message stream wlock (read-message stream))
                      (return))
                  (error () (return))))
-      (ignore-errors (finch/net:tcp-close connection)))))
+      (ignore-errors (darterfly/net:tcp-close connection)))))
 
 (defun %accept (listener)
-  (loop (let ((connection (finch/net:tcp-accept listener)))
+  (loop (let ((connection (darterfly/net:tcp-accept listener)))
           (when connection
             (sb-thread:make-thread (lambda () (%serve-one connection))
                                    :name "nrepl connection")))))
@@ -289,23 +289,23 @@
     (format nil "~{~(~8,'0x~)~}" (loop repeat 4 collect (random (ash 1 32) state)))))
 
 (defun start (&key (port *port*) key)
-  (unless finch/net:*interface*
-    (finch/net:start-network))
+  (unless darterfly/net:*interface*
+    (darterfly/net:start-network))
   (setf *key* (or key
-                  (let ((arg (finch/devices:boot-arg "nrepl-key"))) (and (stringp arg) arg))
+                  (let ((arg (darterfly/devices:boot-arg "nrepl-key"))) (and (stringp arg) arg))
                   *key*
                   (new-key)))
   (unless (running-p)
     (setf *port* port
-          *listener* (finch/net:tcp-listen port)
+          *listener* (darterfly/net:tcp-listen port)
           *thread* (sb-thread:make-thread (lambda () (%accept *listener*)) :name "nrepl listener")))
-  (let ((address (format nil "~a:~d" (finch/net:address-string (finch/net::interface-ip finch/net:*interface*)) *port*)))
+  (let ((address (format nil "~a:~d" (darterfly/net:address-string (darterfly/net::interface-ip darterfly/net:*interface*)) *port*)))
     (format t "~&nrepl: ~a key ~a~%" address *key*)
     address))
 
 (defun stop ()
   (when *listener*
-    (ignore-errors (finch/net:tcp-unlisten *listener*)))
+    (ignore-errors (darterfly/net:tcp-unlisten *listener*)))
   (when *thread*
     (ignore-errors (sb-thread:terminate-thread *thread*)))
   (setf *listener* nil *thread* nil)

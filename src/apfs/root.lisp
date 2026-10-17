@@ -1,4 +1,4 @@
-(in-package #:finch/apfs)
+(in-package #:darterfly/apfs)
 
 (defun mountroot ()
   (let ((rd (devices:boot-arg "rd")))

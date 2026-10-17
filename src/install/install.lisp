@@ -1,15 +1,15 @@
-(defpackage #:finch/install
+(defpackage #:darterfly/install
   (:use #:cl)
   (:export #:save-generation #:install-saved-generation #:receive-deployment #:reload-systems #:restart-soon #:flush-disks #:install #:generations #:current #:select #:confirm #:failed #:manifest #:save #:stop-threads #:kernel-image #:build-kernel #:install-disk #:internal-disk))
-(in-package #:finch/install)
+(in-package #:darterfly/install)
 
 (defvar *esp* "/Volumes/EFI/")
 
-(defun esp-path (name) (concatenate 'string *esp* "EFI/finch/" name))
+(defun esp-path (name) (concatenate 'string *esp* "EFI/darterfly/" name))
 
 (defun esp ()
-  (unless (probe-file (esp-path "current")) (finch/fat:mount-esp (string-right-trim "/" *esp*)))
-  (unless (probe-file (esp-path "current")) (error "no ESP with finch generations")))
+  (unless (probe-file (esp-path "current")) (darterfly/fat:mount-esp (string-right-trim "/" *esp*)))
+  (unless (probe-file (esp-path "current")) (error "no ESP with darterfly generations")))
 
 (defun generations ()
   (esp)
@@ -57,7 +57,7 @@
   name)
 
 (defun stop-threads (&optional keep)
-  (finch/vfs:vfs-sync)
+  (darterfly/vfs:vfs-sync)
   (flet ((others ()
            (remove-if (lambda (th) (or (eq th sb-thread:*current-thread*) (sb-thread::thread-ephemeral-p th)
                                        (member th keep) (not (sb-thread:thread-alive-p th))))
@@ -77,9 +77,9 @@
   (ensure-directories-exist *pending-generation*)
   (with-open-file (s *pending-generation* :direction :output :if-exists :supersede)
     (write-line "pending" s))
-  (finch/bsd:suspend-processes)
-  (finch/bsd:end-processes)
-  (finch/power:flush-disks)
+  (darterfly/bsd:suspend-processes)
+  (darterfly/bsd:end-processes)
+  (darterfly/power:flush-disks)
   (if (eq sb-thread:*current-thread* (sb-thread:main-thread))
       (save)
       (sb-thread:interrupt-thread (sb-thread:main-thread) #'save)))
@@ -87,15 +87,15 @@
 (defun install-saved-generation ()
   (when (probe-file *pending-generation*)
     (delete-file *pending-generation*)
-    (prog1 (install "/System/Library/Kernels/kernel" "/System/Library/Kernels/finch.core")
-      (finch/power:flush-disks))))
+    (prog1 (install "/System/Library/Kernels/kernel" "/System/Library/Kernels/darterfly.core")
+      (darterfly/power:flush-disks))))
 
 (defun install (kernel core &key loader manifest)
   (let* ((was (current))
          (name (format nil "gen-~d" (1+ (reduce #'max (generations) :key (lambda (g) (parse-integer g :start 4)) :initial-value 0)))))
     (ensure-directories-exist (esp-path (format nil "~a/" name)))
     (uiop:copy-file kernel (esp-path (format nil "~a/kernel" name)))
-    (uiop:copy-file core (esp-path (format nil "~a/finch.core" name)))
+    (uiop:copy-file core (esp-path (format nil "~a/darterfly.core" name)))
     (when manifest
       (uiop:copy-file manifest (esp-path (format nil "~a/manifest" name))))
     (when loader
@@ -110,12 +110,12 @@
     (format nil "~d-~2,'0d-~2,'0d ~2,'0d:~2,'0d:~2,'0d UTC" y mo d h m s)))
 
 (defun kernel-image (user-objects)
-  (setf finch/low:*build-date* (build-date))
-  (finch/link:link-kernel
-   (list (finch/link:read-object (finch/platform:platform-object) "platform.o" :kernel)
-         (finch/link:read-object (finch/kern:kern-object) "kern.o" :kernel))
+  (setf darterfly/low:*build-date* (build-date))
+  (darterfly/link:link-kernel
+   (list (darterfly/link:read-object (darterfly/platform:platform-object) "platform.o" :kernel)
+         (darterfly/link:read-object (darterfly/kern:kern-object) "kern.o" :kernel))
    (loop :for (name . octets) :in user-objects
-         :collect (finch/link:read-object octets name :user))))
+         :collect (darterfly/link:read-object octets name :user))))
 
 (defun read-octets (path)
   (with-open-file (s path :element-type '(unsigned-byte 8))
@@ -123,7 +123,7 @@
       (read-sequence v s)
       v)))
 
-(defun build-kernel (&key (objects "/usr/lib/finch/objects/") (out "/Users/finch/kernel"))
+(defun build-kernel (&key (objects "/usr/lib/darterfly/objects/") (out "/Users/darterfly/kernel"))
   (let ((names (remove "" (uiop:split-string (uiop:read-file-string (concatenate 'string objects "objects"))
                                              :separator '(#\Newline))
                        :test #'string=)))
@@ -133,4 +133,4 @@
                       s))
     out))
 
-(setf finch/power:*save-system* 'save-generation)
+(setf darterfly/power:*save-system* 'save-generation)

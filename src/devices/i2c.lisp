@@ -1,4 +1,4 @@
-(in-package #:finch/devices)
+(in-package #:darterfly/devices)
 
 (define-device-class intel-lpss-i2c-controller "IntelLpssI2CController" (device)
   ((base :accessor i2c-base)

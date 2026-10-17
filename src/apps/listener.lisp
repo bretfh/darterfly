@@ -1,4 +1,4 @@
-(in-package #:finch/apps)
+(in-package #:darterfly/apps)
 
 (defparameter +listener-font+ "AdwaitaMono-Regular")
 

@@ -1,7 +1,7 @@
-(defpackage #:finch/gpt
+(defpackage #:darterfly/gpt
   (:use #:cl)
   (:export #:write-disk #:write-table #:+esp-type+ #:+apfs-type+))
-(in-package #:finch/gpt)
+(in-package #:darterfly/gpt)
 
 (defparameter +esp-type+ "C12A7328-F81F-11D2-BA4B-00A0C93EC93B")
 (defparameter +apfs-type+ "7C3457EF-0000-11AA-AA11-00306543ECAC")

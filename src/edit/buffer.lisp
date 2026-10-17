@@ -1,4 +1,4 @@
-(in-package #:finch/edit)
+(in-package #:darterfly/edit)
 
 (defclass buffer ()
   ((lines :initarg :lines :accessor buffer-lines)

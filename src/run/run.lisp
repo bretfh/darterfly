@@ -1,7 +1,7 @@
-(defpackage #:finch/run
+(defpackage #:darterfly/run
   (:use #:cl)
   (:export #:run-core #:collect #:tree-files #:in-run-p))
-(in-package #:finch/run)
+(in-package #:darterfly/run)
 
 (defconstant +magic+ #x4e555248434e4946)
 (defconstant +base+ #x0000340000000000)
@@ -88,8 +88,8 @@
                             :do (incf at (length p)))))
            (back-at (page-up (+ (car (last offsets)) (length (car (last parts))))))
            (size (+ back-at (aref back 1))))
-      (finch/vfs:vfs-sync)
-      (let ((left (finch/install:stop-threads (list (sb-thread:main-thread)))))
+      (darterfly/vfs:vfs-sync)
+      (let ((left (darterfly/install:stop-threads (list (sb-thread:main-thread)))))
         (when left (error "threads still running: ~a" left)))
       (sb-impl::finalizer-thread-stop)
       (let ((region (libsa "mmap" sb-alien:unsigned (sb-alien:unsigned +base+) (sb-alien:unsigned size)

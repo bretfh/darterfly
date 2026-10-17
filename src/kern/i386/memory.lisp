@@ -1,4 +1,4 @@
-(in-package #:finch/kern)
+(in-package #:darterfly/kern)
 
 (defconstant +kalloc-base+ #xFFFFFF0000000000)
 (defconstant +kalloc-size+ (ash 64 30))
@@ -117,4 +117,4 @@
   (memset d 0 n))
 
 (defun kern-object ()
-  (package-object "FINCH/KERN" :extra '("va_next") :routines (append (start-routines) (stub-routines))))
+  (package-object "DARTERFLY/KERN" :extra '("va_next") :routines (append (start-routines) (stub-routines))))

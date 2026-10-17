@@ -1,8 +1,8 @@
-(defpackage #:finch/init
+(defpackage #:darterfly/init
   (:use #:cl)
-  (:local-nicknames (#:bsd #:finch/bsd) (#:mach #:finch/mach))
+  (:local-nicknames (#:bsd #:darterfly/bsd) (#:mach #:darterfly/mach))
   (:export #:bootstrap-check-in #:bootstrap-look-up #:bootstrap-port #:init-call #:launch))
-(in-package #:finch/init)
+(in-package #:darterfly/init)
 
 (defconstant +mach-notify-port-destroyed+ #o105)
 

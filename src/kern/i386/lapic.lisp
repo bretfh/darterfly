@@ -1,4 +1,4 @@
-(in-package #:finch/kern)
+(in-package #:darterfly/kern)
 
 (defconstant +lapic-start+ #xFEE00000)
 (defconstant +ioapic-start+ #xFEC00000)

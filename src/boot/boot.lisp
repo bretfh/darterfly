@@ -1,7 +1,7 @@
-(defpackage #:finch/boot
-  (:use #:cl #:finch/low)
+(defpackage #:darterfly/boot
+  (:use #:cl #:darterfly/low)
   (:export #:boot-image))
-(in-package #:finch/boot)
+(in-package #:darterfly/boot)
 
 (defconstant +com1+ #x3F8)
 (defconstant +kernel-base+ #xFFFFFFFF80000000)
@@ -217,9 +217,9 @@
     (= (mem :u8 (+ a i)) (mem :u8 (+ b i)))))
 
 (define-low choose-generation (root)
-  (let ((current (read-name root "/EFI/finch/current" (address current-name)))
-        (good (read-name root "/EFI/finch/good" (address good-name)))
-        (tried (read-name root "/EFI/finch/tried" (address tried-name))))
+  (let ((current (read-name root "/EFI/darterfly/current" (address current-name)))
+        (good (read-name root "/EFI/darterfly/good" (address good-name)))
+        (tried (read-name root "/EFI/darterfly/tried" (address tried-name))))
     (unless current (result 0))
     (when (and good (the :u32 (same-name (address current-name) (address good-name)))) (result 0))
     (when (and good tried (the :u32 (same-name (address current-name) (address tried-name))))
@@ -229,11 +229,11 @@
       (puts-serial (address good-name))
       (puts-serial "
 ")
-      (write-path root "/EFI/finch/failed" (address current-name))
-      (write-path root "/EFI/finch/current" (address good-name))
-      (delete-path root "/EFI/finch/tried")
+      (write-path root "/EFI/darterfly/failed" (address current-name))
+      (write-path root "/EFI/darterfly/current" (address good-name))
+      (delete-path root "/EFI/darterfly/tried")
       (result 0))
-    (write-path root "/EFI/finch/tried" (address current-name))))
+    (write-path root "/EFI/darterfly/tried" (address current-name))))
 
 (define-low loaded (name n)
   (puts-serial "boot.efi: ")
@@ -262,7 +262,7 @@
 
 (define-low kernel-flags (root args)
   (let ((size 0) (conf 0))
-    (setf conf (read-file root (wide "\\EFI\\finch\\boot.conf") (address size)))
+    (setf conf (read-file root (wide "\\EFI\\darterfly\\boot.conf") (address size)))
     (conf-value conf "kernel-flags=" (+ args +command-line+) +line-length+)
     (boot-file root conf "ramdisk=" (+ args +ramdisk-start+) (+ args +ramdisk-size+))
     (boot-file root conf "root-image=" (+ args +root-image-start+) (+ args +root-image-size+))
@@ -381,7 +381,7 @@
     0))
 
 (define-low generation-path (name tail)
-  (let ((at (append-string (address path) 0 "/EFI/finch/")))
+  (let ((at (append-string (address path) 0 "/EFI/darterfly/")))
     (setf at (append-string (address path) at name))
     (append-string (address path) at tail)
     (address path)))
@@ -396,7 +396,7 @@
     (puts-serial name)
     (setf kernel (read-path root (generation-path name "/kernel") (address ksize)))
     (when (elf-p kernel ksize)
-      (setf core (read-path root (generation-path name "/finch.core") (address csize))))
+      (setf core (read-path root (generation-path name "/darterfly.core") (address csize))))
     (unless core
       (puts-serial " will not boot
 ")
@@ -415,7 +415,7 @@
     (setf bs (mem :u64 (+ st +st-boot-services+)))
     (efi-call (service +bs-set-watchdog-timer+) 0 0 0 0)
     (puts-serial "
-finch boot.efi
+darterfly boot.efi
 ")
     (setf args (allocate-low +boot-args-size+))
     (setf (mem :u16 args) 1)
@@ -425,8 +425,8 @@ finch boot.efi
     (setf root (volume image))
     (setf conf (kernel-flags root args))
     (choose-generation root)
-    (setf entry (try-generation root "/EFI/finch/current" args))
-    (unless entry (setf entry (try-generation root "/EFI/finch/previous" args)))
+    (setf entry (try-generation root "/EFI/darterfly/current" args))
+    (unless entry (setf entry (try-generation root "/EFI/darterfly/previous" args)))
     (unless entry
       (let ((ksize 0) (kernel 0))
         (setf kernel (read-path root "/System/Library/Kernels/kernel" (address ksize)))
@@ -480,4 +480,4 @@ boot.efi: boot-args \"")
   (call-pointer entry args))
 
 (defun boot-image ()
-  (package-image "FINCH/BOOT" "efi_main"))
+  (package-image "DARTERFLY/BOOT" "efi_main"))

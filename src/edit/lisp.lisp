@@ -1,4 +1,4 @@
-(in-package #:finch/edit)
+(in-package #:darterfly/edit)
 
 (defun terminating-p (ch)
   (or (member ch '(#\Space #\Tab #\( #\) #\" #\' #\` #\, #\;))

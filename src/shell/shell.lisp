@@ -1,8 +1,8 @@
-(defpackage #:finch/shell
+(defpackage #:darterfly/shell
   (:use #:cl)
-  (:local-nicknames (#:bsd #:finch/bsd))
+  (:local-nicknames (#:bsd #:darterfly/bsd))
   (:export #:run #:spawn #:ps #:ls #:cat #:halt #:pwd #:cd #:kill))
-(in-package #:finch/shell)
+(in-package #:darterfly/shell)
 
 (defun run (program &rest arguments)
   (finish-output *standard-output*)
@@ -19,13 +19,13 @@
   (bsd:kill pid signal))
 
 (defun ps ()
-  (let ((procs (loop :for proc :being :the :hash-values :of finch/bsd::*procs*
+  (let ((procs (loop :for proc :being :the :hash-values :of darterfly/bsd::*procs*
                      :collect proc)))
     (format t "  PID  PPID STAT COMMAND~%")
-    (dolist (proc (sort procs #'< :key #'finch/bsd::proc-pid))
-      (format t "~5d ~5d ~4a ~a~%" (finch/bsd::proc-pid proc)
-              (let ((parent (finch/bsd::proc-parent proc))) (if parent (finch/bsd::proc-pid parent) 0))
-              (case (finch/bsd::proc-state proc) (:run "R") (:stop "T") (:zombie "Z"))
+    (dolist (proc (sort procs #'< :key #'darterfly/bsd::proc-pid))
+      (format t "~5d ~5d ~4a ~a~%" (darterfly/bsd::proc-pid proc)
+              (let ((parent (darterfly/bsd::proc-parent proc))) (if parent (darterfly/bsd::proc-pid parent) 0))
+              (case (darterfly/bsd::proc-state proc) (:run "R") (:stop "T") (:zombie "Z"))
               (bsd:proc-comm proc)))
     (values)))
 
@@ -50,11 +50,11 @@
   (finish-output)
   (bsd:reboot 0))
 
-(defpackage #:finch/shell-user
-  (:use #:cl #:finch/shell))
+(defpackage #:darterfly/shell-user
+  (:use #:cl #:darterfly/shell))
 
 (bsd:define-program "sh" (argv envp)
-  (let ((*package* (find-package :finch/shell-user))
+  (let ((*package* (find-package :darterfly/shell-user))
         (command (second (member "-c" argv :test #'string=))))
     (when command
       (bsd:exit (handler-case (progn (eval (read-from-string command)) 0)

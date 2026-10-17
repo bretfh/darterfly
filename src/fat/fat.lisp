@@ -1,10 +1,10 @@
-(defpackage #:finch/fat
+(defpackage #:darterfly/fat
   (:use #:cl)
-  (:local-nicknames (#:vfs #:finch/vfs) (#:devices #:finch/devices))
+  (:local-nicknames (#:vfs #:darterfly/vfs) (#:devices #:darterfly/devices))
   (:export #:newfs #:file-store #:open-volume #:mount #:mount-esp #:volume-label
            #:lookup #:entries #:read-file #:write-file #:make-entry #:remove-entry #:resolve
            #:entry-name #:entry-directory-p #:entry-size))
-(in-package #:finch/fat)
+(in-package #:darterfly/fat)
 
 (defconstant +sector+ 512)
 (defconstant +eoc+ #x0FFFFFFF)
@@ -368,7 +368,8 @@
          (boot (octets +sector+))
          (info (octets +sector+)))
     (replace boot #(#xEB #x58 #x90))
-    (replace boot (map 'vector #'char-code "FINCH   ") :start1 3)
+    ;; The FAT OEM identifier is exactly eight bytes.
+    (replace boot (map 'vector #'char-code "DRTRFLY ") :start1 3)
     (setf (u boot 11 2) +sector+ (aref boot 13) cluster-sectors (u boot 14 2) reserved (aref boot 16) 2
           (aref boot 21) #xF8 (u boot 24 2) 32 (u boot 26 2) 64 (u boot 32 4) sectors (u boot 36 4) fat-sectors
           (u boot 44 4) 2 (u boot 48 2) 1 (u boot 50 2) 6 (aref boot 64) #x80 (aref boot 66) #x29

@@ -1,4 +1,4 @@
-(in-package #:finch/test)
+(in-package #:darterfly/test)
 
 (def-suite server :in all)
 (in-suite server)

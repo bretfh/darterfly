@@ -1,4 +1,4 @@
-(in-package #:finch/kern)
+(in-package #:darterfly/kern)
 
 (defconstant +ebadf+ 9)
 (defconstant +enomem+ 12)

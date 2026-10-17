@@ -1,4 +1,4 @@
-(in-package #:finch/net)
+(in-package #:darterfly/net)
 
 (defun ip6-p (address) (and (vectorp address) (= (length address) 16)))
 

@@ -1,4 +1,4 @@
-(in-package #:finch/kern)
+(in-package #:darterfly/kern)
 
 (defconstant +max-cpus+ 32)
 (defconstant +c-tlb-invalid+ 40)

@@ -1,7 +1,7 @@
-(defpackage #:finch/kernel
+(defpackage #:darterfly/kernel
   (:use #:cl)
   (:export #:launch #:halt))
-(in-package #:finch/kernel)
+(in-package #:darterfly/kernel)
 
 (defconstant +rb-power-off+ #x4321fedc)
 
@@ -14,14 +14,14 @@
 
 (defun halt ()
   (drain)
-  (finch/vfs:vfs-sync)
+  (darterfly/vfs:vfs-sync)
   (reboot +rb-power-off+))
 
 (defun launch ()
-  (setf finch/bsd:*reboot* (lambda (how) (declare (ignore how)) (halt)))
+  (setf darterfly/bsd:*reboot* (lambda (how) (declare (ignore how)) (halt)))
   (dotimes (i 3)
-    (finch/bsd:open "/dev/console" finch/bsd:+o-rdwr+))
-  (let ((init (finch/bsd:fork (lambda () (finch/bsd:execve "/sbin/init" (list "/sbin/init") nil)))))
+    (darterfly/bsd:open "/dev/console" darterfly/bsd:+o-rdwr+))
+  (let ((init (darterfly/bsd:fork (lambda () (darterfly/bsd:execve "/sbin/init" (list "/sbin/init") nil)))))
     (format t "~&load_init_program: /sbin/init pid ~d~%" init)
     (finish-output)
     init))

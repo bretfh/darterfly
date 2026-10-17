@@ -1,7 +1,7 @@
-(in-package #:finch/apps)
+(in-package #:darterfly/apps)
 
 (defun disk-description (disk)
-  (format nil "~,1f GB NVMe disk" (/ (finch/devices:get-property disk "Size") 1d9)))
+  (format nil "~,1f GB NVMe disk" (/ (darterfly/devices:get-property disk "Size") 1d9)))
 
 (defun install-page (content lines buttons)
   (kit:remove-subviews content)
@@ -19,7 +19,7 @@
                       (list "Install..." (lambda () (install-confirm content))))))
 
 (defun install-confirm (content)
-  (let ((disk (finch/install:internal-disk)))
+  (let ((disk (darterfly/install:internal-disk)))
     (if (null disk)
         (install-page content '("No internal disk was found.") (list (list "Back" (lambda () (install-welcome content)))))
         (install-page content
@@ -35,7 +35,7 @@
               (kit:perform-on-main (lambda () (install-page content lines buttons)))))
        (handler-case
            (progn
-             (finch/install:install-disk :progress (lambda (step) (show (list "Installing..." step))))
+             (darterfly/install:install-disk :progress (lambda (step) (show (list "Installing..." step))))
              (show '("Installed." "Remove the USB stick and restart.") (list (list "Done" #'kit:terminate))))
          (error (e)
            (show (list "The install failed:" (princ-to-string e)) (list (list "Back" (lambda () (install-welcome content)))))))))

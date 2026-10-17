@@ -1,4 +1,4 @@
-(in-package #:finch/image)
+(in-package #:darterfly/image)
 
 (defun tcc-source () (format nil "~a/share/tinycc-source/" (uiop:getenv "GUIX_ENVIRONMENT")))
 
@@ -67,7 +67,7 @@
       (:clang (append (list "clang") clang-flags (mapcar (lambda (d) (format nil "-D~a" d)) defines)
                       (loop :for i :in includes :append (list "-I" i)) (list "-c" source "-o" object)))
       (:tcc (append (list (tcc))
-                    (finch/cc:arguments source :includes includes :defines defines :compat compat
+                    (darterfly/cc:arguments source :includes includes :defines defines :compat compat
                                                :tcc-dir (uiop:native-namestring (tcc-stage 2)) :libsa-dir (source "src/libsa/"))
                     (list "-c" source "-o" object))))))
 
@@ -76,8 +76,8 @@
 
 
 (defun libtcc-tree ()
-  (let ((tree (build-path "tcc/finch-src/")))
+  (let ((tree (build-path "tcc/darterfly-src/")))
     (unless (probe-file (merge-pathnames "config.h" tree))
       (tcc)
-      (finch/build:libtcc-tree (tcc-source) (namestring tree) (merge-pathnames "tccdefs_.h" (tcc-stage 2))))
+      (darterfly/build:libtcc-tree (tcc-source) (namestring tree) (merge-pathnames "tccdefs_.h" (tcc-stage 2))))
     tree))

@@ -1,14 +1,14 @@
-(defpackage #:finch/kit
+(defpackage #:darterfly/kit
   (:use #:cl)
-  (:local-nicknames (#:layer #:finch/layer) (#:text #:finch/text) (#:mach #:finch/mach) (#:server #:finch/server) (#:bsd #:finch/bsd)
-                   (#:imageio #:finch/imageio))
+  (:local-nicknames (#:layer #:darterfly/layer) (#:text #:darterfly/text) (#:mach #:darterfly/mach) (#:server #:darterfly/server) (#:bsd #:darterfly/bsd)
+                   (#:imageio #:darterfly/imageio))
   (:export #:resumed #:resume #:responder #:view #:text-field #:button #:window #:make-window
            #:view-frame #:subviews #:add-subview #:needs-display #:draw #:mouse-down #:key-down
            #:content-view #:window-title #:first-responder #:show #:close-window #:run
            #:string-value #:font-size #:text-color #:title #:action #:background
            #:view-width #:view-height #:windows #:perform-on-main #:menu-bar #:*menus* #:*click-count* #:icon-view #:icon-path #:label #:remove-subviews
            #:window-level #:style #:set-window-title #:standard-menus #:terminate))
-(in-package #:finch/kit)
+(in-package #:darterfly/kit)
 
 (defclass responder () ())
 
@@ -228,9 +228,9 @@
 
 (defun standard-menus (name &rest menus)
   (list* (list name (cons (format nil "About ~a" name) nil) :separator
-               (cons "Save System" (lambda (sender) (declare (ignore sender)) (finch/power:save-system)))
-               (cons "Restart" (lambda (sender) (declare (ignore sender)) (finch/power:restart)))
-               (cons "Shut Down" (lambda (sender) (declare (ignore sender)) (finch/power:shut-down)))
+               (cons "Save System" (lambda (sender) (declare (ignore sender)) (darterfly/power:save-system)))
+               (cons "Restart" (lambda (sender) (declare (ignore sender)) (darterfly/power:restart)))
+               (cons "Shut Down" (lambda (sender) (declare (ignore sender)) (darterfly/power:shut-down)))
                :separator
                (cons (format nil "Quit ~a" name) #'terminate))
          (or menus

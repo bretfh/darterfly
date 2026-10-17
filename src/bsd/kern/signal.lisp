@@ -1,4 +1,4 @@
-(in-package #:finch/kern)
+(in-package #:darterfly/kern)
 
 (defconstant +nsig+ 65)
 (defconstant +sigint+ 2)

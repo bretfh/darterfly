@@ -1,7 +1,7 @@
-(defpackage #:finch/platform
-  (:use #:cl #:finch/low)
+(defpackage #:darterfly/platform
+  (:use #:cl #:darterfly/low)
   (:export #:platform-object))
-(in-package #:finch/platform)
+(in-package #:darterfly/platform)
 
 (defconstant +com1+ #x3F8)
 (defconstant +lsr+ (+ +com1+ 5))

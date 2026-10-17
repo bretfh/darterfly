@@ -1,4 +1,4 @@
-(in-package #:finch/vfs)
+(in-package #:darterfly/vfs)
 
 (defvar *next-ino* 2)
 

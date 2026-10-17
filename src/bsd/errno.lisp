@@ -1,4 +1,4 @@
-(defpackage #:finch/bsd
+(defpackage #:darterfly/bsd
   (:use #:cl)
   (:export
    #:errno #:errno-name #:errno-code
@@ -13,8 +13,8 @@
    #:socket #:bind #:listen #:accept #:connect #:send #:recv #:sendto #:recvfrom #:+af-inet+ #:+af-inet6+ #:+sock-stream+ #:+sock-dgram+
    #:wifexited #:wexitstatus #:wifsignaled #:wtermsig #:wifstopped #:wstopsig #:wifcontinued)
   (:shadow #:read #:write #:close #:open #:listen)
-  (:local-nicknames (#:vfs #:finch/vfs)))
-(in-package #:finch/bsd)
+  (:local-nicknames (#:vfs #:darterfly/vfs)))
+(in-package #:darterfly/bsd)
 
 (defparameter +errno+
   '((:eperm . 1) (:enoent . 2) (:esrch . 3) (:eintr . 4) (:eio . 5) (:enxio . 6) (:e2big . 7)

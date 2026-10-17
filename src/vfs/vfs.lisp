@@ -1,4 +1,4 @@
-(defpackage #:finch/vfs
+(defpackage #:darterfly/vfs
   (:use #:cl)
   (:export
    #:vfs-error #:vfs-errno #:fail
@@ -10,7 +10,7 @@
    #:vfs-unlink #:vfs-rename #:vfs-chdir #:vfs-getcwd #:*root*
    #:vfs-symlink #:vfs-remove #:vfs-lseek #:vfs-fstat #:vfs-realpath #:make-ram-node
    #:make-devfs #:make-kernel-dir #:vfs-mkdirs #:vfs-start #:make-procfs #:make-host-root #:fd-vnode #:*umask* #:errno-code #:*syncers* #:vfs-sync))
-(in-package #:finch/vfs)
+(in-package #:darterfly/vfs)
 
 (define-condition vfs-error (error)
   ((errno :initarg :errno :reader vfs-errno))

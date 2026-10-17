@@ -1,9 +1,9 @@
-(defpackage #:finch/test
+(defpackage #:darterfly/test
   (:use #:cl #:fiveam)
-  (:local-nicknames (#:mach #:finch/mach)
-                   (#:server #:finch/server) (#:layer #:finch/layer) (#:image #:finch/image) (#:bsd #:finch/bsd) (#:init #:finch/init) (#:apfs #:finch/apfs))
+  (:local-nicknames (#:mach #:darterfly/mach)
+                   (#:server #:darterfly/server) (#:layer #:darterfly/layer) (#:image #:darterfly/image) (#:bsd #:darterfly/bsd) (#:init #:darterfly/init) (#:apfs #:darterfly/apfs))
   (:export #:run-them #:all))
-(in-package #:finch/test)
+(in-package #:darterfly/test)
 
 (def-suite all)
 
@@ -14,16 +14,16 @@
     (unless (results-status results)
       (uiop:quit 1))))
 
-(defvar *finch-root* nil)
+(defvar *darterfly-root* nil)
 
-(defun finch-file (name)
-  (if *finch-root*
-      (merge-pathnames name *finch-root*)
-      (asdf:system-relative-pathname :finch name)))
+(defun darterfly-file (name)
+  (if *darterfly-root*
+      (merge-pathnames name *darterfly-root*)
+      (asdf:system-relative-pathname :darterfly name)))
 
 (defun scratch ()
   (let ((dir (uiop:ensure-directory-pathname
-              (format nil "~a/finch-test-~d" (string-right-trim "/" (uiop:native-namestring (uiop:temporary-directory)))
+              (format nil "~a/darterfly-test-~d" (string-right-trim "/" (uiop:native-namestring (uiop:temporary-directory)))
                       (sb-posix:getpid)))))
     (ensure-directories-exist dir)
     dir))

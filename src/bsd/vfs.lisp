@@ -1,4 +1,4 @@
-(in-package #:finch/bsd)
+(in-package #:darterfly/bsd)
 
 (defconstant +o-rdonly+ 0)
 (defconstant +o-wronly+ 1)

@@ -1,6 +1,6 @@
-(defpackage #:finch/apfs
+(defpackage #:darterfly/apfs
   (:use #:cl)
-  (:local-nicknames (#:vfs #:finch/vfs))
+  (:local-nicknames (#:vfs #:darterfly/vfs))
   (:export
    #:apfs-error #:open-container #:file-device
    #:container #:container-block-size #:container-uuid #:container-xid #:container-volumes
@@ -10,7 +10,7 @@
    #:inode-size #:inode-name #:inode-mod-time #:inode-private-id
    #:entry-name #:entry-file-id #:entry-type #:volume-index #:volume-formatted-by #:volume-incompatible-features
    #:container-size #:mount-volume #:mount-volumes #:newfs #:file-store #:open-writable #:commit #:mount-writable #:*clock* #:mountroot #:with-batch))
-(in-package #:finch/apfs)
+(in-package #:darterfly/apfs)
 
 (define-condition apfs-error (error)
   ((text :initarg :text :reader apfs-error-text))

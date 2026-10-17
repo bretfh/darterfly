@@ -1,4 +1,4 @@
-(in-package #:finch/devices)
+(in-package #:darterfly/devices)
 
 (defconstant +ecm-receive-pages+ 16)
 (defconstant +ecm-send-pages+ 16)

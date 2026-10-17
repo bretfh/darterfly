@@ -1,4 +1,4 @@
-(in-package #:finch/bsd)
+(in-package #:darterfly/bsd)
 
 (defclass fd-stream (sb-gray:fundamental-character-input-stream sb-gray:fundamental-character-output-stream)
   ((fd :initarg :fd :reader stream-fd)

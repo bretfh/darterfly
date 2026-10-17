@@ -1,4 +1,4 @@
-(in-package #:finch/platform)
+(in-package #:darterfly/platform)
 
 (defconstant +ec-data+ #x62)
 (defconstant +ec-command+ #x66)

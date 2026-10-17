@@ -1,10 +1,10 @@
-(defpackage #:finch/layer
+(defpackage #:darterfly/layer
   (:use #:cl)
   (:export #:layer #:make-layer #:layer-id #:layer-position #:layer-bounds #:layer-frame
            #:layer-background-color #:layer-opacity #:layer-masks-to-bounds #:layer-sublayers
            #:context #:context-create #:context-id #:context-layer #:commit
            #:layer-contents #:image #:next-event #:context-events #:window-create #:transaction-commit #:main-display-bounds))
-(in-package #:finch/layer)
+(in-package #:darterfly/layer)
 
 (defvar *next-layer-id* 0)
 
@@ -50,38 +50,38 @@
    (layer :initform nil :accessor context-layer)))
 
 (defun render-server (&key (tries 100))
-  (finch/init:bootstrap-look-up "windowserver")
+  (darterfly/init:bootstrap-look-up "windowserver")
   (loop :repeat tries
-        :do (let ((port (finch/init:bootstrap-look-up "renderserver")))
+        :do (let ((port (darterfly/init:bootstrap-look-up "renderserver")))
               (when port (return port))
               (sleep 0.05))
         :finally (error "renderserver is not there")))
 
 (defun context-create ()
   (let ((server (render-server))
-        (reply (finch/mach:mach-reply-port))
-        (events (finch/mach:mach-port-allocate finch/mach:*task* :receive)))
-    (finch/mach:mach-port-set-attributes finch/mach:*task* events :limits-info 1024)
-    (finch/mach:mach-msg-send (finch/mach:make-message :remote-port server :local-port reply
-                                                       :body (list :register-client :pid (finch/bsd:getpid))
+        (reply (darterfly/mach:mach-reply-port))
+        (events (darterfly/mach:mach-port-allocate darterfly/mach:*task* :receive)))
+    (darterfly/mach:mach-port-set-attributes darterfly/mach:*task* events :limits-info 1024)
+    (darterfly/mach:mach-msg-send (darterfly/mach:make-message :remote-port server :local-port reply
+                                                       :body (list :register-client :pid (darterfly/bsd:getpid))
                                                        :descriptors (list (cons events :make-send))))
-    (let ((message (finch/mach:mach-msg-receive reply :timeout 5000)))
-      (finch/mach:mach-port-mod-refs finch/mach:*task* reply :receive -1)
-      (make-instance 'context :id (getf (finch/mach:msgh-body message) :context-id)
-                              :port (car (first (finch/mach:msgh-descriptors message)))
+    (let ((message (darterfly/mach:mach-msg-receive reply :timeout 5000)))
+      (darterfly/mach:mach-port-mod-refs darterfly/mach:*task* reply :receive -1)
+      (make-instance 'context :id (getf (darterfly/mach:msgh-body message) :context-id)
+                              :port (car (first (darterfly/mach:msgh-descriptors message)))
                               :events events))))
 
 (defun next-event (context &key timeout)
-  (handler-case (finch/mach:msgh-body (finch/mach:mach-msg-receive (context-events context) :timeout timeout))
-    (finch/mach:kern-return () nil)))
+  (handler-case (darterfly/mach:msgh-body (darterfly/mach:mach-msg-receive (context-events context) :timeout timeout))
+    (darterfly/mach:kern-return () nil)))
 
 (defun tree (layer)
   (cons layer (mapcan #'tree (copy-list (layer-sublayers layer)))))
 
 (defun commit (context)
   (let ((root (context-layer context)))
-    (finch/mach:mach-msg-send
-     (finch/mach:make-message :remote-port (context-port context)
+    (darterfly/mach:mach-msg-send
+     (darterfly/mach:make-message :remote-port (context-port context)
                               :body (list :commit :root (layer-id root)
                                                   :layers (loop :for layer :in (tree root)
                                                                 :collect (cons (layer-id layer) (layer-object layer))))))))
@@ -90,20 +90,20 @@
   ((window-server :initform nil :accessor connection-window-server)
    (lock :initform (sb-thread:make-mutex :name "connection") :reader connection-lock)))
 
-(finch/bsd:define-process-variable *connection* (make-instance 'connection))
+(darterfly/bsd:define-process-variable *connection* (make-instance 'connection))
 
 (defun window-server ()
   (sb-thread:with-mutex ((connection-lock *connection*))
     (or (connection-window-server *connection*)
         (setf (connection-window-server *connection*)
-              (finch/init:bootstrap-look-up "windowserver")))))
+              (darterfly/init:bootstrap-look-up "windowserver")))))
 
 (defun request (body &key reply)
-  (let ((port (and reply (finch/mach:mach-reply-port))))
-    (finch/mach:mach-msg-send (finch/mach:make-message :remote-port (window-server) :local-port port :body body))
+  (let ((port (and reply (darterfly/mach:mach-reply-port))))
+    (darterfly/mach:mach-msg-send (darterfly/mach:make-message :remote-port (window-server) :local-port port :body body))
     (when port
-      (prog1 (finch/mach:msgh-body (finch/mach:mach-msg-receive port :timeout 5000))
-        (finch/mach:mach-port-mod-refs finch/mach:*task* port :receive -1)))))
+      (prog1 (darterfly/mach:msgh-body (darterfly/mach:mach-msg-receive port :timeout 5000))
+        (darterfly/mach:mach-port-mod-refs darterfly/mach:*task* port :receive -1)))))
 
 (defun transaction-commit (forms)
   (request (list :transaction forms)))

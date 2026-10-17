@@ -1,4 +1,4 @@
-(in-package #:finch/apps)
+(in-package #:darterfly/apps)
 
 (defparameter *fetch-logo*
   '("              .---.         "
@@ -29,19 +29,19 @@
 
 (defun fetch-devices ()
   (let ((found nil))
-    (flet ((have (class label) (when (finch/devices:find-entries class) (push label found))))
-      (have 'finch/devices::nvme-disk "NVMe")
-      (have 'finch/devices::xhci-controller "xHCI")
-      (have 'finch/devices::usb-cdc-ecm "USB Ethernet")
-      (have 'finch/devices::i2c-hid-device "I2C touchpad")
-      (have 'finch/devices::usb-hid-device "USB HID")
-      (have 'finch/devices:virtio-network "virtio")
-      (when (finch/devices:battery) (push "EC battery" found)))
+    (flet ((have (class label) (when (darterfly/devices:find-entries class) (push label found))))
+      (have 'darterfly/devices::nvme-disk "NVMe")
+      (have 'darterfly/devices::xhci-controller "xHCI")
+      (have 'darterfly/devices::usb-cdc-ecm "USB Ethernet")
+      (have 'darterfly/devices::i2c-hid-device "I2C touchpad")
+      (have 'darterfly/devices::usb-hid-device "USB HID")
+      (have 'darterfly/devices:virtio-network "virtio")
+      (when (darterfly/devices:battery) (push "EC battery" found)))
     (format nil "~{~a~^, ~}" (reverse found))))
 
 (defun fetch-facts ()
   (flet ((try (thunk) (handler-case (funcall thunk) (error () "?"))))
-    `(("OS" "finch 0.1 x86_64")
+    `(("OS" "darterfly 0.1 x86_64")
       ("Kernel" "Mach + BSD, in Lisp")
       ("Uptime" ,(try #'fetch-uptime))
       ("Lisp" ,(format nil "~a ~a" (lisp-implementation-type) (lisp-implementation-version)))
@@ -50,13 +50,13 @@
                                          (floor (sb-ext:dynamic-space-size) 1048576)))))
       ("Display" ,(try (lambda () (destructuring-bind (x y w h) (layer:main-display-bounds)
                                     (declare (ignore x y)) (format nil "~dx~d, UEFI GOP" w h)))))
-      ("Network" ,(try (lambda () (let ((i finch/net:*interface*))
-                                    (if i (format nil "en0 ~a" (finch/net:address-string (finch/net::interface-ip i))) "down")))))
-      ("Battery" ,(try (lambda () (let ((b (finch/devices:battery)))
+      ("Network" ,(try (lambda () (let ((i darterfly/net:*interface*))
+                                    (if i (format nil "en0 ~a" (darterfly/net:address-string (darterfly/net::interface-ip i))) "down")))))
+      ("Battery" ,(try (lambda () (let ((b (darterfly/devices:battery)))
                                     (if b (format nil "~d%~:[~;, charging~]" (getf b :percent) (getf b :charging)) "none")))))
       ("Devices" ,(try #'fetch-devices))
-      ("Kit" ,(try (lambda () (labels ((walk (e) (1+ (reduce #'+ (mapcar #'walk (finch/devices:entry-children e))))))
-                                  (format nil "~d registry entries" (walk finch/devices:*registry-root*)))))))))
+      ("Kit" ,(try (lambda () (labels ((walk (e) (1+ (reduce #'+ (mapcar #'walk (darterfly/devices:entry-children e))))))
+                                  (format nil "~d registry entries" (walk darterfly/devices:*registry-root*)))))))))
 
 (defparameter *fetch-colors*
   '((0.80 0.36 0.30) (0.85 0.60 0.30) (0.86 0.76 0.42) (0.55 0.70 0.42)

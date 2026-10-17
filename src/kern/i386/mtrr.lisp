@@ -1,7 +1,7 @@
-(defpackage #:finch/kern
-  (:use #:cl #:finch/low)
+(defpackage #:darterfly/kern
+  (:use #:cl #:darterfly/low)
   (:export #:kern-object))
-(in-package #:finch/kern)
+(in-package #:darterfly/kern)
 
 (defconstant +page-size+ 4096)
 (defconstant +physmap-base+ #xFFFF800000000000)

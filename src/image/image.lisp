@@ -1,11 +1,11 @@
-(defpackage #:finch/image
+(defpackage #:darterfly/image
   (:use #:cl)
   (:export #:write-cpio #:*build*
    #:console #:expect #:send #:transcript #:finish #:screendump #:pixel #:monitor #:pointer #:qmp #:send-keys
    #:boot-efi #:kernel-file #:esp #:bare-console #:bare-boot #:send-char #:*screen-size* #:update-root #:desktop #:copy-in #:build-sbcl #:*c-compiler* #:build-tcc #:*input-devices* #:*network-device* #:usb-image #:deploy))
-(in-package #:finch/image)
+(in-package #:darterfly/image)
 
-(defvar *build* (asdf:system-relative-pathname :finch "build/"))
+(defvar *build* (asdf:system-relative-pathname :darterfly "build/"))
 
 (defun build-path (name)
   (merge-pathnames name (ensure-directories-exist *build*)))
@@ -77,7 +77,7 @@
     ("System/Library/Services/Dock.app/Contents/Programs/Dock" "Dock")
     ("System/Library/Services/MenuBar.app/Contents/Programs/MenuBar" "MenuBar")
     ("System/Library/Services/Files.app/Contents/Programs/Files" "Files")
-    ("usr/libexec/finch-gui" "finch-gui")))
+    ("usr/libexec/darterfly-gui" "darterfly-gui")))
 
 (defun job (label &rest keys)
   (list :file (format nil "Library/Jobs/~a.job" label)
@@ -85,15 +85,15 @@
                 (let ((*print-case* :downcase)) (prin1-to-string (list* :label label keys)))))))
 
 (defun desktop-jobs ()
-  (list (job "finch.gui" :arguments '("/usr/libexec/finch-gui") :run-at-load t)
-        (job "finch.windowserver" :program "/System/Library/Services/WindowServer"
+  (list (job "darterfly.gui" :arguments '("/usr/libexec/darterfly-gui") :run-at-load t)
+        (job "darterfly.windowserver" :program "/System/Library/Services/WindowServer"
              :services '("windowserver" ("windowserver.active" :hidden t) ("renderserver" :hidden t)))
-        (job "finch.session" :program "/System/Library/Services/Session.app/Contents/Programs/Session"
+        (job "darterfly.session" :program "/System/Library/Services/Session.app/Contents/Programs/Session"
              :services '("Session"))
-        (job "finch.dock" :program "/System/Library/Services/Dock.app/Contents/Programs/Dock" :keep-alive :after-demand)
-        (job "finch.menubar" :program "/System/Library/Services/MenuBar.app/Contents/Programs/MenuBar"
+        (job "darterfly.dock" :program "/System/Library/Services/Dock.app/Contents/Programs/Dock" :keep-alive :after-demand)
+        (job "darterfly.menubar" :program "/System/Library/Services/MenuBar.app/Contents/Programs/MenuBar"
              :keep-alive :after-demand)
-        (job "finch.files" :program "/System/Library/Services/Files.app/Contents/Programs/Files"
+        (job "darterfly.files" :program "/System/Library/Services/Files.app/Contents/Programs/Files"
              :keep-alive :after-demand :throttle 1)))
 
 (defun fonts ()
@@ -130,7 +130,7 @@
   (uiop:native-namestring (build-path "qmp.sock")))
 
 (defun qmp (command &optional arguments)
-  (finch/qmp:qmp (qmp-path) command arguments))
+  (darterfly/qmp:qmp (qmp-path) command arguments))
 
 (defun key-name (char)
   (case char
@@ -150,15 +150,15 @@
 
 (defun send-keys (string)
   (flet ((key (name down)
-           (finch/qmp:dict "type" "key"
-                           "data" (finch/qmp:dict "down" down
-                                                  "key" (finch/qmp:dict "type" "qcode" "data" name)))))
+           (darterfly/qmp:dict "type" "key"
+                           "data" (darterfly/qmp:dict "down" down
+                                                  "key" (darterfly/qmp:dict "type" "qcode" "data" name)))))
     (loop :for char :across string
           :do (let* ((shift (or (find char "()+*\"!@#$%^&_{}|:<>?~") (upper-case-p char)))
                      (held (cond (shift "shift") ((control-char-p char) "ctrl")))
                      (name (key-name char)))
                 (qmp "input-send-event"
-                     (finch/qmp:dict "events"
+                     (darterfly/qmp:dict "events"
                                      (coerce (append (and held (list (key held t)))
                                                      (list (key name t) (key name nil))
                                                      (and held (list (key held nil))))
@@ -168,15 +168,15 @@
 
 (defun pointer (x y &optional (button nil button-p))
   (flet ((abs-event (axis value)
-           (finch/qmp:dict "type" "abs" "data" (finch/qmp:dict "axis" axis "value" value))))
+           (darterfly/qmp:dict "type" "abs" "data" (darterfly/qmp:dict "axis" axis "value" value))))
     (qmp "input-send-event"
-         (finch/qmp:dict "events"
+         (darterfly/qmp:dict "events"
                          (concatenate 'vector
                                       (vector (abs-event "x" (floor (* x 32768) (first *screen-size*)))
                                               (abs-event "y" (floor (* y 32768) (second *screen-size*))))
                                       (and button-p
-                                           (vector (finch/qmp:dict "type" "btn"
-                                                                   "data" (finch/qmp:dict "button" "left"
+                                           (vector (darterfly/qmp:dict "type" "btn"
+                                                                   "data" (darterfly/qmp:dict "button" "left"
                                                                                           "down" button)))))))))
 
 (defstruct (console (:constructor %console (process))) process (seen (make-string-output-stream)) (text (pending-text)))
@@ -186,7 +186,7 @@
 
 (defun cpu-states ()
   (ignore-errors
-   (let ((r (qmp "human-monitor-command" (finch/qmp:dict "command-line" "info registers -a"))))
+   (let ((r (qmp "human-monitor-command" (darterfly/qmp:dict "command-line" "info registers -a"))))
      (when (stringp r)
        (with-output-to-string (out)
          (with-input-from-string (s r)
@@ -229,7 +229,7 @@
                         (vector-push-extend c (console-text console)))))
           (if (uiop:process-alive-p (console-process console))
               (sleep 0.01)
-              (error "console: finch stopped, saw ~s" (console-text console)))))))
+              (error "console: darterfly stopped, saw ~s" (console-text console)))))))
 
 (defun send (console line)
   (let ((in (uiop:process-info-input (console-process console))))
@@ -289,7 +289,7 @@
 (defun screendump ()
   (let ((path (uiop:native-namestring (build-path "screen.ppm"))))
     (uiop:delete-file-if-exists path)
-    (qmp "screendump" (finch/qmp:dict "filename" path))
+    (qmp "screendump" (darterfly/qmp:dict "filename" path))
     (read-ppm path)))
 
 (defun pixel (screen x y)

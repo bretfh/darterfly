@@ -1,5 +1,5 @@
-#ifndef _X86_64_FINCH_OS_H
-#define _X86_64_FINCH_OS_H
+#ifndef _X86_64_DARTERFLY_OS_H
+#define _X86_64_DARTERFLY_OS_H
 
 #include <stdint.h>
 #include <signal.h>

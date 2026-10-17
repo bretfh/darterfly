@@ -1,4 +1,4 @@
-(in-package #:finch/apps)
+(in-package #:darterfly/apps)
 
 (defparameter +editor-colors+
   '(:comment (0.45 0.45 0.45) :string (0.1 0.5 0.1) :keyword (0.55 0.2 0.6) :char (0.7 0.4 0.0)))
@@ -202,5 +202,5 @@
 
 (bsd:define-program "Editor" (argv envp)
   (setf kit:*menus* (kit:standard-menus "Editor"))
-  (edit-window (or (second argv) "/Users/finch/scratch.lisp"))
+  (edit-window (or (second argv) "/Users/darterfly/scratch.lisp"))
   (kit:run))

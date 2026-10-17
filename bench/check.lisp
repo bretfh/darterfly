@@ -1,6 +1,6 @@
 (require :asdf)
 
-(defparameter +mine+ '(:finch/mach :finch/server :finch/layer :finch/bsd :finch/init :finch/shell :finch/kernel :finch/image :finch/qmp :finch/io :finch/text :finch/imageio :finch/kit :finch/windowserver :finch/apps :finch))
+(defparameter +mine+ '(:darterfly/mach :darterfly/server :darterfly/layer :darterfly/bsd :darterfly/init :darterfly/shell :darterfly/kernel :darterfly/image :darterfly/qmp :darterfly/io :darterfly/text :darterfly/imageio :darterfly/kit :darterfly/windowserver :darterfly/apps :darterfly))
 
 (defvar *warnings* nil)
 
@@ -8,13 +8,13 @@
   (let ((*package* (find-package :cl-user))
         (*print-pretty* nil))
     (and (not (typep condition 'sb-kernel:redefinition-warning))
-         (search "FINCH" (princ-to-string condition))
+         (search "DARTERFLY" (princ-to-string condition))
          t)))
 
 (handler-bind ((warning (lambda (c)
                           (when (minep c)
                             (push (list (type-of c) (princ-to-string c)) *warnings*)))))
-  (asdf:load-system :finch :force +mine+))
+  (asdf:load-system :darterfly :force +mine+))
 
 (let ((warnings (reverse *warnings*)))
   (cond ((null warnings)
@@ -22,7 +22,7 @@
          (terpri)
          (sb-ext:exit :code 0))
         (t
-         (format t "~&~d warning~:p from finch's own code:~%" (length warnings))
+         (format t "~&~d warning~:p from darterfly's own code:~%" (length warnings))
          (loop :for (kind text) :in warnings
                :do (format t "  ~(~a~): ~a~%" kind text))
          (finish-output)

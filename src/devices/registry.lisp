@@ -1,4 +1,4 @@
-(in-package #:finch/devices)
+(in-package #:darterfly/devices)
 
 (defvar *device-classes* (make-hash-table :test 'equal))
 

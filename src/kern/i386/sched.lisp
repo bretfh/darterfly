@@ -1,4 +1,4 @@
-(in-package #:finch/kern)
+(in-package #:darterfly/kern)
 
 (defconstant +th-run+ 1)
 (defconstant +th-wait+ 2)

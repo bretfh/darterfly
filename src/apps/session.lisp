@@ -1,4 +1,4 @@
-(in-package #:finch/apps)
+(in-package #:darterfly/apps)
 
 (defun text-layer (string font r g b &optional (a 1.0))
   (let* ((width (ceiling (+ 2 (text:string-width font string))))
@@ -23,9 +23,9 @@
             day (if (zerop (mod h 12)) 12 (mod h 12)) m (if (< h 12) "AM" "PM"))))
 
 (bsd:define-program "Session" (argv envp)
-  (dolist (label '("finch.files" "finch.menubar" "finch.dock"))
-    (finch/init:launch label))
-  (when (equal (finch/devices:boot-arg "rd") "ram")
+  (dolist (label '("darterfly.files" "darterfly.menubar" "darterfly.dock"))
+    (darterfly/init:launch label))
+  (when (equal (darterfly/devices:boot-arg "rd") "ram")
     (ignore-errors (bsd:posix-spawn "/System/Applications/Install.app/Contents/Programs/Install" (list "Install") nil)))
   (bsd:resume-processes)
   (loop (bsd:pause)))
@@ -57,7 +57,7 @@
     (flet ((draw ()
              (let* ((time (text-layer (clock) font 0.0 0.0 0.0))
                     (left (- width (round (aref (layer:layer-frame time) 2)) 14))
-                    (battery (ignore-errors (finch/devices:battery))))
+                    (battery (ignore-errors (darterfly/devices:battery))))
                (place time left 4)
                (setf (layer:layer-sublayers bar)
                      (if battery
@@ -90,7 +90,7 @@
 (defun icon-layer (name color size)
   (let ((tile (text:make-bitmap size size))
         (inset (round size 4))
-        (glyph (ignore-errors (finch/imageio:icon (icon-path name) (- size (* 2 (round size 4)))))))
+        (glyph (ignore-errors (darterfly/imageio:icon (icon-path name) (- size (* 2 (round size 4)))))))
     (text:fill-round-rect tile 0 0 size size (round size 5) (aref color 0) (aref color 1) (aref color 2))
     (when glyph
       (let ((out (text:bitmap-pixels tile)) (g (- size (* 2 inset))))
@@ -125,8 +125,8 @@
       (layer:window-create context (floor (- width dock-width) 2) (- height 92) dock-width 88 :level :dock)
       (loop
         (let ((event (layer:next-event context)))
-          (when (and event (eq (finch/server:event-type event) :left-mouse-down))
-            (let ((x (first (finch/server:event-window-location event))))
+          (when (and event (eq (darterfly/server:event-type event) :left-mouse-down))
+            (let ((x (first (darterfly/server:event-window-location event))))
               (let ((index (floor (- x gap) (+ tile gap))))
                 (when (< -1 index (length *dock-items*))
                   (bsd:posix-spawn (second (nth index *dock-items*))
@@ -167,7 +167,7 @@
                       #'string-lessp))
          (columns 6) (cell 92) (row 96))
     (kit:remove-subviews content)
-    (kit:set-window-title window (if (string= path "/") "finch HD" (subseq path (1+ (position #\/ path :from-end t)))))
+    (kit:set-window-title window (if (string= path "/") "darterfly HD" (subseq path (1+ (position #\/ path :from-end t)))))
     (loop :for name :in names
           :for i :from 0
           :do (let ((child (child-path path name)))
@@ -183,7 +183,7 @@
 (defmethod kit:mouse-down ((view disk-view) x y)
   (declare (ignore x y))
   (when (>= kit:*click-count* 2)
-    (let ((window (kit:make-window :title "finch HD" :x 120 :y 80 :width 600 :height 420)))
+    (let ((window (kit:make-window :title "darterfly HD" :x 120 :y 80 :width 600 :height 420)))
       (browse window "/")
       (kit:show window)))
   t)
@@ -192,17 +192,17 @@
   (setf kit:*menus* (list (list "Files" (cons "About Files" nil))
                           (list "File" (cons "New Window" nil)) (list "Edit" (cons "Copy" nil))
                           (list "View" (cons "as Icons" nil)) (list "Go" (cons "Computer" nil))
-                          (list "Window" (cons "Minimize" nil)) (list "Help" (cons "finch Help" nil))))
+                          (list "Window" (cons "Minimize" nil)) (list "Help" (cons "darterfly Help" nil))))
   (multiple-value-bind (width height) (screen-size)
     (let ((desktop (kit:make-window :style :borderless :level :desktop :x 0 :y 0 :width width :height height
                                     :background #(0.18 0.36 0.56 1.0))))
       (kit:add-subview (kit:content-view desktop)
                        (make-instance 'disk-view :icon-path (icon-path "devices/drive-harddisk")
-                                                 :label "finch HD" :label-color #(1.0 1.0 1.0)
+                                                 :label "darterfly HD" :label-color #(1.0 1.0 1.0)
                                                  :frame (vector (- width 112) 36 100 90)))
       (kit:show desktop)
       (kit:run))))
 
-(bsd:define-program "finch-gui" (argv envp)
-  (finch/init:bootstrap-look-up "windowserver")
+(bsd:define-program "darterfly-gui" (argv envp)
+  (darterfly/init:bootstrap-look-up "windowserver")
   0)

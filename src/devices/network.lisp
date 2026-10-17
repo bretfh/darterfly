@@ -1,4 +1,4 @@
-(in-package #:finch/devices)
+(in-package #:darterfly/devices)
 
 (defconstant +net-header+ 12)
 (defconstant +receive-buffers+ 32)

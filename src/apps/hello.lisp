@@ -1,7 +1,7 @@
-(defpackage #:finch/apps
+(defpackage #:darterfly/apps
   (:use #:cl)
-  (:local-nicknames (#:layer #:finch/layer) (#:bsd #:finch/bsd) (#:text #:finch/text) (#:kit #:finch/kit) (#:edit #:finch/edit)))
-(in-package #:finch/apps)
+  (:local-nicknames (#:layer #:darterfly/layer) (#:bsd #:darterfly/bsd) (#:text #:darterfly/text) (#:kit #:darterfly/kit) (#:edit #:darterfly/edit)))
+(in-package #:darterfly/apps)
 
 (defun label (string font r g b)
   (let* ((width (ceiling (+ 2 (text:string-width font string))))
@@ -35,7 +35,7 @@
 (bsd:define-program "Hello" (argv envp)
   (setf kit:*menus* (kit:standard-menus "Hello"))
   (let* ((window (kit:make-window :title "Hello" :x 212 :y 134 :width 600 :height 400))
-         (label (make-instance 'kit:text-field :string "Hello from finch." :font-size 28
+         (label (make-instance 'kit:text-field :string "Hello from darterfly." :font-size 28
                                                :frame (vector 20 20 400 40)))
          (button (make-instance 'kit:button :title "Click me" :frame (vector 20 80 120 32)
                                             :action (lambda (button)

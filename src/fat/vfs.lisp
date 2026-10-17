@@ -1,4 +1,4 @@
-(in-package #:finch/fat)
+(in-package #:darterfly/fat)
 
 (defclass fat-vnode (vfs:vnode)
   ((volume :initarg :volume :reader vnode-volume)
@@ -109,7 +109,7 @@
 
 (defun mount-esp (&optional (path "/Volumes/EFI"))
   (let ((media (find-if (lambda (m) (and (or (devices:get-property m "Whole")
-                                              (equal (devices:get-property m "Content") finch/gpt:+esp-type+))
+                                              (equal (devices:get-property m "Content") darterfly/gpt:+esp-type+))
                                           (fat-media-p m)))
                         (devices:find-entries 'devices:media))))
     (when media

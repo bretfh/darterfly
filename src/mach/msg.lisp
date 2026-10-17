@@ -1,4 +1,4 @@
-(in-package #:finch/mach)
+(in-package #:darterfly/mach)
 
 (defclass message ()
   ((remote-port :initarg :remote-port :initform nil :accessor msgh-remote-port)

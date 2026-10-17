@@ -1,4 +1,4 @@
-(in-package #:finch/devices)
+(in-package #:darterfly/devices)
 
 (defconstant +keyboard-vector+ #x3F)
 (defvar *free-vectors* (loop for v from #x30 below +keyboard-vector+ collect v))

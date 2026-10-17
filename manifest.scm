@@ -21,7 +21,7 @@
     (build-system copy-build-system)
     (arguments (list #:install-plan ''(("." "share/tinycc-source/"))))
     (home-page "https://repo.or.cz/tinycc.git")
-    (synopsis "TinyCC's source, which finch builds its C compiler from")
+    (synopsis "TinyCC's source, which darterfly builds its C compiler from")
     (description "TinyCC at a pinned mob revision.")
     (license license:lgpl2.1+)))
 
@@ -34,7 +34,7 @@
     (arguments (list #:install-plan ''(("." "share/sbcl-source/"))))
     (native-inputs (list zstd))
     (home-page "https://www.sbcl.org/")
-    (synopsis "SBCL's source, which finch builds its Lisp from")
+    (synopsis "SBCL's source, which darterfly builds its Lisp from")
     (description "SBCL's source as guix prepares it.")
     (license license:public-domain)))
 

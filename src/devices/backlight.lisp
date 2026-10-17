@@ -1,4 +1,4 @@
-(in-package #:finch/devices)
+(in-package #:darterfly/devices)
 
 (defparameter *brightness-setting* "/Library/Settings/brightness")
 (defconstant +pwm-period+ #xc8254)
