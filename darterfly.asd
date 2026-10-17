@@ -67,9 +67,16 @@
   :pathname "src/kit/"
   :components ((:file "kit")))
 
+(asdf:defsystem #:darterfly/stats
+  :description "What the system is doing"
+  :depends-on (#:darterfly/devices #:darterfly/bsd)
+  :serial t
+  :pathname "src/stats/"
+  :components ((:file "stats")))
+
 (asdf:defsystem #:darterfly/windowserver
   :description "WindowServer"
-  :depends-on (#:darterfly/layer #:darterfly/server #:darterfly/bsd #:darterfly/mach #:darterfly/init #:darterfly/io)
+  :depends-on (#:darterfly/layer #:darterfly/server #:darterfly/bsd #:darterfly/mach #:darterfly/init #:darterfly/io #:darterfly/stats)
   :serial t
   :pathname "src/server/"
   :components ((:file "windowserver")))
@@ -239,7 +246,7 @@
 
 (asdf:defsystem #:darterfly
   :description "A live, hackable OS on SBCL"
-  :depends-on (#:darterfly/mach #:darterfly/server #:darterfly/layer #:darterfly/bsd #:darterfly/init #:darterfly/shell #:darterfly/io #:darterfly/text #:darterfly/edit #:darterfly/imageio #:darterfly/kit #:darterfly/windowserver #:darterfly/apps #:darterfly/devices #:darterfly/vfs #:darterfly/apfs #:darterfly/fat #:darterfly/install #:darterfly/net #:darterfly/nrepl #:darterfly/run #:darterfly/generation #:darterfly/kernel #:darterfly/image)
+  :depends-on (#:darterfly/mach #:darterfly/server #:darterfly/layer #:darterfly/bsd #:darterfly/init #:darterfly/shell #:darterfly/io #:darterfly/text #:darterfly/edit #:darterfly/imageio #:darterfly/kit #:darterfly/stats #:darterfly/windowserver #:darterfly/apps #:darterfly/devices #:darterfly/vfs #:darterfly/apfs #:darterfly/fat #:darterfly/install #:darterfly/net #:darterfly/nrepl #:darterfly/run #:darterfly/generation #:darterfly/kernel #:darterfly/image)
   :in-order-to ((asdf:test-op (asdf:test-op #:darterfly/test))))
 
 (asdf:defsystem #:darterfly/test

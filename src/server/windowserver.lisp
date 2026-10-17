@@ -162,7 +162,9 @@
          (screen (intersect whole (or (shiftf *damage* nil) whole)))
          (io:*clip* screen))
     (when (and (< (first screen) (third screen)) (< (second screen) (fourth screen)))
-      (render-rect fb screen))))
+      (let ((start (get-internal-real-time)))
+        (render-rect fb screen)
+        (darterfly/stats:note :frame-ms (/ (- (get-internal-real-time) start) (/ internal-time-units-per-second 1000.0)))))))
 
 (defun render-rect (fb screen)
   (progn

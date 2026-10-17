@@ -77,6 +77,7 @@ Fault CR2: 0x%016lx, Error code: 0x%016lx, Fault CPU: 0x0
   (let ((user (= (logand (reg regs +r-cs+) 3) 3))
         (trapno (reg regs +r-trapno+)))
     (when (or (and (>= trapno #x20) (< trapno #x80)) (>= trapno #xD0))
+      (setf (ref irq-counts trapno) (+ (ref irq-counts trapno) 1))
       (lapic-interrupt trapno)
       (when (and (= trapno #xDD)
                  (or user (/= (current-thread) (mem :u64 (+ (cpu-data) +c-idle-thread+)))))

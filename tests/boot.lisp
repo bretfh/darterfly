@@ -682,6 +682,20 @@
                (is (search "42" (listener-text-until c "42")) "and so does the listener"))
           (image:finish c 5))))))
 
+(test stats-see-what-the-system-does
+  (let ((c (image:bare-console)))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 90)
+             (ask "(defvar *s* (progn (sb-thread:make-thread (lambda () (let ((end (+ (get-internal-real-time) (* 4 internal-time-units-per-second)))) (loop :while (< (get-internal-real-time) end)))) :name \"spin\") (darterfly/stats:sample 2)))")
+             (is (search "T" (ask "(and (find-if (lambda (th) (and (equal (getf th :name) \"spin\") (> (getf th :cpu) 50))) (getf *s* :threads)) t)"))
+                 "a busy thread shows up with its share of a cpu")
+             (is (search "T" (ask "(and (some (lambda (c) (> c 50)) (getf *s* :cpu-busy)) t)")) "and a cpu shows busy")
+             (is (search "T" (ask "(and (assoc \"#xDD\" (getf *s* :interrupts-per-s) :test #'equal) t)")) "the clock interrupt is counted")
+             (is (search "PID" (ask "(darterfly/stats:top 1)"))))
+        (image:finish c 5)))))
+
 (test power-restarts-and-shuts-down
   (dolist (form '("(darterfly/power:shut-down)" "(darterfly/power:restart)"))
     (let ((c (image:bare-console)))
