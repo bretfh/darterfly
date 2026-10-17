@@ -13,7 +13,7 @@
    #:virtio-block-storage-device #:block-count #:block-size #:read-blocks #:write-blocks
    #:block-device #:media #:media-read #:media-write #:media-flush #:media-size #:gpt-scheme #:crc32
    #:acpi-table #:vm-page-grab #:vm-pages-grab #:phys-sap #:mmio-read #:mmio-write #:pci-primary-id #:ml-io-map #:ml-io-map-wcomb #:boot-arg #:kernel-flags #:boot-video
-   #:wait-for-interrupt #:interrupt-vector
+   #:wait-for-interrupt #:interrupt-vector #:enable-msi-x #:allocate-vector #:set-msi-x-vector
    #:virtio-input #:input-events #:input-abs-range
    #:virtio-network #:ethernet-controller #:ecm-status #:battery #:ethernet-interface #:network-send #:network-receive #:network-mac
    #:define-device-class #:add-personality #:personality #:publish-media #:partition-scheme
