@@ -26,6 +26,7 @@
    (keyed :initform nil :accessor link-keyed)
    (want-ht :initarg :want-ht :initform nil :reader link-want-ht)
    (ht :initform nil :accessor link-ht)
+   (signal :initform nil :accessor link-signal)
    (frames :initform nil :accessor link-frames)
    (lock :initform (sb-thread:make-mutex :name "wifi link") :reader link-lock)))
 
@@ -42,7 +43,8 @@
                          (let ((h (header-length raw)))
                            (if (> (length raw) (+ h 2)) (octets (subseq raw 0 h) (subseq raw (+ h 2))) raw))
                          raw)))
-          (values frame status (aref payload 42) (u32le payload 44)))))))
+          (values frame status (aref payload 42) (u32le payload 44)
+                  (flet ((dbm (e) (if (zerop e) -256 (- e)))) (max (dbm (aref payload 40)) (dbm (aref payload 41))))))))))
 
 (defun header-length (frame)
   (let ((type (ldb (byte 2 2) (aref frame 0)))
@@ -390,8 +392,11 @@
                         (setf (card-notifications w) (remove #xA2 (card-notifications w) :key (lambda (p) (getf p :code))))))))
         (when missed (setf lost (lost-signal l missed nil))))
       (dolist (p (take-mpdus w))
-        (multiple-value-bind (f status) (mpdu (getf p :payload))
+        (multiple-value-bind (f status channel gp2 signal) (mpdu (getf p :payload))
+          (declare (ignore channel gp2))
           (setf lost (or lost (lost-signal l p f)))
+          (when (and f signal (> signal -256) (>= (length f) 16) (equalp (subseq f 10 16) (link-bssid l)))
+            (setf (link-signal l) (if (link-signal l) (round (+ (* 7 (link-signal l)) signal) 8) signal)))
           (progn
             (when (and f (data-from-bss-p l f) (decrypted-p f status))
               (if (eql +eapol-ethertype+ (data-payload f))
@@ -467,3 +472,12 @@
 (defun confirm-wifi ()
   (setf *wifi-confirmed* t)
   (keep-wifi))
+
+(defun network-status ()
+  (let ((d (and darterfly/net:*interface* (darterfly/net::interface-device darterfly/net:*interface*))))
+    (cond ((typep d 'wireless-interface)
+           (let ((l (wireless-link d)))
+             (list :kind :wifi :up (wireless-up-p d) :signal (link-signal l)
+                   :ssid (and (link-bss l) (getf (link-bss l) :ssid)))))
+          (d (list :kind :wired :up t))
+          (t (list :kind :none :up nil)))))
