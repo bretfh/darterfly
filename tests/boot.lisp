@@ -91,6 +91,12 @@
              (is (search "CS:  0x0000000000000008, SS:  0x0000000000000010" panic))))
       (image:finish c 5))))
 
+(test two-worlds-have-their-own-memory
+  (let ((c (image:bare-console :boot-args "worldtest halt" :root nil)))
+    (unwind-protect
+         (is (image:expect c "worldtest: world 0 sees 0x1111, world 1 thread sees 0x2222"))
+      (image:finish c 5))))
+
 (test the-kernel-has-memory
   (let ((c (image:bare-console :boot-args "vmtest halt" :root nil)))
     (unwind-protect

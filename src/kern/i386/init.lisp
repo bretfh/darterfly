@@ -42,6 +42,34 @@
       (kprintf "vmtest: kalloc %s
 " (if (and (= x (kalloc 90)) y) "reuses freed blocks" "is wrong")))))
 
+(defconstant +world-test-va+ #x1300000000)
+
+(define-global world-test-seen :u64)
+
+(define-low world-test-thread ()
+  (setf world-test-seen (mem :u64 +world-test-va+))
+  (thread-wakeup (address world-test-seen) 1)
+  (thread-terminate-self))
+
+(define-low world-test ()
+  (let ((w (world-create))
+        (a (vm-page-grab))
+        (b (vm-page-grab))
+        (tries 0))
+    (pmap-enter +world-test-va+ a 3)
+    (setf (mem :u64 +world-test-va+) #x1111)
+    (set-cr 3 w)
+    (pmap-enter +world-test-va+ b 3)
+    (setf (mem :u64 +world-test-va+) #x2222)
+    (set-cr 3 (world-0))
+    (thread-create-kernel (code-address world-test-thread) w)
+    (while (and (not world-test-seen) (< tries 100))
+      (thread-wait (address world-test-seen) (deadline-after 0 10000000))
+      (incf tries))
+    (kprintf "worldtest: world 0 sees 0x%lx, world 1 thread sees 0x%lx, world 1 pml4 0x%lx
+" (mem :u64 +world-test-va+) world-test-seen w)
+    (pmap-remove +world-test-va+ +page-size+)))
+
 (define-low reset-user-image ()
   (let* ((file (+ (mem :u64 (+ |platform_boot_args| +kernel-file-start+)) +physmap-base+))
          (ph (+ file (mem :u64 (+ file 32))))
@@ -192,6 +220,7 @@
   (lapic-init)
   (thread-bootstrap (boot-kernel-stack-top))
   (i386-start-cpus)
+  (when (the :u32 (|platform_parse_boot_arg| "worldtest")) (world-test))
   (when (the :u32 (|platform_parse_boot_arg| "trap")) (int3))
   (when (the :u32 (|platform_parse_boot_arg| "halt"))
     (kprintf "halt

@@ -41,7 +41,9 @@
     pa))
 
 (define-low pte (va create)
-  (let ((table (ptov (kvtophys (address idle-pml4))))
+  (let ((table (if physmap-ready
+                   (ptov (logand (read-cr 3) +pte-pfn+))
+                   (ptov (kvtophys (address idle-pml4)))))
         (shift 39))
     (while (> shift 12)
       (let ((e (+ table (* 8 (logand (shr va shift) 511)))))
@@ -158,6 +160,23 @@
         (incf r)))
     (set-cr3 (kvtophys (address idle-pml4)))
     (setf physmap-ready 1)
+    (let ((i 257))
+      (while (< i 512)
+        (unless (logand (ref idle-pml4 i) +pte-valid+)
+          (setf (ref idle-pml4 i) (logior (table-page) +pte-valid+ +pte-write+ +pte-user+)))
+        (incf i)))
     (setf |platform_boot_args| (+ args +physmap-base+))
     (kprintf "pmap: physmap %d GB at 0x%lx with %s pages, kernel at 0x%lx from 0x%x
 " gigs +physmap-base+ (if (= gigs 512) "1 GB" "2 MB") +kernel-base+ kaddr)))
+
+(define-low world-0 () (kvtophys (address idle-pml4)))
+
+(define-low world-create ()
+  (let ((pa (vm-page-grab))
+        (i 256))
+    (when (= pa 0) (result 0))
+    (rep-stosb (ptov pa) 0 +page-size+)
+    (while (< i 512)
+      (setf (mem :u64 (+ (ptov pa) (* 8 i))) (ref idle-pml4 i))
+      (incf i))
+    pa))
