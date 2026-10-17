@@ -69,8 +69,6 @@
     (vm-map-remove +world-test-va+ +page-size+)
     (world-user-test)))
 
-(defconstant +world-code-va+ #x40000000)
-
 (define-low world-user-test ()
   (let* ((u (world-create))
          (pa (vm-page-grab))

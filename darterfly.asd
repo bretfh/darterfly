@@ -90,7 +90,7 @@
 
 (asdf:defsystem #:darterfly/apps
   :description "Applications"
-  :depends-on (#:darterfly/layer #:darterfly/server #:darterfly/bsd #:darterfly/text #:darterfly/imageio #:darterfly/kit #:darterfly/edit #:darterfly/install #:darterfly/generation #:darterfly/devices #:darterfly/net #:darterfly/wifi #:darterfly/journal)
+  :depends-on (#:darterfly/layer #:darterfly/server #:darterfly/bsd #:darterfly/text #:darterfly/imageio #:darterfly/kit #:darterfly/edit #:darterfly/install #:darterfly/generation #:darterfly/devices #:darterfly/net #:darterfly/wifi #:darterfly/journal #:darterfly/worlds)
   :serial t
   :pathname "src/apps/"
   :components ((:file "hello") (:file "terminal") (:file "listener") (:file "forcequit") (:file "editor") (:file "generations") (:file "session") (:file "fetch") (:file "install") (:file "ocicl")))
@@ -114,6 +114,12 @@
   :serial t
   :pathname "src/wifi/"
   :components ((:file "eapol") (:file "firmware") (:file "ax210") (:file "join")))
+
+(asdf:defsystem #:darterfly/worlds
+  :description "Worlds and ports"
+  :serial t
+  :pathname "src/worlds/"
+  :components ((:file "worlds")))
 
 (asdf:defsystem #:darterfly/journal
   :description "Forms evaluated since the last save"
@@ -220,7 +226,7 @@
   :pathname "src/kern/i386/"
   :components ((:file "mtrr") (:file "power") (:file "printf") (:file "rtclock") (:file "vm-map") (:file "pmap") (:file "lapic") (:file "sched")
                (:file "signal" :pathname "../../bsd/kern/signal") (:file "trap") (:file "mp")
-               (:file "systemcalls" :pathname "../../bsd/dev/i386/systemcalls")
+               (:file "systemcalls" :pathname "../../bsd/dev/i386/systemcalls") (:file "world")
                (:file "start" :pathname "../x86_64/start") (:file "init") (:file "stubs" :pathname "../x86_64/stubs") (:file "mp-desc") (:file "memory")))
 
 (asdf:defsystem #:darterfly/link
@@ -273,7 +279,7 @@
 
 (asdf:defsystem #:darterfly
   :description "A live, hackable OS on SBCL"
-  :depends-on (#:darterfly/mach #:darterfly/server #:darterfly/layer #:darterfly/bsd #:darterfly/init #:darterfly/shell #:darterfly/io #:darterfly/text #:darterfly/edit #:darterfly/imageio #:darterfly/kit #:darterfly/stats #:darterfly/windowserver #:darterfly/bench #:darterfly/apps #:darterfly/devices #:darterfly/vfs #:darterfly/apfs #:darterfly/fat #:darterfly/install #:darterfly/net #:darterfly/nrepl #:darterfly/run #:darterfly/generation #:darterfly/kernel #:darterfly/image #:darterfly/crypto #:darterfly/wifi #:darterfly/journal)
+  :depends-on (#:darterfly/mach #:darterfly/server #:darterfly/layer #:darterfly/bsd #:darterfly/init #:darterfly/shell #:darterfly/io #:darterfly/text #:darterfly/edit #:darterfly/imageio #:darterfly/kit #:darterfly/stats #:darterfly/windowserver #:darterfly/bench #:darterfly/apps #:darterfly/devices #:darterfly/vfs #:darterfly/apfs #:darterfly/fat #:darterfly/install #:darterfly/net #:darterfly/nrepl #:darterfly/run #:darterfly/generation #:darterfly/kernel #:darterfly/image #:darterfly/crypto #:darterfly/wifi #:darterfly/journal #:darterfly/worlds)
   :in-order-to ((asdf:test-op (asdf:test-op #:darterfly/test))))
 
 (asdf:defsystem #:darterfly/test

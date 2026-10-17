@@ -368,6 +368,7 @@
 (define-low world-stop (w)
   (let ((th all-threads) (self (current-thread)))
     (setf (mem :u64 (+ w +w-flags+)) (logior (mem :u64 (+ w +w-flags+)) +stopped+))
+    (ports-fail w)
     (while th
       (when (and (/= th self) (= (world-of th) w) (/= (mem :u32 (+ th +t-state+)) +th-terminate+))
         (thread-terminate th))
