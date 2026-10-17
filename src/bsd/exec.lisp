@@ -148,6 +148,7 @@
 (defun note-background-error (condition)
   (let ((entry (list :time (get-universal-time)
                      :thread (sb-thread:thread-name sb-thread:*current-thread*)
+                     :process (and *proc* (proc-comm *proc*))
                      :error (ignore-errors (princ-to-string condition))
                      :backtrace (ignore-errors (with-output-to-string (s) (sb-debug:print-backtrace :stream s :count 25))))))
     (sb-ext:atomic-push entry *background-errors*)

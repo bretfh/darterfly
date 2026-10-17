@@ -862,9 +862,15 @@
              (image:send c ":sync")
              (image:expect c ":SYNC" :timeout 30)
              (image:expect c "* " :timeout 30)
-             (let ((seen (ask "(list (if (sb-thread:mutex-owner darterfly/bsd::*bsd*) :held :free) (darterfly/bsd:getpid))")))
+             (let ((seen (ask "(list (if (loop :repeat 50 :thereis (not (sb-thread:mutex-owner darterfly/bsd::*bsd*)) :do (sleep 0.1)) :free (sb-thread:mutex-owner darterfly/bsd::*bsd*)) (darterfly/bsd:getpid))")))
                (is (search "(:FREE " seen) "the process lock is free again and processes still work: ~a" seen))
-             (is (search "\"boom\"" (ask "(getf (first darterfly/bsd:*background-errors*) :error)")) "and the error is kept to look at"))
+             (is (search "\"boom\"" (ask "(getf (first darterfly/bsd:*background-errors*) :error)")) "and the error is kept to look at")
+             (ask "(darterfly/bsd:define-program \"crasher\" (argv envp) (declare (ignore argv envp)) (error \"crashed on purpose\"))")
+             (ask "(with-open-file (s \"/tmp/crasher\" :direction :output :if-exists :supersede) (write-line \"#!darterfly crasher\" s))")
+             (ask "(darterfly/vfs:vnop-setattr (darterfly/vfs::namei \"/tmp/crasher\") :mode #o755)")
+             (ask "(darterfly/shell:spawn \"/tmp/crasher\")")
+             (is (search "\"crashed on purpose\"" (ask "(progn (sleep 2) (getf (find \"crasher\" darterfly/bsd:*background-errors* :key (lambda (e) (getf e :process)) :test #'equal) :error))"))
+                 "a process that crashes leaves its error and backtrace behind"))
         (image:finish c 5)))))
 
 (test a-thread-caught-in-a-reload-carries-on

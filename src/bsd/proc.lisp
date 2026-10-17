@@ -152,12 +152,13 @@
   (let ((status (catch proc
                   (loop
                     (setf fn (catch (exec-tag proc)
-                               (let ((code (handler-case (funcall fn)
-                                             (error (e) (crash e)))))
+                               (let ((code (handler-bind ((error #'crash))
+                                             (funcall fn))))
                                  (return (w-exitcode (if (integerp code) (logand code 255) 0) 0)))))))))
     (proc-exit proc status)))
 
 (defun crash (e)
+  (ignore-errors (note-background-error e))
   (ignore-errors (format *error-output* "~&~a[~d]: ~a~%" (proc-comm *proc*) (proc-pid *proc*) e)
                  (finish-output *error-output*))
   (throw *proc* (w-exitcode 0 (signo :sigabrt))))
