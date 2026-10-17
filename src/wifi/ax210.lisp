@@ -24,6 +24,8 @@
    (cmd-cur :initform 0 :accessor card-cmd-cur)
    (cmd-hw :initform 0 :accessor card-cmd-hw)
    (nvm :initform nil :accessor card-nvm)
+   (mpdus :initform nil :accessor card-mpdus)
+   (pump-lock :initform (sb-thread:make-mutex :name "wifi card") :reader card-pump-lock)
    (notifications :initform nil :accessor card-notifications)))
 
 (defparameter *firmware-path* "/Library/Firmware/iwlwifi-ty-a0-gf-a0-77.ucode")
@@ -282,18 +284,35 @@
 
 (defun response-p (p) (not (logbitp 7 (getf p :qid))))
 
+(defun last-n (list n) (if (> (length list) n) (last list n) list))
+
+(defun pump (w)
+  (sb-thread:with-recursive-lock ((card-pump-lock w))
+    (let ((packets (receive-packets w)))
+      (dolist (p packets)
+        (case (getf p :code)
+          (#xC1 (setf (card-mpdus w) (nconc (card-mpdus w) (list p))))
+          (#x1C nil)
+          (t (setf (card-notifications w) (nconc (card-notifications w) (list p))))))
+      (setf (card-mpdus w) (last-n (card-mpdus w) 1024)
+            (card-notifications w) (last-n (card-notifications w) 256))
+      packets)))
+
 (defun take-packet (w test seconds)
   (let ((deadline (+ (microseconds) (* seconds 1000000))))
     (loop
-      (let ((found (find-if test (card-notifications w))))
-        (when found
-          (setf (card-notifications w) (remove found (card-notifications w) :count 1))
-          (return found)))
+      (let ((found (sb-thread:with-recursive-lock ((card-pump-lock w))
+                     (let ((found (find-if test (card-notifications w))))
+                       (when found
+                         (setf (card-notifications w) (remove found (card-notifications w) :count 1)))
+                       found))))
+        (when found (return found)))
       (when (> (microseconds) deadline) (return nil))
-      (let ((packets (receive-packets w)))
-        (if packets
-            (setf (card-notifications w) (append (card-notifications w) packets))
-            (sleep 0.001))))))
+      (unless (pump w) (sleep 0.001)))))
+
+(defun take-mpdus (w)
+  (sb-thread:with-recursive-lock ((card-pump-lock w))
+    (shiftf (card-mpdus w) nil)))
 
 (defun send-command (w group opcode payload &key (version 0))
   (let* ((payload (octets payload))
