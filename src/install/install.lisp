@@ -79,10 +79,11 @@
   (or (sb-sys:find-foreign-symbol-address name) (error "the runtime has no ~a" name)))
 
 (defun heap-errors ()
-  (let ((verify (runtime-function "darterfly_heap_errors"))
+  (let ((verify (sb-sys:find-foreign-symbol-address "darterfly_heap_errors"))
         (lock (runtime-function "try_acquire_gc_lock"))
         (unlock (runtime-function "release_gc_lock"))
         (result nil))
+    (unless verify (return-from heap-errors nil))
     (sb-sys:without-gcing
       (when (eql 1 (sb-alien:alien-funcall (sb-alien:sap-alien (sb-sys:int-sap lock) (function sb-alien:int))))
         (sb-kernel::gc-stop-the-world)
@@ -98,7 +99,8 @@
 
 (defun save-generation (&key kernel loader boot-conf restart then)
   (let ((errors (heap-errors)))
-    (when (plusp errors) (error 'bad-world :errors errors)))
+    (when (null errors) (format *error-output* "~&save: this runtime can't check the heap; saving unchecked~%"))
+    (when (and errors (plusp errors)) (error 'bad-world :errors errors)))
   (darterfly/journal:note-save)
   (ensure-directories-exist *pending-generation*)
   (with-open-file (s *pending-generation* :direction :output :if-exists :supersede)

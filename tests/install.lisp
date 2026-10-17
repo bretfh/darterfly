@@ -45,3 +45,6 @@
     (darterfly/journal:note-form "(+ 2 2)")
     (is (= 1 (darterfly/journal:trim)))
     (is (equal '("(+ 2 2)") (mapcar #'fifth (darterfly/journal:forms-since-save))))))
+
+(test a-runtime-without-the-heap-check-does-not-block-saving
+  (is (null (darterfly/install:heap-errors)) "the host runtime has no check, and says so with nil instead of an error"))
