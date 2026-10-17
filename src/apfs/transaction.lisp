@@ -48,7 +48,14 @@
                         (list (u64 block k) (u64 block (+ k 8)) (if (plusp vs) (u64 block v) 1))))))))
 
 (defun open-writable (read write &optional flush)
-  (multiple-value-bind (sb) (checkpoint-superblock read)
+  (newest-that-opens read (lambda (sb block-size newest)
+                            (declare (ignore block-size))
+                            (let ((nx (open-checkpoint read write flush sb)))
+                              (setf (nx-xid nx) (max (nx-xid nx) newest))
+                              nx))))
+
+(defun open-checkpoint (read write flush sb)
+  (progn
     (let* ((nx (make-nx :read read :write write :flush flush :sb (copy-seq sb) :xid (object-xid sb) :block-count (u64 sb 40)
                         :next-oid (u64 sb 88)
                         :desc-base (u64 sb 112) :desc-blocks (logand (u32 sb 104) #x7fffffff) :desc-next (u32 sb 128)
@@ -294,6 +301,7 @@
         (put-u64 sb 160 (nx-omap-paddr nx))
         (seal sb)
         (dolist (w (reverse writes)) (nx-put nx (car w) (cdr w)))
+        (when (nx-flush nx) (funcall (nx-flush nx)))
         (nx-put nx cpm-block cpm)
         (nx-put nx sb-block sb)
         (when (nx-flush nx) (funcall (nx-flush nx)))

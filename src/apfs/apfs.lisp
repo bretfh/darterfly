@@ -122,23 +122,34 @@
 (defun omap-root (container omap-oid)
   (u64 (read-object container omap-oid) 48))
 
-(defun checkpoint-superblock (device)
+(defun checkpoint-superblocks (device)
   (let* ((zero (funcall device 0 4096))
          (block-size (u32 zero 36)))
     (unless (= (u32 zero 32) +nx-magic+) (fail "no APFS container here"))
     (let* ((zero (funcall device 0 block-size))
            (base (u64 zero 112))
            (blocks (logand (u32 zero 104) #x7fffffff))
-           (best zero))
+           (found (and (object-valid-p zero) (list zero))))
       (dotimes (i blocks)
         (let ((b (funcall device (* (+ base i) block-size) block-size)))
           (when (and (= (object-type b) +object-type-nx-superblock+)
                      (= (u32 b 32) +nx-magic+)
                      (object-valid-p b)
-                     (> (object-xid b) (object-xid best)))
-            (setf best b))))
-      (unless (object-valid-p best) (fail "no valid container superblock"))
-      (values best block-size))))
+                     (not (find (object-xid b) found :key #'object-xid)))
+            (push b found))))
+      (unless found (fail "no valid container superblock"))
+      (values (sort found #'> :key #'object-xid) block-size))))
+
+(defun checkpoint-superblock (device)
+  (multiple-value-bind (all block-size) (checkpoint-superblocks device)
+    (values (first all) block-size)))
+
+(defun newest-that-opens (device open)
+  (multiple-value-bind (all block-size) (checkpoint-superblocks device)
+    (let ((newest (object-xid (first all))) (last-error nil))
+      (dolist (sb all (error last-error))
+        (handler-case (return (funcall open sb block-size newest))
+          (error (e) (setf last-error e)))))))
 
 (defstruct volume container superblock name uuid role omap root-tree xid case-insensitive-p hashed-p)
 
@@ -148,7 +159,13 @@
 (defun container-size (c) (* (container-block-size c) (u64 (container-superblock c) 40)))
 
 (defun open-container (device)
-  (multiple-value-bind (sb block-size) (checkpoint-superblock device)
+  (newest-that-opens device (lambda (sb block-size newest)
+                              (declare (ignore newest))
+                              (open-checkpoint device nil nil sb)
+                              (open-container-at device sb block-size))))
+
+(defun open-container-at (device sb block-size)
+  (progn
     (let ((c (make-container :device device :block-size block-size :superblock sb
                              :uuid (uuid-string sb 72) :xid (object-xid sb))))
       (setf (container-omap c) (omap-root c (u64 sb 160)))
