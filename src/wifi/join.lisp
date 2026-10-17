@@ -1,5 +1,7 @@
 (in-package #:darterfly/wifi)
 
+(defparameter *wifi-settings* "/Library/Settings/wifi")
+
 (defconstant +tx-slots+ 256)
 (defconstant +mgmt-tid+ 15)
 
@@ -258,7 +260,8 @@
         thereis (find ssid (scan card) :key (lambda (b) (getf b :ssid)) :test #'equal)))
 
 (devices:define-device-class wireless-interface "WirelessInterface" (devices:ethernet-controller)
-  ((link :initarg :link :reader wireless-link)
+  ((link :initarg :link :accessor wireless-link)
+   (rejoining :initform nil :accessor wireless-rejoining)
    (mac :initarg :mac :accessor devices:network-mac)))
 
 (defmethod devices:interrupt-vector ((d wireless-interface)) (card-vector (link-card (wireless-link d))))
@@ -268,7 +271,46 @@
     (setf (reg w #x2800) fh (reg w #x2808) hw (reg w #x2810) 1)
     (values fh hw)))
 
+(defun wireless-up-p (d)
+  (and (not (wireless-rejoining d)) (link-keyed (wireless-link d))))
+
+(defparameter *missed-beacons-limit* 20)
+
+(defun wifi-settings ()
+  (with-open-file (s *wifi-settings*)
+    (values (read-line s) (read-line s))))
+
+(defun rejoin (d)
+  (loop for wait in '(0 2 5 10 30 30 60)
+        do (sleep wait)
+           (handler-case
+               (multiple-value-bind (ssid pass) (wifi-settings)
+                 (setf *link* nil)
+                 (bring-up)
+                 (setf (wireless-link d) (join ssid pass))
+                 (return t))
+             (error (e) (note *card* :rejoin-failed (princ-to-string e))))
+        finally (return nil)))
+
+(defun lost (d why)
+  (sb-thread:with-recursive-lock ((link-lock (wireless-link d)))
+    (unless (wireless-rejoining d)
+      (setf (wireless-rejoining d) why)
+      (note (link-card (wireless-link d)) :lost why)
+      (sb-thread:make-thread
+       (lambda () (unwind-protect (rejoin d) (setf (wireless-rejoining d) nil)))
+       :name "wifi rejoin"))))
+
+(defun lost-signal (l p f)
+  (cond ((and f (= (getf p :code) #xC1) (member (aref f 0) '(#xC0 #xA0))
+              (equalp (subseq f 10 16) (link-bssid l)))
+         (if (= (aref f 0) #xC0) :deauthenticated :disassociated))
+        ((and (= (getf p :code) #xA2) (>= (length (getf p :payload)) 8)
+              (> (u32le (getf p :payload) 4) *missed-beacons-limit*))
+         :beacons-lost)))
+
 (defmethod devices:network-send ((d wireless-interface) frame)
+  (unless (wireless-up-p d) (return-from devices:network-send 0))
   (let* ((l (wireless-link d))
          (frame (octets frame))
          (dst (subseq frame 0 6)) (src (subseq frame 6 12)))
@@ -288,12 +330,14 @@
       (and (= (logand status (ash 7 8)) (ash 2 8)) (logbitp 11 status) (logbitp 6 status))))
 
 (defmethod devices:network-receive ((d wireless-interface))
-  (let* ((l (wireless-link d)) (w (link-card l)) (out nil))
+  (unless (wireless-up-p d) (sleep 0.1) (return-from devices:network-receive nil))
+  (let* ((l (wireless-link d)) (w (link-card l)) (out nil) (lost nil))
     (sb-thread:with-recursive-lock ((link-lock l))
       (acknowledge-interrupts w)
       (dolist (p (receive-packets w))
-        (when (= (getf p :code) #xC1)
-          (multiple-value-bind (f status) (mpdu (getf p :payload))
+        (multiple-value-bind (f status) (and (= (getf p :code) #xC1) (mpdu (getf p :payload)))
+          (setf lost (or lost (lost-signal l p f)))
+          (when (= (getf p :code) #xC1)
             (when (and f (data-from-bss-p l f) (decrypted-p f status))
               (if (eql +eapol-ethertype+ (data-payload f))
                   (multiple-value-bind (reply events) (supplicant-receive (link-supplicant l) (nth-value 1 (data-payload f)))
@@ -301,6 +345,7 @@
                     (dolist (e events)
                       (when (eq (first e) :group) (install-key l (second e) (third e) t))))
                   (let ((e (ethernet-from f))) (when e (push e out)))))))))
+    (when lost (lost d lost))
     (nreverse out)))
 
 (defvar *wifi-confirmed* nil)
@@ -325,13 +370,11 @@
      :name "wifi switch")
     d))
 
-(defparameter *wifi-settings* "/Library/Settings/wifi")
-
 (defun start-wifi ()
   (darterfly/net:start-network)
   (unless (darterfly/net::interface-device darterfly/net:*interface*)
-    (with-open-file (s *wifi-settings*)
-      (let ((ssid (read-line s)) (pass (read-line s)))
+    (multiple-value-bind (ssid pass) (wifi-settings)
+      (progn
         (setf *link* nil)
         (bring-up)
         (darterfly/net::interface-attach

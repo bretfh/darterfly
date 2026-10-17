@@ -176,3 +176,14 @@
       (is (equalp #(1 2) (coerce body 'simple-vector))))))
 
 (defun le16 (n) (list (ldb (byte 8 0) n) (ldb (byte 8 8) n)))
+
+(test losing-the-access-point-is-noticed
+  (let* ((l (offline-link))
+         (bssid (hex "04f021323f38")) (me (hex "10f60a82a3ca"))
+         (deauth (darterfly/crypto:octets (darterfly/wifi::frame-header #xC0 0 me bssid bssid 1) 7 0))
+         (other (darterfly/crypto:octets (darterfly/wifi::frame-header #xC0 0 me (hex "020000000001") (hex "020000000001") 1) 7 0))
+         (beacons (lambda (n) (list :code #xA2 :payload (darterfly/crypto:octets (le32 0) (le32 n) (le32 n) (le32 0) (le32 0))))))
+    (is (eq :deauthenticated (darterfly/wifi::lost-signal l (list :code #xC1) deauth)))
+    (is (null (darterfly/wifi::lost-signal l (list :code #xC1) other)))
+    (is (eq :beacons-lost (darterfly/wifi::lost-signal l (funcall beacons 30) nil)))
+    (is (null (darterfly/wifi::lost-signal l (funcall beacons 3) nil)))))
