@@ -18,9 +18,12 @@
    (iml :accessor ax210-iml)
    (sections :accessor ax210-sections)
    (paging :accessor ax210-paging)
-   (alive :initform nil :accessor ax210-alive)))
+   (alive :initform nil :accessor ax210-alive)
+   (pnvm :initform nil :accessor ax210-pnvm)
+   (notifications :initform nil :accessor ax210-notifications)))
 
 (defparameter *firmware-path* "/Library/Firmware/iwlwifi-ty-a0-gf-a0-77.ucode")
+(defparameter *pnvm-path* "/Library/Firmware/iwlwifi-ty-a0-gf-a0.pnvm")
 
 (defconstant +page+ 4096)
 (defconstant +rx-count+ 512)
@@ -241,7 +244,8 @@
       (setf (ax210-alive w) (find-if (lambda (p) (and (= 0 (getf p :group)) (= 1 (getf p :code)))) packets)))))
 
 (defun receive-packets (w)
-  (let ((hw (logand (get-16 (ax210-rx-status w) 0) #xFFF (1- +rx-count+))))
+  (let* ((hw (logand (get-16 (ax210-rx-status w) 0) #xFFF (1- +rx-count+)))
+         (packets
     (loop while (/= (ax210-rx-cur w) hw)
           collect (let* ((i (ax210-rx-cur w))
                          (rbid (get-16 (ax210-rx-used w) (+ 4 (* 32 i))))
@@ -250,6 +254,69 @@
                     (setf (ax210-rx-cur w) (mod (1+ i) +rx-count+))
                     (list :code (sb-sys:sap-ref-8 (dma-sap buffer) 4) :group (sb-sys:sap-ref-8 (dma-sap buffer) 5)
                           :length length :payload (dma-octets buffer 8 (max 0 (min (- length 4) (- +page+ 8)))))))))
+    (setf (reg w #x1C80) (logand (mod (+ hw (1- +rx-count+)) +rx-count+) (lognot 7)))
+    packets))
+
+(defun wait-notification (w group code seconds)
+  (let ((deadline (+ (microseconds) (* seconds 1000000))))
+    (loop
+      (let ((found (find-if (lambda (p) (and (= group (getf p :group)) (= code (getf p :code)))) (ax210-notifications w))))
+        (when found
+          (setf (ax210-notifications w) (remove found (ax210-notifications w)))
+          (return found)))
+      (when (> (microseconds) deadline) (return nil))
+      (let ((packets (receive-packets w)))
+        (if packets
+            (setf (ax210-notifications w) (append (ax210-notifications w) packets))
+            (sleep 0.001))))))
+
+(defun alive-sku (packet)
+  (let ((p (getf packet :payload)))
+    (list (u32le p 116) (u32le p 120) (u32le p 124))))
+
+(defun tlvs (v &key (start 0))
+  (loop with at = start
+        while (<= (+ at 8) (length v))
+        collect (let* ((type (u32le v at)) (length (u32le v (+ at 4))) (end (min (length v) (+ at 8 length))))
+                  (prog1 (cons type (subseq v (+ at 8) end))
+                    (setf at (+ at 8 (* 4 (ceiling length 4))))))))
+
+(defun pnvm-sections (file sku mac-type rf-type)
+  (let ((tlvs (tlvs file)))
+    (loop for rest on tlvs
+          for (type . data) = (first rest)
+          when (and (= type 64) (>= (length data) 12)
+                    (equal sku (list (u32le data 0) (u32le data 4) (u32le data 8))))
+            do (let ((sections nil) (match nil))
+                 (loop for (ty . d) in (rest rest)
+                       until (= ty 64)
+                       do (case ty
+                            (58 (when (and (= mac-type (logior (aref d 0) (ash (aref d 1) 8)))
+                                           (= rf-type (logior (aref d 2) (ash (aref d 3) 8))))
+                                  (setf match t)))
+                            (19 (unless (= (u32le d 0) #xDDDDEEEE) (push (subseq d 4) sections)))))
+                 (when (and match sections) (return (nreverse sections)))))))
+
+(defun load-pnvm (w)
+  (let* ((rev (reg w #x28)) (rf (reg w #x9C))
+         (sections (pnvm-sections (read-file-octets *pnvm-path*) (alive-sku (ax210-alive w))
+                                  (ldb (byte 12 4) rev) (ldb (byte 12 12) rf))))
+    (unless sections (return-from load-pnvm (note w :pnvm :no-match :sku (alive-sku (ax210-alive w)))))
+    (let ((size (reduce #'+ sections :key #'length))
+          (s (ax210-scratch w)))
+      (unless (ax210-pnvm w)
+        (setf (ax210-pnvm w)
+              (if (logbitp 32 (firmware-capabilities (ax210-firmware w)))
+                  (let ((table (dma-pages 1)))
+                    (loop for section in sections for i from 0
+                          do (put-64 table (* 8 i) (dma-copy section)))
+                    table)
+                  (dma-copy (apply #'octets sections)))))
+      (put-64 s 16 (ax210-pnvm w))
+      (put-32 s 24 size)
+      (with-nic (w) (setf (prph w (+ #xA05C04 +umac-prph+)) (ash 1 20)))
+      (note w :pnvm :sections (length sections) :size size
+            :complete (and (wait-notification w #xC #xFE 2) t)))))
 
 (defun alive-summary (packet)
   (let ((p (getf packet :payload)))
@@ -262,6 +329,8 @@
 (defun bring-up ()
   (let ((w (or *card* (setf *card* (make-card)))))
     (setf (ax210-log w) nil (ax210-rx-cur w) 0 (ax210-alive w) nil)
+    (setf (ax210-notifications w) nil)
     (start-hardware w)
     (boot-firmware w)
+    (when (ax210-alive w) (load-pnvm w))
     (list :alive (alive-summary (ax210-alive w)) :log (reverse (ax210-log w)))))
