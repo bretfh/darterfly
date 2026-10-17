@@ -1,6 +1,6 @@
 (defpackage #:darterfly/worlds
   (:use #:cl)
-  (:export #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error))
+  (:export #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages))
 (in-package #:darterfly/worlds)
 
 (define-condition world-error (error)
@@ -53,5 +53,8 @@
 
 (defun stop (world) (machdep 45 world))
 
+(defun free-pages () (machdep 47))
+
 (defun world-state (world)
-  (if (logtest (machdep 46 world) 2) :stopped :running))
+  (let ((flags (machdep 46 world)))
+    (cond ((logtest flags 4) :gone) ((logtest flags 2) :stopped) (t :running))))

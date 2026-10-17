@@ -225,6 +225,7 @@
       ((= n 44) (ok regs (world-spawn a b (reg regs +r-rdx+) (reg regs +r-r10+))))
       ((= n 45) (ok regs (world-stop-id a)))
       ((= n 46) (ok regs (world-state a)))
+      ((= n 47) (ok regs (vm-page-free-count)))
       ((= n 4) (ok regs (if (privileged) (address commpage) +commpage-va+)))
       ((= n 5) (ok regs (the :u32 (serial-ready))))
       ((= n 6)

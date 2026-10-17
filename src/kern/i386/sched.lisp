@@ -96,7 +96,20 @@
               (kfree (mem :u64 (+ th +t-stack+)))
               (kfree th))
             (setf prev th))
-        (setf th next)))))
+        (setf th next))))
+  (let ((w (mem :u64 (+ (world-0) +w-next+))))
+    (while w
+      (let ((next (mem :u64 (+ w +w-next+))))
+        (when (and (logand (mem :u64 (+ w +w-flags+)) +stopped+) (not (world-threads w)))
+          (world-destroy w))
+        (setf w next)))))
+
+(define-low world-threads (w)
+  (let ((th all-threads) (n 0))
+    (while th
+      (when (= (world-of th) w) (incf n))
+      (setf th (mem :u64 (+ th +t-all-next+))))
+    n))
 
 (define-low thread-alloc ()
   (reap-threads)
@@ -131,6 +144,7 @@
     (rep-stosb stack 0 +kernel-stack-size+)
     (setf (mem :u64 (+ th +t-kstack-top+)) k)
     (setf (mem :u64 (+ th +t-stack+)) stack)
+    (setf (mem :u64 (+ th +t-world+)) (world-0))
     (setf (mem :u32 (+ th +t-state+)) +th-run+)
     (setf k (push-word k 0))
     (setf k (push-word k (code-address idle-thread)))
