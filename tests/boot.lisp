@@ -866,6 +866,22 @@
                (is (search "(:FREE " seen) "the process lock is free again and processes still work: ~a" seen)))
         (image:finish c 5)))))
 
+(test a-thread-caught-in-a-reload-carries-on
+  (let ((c (image:bare-console :boot-args "init")))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
+      (unwind-protect
+           (progn
+             (is (image:expect c "init: pid 1" :timeout 120))
+             (ask "(defgeneric cl-user::reloaded (x))")
+             (ask "(setf darterfly/bsd:*reloading* t)")
+             (ask "(defvar cl-user::*caught* (sb-thread:make-thread (lambda () (cl-user::reloaded 1)) :name \"caught\"))")
+             (ask "(sleep 1)")
+             (ask "(defmethod cl-user::reloaded ((x integer)) (* x 42))")
+             (ask "(setf darterfly/bsd:*reloading* nil)")
+             (is (search "42" (ask "(sb-thread:join-thread cl-user::*caught* :default :ended :timeout 10)"))
+                 "the call that found no method retries once the reload is done"))
+        (image:finish c 5)))))
+
 (test runaway-code-can-be-stopped
   (let ((c (image:bare-console :boot-args "init"))
         (image:*screen-size* '(1280 800)))

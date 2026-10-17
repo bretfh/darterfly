@@ -134,9 +134,22 @@
       (setf (gethash thread *user-threads*) (cons function keys)))
     thread))
 
+(defvar *reloading* nil)
+(defvar *reloaded* 0)
+
+(defun reloading-p ()
+  (or *reloading* (< (- (get-internal-real-time) *reloaded*) internal-time-units-per-second)))
+
+(defun retry-restart (condition)
+  (find "RETRY" (compute-restarts condition) :key (lambda (r) (symbol-name (restart-name r))) :test #'string=))
+
 (defun report-and-unwind (condition hook)
   (declare (ignore hook))
   (unless (or (eq sb-thread:*current-thread* (sb-thread:main-thread)) *debugger-hook*)
+    (when (reloading-p)
+      (loop while *reloading* do (sleep 0.05))
+      (let ((retry (retry-restart condition)))
+        (when retry (invoke-restart retry))))
     (ignore-errors
      (format *error-output* "~&~a: ~a~%" (sb-thread:thread-name sb-thread:*current-thread*) condition)
      (sb-debug:print-backtrace :stream *error-output* :count 15))
