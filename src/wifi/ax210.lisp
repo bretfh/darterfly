@@ -80,6 +80,8 @@
       (sb-kernel:system-area-ub8-copy (sb-sys:vector-sap octets) 0 (dma-sap pa) 0 (length octets)))
     pa))
 
+(defun zeros (n) (make-array n :element-type '(unsigned-byte 8) :initial-element 0))
+
 (defun dma-copy (octets)
   (copy-to-dma octets (dma-pages (ceiling (length octets) +page+))))
 
@@ -216,6 +218,9 @@
   (devices:mmio-write (+ (card-regs w) #x4) 8 #x40)
   (set-reg-bits w #xA8 #x800fffff)
   (setf (reg w #x280C) (lognot 1) (reg w #x2804) (lognot (logior 1 2 (ash 1 16) (ash 1 17) (ash 1 19) (ash 1 21))))
+  (copy-to-dma (zeros +page+) (card-rx-status w))
+  (copy-to-dma (zeros (* 32 +rx-count+)) (card-rx-used w))
+  (setf (card-rx-cur w) 0)
   (fill-rx-ring w)
   (refresh-images w)
   (write-context w)
@@ -429,7 +434,6 @@
           (loop for c from 100 to 144 by 4 collect (list c 0))
           (loop for c from 149 to 165 by 4 collect (list c 0))))
 
-(defun zeros (n) (make-array n :element-type '(unsigned-byte 8) :initial-element 0))
 
 (defun le-u16 (n) (list (ldb (byte 8 0) n) (ldb (byte 8 8) n)))
 
