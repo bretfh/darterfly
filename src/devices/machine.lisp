@@ -1,7 +1,7 @@
 (defpackage #:darterfly/devices
   (:use #:cl)
   (:nicknames #:devices)
-  (:export #:brightness #:set-brightness #:restore-brightness #:machdep
+  (:export #:*device-hooks* #:announce #:brightness #:set-brightness #:restore-brightness #:machdep
    #:start-devices #:device-tree #:*registry-root*
    #:entry #:entry-name #:entry-location #:entry-parent #:entry-children
    #:get-property #:set-property #:find-entries

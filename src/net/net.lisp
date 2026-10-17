@@ -63,7 +63,9 @@
   (darterfly/devices:network-send device frame))
 
 (defun send-frame (dst type payload)
-  (if-output (interface-device *interface*) (octets dst (interface-mac *interface*) (be type 2) payload)))
+  (let ((device (interface-device *interface*)))
+    (when device
+      (if-output device (octets dst (interface-mac *interface*) (be type 2) payload)))))
 
 (defun arp-packet (op target-mac target-ip)
   (octets (be 1 2) (be +ethertype-ip+ 2) (be 6 1) (be 4 1) (be op 2)
@@ -189,28 +191,61 @@
             ((= type +ethertype-ip+) (receive-ip payload))
             ((= type +ethertype-ip6+) (receive-ip6 payload))))))
 
-(defun input-loop ()
-  (let* ((device (interface-device *interface*))
-         (vector (darterfly/devices:interrupt-vector device)))
+(defun input-loop (device)
+  (let ((vector (darterfly/devices:interrupt-vector device)))
     (loop
+      (unless (eq device (interface-device *interface*)) (return))
       (let ((frames (darterfly/devices:network-receive device)))
         (cond (frames (dolist (f frames) (ignore-errors (receive-frame f))))
               (vector (darterfly/devices:wait-for-interrupt (list vector)))
               (t (sleep 0.002)))))))
 
-(defun start-network (&key ip (prefix 24) gateway)
+(defvar *configuration* nil)
+
+(defun interface-attach (device)
+  (when (and *interface*
+             (sb-thread:with-mutex ((interface-lock *interface*))
+               (unless (interface-device *interface*)
+                 (setf (interface-device *interface*) device
+                       (interface-mac *interface*) (darterfly/devices:network-mac device)
+                       (interface-ip6 *interface*) nil)
+                 t)))
+    (clrhash (interface-arp *interface*))
+    (clrhash (interface-nd6 *interface*))
+    (setf (interface-thread *interface*) (sb-thread:make-thread #'input-loop :name "net input" :arguments (list device)))
+    (start-ip6)
+    (destructuring-bind (&key ip (prefix 24) gateway) *configuration*
+      (if ip
+          (setf (interface-ip *interface*) (ip-address ip) (interface-prefix *interface*) prefix
+                (interface-gateway *interface*) (if gateway (ip-address gateway) 0))
+          (handler-case (dhcp)
+            (net-error (e) (format *error-output* "~&network: ~a~%" e)))))
+    t))
+
+(defun interface-detach (device)
+  (when (and *interface* (eq device (interface-device *interface*)))
+    (setf (interface-device *interface*) nil
+          (interface-ip *interface*) 0
+          (interface-ip6 *interface*) nil)
+    t))
+
+(defun device-changed (event device)
+  (when (typep device 'darterfly/devices:ethernet-controller)
+    (case event
+      (:added (sb-thread:make-thread #'interface-attach :name "net attach" :arguments (list device)))
+      (:removed (interface-detach device)))))
+
+(pushnew 'device-changed darterfly/devices:*device-hooks*)
+
+(defun start-network (&rest configuration &key ip (prefix 24) gateway)
+  (declare (ignore ip prefix gateway))
   (when *interface* (return-from start-network *interface*))
   (darterfly/devices:start-devices)
+  (setf *configuration* configuration
+        *interface* (make-interface))
   (let ((device (first (darterfly/devices:find-entries 'darterfly/devices:ethernet-controller))))
-    (unless device (net-fail :enetdown "no network device"))
-    (setf *interface* (make-interface :device device :mac (darterfly/devices:network-mac device)))
-    (setf (interface-thread *interface*) (sb-thread:make-thread #'input-loop :name "net input"))
-    (start-ip6)
-    (if ip
-        (setf (interface-ip *interface*) (ip-address ip) (interface-prefix *interface*) prefix
-              (interface-gateway *interface*) (if gateway (ip-address gateway) 0))
-        (dhcp))
-    *interface*))
+    (when device (interface-attach device)))
+  *interface*)
 
 (defun udp-echo (number)
   (let ((port (udp-bind number)))

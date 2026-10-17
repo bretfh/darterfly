@@ -30,6 +30,13 @@
   (setf (entry-children parent) (append (entry-children parent) (list child)))
   child)
 
+(defvar *device-hooks* nil)
+
+(defun announce (event device)
+  (dolist (hook *device-hooks*)
+    (handler-case (funcall hook event device)
+      (error (e) (format *error-output* "~&device ~(~a~) ~a: ~a~%" event (entry-name device) e)))))
+
 (defun detach (child)
   (let ((parent (entry-parent child)))
     (when parent

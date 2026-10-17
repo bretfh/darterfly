@@ -17,7 +17,10 @@
    (vector :initform nil :accessor xhci-vector)
    (results :initform (make-hash-table) :reader xhci-results)
    (endpoints :initform (make-hash-table :test 'equal) :reader xhci-endpoints)
-   (lock :initform (sb-thread:make-mutex :name "xhci") :reader xhci-lock)))
+   (lock :initform (sb-thread:make-mutex :name "xhci") :reader xhci-lock)
+   (changed-ports :initform nil :accessor xhci-changed-ports)
+   (port-slots :initform (make-hash-table) :reader xhci-port-slots)
+   (attached :initform (make-hash-table) :reader xhci-attached)))
 
 (add-personality "Class" "USBXHCI" "ProviderClass" "PCIDevice" "PCIClassMatch" "0x000c0330")
 
@@ -92,6 +95,7 @@
               (status (ml-phys-read-32 (+ trb 8))))
           (case type
             (33 (setf (gethash parameter (xhci-results c)) (list (ldb (byte 8 24) status) (ldb (byte 8 24) control))))
+            (34 (pushnew (ldb (byte 8 24) parameter) (xhci-changed-ports c)))
             (32 (let ((endpoint (gethash (list (ldb (byte 8 24) control) (ldb (byte 5 16) control)) (xhci-endpoints c))))
                   (if endpoint
                       (funcall endpoint parameter (ldb (byte 8 24) status) (ldb (byte 24 0) status))
@@ -173,6 +177,7 @@
       (ml-phys-write-32 (+ ep0 4) (logior (ash 3 1) (ash 4 3) (ash mps 16)))
       (ml-phys-write-64 (+ ep0 8) (logior (ring-page ring) 1))
       (ml-phys-write-32 (+ ep0 16) 8))
+    (setf (gethash port (xhci-port-slots c)) slot)
     (command c 11 :parameter input :slot slot)
     (let ((real (aref (read-descriptor c slot ring 1 0 8) 7)))
       (when (and (< speed 3) (/= real mps) (plusp real))
@@ -313,12 +318,53 @@
     (sleep 0.2)
     (loop :for port :from 1 :to (xhci-ports c)
           :when (logbitp 0 (xr32 (portsc c port)))
-            :do (handler-case
-                    (when (reset-port c port)
-                      (configure-device c port))
-                  (error (e) (set-property c (format nil "port ~d" port) (princ-to-string e)))))
+            :do (attach-port c port))
     (register-service c)
+    (sb-thread:make-thread #'watch-ports :name "usb ports" :arguments (list c))
     t))
+
+(defun attach-port (c port)
+  (let ((before (copy-list (entry-children c))))
+    (handler-case
+        (when (reset-port c port)
+          (configure-device c port)
+          (let ((added (remove-if (lambda (child) (member child before)) (entry-children c))))
+            (setf (gethash port (xhci-attached c)) added)
+            (dolist (device added) (announce :added device))))
+      (error (e) (set-property c (format nil "port ~d" port) (princ-to-string e))))))
+
+(defun detach-port (c port)
+  (let ((devices (gethash port (xhci-attached c)))
+        (slot (gethash port (xhci-port-slots c))))
+    (remhash port (xhci-attached c))
+    (remhash port (xhci-port-slots c))
+    (dolist (device devices)
+      (announce :removed device)
+      (detach device))
+    (when slot
+      (sb-thread:with-recursive-lock ((xhci-lock c))
+        (loop for key in (loop for k being the hash-keys of (xhci-endpoints c) when (eql (first k) slot) collect k)
+              do (remhash key (xhci-endpoints c))))
+      (ignore-errors (command c 10 :slot slot))
+      (ml-phys-write-64 (+ (xhci-dcbaa c) (* 8 slot)) 0))))
+
+(defun port-changed (c port)
+  (let* ((at (portsc c port))
+         (value (xr32 at))
+         (connected (logbitp 0 value))
+         (attached (nth-value 1 (gethash port (xhci-attached c)))))
+    (xw32 at (logior (logand value #x0e00c3e0) (logand value #x00fe0000)))
+    (cond ((and connected (not attached)) (attach-port c port))
+          ((and (not connected) attached) (detach-port c port)))))
+
+(defun watch-ports (c)
+  (loop
+    (if (xhci-vector c)
+        (wait-for-interrupt (list (xhci-vector c)) 1)
+        (sleep 0.5))
+    (process-events c)
+    (dolist (port (sb-thread:with-recursive-lock ((xhci-lock c)) (shiftf (xhci-changed-ports c) nil)))
+      (port-changed c port))))
 
 (defmethod interrupt-vector ((d usb-hid-device)) (xhci-vector (hid-controller d)))
 

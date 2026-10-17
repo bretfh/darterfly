@@ -298,7 +298,7 @@
                                     (format nil "virtio-blk-pci,drive=disk~d" i))))
    (list "-netdev" (format nil "user,id=net0~{,hostfwd=~(~a~)::~d-:~d~}" (loop for (proto host guest) in forwards append (list proto host guest))))
    (loop :for device :in *input-devices* :append (list "-device" device))
-   (list "-device" *network-device*)
+   (when *network-device* (list "-device" *network-device*))
    (list "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
         "-monitor" (format nil "unix:~a,server=on,wait=off" (monitor-path))
         "-qmp" (format nil "unix:~a,server=on,wait=off" (qmp-path))

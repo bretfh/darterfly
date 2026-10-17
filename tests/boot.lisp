@@ -1771,6 +1771,30 @@
         (image:*network-device* "usb-net,netdev=net0,bus=xhci.0"))
     (nrepl-check :status t)))
 
+(test usb-ethernet-plugged-in-later
+  (let* ((image:*input-devices* '("qemu-xhci,id=xhci" "virtio-keyboard-pci" "virtio-tablet-pci"))
+         (image:*network-device* nil)
+         (port (free-udp-port))
+         (c (image:bare-console :forwards (list (list :tcp port 4011)))))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60))
+           (plug () (image:qmp "device_add" (darterfly/qmp:dict "driver" "usb-net" "netdev" "net0" "bus" "xhci.0" "id" "dongle")))
+           (answers () (loop :with deadline := (+ (get-internal-real-time) (* 60 internal-time-units-per-second))
+                             :thereis (search "=> 3" (nrepl-client port "test-key" "(+ 1 2)"))
+                             :until (> (get-internal-real-time) deadline)
+                             :do (sleep 1))))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 90)
+             (is (search "4011" (ask "(darterfly/nrepl:start :key \"test-key\")")) "nrepl starts with no network device")
+             (plug)
+             (is (answers) "nrepl answers once the dongle is plugged in")
+             (image:qmp "device_del" (darterfly/qmp:dict "id" "dongle"))
+             (is (search "NIL" (ask "(loop :repeat 100 :while (darterfly/net::interface-device darterfly/net:*interface*) :do (sleep 0.1) :finally (return (darterfly/net::interface-device darterfly/net:*interface*)))"))
+                 "unplugging it takes the network down")
+             (plug)
+             (is (answers) "and plugging it back brings nrepl back"))
+        (image:finish c 5)))))
+
 (defvar *stick-netdev* "user,id=net0")
 
 (defun stick-machine (&rest devices)
