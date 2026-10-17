@@ -506,7 +506,11 @@
                 :ssid (let ((s (cdr (assoc 0 elements)))) (and s (map 'string #'code-char s)))
                 :channel (let ((ds (cdr (assoc 3 elements)))) (if (and ds (plusp (length ds))) (aref ds 0) (aref payload 42)))
                 :signal (flet ((dbm (e) (if (zerop e) -256 (- e)))) (max (dbm (aref payload 40)) (dbm (aref payload 41))))
-                :rsn (and (assoc 48 elements) t)))))))
+                :rsn (and (assoc 48 elements) t)
+                :tsf (loop for i below 8 sum (ash (aref frame (+ 24 i)) (* 8 i)))
+                :interval (logior (aref frame 32) (ash (aref frame 33) 8))
+                :dtim (let ((tim (cdr (assoc 5 elements)))) (if (and tim (>= (length tim) 2) (plusp (aref tim 1))) (aref tim 1) 1))
+                :gp2 (u32le payload 44)))))))
 
 (defun scan (w &key (seconds 15))
   (setf (card-notifications w) (remove-if (lambda (p) (= (getf p :code) #xC1)) (card-notifications w)))

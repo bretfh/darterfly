@@ -140,3 +140,39 @@
     (is (= 3 (darterfly/wifi::command-version fw 0 1)))
     (is (= 6 (darterfly/wifi::command-version fw 5 2)))
     (is (logbitp 34 (darterfly/wifi::firmware-capabilities fw)))))
+
+(defun offline-link ()
+  (let ((card (make-instance 'darterfly/wifi::wireless-card)))
+    (setf (darterfly/wifi::card-nvm card) (list :mac (hex "10f60a82a3ca")))
+    (make-instance 'darterfly/wifi::link :card card :bssid (hex "04f021323f38")
+                                         :bss (list :channel 153 :interval 100 :dtim 2 :tsf #x0102030405060708 :gp2 77))))
+
+(test join-commands-have-the-firmware-layouts
+  (let ((l (offline-link)))
+    (is (= 148 (length (darterfly/wifi::mac-context l :add nil))))
+    (let ((m (darterfly/wifi::mac-context l :modify t)))
+      (is (equalp (hex "10f60a82a3ca") (subseq m 16 22)))
+      (is (equalp (hex "04f021323f38") (subseq m 24 30)))
+      (is (= 1 (darterfly/wifi::u32le m 100)))
+      (is (= 200 (darterfly/wifi::u32le m 124))))
+    (is (= 1940 (length (darterfly/wifi::scan-request (darterfly/wifi::link-card l)))))
+    (is (= 24 (length (darterfly/wifi::frame-header #xB0 0 (hex "04f021323f38") (hex "10f60a82a3ca") (hex "04f021323f38") 5))))))
+
+(test an-eapol-frame-comes-back-out-of-a-data-frame
+  (let* ((l (offline-link))
+         (frame (darterfly/wifi::eapol-frame l (darterfly/crypto:octets 1 3 0 5 2 0 0 0 0))))
+    (is (= 8 (aref frame 0)))
+    (is (= 1 (aref frame 1)))
+    (setf (aref frame 1) 2)
+    (multiple-value-bind (type body) (darterfly/wifi::data-payload frame)
+      (is (= #x888E type))
+      (is (equalp #(1 3 0 5 2 0 0 0 0) (coerce body 'simple-vector))))))
+
+(test a-padded-qos-frame-loses-its-padding
+  (let* ((frame (darterfly/crypto:octets #x88 2 0 0 (make-array 22 :initial-element 7) #xEE #xEE #xAA #xAA 3 0 0 0 8 0 1 2))
+         (payload (darterfly/crypto:octets (le16 (length frame)) 0 #x20 (make-array 8 :initial-element 0) 3 0 0 0 (make-array 48 :initial-element 0) frame)))
+    (multiple-value-bind (type body) (darterfly/wifi::data-payload (darterfly/wifi::mpdu payload))
+      (is (= #x0800 type))
+      (is (equalp #(1 2) (coerce body 'simple-vector))))))
+
+(defun le16 (n) (list (ldb (byte 8 0) n) (ldb (byte 8 8) n)))
