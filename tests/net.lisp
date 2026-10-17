@@ -155,3 +155,18 @@
             (is (zerop (darterfly/net::transport-checksum ours peer 6 segment)))
             (is (= 1440 (darterfly/net::u16be segment 22)) "with the IPv6 segment size")
             (darterfly/net:tcp-unlisten listener)))))))
+
+(test a-retransmit-into-a-dead-link-does-not-stop-the-tcp-timer
+  (let* ((darterfly/net::*connections* (make-hash-table :test 'equalp))
+         (c (darterfly/net::make-connection :state :established :snd-una 1 :snd-nxt 11 :rxtcur 0.01
+                                            :unacked (list (list 1 darterfly/net::+ack+ (make-array 10 :element-type '(unsigned-byte 8) :initial-element 0)
+                                                                 (- (get-internal-real-time) internal-time-units-per-second) 0)))))
+    (setf (gethash :key darterfly/net::*connections*) c)
+    (sb-int:encapsulate 'darterfly/net::send-segment 'dead-link
+                        (lambda (f &rest args) (declare (ignore f args)) (darterfly/net::net-fail :ehostunreach "arp: no answer")))
+    (unwind-protect
+         (progn
+           (finishes (darterfly/net::tcp-tick))
+           (is (eq c (gethash :key darterfly/net::*connections*)) "the connection waits for the link to come back")
+           (is (= 1 (fifth (first (darterfly/net::tcp-unacked c)))) "the failed try still counts toward giving up"))
+      (sb-int:unencapsulate 'darterfly/net::send-segment 'dead-link))))
