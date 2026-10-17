@@ -4,6 +4,8 @@
 
 (defparameter *power-save* 2)
 
+(defparameter *ht* t)
+
 (defconstant +tx-slots+ 256)
 (defconstant +mgmt-tid+ 15)
 
@@ -22,6 +24,8 @@
    (aid :initform nil :accessor link-aid)
    (supplicant :initform nil :accessor link-supplicant)
    (keyed :initform nil :accessor link-keyed)
+   (want-ht :initarg :want-ht :initform nil :reader link-want-ht)
+   (ht :initform nil :accessor link-ht)
    (frames :initform nil :accessor link-frames)
    (lock :initform (sb-thread:make-mutex :name "wifi link") :reader link-lock)))
 
@@ -133,13 +137,21 @@
     (add-queue l)
     (command-ok w 3 5 (octets (le-u32 0) (le-u32 1) (le-u32 0) (le-u32 (* 9 (getf bss :interval 100))) (le-u32 0) (le-u32 0)))))
 
+(defun station-flags (l)
+  (let ((ht (link-ht l)))
+    (if ht
+        (values (logior (ash 1 28) (ash (getf ht :exponent) 19) (ash (getf ht :density) 23))
+                (logior (ash 3 26) (ash 3 28) (ash #xF 19) (ash 7 23)))
+        (values 0 (logior (ash 3 26) (ash 3 28))))))
+
 (defun add-station (l modify)
+  (multiple-value-bind (flags mask) (station-flags l)
   (let ((p (getf (command-ok (link-card l) 0 #x18
                              (octets (if modify 1 0) 0 0 0 (le-u32 0) (link-bssid l) 0 0 0 0 0 0
-                                     (le-u32 0) (le-u32 (logior (ash 3 26) (ash 3 28)))
+                                     (le-u32 flags) (le-u32 mask)
                                      (zeros 6) 0 0 (le-u16 (or (link-aid l) 0)) 0 0 (le-u32 0) 0 0 0 0))
                  :payload)))
-    (unless (= 1 (logand #xFF (u32le p 0))) (error "the AX210 refused the station: ~x" (u32le p 0)))))
+    (unless (= 1 (logand #xFF (u32le p 0))) (error "the AX210 refused the station: ~x" (u32le p 0))))))
 
 (defun mac-context (l action assoc)
   (let* ((w (link-card l)) (bss (link-bss l))
@@ -152,13 +164,26 @@
             (le-u32 5) (le-u32 0) (getf (card-nvm w) :mac) 0 0 (link-bssid l) 0 0
             (le-u32 0) (le-u32 #x15) (le-u32 0) (le-u32 0) (le-u32 (ash 1 4))
             (le-u32 (logior (ash 1 2) (if assoc 0 (ash 1 6))))
-            (le-u32 1) ac
+            (le-u32 (logior 1 (if (link-ht l) 2 0))) ac
             (le-u32 (if assoc 1 0)) (le-u32 (if assoc (getf bss :gp2 0) 0))
             (le-u32 (ldb (byte 32 0) (if assoc (getf bss :tsf 0) 0))) (le-u32 (ash (if assoc (getf bss :tsf 0) 0) -32))
             (le-u32 interval) (le-u32 0) (le-u32 (* interval (getf bss :dtim 1))) (le-u32 0) (le-u32 10)
             (le-u32 (or (link-aid l) 0)) (le-u32 (if assoc (getf bss :gp2 0) 0)) (le-u32 0))))
 
 (defparameter +rates-5ghz+ (octets #x8C #x12 #x98 #x24 #xB0 #x48 #x60 #x6C))
+
+(defparameter +ht-capabilities+
+  (octets 45 26 (le-u16 #x012D) #x17 #xFF #xFF (zeros 10) 1 0 0 0 (le-u16 0) (le-u32 0) 0))
+
+(defparameter +wmm-information+ (octets 221 7 0 #x50 #xF2 2 0 1 0))
+
+(defun ht-from (elements)
+  (let ((caps (cdr (assoc 45 elements))))
+    (when (and caps (>= (length caps) 3))
+      (let ((info (logior (aref caps 0) (ash (aref caps 1) 8))))
+        (list :sgi20 (logbitp 5 info) :rx-stbc (plusp (ldb (byte 2 8) info))
+              :exponent (ldb (byte 2 0) (aref caps 2)) :density (ldb (byte 3 2) (aref caps 2))
+              :streams (if (and (>= (length caps) 5) (plusp (aref caps 4))) 2 1))))))
 
 (defun authenticate (l)
   (let ((w (link-card l)) (bssid (link-bssid l)))
@@ -177,12 +202,14 @@
                           (le-u16 #x0011) (le-u16 10)
                           0 (length ssid) (map 'list #'char-code ssid)
                           1 (length +rates-5ghz+) +rates-5ghz+
-                          +rsn-psk-ccmp+))
+                          +rsn-psk-ccmp+
+                          (if (link-want-ht l) (octets +ht-capabilities+ +wmm-information+) #())))
       (let ((f (take-frame l (lambda (f) (from-bss-p l f #x10)) 1)))
         (when f
           (let ((status (logior (aref f 26) (ash (aref f 27) 8))))
             (unless (zerop status) (error "association refused, status ~d" status))
-            (setf (link-aid l) (logand #x3FFF (logior (aref f 28) (ash (aref f 29) 8))))
+            (setf (link-aid l) (logand #x3FFF (logior (aref f 28) (ash (aref f 29) 8)))
+                  (link-ht l) (and (link-want-ht l) (ht-from (elements (subseq f 30)))))
             (return (link-aid l))))))))
 
 (defun after-association (l)
@@ -195,7 +222,17 @@
                                        append (append (le-u32 aging) (le-u32 idle)))))
     (command-ok w 0 #xD0 (octets 1 0 0 1 (link-bssid l) 0 0))
     (set-power-save l *power-save*)
-    (send-command w 5 #xF (octets 0 0 0 0 0 0 1 0 (le-u16 0) (le-u16 #xFF0) (zeros 12) (le-u16 2346) (le-u16 0)))))
+    (send-command w 5 #xF (rate-config l))))
+
+(defun rate-config (l)
+  (let ((ht (link-ht l)))
+    (if ht
+        (let ((two (= 2 (getf ht :streams))))
+          (octets 0 0 0 0 0 1 (if two 3 1) (if (getf ht :sgi20) 1 0)
+                  (le-u16 (if (and two (getf ht :rx-stbc)) 1 0)) (le-u16 #xFF0)
+                  (le-u16 #xFF) (le-u16 0) (le-u16 0) (le-u16 (if two #xFF 0)) (le-u16 0) (le-u16 0)
+                  (le-u16 3839) (le-u16 0)))
+        (octets 0 0 0 0 0 0 1 0 (le-u16 0) (le-u16 #xFF0) (zeros 12) (le-u16 2346) (le-u16 0)))))
 
 (defparameter +power-levels+ '((0 0 0) (1 200 500) (2 200 300) (3 50 100)))
 
@@ -253,9 +290,9 @@
 
 (defvar *link* nil)
 
-(defun join (ssid passphrase &key (card *card*))
+(defun join (ssid passphrase &key (card *card*) (ht *ht*))
   (let ((bss (or (find-network card ssid) (error "no network called ~s in range" ssid))))
-      (let ((l (make-instance 'link :card card :bss bss :bssid (mac-octets (getf bss :bssid)))))
+      (let ((l (make-instance 'link :card card :bss bss :bssid (mac-octets (getf bss :bssid)) :want-ht ht)))
         (setf *link* l)
         (context-commands l)
         (authenticate l)
@@ -292,12 +329,13 @@
 
 (defun rejoin (d)
   (loop for wait in '(0 2 5 10 30 30 60)
+        for try from 0
         do (sleep wait)
            (handler-case
                (multiple-value-bind (ssid pass) (wifi-settings)
                  (setf *link* nil)
                  (bring-up)
-                 (setf (wireless-link d) (join ssid pass))
+                 (setf (wireless-link d) (join ssid pass :ht (and *ht* (zerop try))))
                  (return t))
              (error (e) (note *card* :rejoin-failed (princ-to-string e))))
         finally (return nil)))
