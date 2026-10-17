@@ -79,6 +79,18 @@
     (decf free-count)
     pa))
 
+(define-low vm-pages-grab-contiguous (n)
+  (let ((i current)
+        (bytes (* n +page-size+)))
+    (while (< i nranges)
+      (when (<= (+ (ref range-next i) bytes) (ref range-end i))
+        (let ((pa (ref range-next i)))
+          (incf (ref range-next i) bytes)
+          (decf free-count n)
+          (result pa)))
+      (incf i))
+    0))
+
 (define-low vm-page-free (pa)
   (setf (mem :u64 (+ pa +physmap-base+)) free-list)
   (setf free-list pa)

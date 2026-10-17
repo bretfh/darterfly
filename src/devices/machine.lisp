@@ -12,7 +12,7 @@
    #:virtio-transport #:virtio-pci-transport #:virtio-device-type
    #:virtio-block-storage-device #:block-count #:block-size #:read-blocks #:write-blocks
    #:block-device #:media #:media-read #:media-write #:media-flush #:media-size #:gpt-scheme #:crc32
-   #:acpi-table #:vm-page-grab #:ml-io-map #:ml-io-map-wcomb #:boot-arg #:kernel-flags #:boot-video
+   #:acpi-table #:vm-page-grab #:vm-pages-grab #:phys-sap #:mmio-read #:mmio-write #:pci-primary-id #:ml-io-map #:ml-io-map-wcomb #:boot-arg #:kernel-flags #:boot-video
    #:wait-for-interrupt #:interrupt-vector
    #:virtio-input #:input-events #:input-abs-range
    #:virtio-network #:ethernet-controller #:ecm-status #:battery #:ethernet-interface #:network-send #:network-receive #:network-mac
@@ -29,6 +29,7 @@
 
 (defun boot-args () (machdep 8))
 (defun vm-page-grab () (machdep 9))
+(defun vm-pages-grab (n) (machdep 30 n))
 (defun ml-io-map (pa size) (machdep 10 pa size))
 (defun ml-io-map-wcomb (pa size) (machdep 14 pa size))
 

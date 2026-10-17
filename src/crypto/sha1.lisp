@@ -89,8 +89,16 @@
                                   collect (hmac-sha1 key label 0 data i)))
             0 length)))
 
-(defvar *random* nil)
-
 (defun random-octets (n)
-  (let ((state (or *random* (setf *random* (make-random-state t)))))
-    (apply #'octets (loop repeat n collect (random 256 state)))))
+  (let ((out (make-array n :element-type '(unsigned-byte 8)))
+        (machdep (sb-sys:find-foreign-symbol-address "__machdep")))
+    (if machdep
+        (sb-sys:with-pinned-objects (out)
+          (unless (= n (sb-alien:alien-funcall
+                        (sb-alien:sap-alien (sb-sys:int-sap machdep)
+                                            (function sb-alien:unsigned-long sb-alien:long sb-alien:unsigned-long sb-alien:unsigned-long))
+                        16 (sb-sys:sap-int (sb-sys:vector-sap out)) n))
+            (error "the processor gave no random numbers")))
+        (with-open-file (s "/dev/urandom" :element-type '(unsigned-byte 8))
+          (read-sequence out s)))
+    out))

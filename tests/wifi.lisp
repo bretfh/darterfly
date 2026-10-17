@@ -114,3 +114,29 @@
     (is (null (darterfly/wifi:supplicant-receive s (authenticator-frame wrong #x13ca "0000000000000002" anonce
                                                                         (wrapped-gtk wrong (darterfly/crypto:random-octets 16) 1)))))
     (is (eq :sent-2 (darterfly/wifi:supplicant-state s)))))
+
+(defun tlv (type data)
+  (let ((data (darterfly/crypto:octets data)))
+    (darterfly/crypto:octets (le32 type) (le32 (length data)) data (make-array (mod (- (length data)) 4) :initial-element 0))))
+
+(defun le32 (n) (loop for i below 4 collect (ldb (byte 8 (* 8 i)) n)))
+
+(test the-firmware-file-splits-into-its-images
+  (let* ((file (darterfly/crypto:octets (le32 0) (le32 #x0A4C5749) (make-array 64 :initial-element 0) (make-array 16 :initial-element 0)
+                                        (tlv 19 (darterfly/crypto:octets (le32 #x440000) #(1 2 3)))
+                                        (tlv 19 (darterfly/crypto:octets (le32 #xFFFFCCCC)))
+                                        (tlv 19 (darterfly/crypto:octets (le32 #x800000) #(4 5 6 7)))
+                                        (tlv 19 (darterfly/crypto:octets (le32 #xAAAABBBB)))
+                                        (tlv 19 (darterfly/crypto:octets (le32 0) #(8)))
+                                        (tlv 52 #(9 9 9 9 9))
+                                        (tlv 48 #(1 0 3 0 2 5 6 7))
+                                        (tlv 30 (darterfly/crypto:octets (le32 1) (le32 4)))))
+         (fw (darterfly/wifi::parse-firmware file))
+         (images (darterfly/wifi::firmware-images fw)))
+    (is (equalp '((#x440000 . #(1 2 3))) (mapcar (lambda (s) (cons (car s) (coerce (cdr s) 'simple-vector))) (getf images :lmac))))
+    (is (equalp '(#(4 5 6 7)) (mapcar (lambda (s) (coerce (cdr s) 'simple-vector)) (getf images :umac))))
+    (is (equalp '(#(8)) (mapcar (lambda (s) (coerce (cdr s) 'simple-vector)) (getf images :paging))))
+    (is (equalp #(9 9 9 9 9) (coerce (darterfly/wifi::firmware-iml fw) 'simple-vector)))
+    (is (= 3 (darterfly/wifi::command-version fw 0 1)))
+    (is (= 6 (darterfly/wifi::command-version fw 5 2)))
+    (is (logbitp 34 (darterfly/wifi::firmware-capabilities fw)))))
