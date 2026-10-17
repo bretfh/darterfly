@@ -120,12 +120,12 @@
     (put-line "current" name)
     name))
 
-(defun build-date ()
-  (multiple-value-bind (s m h d mo y) (decode-universal-time (get-universal-time) 0)
+(defun build-date (time)
+  (multiple-value-bind (s m h d mo y) (decode-universal-time time 0)
     (format nil "~d-~2,'0d-~2,'0d ~2,'0d:~2,'0d:~2,'0d UTC" y mo d h m s)))
 
-(defun kernel-image (user-objects)
-  (setf darterfly/low:*build-date* (build-date))
+(defun kernel-image (user-objects &key (date (get-universal-time)))
+  (setf darterfly/low:*build-date* (build-date date))
   (darterfly/link:link-kernel
    (list (darterfly/link:read-object (darterfly/platform:platform-object) "platform.o" :kernel)
          (darterfly/link:read-object (darterfly/kern:kern-object) "kern.o" :kernel))
@@ -144,7 +144,9 @@
                        :test #'string=)))
     (with-open-file (s out :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
       (write-sequence (kernel-image (mapcar (lambda (name) (cons name (read-octets (concatenate 'string objects name))))
-                                            names))
+                                            names)
+                                    :date (reduce #'max names :key (lambda (name) (file-write-date (concatenate 'string objects name)))
+                                                              :initial-value 0))
                       s))
     out))
 

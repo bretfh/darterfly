@@ -87,7 +87,9 @@
     (when (and (probe-file out) (> (file-write-date out) (newest (kernel-inputs))))
       (return-from kernel-file out))
     (c-objects)
-    (let ((image (darterfly/install:kernel-image (loop :for (name path) :in (user-objects) :collect (cons name (octets path))))))
+    (let ((image (darterfly/install:kernel-image (loop :for (name path) :in (user-objects) :collect (cons name (octets path)))
+                                                 :date (newest (mapcar #'source '("src/kern/" "src/bsd/dev/" "src/bsd/kern/" "src/platform/"
+                                                                                  "src/libsa/" "src/sbcl/" "src/low/" "src/asm/"))))))
       (ensure-directories-exist out)
       (with-open-file (s out :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
         (write-sequence image s)))

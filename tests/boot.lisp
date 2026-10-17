@@ -897,6 +897,14 @@
                (is (not (search "12345" (ask "darterfly/devices::*backlight*"))) "the backlight is looked up again, not taken from the old mapping"))
           (image:finish c 5))))))
 
+(test the-kernel-builds-the-same-every-time
+  (let* ((objects (loop :for (name path) :in (darterfly/image::user-objects) :collect (cons name (image::octets path))))
+         (date (encode-universal-time 0 0 0 1 1 2026 0))
+         (first (darterfly/install:kernel-image objects :date date)))
+    (sleep 1.5)
+    (is (equalp first (darterfly/install:kernel-image objects :date date))
+        "the same objects make the same kernel, so a deploy restarts only for a changed kernel")))
+
 (test runaway-code-can-be-stopped
   (let ((c (image:bare-console :boot-args "init"))
         (image:*screen-size* '(1280 800)))
