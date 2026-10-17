@@ -833,7 +833,11 @@
                  "a busy thread shows up with its share of a cpu")
              (is (search "T" (ask "(and (some (lambda (c) (> c 50)) (getf *s* :cpu-busy)) t)")) "and a cpu shows busy")
              (is (search "T" (ask "(and (assoc \"#xDD\" (getf *s* :interrupts-per-s) :test #'equal) t)")) "the clock interrupt is counted")
-             (is (search "PID" (ask "(darterfly/stats:top 1)"))))
+             (is (search "PID" (ask "(darterfly/stats:top 1)")))
+             (ask "(defvar *before* (hash-table-count (darterfly/stats::thread-times)))")
+             (ask "(dotimes (i 200) (sb-thread:join-thread (sb-thread:make-thread (lambda () i))))")
+             (is (search "[T]" (ask "(format nil \"[~a]\" (< (hash-table-count (darterfly/stats::thread-times)) (+ *before* 10)))"))
+                 "threads that end give their kernel memory back"))
         (image:finish c 5)))))
 
 (test an-idle-machine-stops-ticking
