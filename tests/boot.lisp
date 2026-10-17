@@ -100,6 +100,19 @@
            (is (image:expect c "vmtest: kalloc reuses freed blocks")))
       (image:finish c 5))))
 
+(test drivers-get-contiguous-memory
+  (let ((c (image:bare-console :boot-args "init")))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
+      (unwind-protect
+           (progn
+             (is (image:expect c "init: pid 1" :timeout 120))
+             (ask "(defvar cl-user::*a* (darterfly/devices:vm-pages-grab 8))")
+             (ask "(defvar cl-user::*b* (darterfly/devices:vm-pages-grab 8))")
+             (is (search "=> (T T T)"
+                         (format nil "=> ~a" (string-trim '(#\Space #\Newline #\*)
+                                                          (ask "(list (zerop (mod cl-user::*a* 4096)) (>= (abs (- cl-user::*b* cl-user::*a*)) 32768) (loop for i below 4096 always (zerop (sb-sys:sap-ref-64 (darterfly/devices:phys-sap cl-user::*a*) (* 8 i)))))"))))))
+        (image:finish c 5)))))
+
 (test sbcl-runs-on-darterfly
   (let ((c (image:bare-console)))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
@@ -1007,6 +1020,30 @@
     (is (zerop (nth-value 2 (uiop:run-program (list "fsck.fat" "-n" (uiop:native-namestring esp))
                                               :ignore-error-status t :output nil :error-output nil)))
         "fsck.fat passes the ESP darterfly wrote")))
+
+(test installing-makes-room-by-dropping-old-generations
+  (let ((esp (merge-pathnames "esp-prune.img" (darterfly-file "build/"))))
+    (uiop:delete-file-if-exists esp)
+    (let ((c (image:bare-console :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 60)
+               (is (search "(\"gen-1\")" (ask "(darterfly/install:generations)")))
+               (ask "(dolist (g '(\"gen-2\" \"gen-3\" \"gen-4\" \"gen-5\" \"gen-6\")) (with-open-file (s (ensure-directories-exist (darterfly/install::esp-path (format nil \"~a/kernel\" g))) :direction :output :if-does-not-exist :create :if-exists :supersede) (write-line g s)))")
+               (ask "(darterfly/install::put-line \"good\" \"gen-2\")")
+               (is (search "\"gen-7\"" (ask "(darterfly/install:install \"/Volumes/EFI/EFI/darterfly/gen-1/kernel\" \"/Volumes/EFI/EFI/darterfly/gen-1/darterfly.core\")")))
+               (is (search "(\"gen-1\" \"gen-2\" \"gen-5\" \"gen-6\" \"gen-7\")" (ask "(darterfly/install:generations)"))
+                   "the current, previous and good generations stay, with the newest three")
+               (is (search "\"gen-7\"" (ask "(darterfly/install:current)")))
+               (ask "(defun darterfly/install::fail-copy (&rest r) (declare (ignore r)) (error \"disk full\"))")
+               (ask "(sb-int:encapsulate 'uiop:copy-file 'fail (lambda (f from to &rest r) (if (search \"darterfly.core\" (namestring to)) (darterfly/install::fail-copy) (apply f from to r))))")
+               (ask "(ignore-errors (darterfly/install:install \"/Volumes/EFI/EFI/darterfly/gen-1/kernel\" \"/Volumes/EFI/EFI/darterfly/gen-1/darterfly.core\"))")
+               (is (not (search "gen-8" (ask "(darterfly/install:generations)"))) "a generation that could not be written is taken away again")
+               (is (search "\"gen-7\"" (ask "(darterfly/install:current)")))
+               (image:send c "(sb-ext:exit)")
+               (image:expect c "exit(0)" :timeout 60))
+          (image:finish c 5))))))
 
 (test darterfly-builds-its-kernel-and-boots-it
   (let ((esp (merge-pathnames "esp-kernel.img" (darterfly-file "build/")))

@@ -94,10 +94,10 @@
   (when (probe-file *pending-generation*)
     (let ((pending (ignore-errors (with-open-file (s *pending-generation*)
                                     (with-standard-io-syntax (let ((*read-eval* nil)) (read s)))))))
-      (delete-file *pending-generation*)
       (prog1 (install (or (getf pending :kernel) "/System/Library/Kernels/kernel")
                       "/System/Library/Kernels/darterfly.core"
                       :loader (getf pending :loader))
+        (delete-file *pending-generation*)
         (when (getf pending :boot-conf)
           (with-open-file (s (esp-path "boot.conf") :direction :output :if-exists :supersede)
             (write-string (getf pending :boot-conf) s)))
@@ -105,17 +105,34 @@
         (cond ((getf pending :shut-down) (darterfly/power:shut-down))
               ((getf pending :restart) (darterfly/power:restart)))))))
 
+(defparameter *kept-generations* 3)
+
+(defun remove-generation (name)
+  (let ((dir (esp-path (format nil "~a/" name))))
+    (mapc #'delete-file (uiop:directory-files dir))
+    (uiop:delete-empty-directory dir)))
+
+(defun prune-generations (&optional (keep *kept-generations*))
+  (let* ((linked (remove nil (list (current) (link "previous") (link "good") (link "failed"))))
+         (all (generations))
+         (newest (last all keep)))
+    (dolist (g all)
+      (unless (or (member g linked :test #'string=) (member g newest :test #'string=))
+        (remove-generation g)))))
+
 (defun install (kernel core &key loader manifest)
+  (prune-generations (1- *kept-generations*))
   (let* ((was (current))
          (name (format nil "gen-~d" (1+ (reduce #'max (generations) :key (lambda (g) (parse-integer g :start 4)) :initial-value 0)))))
-    (ensure-directories-exist (esp-path (format nil "~a/" name)))
-    (uiop:copy-file kernel (esp-path (format nil "~a/kernel" name)))
-    (uiop:copy-file core (esp-path (format nil "~a/darterfly.core" name)))
-    (when manifest
-      (uiop:copy-file manifest (esp-path (format nil "~a/manifest" name))))
-    (when loader
-      (uiop:copy-file loader (esp-path (format nil "~a/boot.efi" name)))
-      (uiop:copy-file loader (concatenate 'string *esp* "EFI/BOOT/BOOTX64.EFI")))
+    (handler-bind ((error (lambda (e) (declare (ignore e)) (ignore-errors (remove-generation name)))))
+      (ensure-directories-exist (esp-path (format nil "~a/" name)))
+      (uiop:copy-file kernel (esp-path (format nil "~a/kernel" name)))
+      (uiop:copy-file core (esp-path (format nil "~a/darterfly.core" name)))
+      (when manifest
+        (uiop:copy-file manifest (esp-path (format nil "~a/manifest" name))))
+      (when loader
+        (uiop:copy-file loader (esp-path (format nil "~a/boot.efi" name)))
+        (uiop:copy-file loader (concatenate 'string *esp* "EFI/BOOT/BOOTX64.EFI"))))
     (put-line "previous" was)
     (put-line "current" name)
     name))
