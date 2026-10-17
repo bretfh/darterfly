@@ -110,7 +110,7 @@
 
 (asdf:defsystem #:darterfly/wifi
   :description "Wi-Fi"
-  :depends-on (#:darterfly/crypto #:darterfly/devices #:darterfly/net)
+  :depends-on (#:darterfly/crypto #:darterfly/devices #:darterfly/net #:darterfly/bsd)
   :serial t
   :pathname "src/wifi/"
   :components ((:file "eapol") (:file "firmware") (:file "ax210") (:file "join")))

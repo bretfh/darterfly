@@ -319,4 +319,23 @@
      :name "wifi switch")
     d))
 
-(defun confirm-wifi () (setf *wifi-confirmed* t))
+(defparameter *wifi-settings* "/Library/Settings/wifi")
+
+(defun start-wifi ()
+  (darterfly/net:start-network)
+  (unless (darterfly/net::interface-device darterfly/net:*interface*)
+    (with-open-file (s *wifi-settings*)
+      (let ((ssid (read-line s)) (pass (read-line s)))
+        (setf *link* nil)
+        (bring-up)
+        (darterfly/net::interface-attach
+         (make-instance 'wireless-interface :link (join ssid pass) :mac (getf (card-nvm *card*) :mac)))))))
+
+(defun keep-wifi ()
+  (setf darterfly/bsd::*activities*
+        (cons (cons :wifi (lambda () (sb-thread:make-thread #'start-wifi :name "wifi start")))
+              (remove :wifi darterfly/bsd::*activities* :key #'car :test #'equal))))
+
+(defun confirm-wifi ()
+  (setf *wifi-confirmed* t)
+  (keep-wifi))

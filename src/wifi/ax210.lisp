@@ -413,7 +413,9 @@
 (pushnew 'forget-card sb-ext:*save-hooks*)
 
 (defun forget-card ()
-  (setf *card* nil))
+  (setf *card* nil)
+  (let ((link (find-symbol "*LINK*" "DARTERFLY/WIFI")))
+    (when link (setf (symbol-value link) nil))))
 
 (defun bring-up ()
   (let ((w (or *card* (setf *card* (make-card)))))
