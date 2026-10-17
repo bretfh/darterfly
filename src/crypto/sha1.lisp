@@ -90,15 +90,7 @@
             0 length)))
 
 (defun random-octets (n)
-  (let ((out (make-array n :element-type '(unsigned-byte 8)))
-        (machdep (sb-sys:find-foreign-symbol-address "__machdep")))
-    (if machdep
-        (sb-sys:with-pinned-objects (out)
-          (unless (= n (sb-alien:alien-funcall
-                        (sb-alien:sap-alien (sb-sys:int-sap machdep)
-                                            (function sb-alien:unsigned-long sb-alien:long sb-alien:unsigned-long sb-alien:unsigned-long))
-                        16 (sb-sys:sap-int (sb-sys:vector-sap out)) n))
-            (error "the processor gave no random numbers")))
-        (with-open-file (s "/dev/urandom" :element-type '(unsigned-byte 8))
-          (read-sequence out s)))
+  (let ((out (make-array n :element-type '(unsigned-byte 8))))
+    (with-open-file (s "/dev/urandom" :element-type '(unsigned-byte 8))
+      (unless (= n (read-sequence out s)) (error "/dev/urandom gave fewer than ~d bytes" n)))
     out))
