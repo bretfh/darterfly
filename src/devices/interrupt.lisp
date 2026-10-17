@@ -19,6 +19,13 @@
   (setf *dispatchers* (make-hash-table))
   (clrhash *seen*))
 
+(defconstant +input-vector+ #x6F)
+
+(defun note-interrupt (vector)
+  (sb-thread:with-mutex (*interrupts-lock*)
+    (incf (aref *interrupt-counts* (- vector #x30)))
+    (sb-thread:condition-broadcast *interrupted*)))
+
 (defun dispatch (vector)
   (loop
     (when (plusp (machdep 12 (ash 1 (- vector #x30)) 1000000))
@@ -27,7 +34,7 @@
         (sb-thread:condition-broadcast *interrupted*)))))
 
 (defun ensure-dispatcher (vector)
-  (unless (gethash vector *dispatchers*)
+  (unless (or (= vector +input-vector+) (gethash vector *dispatchers*))
     (let ((recording (find-symbol "*RECORDING*" "DARTERFLY/BSD")))
       (progv (and recording (list recording)) '(nil)
         (setf (gethash vector *dispatchers*)

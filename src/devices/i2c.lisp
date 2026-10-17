@@ -145,7 +145,8 @@
       (let ((report (ignore-errors (i2c-hid-input h))))
         (when report
           (sb-thread:with-mutex ((hid-queue-lock h))
-            (setf (hid-queue h) (nconc (hid-queue h) (list report)))))))
+            (setf (hid-queue h) (nconc (hid-queue h) (list report))))
+          (note-interrupt +input-vector+))))
     (i2c-hid-unmask h)))
 
 (defun start-i2c-hid (c h)

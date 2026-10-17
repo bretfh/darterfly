@@ -89,7 +89,7 @@
         :append (if (= (darterfly/devices::hid-protocol d) 1) (keyboard-report d report) (mouse-report d report))))
 
 (defmethod abs-range ((d darterfly/devices::usb-hid-device) axis) (declare (ignore axis)) nil)
-(defmethod event-vector ((d darterfly/devices::usb-hid-device)) nil)
+(defmethod event-vector ((d darterfly/devices::usb-hid-device)) darterfly/devices::+input-vector+)
 
 (defmethod read-events ((d darterfly/devices::i2c-hid-device))
   (unless (darterfly/devices::hid-fields d)
@@ -104,7 +104,7 @@
                   events)))
 
 (defmethod abs-range ((d darterfly/devices::i2c-hid-device) axis) (declare (ignore axis)) nil)
-(defmethod event-vector ((d darterfly/devices::i2c-hid-device)) nil)
+(defmethod event-vector ((d darterfly/devices::i2c-hid-device)) darterfly/devices::+input-vector+)
 
 (defun input-devices ()
   (darterfly/devices:start-devices)
