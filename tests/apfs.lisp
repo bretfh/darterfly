@@ -42,7 +42,11 @@
                 (:file (is (= #o100000 (logand mode #o170000)))
                  (is (equalp content (apfs:read-file v id)) "~a: contents" path))))))))
     (is (= 300 (length (apfs:directory-entries v (apfs:lookup v "/many")))))
-    (is (equal "line 12345 of a" (map 'string #'code-char (apfs:read-file v (apfs:lookup v "/big.txt") :start (* 12345 33) :end (+ (* 12345 33) 15)))))))
+    (let ((start (* 12345 (length (text (format nil "line ~5,'0d of a file darterfly wrote~%" 0)))))
+          (expected "line 12345 of a"))
+      (is (equal expected (map 'string #'code-char
+                              (apfs:read-file v (apfs:lookup v "/big.txt")
+                                              :start start :end (+ start (length expected)))))))))
 
 (defun put-file (path content)
   (let ((fd (darterfly/vfs:vfs-open path (list :access :wronly :creat t :trunc t) #o644)))

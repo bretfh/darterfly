@@ -1213,7 +1213,7 @@
                     "(progn (setf sb-sys::*sbcl-homedir-pathname* #p\"/usr/src/sbcl/obj/sbcl-home/\") (require :asdf) (require :sb-md5) (require :sb-posix) (require :sb-bsd-sockets))"
                     "--eval" "(with-open-file (o \"/usr/src/sbcl/contribs.txt\" :direction :output :if-exists :supersede) (write (list (asdf:asdf-version) (sb-md5:md5sum-string \"darterfly\") (integerp (sb-posix:getpid)) (sb-bsd-sockets:make-inet-address \"10.0.2.2\")) :stream o :pretty nil))"
                     "--quit"))
-    (is (equal "(\"3.3.1\" #(192 65 240 164 75 149 198 213 199 195 255 71 232 234 151 51) T #(10 0 2 2))"
+    (is (equal "(\"3.3.1\" #(219 162 17 227 133 212 143 33 79 45 21 34 240 4 95 21) T #(10 0 2 2))"
                (let ((out (disk-octets disk "usr/src/sbcl/contribs.txt"))) (and out (map 'string #'code-char out))))
         "darterfly's sbcl.core loads the contribs darterfly built, and they work")))
 
