@@ -243,9 +243,7 @@
 (defvar *link* nil)
 
 (defun join (ssid passphrase &key (card *card*))
-  (multiple-value-bind (found) (scan card)
-    (let ((bss (or (find ssid found :key (lambda (b) (getf b :ssid)) :test #'equal)
-                   (error "no network called ~s in range" ssid))))
+  (let ((bss (or (find-network card ssid) (error "no network called ~s in range" ssid))))
       (let ((l (make-instance 'link :card card :bss bss :bssid (mac-octets (getf bss :bssid)))))
         (setf *link* l)
         (context-commands l)
@@ -254,7 +252,11 @@
         (after-association l)
         (handshake l (passphrase-pmk passphrase ssid))
         (note card :joined :ssid ssid :bssid (getf bss :bssid) :aid (link-aid l))
-        l))))
+        l)))
+
+(defun find-network (card ssid &key (tries 3))
+  (loop repeat tries
+        thereis (find ssid (scan card) :key (lambda (b) (getf b :ssid)) :test #'equal)))
 
 (devices:define-device-class wireless-interface "WirelessInterface" (devices:ethernet-controller)
   ((link :initarg :link :reader wireless-link)
