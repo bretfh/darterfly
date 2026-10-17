@@ -170,3 +170,15 @@
     (is (not (apfs::fits-p records t t 16 16)))
     (is (= 3 (length nodes)))
     (is (= 112 (loop :for (nil level . node) :in nodes :when (zerop level) :sum (apfs::node-count (apfs::make-node node)))))))
+
+(test a-full-container-says-no-space
+  (let* ((image (apfs:newfs (merge-pathnames "full.img" (darterfly-file "build/")) :volume-name "full" :size (* 16 1048576)))
+         (darterfly/vfs:*root* nil)
+         (darterfly/vfs:*mounts* nil)
+         (chunk (make-string 65536 :initial-element #\x)))
+    (darterfly/vfs:vfs-mount (darterfly/vfs:make-ram-node :vdir #o755) "/")
+    (darterfly/vfs:vfs-mkdir "/mnt" #o755)
+    (multiple-value-bind (r w) (apfs:file-store image) (apfs:mount-writable r w "/mnt"))
+    (let ((errno (handler-case (progn (loop for i from 0 below 400 do (put-file (format nil "/mnt/f~d" i) chunk)) :never-full)
+                   (darterfly/vfs:vfs-error (e) (darterfly/vfs:vfs-errno e)))))
+      (is (eq :enospc errno)))))

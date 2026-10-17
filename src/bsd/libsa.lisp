@@ -268,6 +268,7 @@
   (sb-sys:without-interrupts
     (handler-case (or (let ((*proc* *proc0*)) (libsa-call (aref +libsa-ops+ op) a b c d)) 0)
       (errno (e) (- (vfs:errno-code (errno-name e))))
+      (vfs:vfs-error (e) (- (vfs:errno-code (vfs:vfs-errno e))))
       (error () (- (vfs:errno-code :eio))))))
 
 (defvar *libsa-entry* nil)

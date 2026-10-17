@@ -148,8 +148,13 @@
     (append (tree-entries dir "usr/share/zoneinfo" :skip '("posix" "right"))
             (list (list :file "etc/localtime" (octets (or file (concatenate 'string dir "UTC"))))))))
 
+(defun ocicl-entries ()
+  (tree-entries (format nil "~a/share/ocicl-source/" (uiop:getenv "GUIX_ENVIRONMENT")) "usr/src/ocicl"
+                :skip '(".git" ".github" ".githooks" "docs" "releng" "test" "ocicl" "ocicl.old")))
+
 (defun root-entries ()
   (let ((files (append (desktop-entries)
+                       (ocicl-entries)
                        (contribs)
                        (certificates)
                        (zoneinfo)
@@ -179,7 +184,7 @@
                   :collect (list :file (concatenate 'string "usr/src/sbcl/" file) (octets (merge-pathnames file tree)) #o644
                                  (file-time (merge-pathnames file tree)))))))
 
-(defun root-disk (&optional (path (build-path "root.img")) (size (* 128 1048576)) (entries (root-entries)))
+(defun root-disk (&optional (path (build-path "root.img")) (size (* 512 1048576)) (entries (root-entries)))
   (darterfly/apfs:newfs path :size size :volume-name "darterfly HD" :entries entries
                          :container-uuid "F1C40000-0000-4000-8000-000000000001"
                          :volume-uuid "F1C40000-0000-4000-8000-000000000002"))
@@ -266,7 +271,7 @@
 
 (defun usb-image (&key (path (build-path "darterfly-usb.img")) (boot-args (format nil "rd=ram init nrepl-key=~a" (nrepl-key))))
   (let ((fat (esp-image (esp :boot-args boot-args
-                             :root-image (root-disk (build-path "usb-root.img") (* 256 1048576)
+                             :root-image (root-disk (build-path "usb-root.img") (* 512 1048576)
                                                     (append (root-entries) (boot-payload))))
                         (build-path "usb-esp.img") (* 512 1048576))))
     (darterfly/gpt:write-disk path (list (list darterfly/gpt:+esp-type+ "F1C40000-0000-4000-8000-000000000011" "EFI" fat)))

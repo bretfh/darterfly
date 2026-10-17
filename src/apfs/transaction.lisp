@@ -98,13 +98,13 @@
   (loop for n from (nx-low nx) below (nx-block-count nx)
         when (zerop (bitmap-bit (nx-bitmap nx) n))
           do (setf (bitmap-bit (nx-bitmap nx) n) 1 (nx-low nx) (1+ n)) (return n)
-        finally (fail "the container is full")))
+        finally (vfs:fail :enospc)))
 
 (defun alloc-ip-block (nx)
   (loop for n from 0 below (nx-ip-count nx)
         when (zerop (bitmap-bit (nx-ip-bitmap nx) n))
           do (setf (bitmap-bit (nx-ip-bitmap nx) n) 1) (return (+ (nx-ip-base nx) n))
-        finally (fail "the internal pool is full")))
+        finally (vfs:fail :enospc)))
 
 (defun alloc-extent (nx count)
   (loop with start = (nx-low nx)
@@ -116,7 +116,7 @@
                  (progn (loop for n from start below (+ start count) do (setf (bitmap-bit (nx-bitmap nx) n) 1))
                         (when (= start (nx-low nx)) (setf (nx-low nx) (+ start count)))
                         (return start))))
-        finally (fail "no ~d free blocks in a row" count)))
+        finally (vfs:fail :enospc)))
 
 (defun free-count (nx)
   (loop for n below (nx-block-count nx) count (zerop (bitmap-bit (nx-bitmap nx) n))))

@@ -25,6 +25,24 @@
     (description "TinyCC at a pinned mob revision.")
     (license license:lgpl2.1+)))
 
+(define ocicl-source
+  (package
+    (name "ocicl-source")
+    (version "2.16.5-abc3a4e")
+    (source (origin
+              (method git-fetch)
+              (uri (git-reference
+                    (url "https://github.com/ocicl/ocicl")
+                    (commit "abc3a4edf181d61be8d2ac3ea1f5b5637a0f9927")))
+              (file-name (git-file-name "ocicl" version))
+              (sha256 (base32 "0hciqyk3ckzb9zvx52ixgxc7svqyji6ym92dm7kn9wq67ncfx3lz"))))
+    (build-system copy-build-system)
+    (arguments (list #:install-plan ''(("." "share/ocicl-source/"))))
+    (home-page "https://github.com/ocicl/ocicl")
+    (synopsis "ocicl's source and the systems it vendors, which darterfly runs to install Lisp packages")
+    (description "ocicl at a pinned revision, with pure-tls for HTTPS.")
+    (license license:expat)))
+
 (define sbcl-source
   (package
     (name "sbcl-source")
@@ -81,4 +99,4 @@
              "font-adwaita"
              "adwaita-icon-theme"
              "librsvg"))
-  (list sbcl-source tinycc-source)))
+  (list sbcl-source tinycc-source ocicl-source)))

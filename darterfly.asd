@@ -93,7 +93,7 @@
   :depends-on (#:darterfly/layer #:darterfly/server #:darterfly/bsd #:darterfly/text #:darterfly/imageio #:darterfly/kit #:darterfly/edit #:darterfly/install #:darterfly/generation #:darterfly/devices #:darterfly/net #:darterfly/wifi #:darterfly/journal)
   :serial t
   :pathname "src/apps/"
-  :components ((:file "hello") (:file "terminal") (:file "listener") (:file "forcequit") (:file "editor") (:file "generations") (:file "session") (:file "fetch") (:file "install")))
+  :components ((:file "hello") (:file "terminal") (:file "listener") (:file "forcequit") (:file "editor") (:file "generations") (:file "session") (:file "fetch") (:file "install") (:file "ocicl")))
 
 (asdf:defsystem #:darterfly/devices
   :description "Devices: the registry, PCI and drivers"

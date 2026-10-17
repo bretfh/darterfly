@@ -78,7 +78,8 @@
     ("System/Library/Services/MenuBar.app/Contents/Programs/MenuBar" "MenuBar")
     ("System/Library/Services/Files.app/Contents/Programs/Files" "Files")
     ("usr/libexec/darterfly-gui" "darterfly-gui")
-    ("usr/bin/top" "top")))
+    ("usr/bin/top" "top")
+    ("usr/bin/ocicl" "ocicl")))
 
 (defun job (label &rest keys)
   (list :file (format nil "Library/Jobs/~a.job" label)
