@@ -8,6 +8,11 @@
 (defvar *loaders* (make-hash-table :test 'equal))
 (defvar *lock* (sb-thread:make-mutex :name "fonts"))
 
+(pushnew 'forget-fonts sb-ext:*save-hooks*)
+
+(defun forget-fonts ()
+  (setf *loaders* (make-hash-table :test 'equal)))
+
 (defmacro with-fonts (&body body)
   `(sb-thread:with-recursive-lock (*lock*) ,@body))
 

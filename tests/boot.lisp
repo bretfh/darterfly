@@ -898,10 +898,13 @@
              (progn
                (is (image:expect c "init: pid 1" :timeout 120))
                (ask "(setf darterfly/devices::*backlight* 12345)")
+               (ask "(darterfly/text:draw-string (darterfly/text:make-bitmap 64 16) (darterfly/text:font \"AdwaitaSans-Regular\" 13) \"a\" 1 12 0 0 0)")
                (image:send c "(darterfly/install:save-generation)")
                (is (image:expect c "restart: core " :timeout 300))
                (is (image:expect c "init: pid 1" :timeout 120))
-               (is (not (search "12345" (ask "darterfly/devices::*backlight*"))) "the backlight is looked up again, not taken from the old mapping"))
+               (is (not (search "12345" (ask "darterfly/devices::*backlight*"))) "the backlight is looked up again, not taken from the old mapping")
+               (is (search "=> T" (format nil "=> ~a" (string-trim '(#\Space #\Newline #\*) (ask "(open-stream-p (slot-value (darterfly/text::loader (darterfly/text:font \"AdwaitaSans-Regular\" 13)) 'zpb-ttf::input-stream))"))))
+                   "a font asked for after the save reads from an open file"))
           (image:finish c 5))))))
 
 (test the-kernel-builds-the-same-every-time
