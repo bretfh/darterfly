@@ -2,7 +2,7 @@
   (:use #:cl)
   (:local-nicknames (#:layer #:finch/layer) (#:text #:finch/text) (#:mach #:finch/mach) (#:server #:finch/server) (#:bsd #:finch/bsd)
                    (#:imageio #:finch/imageio))
-  (:export #:responder #:view #:text-field #:button #:window #:make-window
+  (:export #:resumed #:resume #:responder #:view #:text-field #:button #:window #:make-window
            #:view-frame #:subviews #:add-subview #:needs-display #:draw #:mouse-down #:key-down
            #:content-view #:window-title #:first-responder #:show #:close-window #:run
            #:string-value #:font-size #:text-color #:title #:action #:background
@@ -370,7 +370,29 @@
     (when (any-dirty (frame-view window))
       (commit window))))
 
+(defgeneric resumed (view)
+  (:method ((view t)) nil))
+
+(defun resume-view (view)
+  (resumed view)
+  (needs-display view)
+  (mapc #'resume-view (subviews view)))
+
+(defun resume ()
+  (let ((windows (reverse (windows))))
+    (setf *run-set* nil
+          (app-main *application*) nil
+          (app-menu *application*) nil
+          (app-windows *application*) nil
+          (slot-value *application* 'lock) (sb-thread:make-mutex :name "application"))
+    (dolist (window windows)
+      (setf (window-context window) nil (window-id window) nil)
+      (resume-view (frame-view window))
+      (show window))
+    (run)))
+
 (defun run ()
+  (setf bsd:*resume* #'resume)
   (let ((set (mach:mach-port-allocate mach:*task* :port-set)))
     (setf *run-set* set)
     (mach:mach-port-move-member mach:*task* (main-port) set)

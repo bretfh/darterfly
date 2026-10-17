@@ -55,7 +55,8 @@
       (loop :for signo :from 1 :below 32
             :when (functionp (aref (proc-actions proc) signo))
               :do (setf (aref (proc-actions proc) signo) :default))
-      (setf (proc-comm proc) (basename name))
+      (setf (proc-comm proc) (basename name)
+            (proc-path proc) (path name))
       (let ((bindings (fresh-bindings)))
         (setf (proc-bindings proc) bindings)
         (throw (exec-tag proc)
@@ -82,3 +83,32 @@
 (defun reboot (how)
   (when *reboot* (funcall *reboot* how))
   (fail :eperm))
+
+(define-process-variable *resume* nil)
+
+(defvar *suspended* nil)
+
+(defun suspend-processes ()
+  (setf *suspended*
+        (loop for proc in (procs)
+              for thread = (proc-thread proc)
+              for bindings = (proc-bindings proc)
+              when (and bindings thread (sb-thread:thread-alive-p thread)
+                        (not (uiop:string-prefix-p "/System/Library/Services/" (or (proc-path proc) "")))
+                        (ignore-errors (sb-thread:symbol-value-in-thread '*resume* thread nil)))
+                collect (list (proc-path proc) (proc-comm proc)
+                              (cons (car bindings)
+                                    (mapcar (lambda (symbol) (ignore-errors (sb-thread:symbol-value-in-thread symbol thread nil)))
+                                            (car bindings)))))))
+
+(defun resume-processes ()
+  (dolist (entry (shiftf *suspended* nil))
+    (destructuring-bind (path comm bindings) entry
+      (ignore-errors
+       (fork (lambda ()
+               (with-bsd
+                 (setf (proc-comm *proc*) comm
+                       (proc-path *proc*) path
+                       (proc-bindings *proc*) bindings))
+               (throw (exec-tag *proc*)
+                 (lambda () (call-with-bindings bindings (lambda () (with-stdio (funcall *resume*))))))))))))

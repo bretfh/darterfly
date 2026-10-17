@@ -637,6 +637,14 @@
                                                          (loop :for n :in (reverse names) :collect (key n nil)))
                                                  'vector)))))
 
+(defun listener-text-until (c text)
+  (loop :with deadline := (+ (get-internal-real-time) (* 60 internal-time-units-per-second))
+        :do (image:send c "(progn (ignore-errors (finch/shell:cat \"/tmp/Listener.txt\")) :done)")
+            (let ((seen (image:expect c (format nil "~%* ") :timeout 60)))
+              (when (or (search text seen) (> (get-internal-real-time) deadline))
+                (return seen)))
+            (sleep 1)))
+
 (test the-running-system-saves-itself
   (let ((esp (merge-pathnames "esp-live-save.img" (finch-file "build/")))
         (image:*screen-size* '(1280 800)))
@@ -647,10 +655,16 @@
              (progn
                (is (image:expect c "init: pid 1" :timeout 120))
                (ask "(defun cl-user::made-live () :made-live)")
+               (ask "(finch/shell:spawn \"/System/Applications/Listener.app/Contents/Programs/Listener\")")
+               (screen-until (lambda (s) (= #xffffffff (image:pixel s 500 300))))
+               (image:send-keys (format nil "(+ 40 2)~%"))
+               (is (search "42" (listener-text-until c "42")) "the listener answers before the save")
+               (ask "(ignore-errors (delete-file \"/tmp/Listener.txt\"))")
                (image:send c "(finch/install:save-generation)")
                (is (image:expect c "restart: core " :timeout 300) "the running image is saved and restarted")
                (is (image:expect c "init: pid 1" :timeout 120) "the session comes back")
                (is (search ":MADE-LIVE" (ask "(cl-user::made-live)")) "what was made live is still there")
+               (is (search "42" (listener-text-until c "42")) "the listener comes back with what it held")
                (is (search "T" (ask "(loop :repeat 600 :until (equal \"gen-2\" (finch/install:current)) :do (sleep 0.5) :finally (return (equal \"gen-2\" (finch/install:current))))"))
                    "it becomes a generation")
                (let ((screen (screen-until (lambda (s) (< 200 (ldb (byte 8 16) (image:pixel s 300 12)))))))
@@ -664,7 +678,8 @@
              (progn
                (is (image:expect c "boot.efi: generation gen-2" :timeout 60) "the saved system boots")
                (is (image:expect c "init: pid 1" :timeout 120))
-               (is (search ":MADE-LIVE" (ask "(cl-user::made-live)")) "a change made live survives a cold boot"))
+               (is (search ":MADE-LIVE" (ask "(cl-user::made-live)")) "a change made live survives a cold boot")
+               (is (search "42" (listener-text-until c "42")) "and so does the listener"))
           (image:finish c 5))))))
 
 (test power-restarts-and-shuts-down

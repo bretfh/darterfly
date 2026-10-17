@@ -27,6 +27,7 @@
     (finch/init:launch label))
   (when (equal (finch/devices:boot-arg "rd") "ram")
     (ignore-errors (bsd:posix-spawn "/System/Applications/Install.app/Contents/Programs/Install" (list "Install") nil)))
+  (bsd:resume-processes)
   (loop (bsd:pause)))
 
 (defun battery-layer (battery)

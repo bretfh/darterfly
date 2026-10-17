@@ -234,3 +234,6 @@
     (setf (kit:first-responder window) view)
     (kit:show window)
     (kit:run)))
+
+(defmethod kit:resumed ((view listener-view))
+  (setf (running view) nil))

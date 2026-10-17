@@ -77,6 +77,7 @@
   (ensure-directories-exist *pending-generation*)
   (with-open-file (s *pending-generation* :direction :output :if-exists :supersede)
     (write-line "pending" s))
+  (finch/bsd:suspend-processes)
   (finch/bsd:end-processes)
   (finch/power:flush-disks)
   (if (eq sb-thread:*current-thread* (sb-thread:main-thread))

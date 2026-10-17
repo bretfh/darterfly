@@ -266,7 +266,7 @@
 (defvar *listener* nil)
 (defvar *thread* nil)
 
-(defun running-p () (and *thread* t))
+(defun running-p () (and *thread* (sb-thread:thread-alive-p *thread*) t))
 
 (defun %serve-one (connection)
   (let ((stream (make-instance 'tcp-stream :connection connection))
@@ -310,3 +310,10 @@
     (ignore-errors (sb-thread:terminate-thread *thread*)))
   (setf *listener* nil *thread* nil)
   t)
+
+(defun forget-server ()
+  (setf *listener* nil *thread* nil
+        *sessions* (make-hash-table :test 'equal) *sessions-lock* (sb-thread:make-mutex :name "nrepl sessions")
+        *running* (make-hash-table :test 'equal) *running-lock* (sb-thread:make-mutex :name "nrepl running")))
+
+(pushnew 'forget-server sb-ext:*save-hooks*)
