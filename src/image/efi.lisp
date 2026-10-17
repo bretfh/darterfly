@@ -273,7 +273,7 @@
   (let ((fat (esp-image (esp :boot-args boot-args
                              :root-image (root-disk (build-path "usb-root.img") (* 512 1048576)
                                                     (append (root-entries) (boot-payload))))
-                        (build-path "usb-esp.img") (* 512 1048576))))
+                        (build-path "usb-esp.img") (* 1024 1048576))))
     (darterfly/gpt:write-disk path (list (list darterfly/gpt:+esp-type+ "F1C40000-0000-4000-8000-000000000011" "EFI" fat)))
     (delete-file fat)
     path))

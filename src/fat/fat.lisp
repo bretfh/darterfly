@@ -75,7 +75,7 @@
 (defun free-cluster (v)
   (let ((last (+ 2 (volume-clusters v))))
     (loop :repeat (volume-clusters v)
-          :for n := (volume-hint v) :then (if (>= (1+ n) last) 2 (1+ n))
+          :for n := (if (< 1 (volume-hint v) last) (volume-hint v) 2) :then (if (>= (1+ n) last) 2 (1+ n))
           :when (zerop (next-cluster v n))
             :do (setf (volume-hint v) (1+ n))
                 (return-from free-cluster n))
