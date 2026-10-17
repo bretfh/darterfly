@@ -17,7 +17,6 @@
    (seq :initform 0 :accessor link-seq)
    (aid :initform nil :accessor link-aid)
    (supplicant :initform nil :accessor link-supplicant)
-   (pn :initform 0 :accessor link-pn)
    (keyed :initform nil :accessor link-keyed)
    (frames :initform nil :accessor link-frames)
    (lock :initform (sb-thread:make-mutex :name "wifi link") :reader link-lock)))
@@ -264,17 +263,12 @@
 
 (defmethod devices:interrupt-vector ((d wireless-interface)) nil)
 
-(defun ccmp-header (pn index)
-  (octets (ldb (byte 8 0) pn) (ldb (byte 8 8) pn) 0 (logior #x20 (ash index 6))
-          (ldb (byte 8 16) pn) (ldb (byte 8 24) pn) (ldb (byte 8 32) pn) (ldb (byte 8 40) pn)))
-
 (defmethod devices:network-send ((d wireless-interface) frame)
   (let* ((l (wireless-link d))
          (frame (octets frame))
          (dst (subseq frame 0 6)) (src (subseq frame 6 12)))
     (sb-thread:with-recursive-lock ((link-lock l))
       (transmit l (octets (frame-header 8 (logior 1 #x40) (link-bssid l) src dst (next-seq l))
-                          (ccmp-header (incf (link-pn l)) 0)
                           #xAA #xAA 3 0 0 0 (subseq frame 12))
                 :encrypt t))
     (length frame)))
