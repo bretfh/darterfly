@@ -2,7 +2,7 @@
   (:use #:cl)
   (:export
    #:errno #:errno-name #:errno-code
-   #:proc #:procs #:end-processes #:*resume* #:suspend-processes #:resume-processes #:keep-running #:stop-keeping #:*recording* #:suspend-threads #:resume-activities #:proc-pid #:proc-path #:*proc* #:*proc0* #:getpid #:getppid #:proc-task #:pfind #:task-pid
+   #:proc #:procs #:end-processes #:*resume* #:suspend-processes #:resume-processes #:keep-running #:stop-keeping #:*recording* #:*safe* #:suspend-threads #:resume-activities #:proc-pid #:proc-path #:*proc* #:*proc0* #:getpid #:getppid #:proc-task #:pfind #:task-pid
    #:fork #:exit #:wait4 #:kill #:pause #:sigaction #:sigprocmask #:signo #:signame
    #:pipe #:read #:write #:close #:dup #:dup2 #:fcntl
    #:+o-nonblock+ #:+f-getfl+ #:+f-setfl+

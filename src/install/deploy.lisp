@@ -57,23 +57,25 @@
     (flush-disks)
     (list :written (length written) :unchanged kept)))
 
-(defun deploy-into-world ()
+(defun deploy-into-world (&key restart)
   (let* ((kernel (concatenate 'string *deploy-dir* "kernel"))
          (loader (concatenate 'string *deploy-dir* "boot.efi"))
-         (new-kernel (and (probe-file kernel)
+         (new-kernel (or restart
+                         (and (probe-file kernel)
                           (not (same-octets-p "/System/Library/Kernels/kernel"
                                               (with-open-file (s kernel :element-type '(unsigned-byte 8))
                                                 (let ((v (make-array (file-length s) :element-type '(unsigned-byte 8))))
-                                                  (read-sequence v s) v))))))
+                                                  (read-sequence v s) v)))))))
          (reloaded (reload-systems)))
-    (sb-thread:make-thread
-     (lambda ()
-       (sleep 2)
-       (save-generation :kernel (and (probe-file kernel) kernel)
+    (let ((darterfly/bsd:*recording* nil))
+      (sb-thread:make-thread
+       (lambda ()
+         (sleep 2)
+         (save-generation :kernel (and (probe-file kernel) kernel)
                         :loader (and (probe-file loader) loader)
                         :boot-conf (deployed-boot-conf)
-                        :restart new-kernel))
-     :name "deploy save")
+                          :restart new-kernel))
+       :name "deploy save"))
     (append reloaded (list :new-kernel (and new-kernel t) :saving t))))
 
 (defun reload-systems ()

@@ -55,7 +55,7 @@
 
 (asdf:defsystem #:darterfly/power
   :description "Restart and shut down"
-  :depends-on (#:darterfly/devices #:darterfly/vfs)
+  :depends-on (#:darterfly/devices #:darterfly/vfs #:darterfly/bsd)
   :serial t
   :pathname "src/power/"
   :components ((:file "power")))

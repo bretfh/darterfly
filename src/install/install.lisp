@@ -1,6 +1,6 @@
 (defpackage #:darterfly/install
   (:use #:cl)
-  (:export #:deploy-into-world #:save-generation #:install-saved-generation #:receive-deployment #:reload-systems #:restart-soon #:flush-disks #:install #:generations #:current #:select #:confirm #:failed #:manifest #:save #:stop-threads #:kernel-image #:build-kernel #:install-disk #:internal-disk))
+  (:export #:*stable-after* #:deploy-into-world #:save-generation #:install-saved-generation #:receive-deployment #:reload-systems #:restart-soon #:flush-disks #:install #:generations #:current #:select #:confirm #:failed #:manifest #:save #:stop-threads #:kernel-image #:build-kernel #:install-disk #:internal-disk))
 (in-package #:darterfly/install)
 
 (defvar *esp* "/Volumes/EFI/")
@@ -70,6 +70,8 @@
   (let ((left (stop-threads)))
     (when left (error "threads still running: ~a" left)))
   (sb-ext:save-lisp-and-die "/System/Library/Kernels/saved.core"))
+
+(defparameter *stable-after* 90)
 
 (defparameter *pending-generation* "/Library/Settings/pending-generation")
 

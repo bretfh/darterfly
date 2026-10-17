@@ -22,7 +22,8 @@
   (darterfly/devices:machdep 26))
 
 (defun restart-soon (&optional (seconds 2))
-  (sb-thread:make-thread (lambda () (sleep seconds) (restart)) :name "restart")
+  (let ((darterfly/bsd:*recording* nil))
+    (sb-thread:make-thread (lambda () (sleep seconds) (restart)) :name "restart"))
   :restarting)
 
 (defun package-integer (v at)

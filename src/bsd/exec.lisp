@@ -1,6 +1,7 @@
 (in-package #:darterfly/bsd)
 
 (defvar *programs* (make-hash-table :test 'equal))
+(defvar *safe* nil)
 (defvar *process-variables* nil)
 
 (defmacro define-process-variable (name init)
@@ -102,6 +103,7 @@
                                             (car bindings)))))))
 
 (defun resume-processes ()
+  (when *safe* (return-from resume-processes nil))
   (dolist (entry (shiftf *suspended* nil))
     (destructuring-bind (path comm bindings) entry
       (ignore-errors
@@ -142,6 +144,7 @@
               when (sb-thread:thread-alive-p thread) collect how)))
 
 (defun resume-activities ()
+  (when *safe* (return-from resume-activities nil))
   (dolist (activity (reverse *activities*))
     (handler-case (let ((*recording* nil)) (funcall (cdr activity)))
       (error (e) (format *error-output* "~&resume ~a: ~a~%" (car activity) e))))

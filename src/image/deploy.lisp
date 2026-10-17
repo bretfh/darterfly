@@ -47,12 +47,12 @@
   (format nil "(progn ~{(with-input-from-string (s ~s) (let ((*package* (find-package \"DARTERFLY/INSTALL\"))) (loop for f = (read s nil s) until (eq f s) do (eval f)))) ~})"
           (mapcar (lambda (f) (uiop:read-file-string (source f))) *receiver-sources*)))
 
-(defun deploy (host &key (from "10.42.0.1") (port 47100) (nrepl-port 4011) (reload nil))
+(defun deploy (host &key (from "10.42.0.1") (port 47100) (nrepl-port 4011) (reload nil) (restart nil))
   (let* ((entries (deployment :generation (not reload)))
          (server (serve-deployment entries port))
-         (result (device-eval host (format nil "(progn ~a (append (darterfly/install::receive-deployment ~s ~d) (~a)))"
+         (result (device-eval host (format nil "(progn ~a (append (darterfly/install::receive-deployment ~s ~d) ~a))"
                                            (receiver-code) from port
-                                           (if reload "darterfly/install::reload-systems" "darterfly/install::deploy-into-world"))
+                                           (if reload "(darterfly/install::reload-systems)" (format nil "(darterfly/install::deploy-into-world :restart ~a)" (and restart t))))
                               :nrepl-port nrepl-port)))
     (sb-thread:join-thread server :default nil :timeout 5)
     result))
