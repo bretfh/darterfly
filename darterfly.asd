@@ -81,6 +81,13 @@
   :pathname "src/server/"
   :components ((:file "windowserver")))
 
+(asdf:defsystem #:darterfly/bench
+  :description "The benchmark suite"
+  :depends-on (#:darterfly/bsd #:darterfly/mach #:darterfly/vfs #:darterfly/stats #:darterfly/windowserver)
+  :serial t
+  :pathname "src/bench/"
+  :components ((:file "bench")))
+
 (asdf:defsystem #:darterfly/apps
   :description "Applications"
   :depends-on (#:darterfly/layer #:darterfly/server #:darterfly/bsd #:darterfly/text #:darterfly/imageio #:darterfly/kit #:darterfly/edit #:darterfly/install #:darterfly/generation #:darterfly/devices #:darterfly/net)
@@ -222,7 +229,7 @@
   :depends-on (#:uiop #:darterfly/qmp #:darterfly/io #:darterfly/apfs #:darterfly/fat #:darterfly/gpt #:darterfly/install #:darterfly/cc #:darterfly/build #:darterfly/platform #:darterfly/kern #:darterfly/low #:darterfly/boot #:darterfly/link (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/image/"
-  :components ((:file "image") (:file "tcc") (:file "runtime") (:file "efi") (:file "deploy")))
+  :components ((:file "image") (:file "tcc") (:file "runtime") (:file "efi") (:file "deploy") (:file "bench")))
 
 (asdf:defsystem #:darterfly/server
   :description "The window server"
@@ -246,7 +253,7 @@
 
 (asdf:defsystem #:darterfly
   :description "A live, hackable OS on SBCL"
-  :depends-on (#:darterfly/mach #:darterfly/server #:darterfly/layer #:darterfly/bsd #:darterfly/init #:darterfly/shell #:darterfly/io #:darterfly/text #:darterfly/edit #:darterfly/imageio #:darterfly/kit #:darterfly/stats #:darterfly/windowserver #:darterfly/apps #:darterfly/devices #:darterfly/vfs #:darterfly/apfs #:darterfly/fat #:darterfly/install #:darterfly/net #:darterfly/nrepl #:darterfly/run #:darterfly/generation #:darterfly/kernel #:darterfly/image)
+  :depends-on (#:darterfly/mach #:darterfly/server #:darterfly/layer #:darterfly/bsd #:darterfly/init #:darterfly/shell #:darterfly/io #:darterfly/text #:darterfly/edit #:darterfly/imageio #:darterfly/kit #:darterfly/stats #:darterfly/windowserver #:darterfly/bench #:darterfly/apps #:darterfly/devices #:darterfly/vfs #:darterfly/apfs #:darterfly/fat #:darterfly/install #:darterfly/net #:darterfly/nrepl #:darterfly/run #:darterfly/generation #:darterfly/kernel #:darterfly/image)
   :in-order-to ((asdf:test-op (asdf:test-op #:darterfly/test))))
 
 (asdf:defsystem #:darterfly/test

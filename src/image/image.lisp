@@ -2,7 +2,7 @@
   (:use #:cl)
   (:export #:write-cpio #:*build*
    #:console #:expect #:send #:transcript #:finish #:screendump #:pixel #:monitor #:pointer #:qmp #:send-keys
-   #:boot-efi #:kernel-file #:esp #:bare-console #:bare-boot #:send-char #:*screen-size* #:update-root #:desktop #:copy-in #:build-sbcl #:*c-compiler* #:build-tcc #:*input-devices* #:*network-device* #:usb-image #:deploy))
+   #:boot-efi #:kernel-file #:esp #:bare-console #:bare-boot #:send-char #:*screen-size* #:update-root #:desktop #:copy-in #:build-sbcl #:*c-compiler* #:build-tcc #:*input-devices* #:*network-device* #:usb-image #:deploy #:bench))
 (in-package #:darterfly/image)
 
 (defvar *build* (asdf:system-relative-pathname :darterfly "build/"))
