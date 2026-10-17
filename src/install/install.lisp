@@ -1,6 +1,6 @@
 (defpackage #:darterfly/install
   (:use #:cl)
-  (:export #:save-generation #:install-saved-generation #:receive-deployment #:reload-systems #:restart-soon #:flush-disks #:install #:generations #:current #:select #:confirm #:failed #:manifest #:save #:stop-threads #:kernel-image #:build-kernel #:install-disk #:internal-disk))
+  (:export #:deploy-into-world #:save-generation #:install-saved-generation #:receive-deployment #:reload-systems #:restart-soon #:flush-disks #:install #:generations #:current #:select #:confirm #:failed #:manifest #:save #:stop-threads #:kernel-image #:build-kernel #:install-disk #:internal-disk))
 (in-package #:darterfly/install)
 
 (defvar *esp* "/Volumes/EFI/")
@@ -73,11 +73,13 @@
 
 (defparameter *pending-generation* "/Library/Settings/pending-generation")
 
-(defun save-generation ()
+(defun save-generation (&key kernel loader boot-conf restart)
   (ensure-directories-exist *pending-generation*)
   (with-open-file (s *pending-generation* :direction :output :if-exists :supersede)
-    (write-line "pending" s))
+    (with-standard-io-syntax
+      (prin1 (list :kernel kernel :loader loader :boot-conf boot-conf :restart restart) s)))
   (darterfly/bsd:suspend-processes)
+  (darterfly/bsd:suspend-threads)
   (darterfly/bsd:end-processes)
   (darterfly/power:flush-disks)
   (if (eq sb-thread:*current-thread* (sb-thread:main-thread))
@@ -86,9 +88,18 @@
 
 (defun install-saved-generation ()
   (when (probe-file *pending-generation*)
-    (delete-file *pending-generation*)
-    (prog1 (install "/System/Library/Kernels/kernel" "/System/Library/Kernels/darterfly.core")
-      (darterfly/power:flush-disks))))
+    (let ((pending (ignore-errors (with-open-file (s *pending-generation*)
+                                    (with-standard-io-syntax (let ((*read-eval* nil)) (read s)))))))
+      (delete-file *pending-generation*)
+      (prog1 (install (or (getf pending :kernel) "/System/Library/Kernels/kernel")
+                      "/System/Library/Kernels/darterfly.core"
+                      :loader (getf pending :loader))
+        (when (getf pending :boot-conf)
+          (with-open-file (s (esp-path "boot.conf") :direction :output :if-exists :supersede)
+            (write-string (getf pending :boot-conf) s)))
+        (darterfly/power:flush-disks)
+        (when (getf pending :restart)
+          (darterfly/power:restart))))))
 
 (defun install (kernel core &key loader manifest)
   (let* ((was (current))

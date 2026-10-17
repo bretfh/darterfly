@@ -33,7 +33,8 @@
     (when (stringp (darterfly/devices:boot-arg "nrepl-key"))
       (sb-thread:make-thread (lambda () (ignore-errors (darterfly/nrepl:start))) :name "nrepl start"))
     (when (darterfly/devices:boot-arg "init")
-      (sb-thread:make-thread #'darterfly/kernel:launch :name "load_init_program"))))
+      (sb-thread:make-thread #'darterfly/kernel:launch :name "load_init_program"))
+    (sb-thread:make-thread #'darterfly/bsd:resume-activities :name "resume")))
 
 (push 'darterfly-boot sb-ext:*init-hooks*)
 (sb-ext:enable-debugger)

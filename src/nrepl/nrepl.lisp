@@ -186,7 +186,7 @@
                 (let* ((*standard-output* text) (*error-output* text)
                        (*compile-print* nil) (*compile-verbose* nil)
                        (value (handler-bind ((warning #'muffle-warning))
-                                (eval form))))
+                                (let ((darterfly/bsd:*recording* t)) (eval form)))))
                   (setf (session-package session) *package*)
                   (%flush emit text)
                   (funcall emit "value" (prin1-to-string value)
@@ -289,12 +289,16 @@
     (format nil "~{~(~8,'0x~)~}" (loop repeat 4 collect (random (ash 1 32) state)))))
 
 (defun start (&key (port *port*) key)
+  (let ((key (or key
+                 (let ((arg (darterfly/devices:boot-arg "nrepl-key"))) (and (stringp arg) arg))
+                 *key*
+                 (new-key))))
+    (darterfly/bsd:keep-running :nrepl (start-server port key))))
+
+(defun start-server (port key)
   (unless darterfly/net:*interface*
     (darterfly/net:start-network))
-  (setf *key* (or key
-                  (let ((arg (darterfly/devices:boot-arg "nrepl-key"))) (and (stringp arg) arg))
-                  *key*
-                  (new-key)))
+  (setf *key* key)
   (unless (running-p)
     (setf *port* port
           *listener* (darterfly/net:tcp-listen port)
@@ -304,6 +308,7 @@
     address))
 
 (defun stop ()
+  (darterfly/bsd:stop-keeping :nrepl)
   (when *listener*
     (ignore-errors (darterfly/net:tcp-unlisten *listener*)))
   (when *thread*

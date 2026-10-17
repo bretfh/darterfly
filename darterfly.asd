@@ -97,7 +97,7 @@
 
 (asdf:defsystem #:darterfly/nrepl
   :description "Remote eval"
-  :depends-on (#:darterfly/net #:darterfly/devices)
+  :depends-on (#:darterfly/net #:darterfly/devices #:darterfly/bsd)
   :serial t
   :pathname "src/nrepl/"
   :components ((:file "nrepl")))

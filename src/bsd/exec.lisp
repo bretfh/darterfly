@@ -112,3 +112,39 @@
                        (proc-bindings *proc*) bindings))
                (throw (exec-tag *proc*)
                  (lambda () (call-with-bindings bindings (lambda () (with-stdio (funcall *resume*))))))))))))
+
+(defvar *activities* nil)
+(defvar *recording* nil)
+(defvar *user-threads* (make-hash-table :test 'eq :weakness :key :synchronized t))
+(defvar *threads-to-resume* nil)
+
+(defmacro keep-running (key &body body)
+  `(progn
+     (setf *activities* (cons (cons ,key (lambda () ,@body)) (remove ,key *activities* :key #'car :test #'equal)))
+     (let ((*recording* nil)) ,@body)))
+
+(defun stop-keeping (key)
+  (setf *activities* (remove key *activities* :key #'car :test #'equal)))
+
+(defun record-user-thread (make-thread function &rest keys)
+  (let ((thread (apply make-thread function keys)))
+    (when *recording*
+      (setf (gethash thread *user-threads*) (cons function keys)))
+    thread))
+
+(sb-ext:without-package-locks
+  (sb-int:unencapsulate 'sb-thread:make-thread 'user-threads)
+  (sb-int:encapsulate 'sb-thread:make-thread 'user-threads #'record-user-thread))
+
+(defun suspend-threads ()
+  (setf *threads-to-resume*
+        (loop for thread being the hash-keys of *user-threads* using (hash-value how)
+              when (sb-thread:thread-alive-p thread) collect how)))
+
+(defun resume-activities ()
+  (dolist (activity (reverse *activities*))
+    (handler-case (let ((*recording* nil)) (funcall (cdr activity)))
+      (error (e) (format *error-output* "~&resume ~a: ~a~%" (car activity) e))))
+  (dolist (how (shiftf *threads-to-resume* nil))
+    (handler-case (let ((*recording* t)) (apply #'sb-thread:make-thread how))
+      (error (e) (format *error-output* "~&resume thread: ~a~%" e)))))

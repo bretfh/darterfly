@@ -39,7 +39,7 @@
 
 (defun receive-deployment (host port)
   (let ((socket (make-instance 'sb-bsd-sockets:inet-socket :type :stream :protocol :tcp))
-        (written nil) (kept 0) (generation nil))
+        (written nil) (kept 0))
     (sb-bsd-sockets:socket-connect socket (sb-bsd-sockets:make-inet-address host) port)
     (unwind-protect
          (let ((stream (sb-bsd-sockets:socket-make-stream socket :input t :element-type '(unsigned-byte 8) :buffering :full)))
@@ -48,7 +48,6 @@
                  do (destructuring-bind (kind length mode &rest path) (uiop:split-string header :separator " ")
                       (let ((path (format nil "~{~a~^ ~}" path))
                             (octets (read-stream-octets stream (parse-integer length))))
-                        (when (string= kind "gen") (setf generation t))
                         (if (if (string= kind "gen")
                                 (put-octets (concatenate 'string *deploy-dir* path) octets #o644)
                                 (put-octets (concatenate 'string "/" path) octets (parse-integer mode :radix 8)))
@@ -56,14 +55,26 @@
                             (incf kept))))))
       (sb-bsd-sockets:socket-close socket))
     (flush-disks)
-    (if generation
-        (let ((name (install (concatenate 'string *deploy-dir* "kernel") (concatenate 'string *deploy-dir* "darterfly.core")
-                             :loader (concatenate 'string *deploy-dir* "boot.efi"))))
-          (with-open-file (s (esp-path "boot.conf") :direction :output :if-exists :supersede)
-            (write-string (deployed-boot-conf) s))
-          (flush-disks)
-          (list :generation name :written (length written) :unchanged kept))
-        (list :written (reverse written) :unchanged kept))))
+    (list :written (length written) :unchanged kept)))
+
+(defun deploy-into-world ()
+  (let* ((kernel (concatenate 'string *deploy-dir* "kernel"))
+         (loader (concatenate 'string *deploy-dir* "boot.efi"))
+         (new-kernel (and (probe-file kernel)
+                          (not (same-octets-p "/System/Library/Kernels/kernel"
+                                              (with-open-file (s kernel :element-type '(unsigned-byte 8))
+                                                (let ((v (make-array (file-length s) :element-type '(unsigned-byte 8))))
+                                                  (read-sequence v s) v))))))
+         (reloaded (reload-systems)))
+    (sb-thread:make-thread
+     (lambda ()
+       (sleep 2)
+       (save-generation :kernel (and (probe-file kernel) kernel)
+                        :loader (and (probe-file loader) loader)
+                        :boot-conf (deployed-boot-conf)
+                        :restart new-kernel))
+     :name "deploy save")
+    (append reloaded (list :new-kernel (and new-kernel t) :saving t))))
 
 (defun reload-systems ()
   (let ((t0 (get-internal-real-time))

@@ -11,7 +11,6 @@
                             (list "file" path octets mode)))
           (and generation
                (list (list "gen" "kernel" (octets (kernel-file)) #o644)
-                     (list "gen" "darterfly.core" (octets (darterfly-core)) #o644)
                      (list "gen" "boot.efi" (octets (boot-efi)) #o644)))))
 
 (defun serve-deployment (entries port)
@@ -48,11 +47,12 @@
   (format nil "(progn ~{(with-input-from-string (s ~s) (let ((*package* (find-package \"DARTERFLY/INSTALL\"))) (loop for f = (read s nil s) until (eq f s) do (eval f)))) ~})"
           (mapcar (lambda (f) (uiop:read-file-string (source f))) *receiver-sources*)))
 
-(defun deploy (host &key (from "10.42.0.1") (port 47100) (nrepl-port 4011) (restart t) (reload nil))
+(defun deploy (host &key (from "10.42.0.1") (port 47100) (nrepl-port 4011) (reload nil))
   (let* ((entries (deployment :generation (not reload)))
          (server (serve-deployment entries port))
-         (result (device-eval host (format nil "(progn ~a (let ((r (darterfly/install::receive-deployment ~s ~d))) (cond (~a (append r (darterfly/install::reload-systems))) (~a (darterfly/install::restart-soon) r) (t r))))"
-                                           (receiver-code) from port (and reload t) (and restart t))
+         (result (device-eval host (format nil "(progn ~a (append (darterfly/install::receive-deployment ~s ~d) (~a)))"
+                                           (receiver-code) from port
+                                           (if reload "darterfly/install::reload-systems" "darterfly/install::deploy-into-world"))
                               :nrepl-port nrepl-port)))
     (sb-thread:join-thread server :default nil :timeout 5)
     result))
