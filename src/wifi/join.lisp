@@ -261,7 +261,12 @@
   ((link :initarg :link :reader wireless-link)
    (mac :initarg :mac :accessor devices:network-mac)))
 
-(defmethod devices:interrupt-vector ((d wireless-interface)) nil)
+(defmethod devices:interrupt-vector ((d wireless-interface)) (card-vector (link-card (wireless-link d))))
+
+(defun acknowledge-interrupts (w)
+  (let ((fh (reg w #x2800)) (hw (reg w #x2808)))
+    (setf (reg w #x2800) fh (reg w #x2808) hw (reg w #x2810) 1)
+    (values fh hw)))
 
 (defmethod devices:network-send ((d wireless-interface) frame)
   (let* ((l (wireless-link d))
@@ -285,6 +290,7 @@
 (defmethod devices:network-receive ((d wireless-interface))
   (let* ((l (wireless-link d)) (w (link-card l)) (out nil))
     (sb-thread:with-recursive-lock ((link-lock l))
+      (acknowledge-interrupts w)
       (dolist (p (receive-packets w))
         (when (= (getf p :code) #xC1)
           (multiple-value-bind (f status) (mpdu (getf p :payload))
