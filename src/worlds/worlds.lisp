@@ -7,7 +7,7 @@
   ((code :initarg :code :reader world-error-code))
   (:report (lambda (c s) (format s "world call failed with errno ~d" (world-error-code c)))))
 
-(defconstant +max-message+ 16384)
+(defconstant +max-message+ 65536)
 
 (defun machdep (n &optional (a 0) (b 0) (c 0) (d 0) (e 0))
   (let ((r (sb-alien:alien-funcall

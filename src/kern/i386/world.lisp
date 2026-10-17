@@ -1,7 +1,7 @@
 (in-package #:darterfly/kern)
 
 (defconstant +max-names+ 64)
-(defconstant +max-message+ 16384)
+(defconstant +max-message+ 65536)
 (defconstant +receive-right+ 1)
 (defconstant +epipe+ 32)
 (defconstant +world-code-va+ #x40000000)

@@ -19,12 +19,19 @@ enum {
   VFS_open = 1, VFS_close, VFS_read, VFS_write, VFS_pread, VFS_pwrite, VFS_lseek, VFS_stat, VFS_lstat, VFS_fstat,
   VFS_readlink, VFS_symlink, VFS_mkdir, VFS_rmdir, VFS_unlink, VFS_rename, VFS_chdir, VFS_fchdir, VFS_getcwd,
   VFS_realpath, VFS_chmod, VFS_fchmod, VFS_chown, VFS_fchown, VFS_truncate, VFS_ftruncate, VFS_dup, VFS_dup2,
-  VFS_fcntl, VFS_readdir, VFS_link, VFS_utimes, VFS_fsync, VFS_umask
+  VFS_fcntl, VFS_readdir, VFS_link, VFS_utimes, VFS_fsync, VFS_umask, VFS_pipe, VFS_spawn, VFS_waitpid
 };
+
+enum { ARG_INT, ARG_STRING, ARG_IN, ARG_OUT };
+enum { TAG_CALL = 1, TAG_EXIT, TAG_FILES };
+
+#define PORT_MESSAGE 65536
+#define PORT_HEADER 72
+#define PORT_CHUNK 49152
 
 struct record {
   uint64_t magic, core, core_size, argv, argv_size, archive, archive_size, cwd, stdin_path, back_core, back_size,
-    result, exit_code, port;
+    result, exit_code, port, disk;
 };
 
 struct node { char *path; char *data; size_t size, cap; uint32_t mode; int64_t mtime; int dead, written; uint64_t ino; };
@@ -364,6 +371,86 @@ static long run_vfs(long op, long a, long b, long c, long d) {
 void __libsa_vfs_register(long (*entry)(long, long, long, long, long));
 void __libsa_run_core(const char *data, size_t size);
 
+static long arg_size(int kind, long value, long len) {
+  return kind == ARG_STRING ? (value ? (long)strlen((const char *)value) + 1 : 0) : kind == ARG_INT ? 0 : value ? len : 0;
+}
+
+static long port_vfs(long op, long a, long b, long c, long d) {
+  long args[4] = {a, b, c, d};
+  int kinds[4] = {ARG_INT, ARG_INT, ARG_INT, ARG_INT};
+  long lens[4] = {0, 0, 0, 0};
+  switch (op) {
+  case VFS_open: case VFS_mkdir: case VFS_rmdir: case VFS_unlink: case VFS_chdir: case VFS_chmod: case VFS_chown:
+  case VFS_truncate:
+    kinds[0] = ARG_STRING; break;
+  case VFS_symlink: case VFS_link: case VFS_rename:
+    kinds[0] = kinds[1] = ARG_STRING; break;
+  case VFS_read: case VFS_pread:
+    if (args[2] > PORT_CHUNK) args[2] = PORT_CHUNK;
+    kinds[1] = ARG_OUT; lens[1] = args[2]; break;
+  case VFS_write: case VFS_pwrite:
+    if (args[2] > PORT_CHUNK) args[2] = PORT_CHUNK;
+    kinds[1] = ARG_IN; lens[1] = args[2]; break;
+  case VFS_stat: case VFS_lstat:
+    kinds[0] = ARG_STRING; kinds[1] = ARG_OUT; lens[1] = sizeof(struct stat); break;
+  case VFS_fstat:
+    kinds[1] = ARG_OUT; lens[1] = sizeof(struct stat); break;
+  case VFS_readlink: case VFS_realpath:
+    kinds[0] = ARG_STRING; kinds[1] = ARG_OUT; lens[1] = args[2] > 4096 ? 4096 : args[2]; break;
+  case VFS_getcwd:
+    kinds[0] = ARG_OUT; lens[0] = args[1] > 4096 ? 4096 : args[1]; break;
+  case VFS_readdir:
+    kinds[2] = ARG_OUT; lens[2] = sizeof(struct dirent); break;
+  case VFS_utimes:
+    kinds[0] = ARG_STRING; kinds[1] = ARG_IN; lens[1] = 32; break;
+  case VFS_pipe:
+    kinds[0] = ARG_OUT; lens[0] = 2 * sizeof(int); break;
+  case VFS_waitpid:
+    kinds[1] = ARG_OUT; lens[1] = sizeof(int); break;
+  case VFS_close: case VFS_lseek: case VFS_fchdir: case VFS_fchmod: case VFS_fchown: case VFS_ftruncate:
+  case VFS_dup: case VFS_dup2: case VFS_fcntl: case VFS_fsync: case VFS_umask:
+    break;
+  default:
+    return -ENOSYS;
+  }
+  char *msg = malloc(PORT_MESSAGE), *reply = malloc(PORT_MESSAGE);
+  if (!msg || !reply) { free(msg); free(reply); return -ENOMEM; }
+  uint64_t *h = (uint64_t *)msg;
+  uint32_t *sizes = (uint32_t *)(msg + 48);
+  uint8_t *k = (uint8_t *)(msg + 64);
+  h[0] = TAG_CALL;
+  h[1] = (uint64_t)op;
+  char *p = msg + PORT_HEADER;
+  for (int i = 0; i < 4; i++) {
+    long size = arg_size(kinds[i], args[i], lens[i]);
+    h[2 + i] = kinds[i] == ARG_INT ? (uint64_t)args[i] : 0;
+    sizes[i] = (uint32_t)size;
+    k[i] = (uint8_t)kinds[i];
+    if ((kinds[i] == ARG_STRING || kinds[i] == ARG_IN) && size) {
+      if (p + size > msg + PORT_MESSAGE) { free(msg); free(reply); return -ENAMETOOLONG; }
+      memcpy(p, (const void *)args[i], (size_t)size);
+      p += size;
+    }
+  }
+  long n = __machdep5(MACHDEP_port_call, (long)record->port, (long)msg, p - msg, (long)reply, PORT_MESSAGE);
+  long r = n < 24 ? -EIO : *(int64_t *)reply;
+  if (n >= 24) {
+    uint32_t *got = (uint32_t *)(reply + 8);
+    char *q = reply + 24;
+    for (int i = 0; i < 4; i++)
+      if (kinds[i] == ARG_OUT && got[i] && args[i]) {
+        if (q + got[i] > reply + n) break;
+        memcpy((void *)args[i], q, got[i]);
+        q += got[i];
+      }
+  }
+  free(msg);
+  free(reply);
+  return r;
+}
+
+void __libsa_vfs_boot_first(void);
+
 const char *__libsa_run_start(int *argc, char **argv, int max) {
   uint64_t k[2] = {0, 0};
   __machdep(MACHDEP_core_file, (long)k, 0);
@@ -372,6 +459,15 @@ const char *__libsa_run_start(int *argc, char **argv, int max) {
   record = r;
   __libsa_run_core((const char *)r->core, r->core_size);
   if (r->result) return 0;
+  if (r->disk) {
+    __libsa_vfs_boot_first();
+    __libsa_vfs_register(port_vfs);
+    *argc = 0;
+    for (const char *p = (const char *)r->argv; p < (const char *)r->argv + r->argv_size && *argc < max - 1; p += strlen(p) + 1)
+      argv[(*argc)++] = (char *)p;
+    argv[*argc] = 0;
+    return (const char *)r;
+  }
   load_archive((const char *)r->archive, r->archive_size);
   struct node *core = add("/System/Library/Kernels/darterfly.core", S_IFREG | 0444);
   core->data = (char *)r->core;
@@ -441,10 +537,17 @@ void __libsa_run_finish(int code) {
   }
   p = put_entry(p, "TRAILER!!!", 0, 0, 0, 0, 0);
   if (record->port) {
-    uint64_t head[2] = {(uint64_t)(unsigned)code, (uint64_t)(p - archive)}, ack;
+    uint64_t head[3] = {TAG_EXIT, (uint64_t)(unsigned)code, (uint64_t)(p - archive)}, ack;
     __machdep5(MACHDEP_port_call, (long)record->port, (long)head, sizeof head, (long)&ack, sizeof ack);
-    for (char *q = archive; q < p; q += RUN_CHUNK)
-      __machdep5(MACHDEP_port_call, (long)record->port, (long)q, p - q < RUN_CHUNK ? p - q : RUN_CHUNK, (long)&ack, sizeof ack);
+    for (char *q = archive; q < p; q += RUN_CHUNK) {
+      char *chunk = q - 8;
+      uint64_t saved;
+      memcpy(&saved, chunk, 8);
+      uint64_t tag = TAG_FILES;
+      memcpy(chunk, &tag, 8);
+      __machdep5(MACHDEP_port_call, (long)record->port, (long)chunk, (p - q < RUN_CHUNK ? p - q : RUN_CHUNK) + 8, (long)&ack, sizeof ack);
+      memcpy(chunk, &saved, 8);
+    }
     return;
   }
   char *core = (char *)(((uint64_t)p + 4095) & ~4095ull);

@@ -950,8 +950,8 @@
                  "an empty port times out")
              (is (search "[T 0]" (ask "(let ((w (darterfly/worlds:spawn *program* :port *port*))) (multiple-value-bind (m token) (darterfly/worlds:receive *port* :timeout 5) (declare (ignore m)) (darterfly/worlds:stop w) (format nil \"[~a ~a]\" (and (member (darterfly/worlds:world-state w) '(:stopped :gone)) t) (darterfly/worlds:reply token \"late\"))))"))
                  "a world stopped while its call is held is gone, and the late reply goes nowhere")
-             (ask "(progn (darterfly/worlds:spawn *program* :entry #x56) (sleep 0.2) (sb-thread:join-thread (sb-thread:make-thread (lambda ()))) (defparameter *free* (darterfly/worlds:free-pages)))")
-             (is (search "[T]" (ask "(let ((ws (loop :repeat 200 :collect (darterfly/worlds:spawn *program* :entry #x56)))) (sleep 0.5) (sb-thread:join-thread (sb-thread:make-thread (lambda ()))) (format nil \"[~a]\" (and (every (lambda (w) (eq (darterfly/worlds:world-state w) :gone)) ws) (< (- *free* (darterfly/worlds:free-pages)) 400))))"))
+             (ask "(progn (darterfly/worlds:spawn *program* :entry #x56) (sleep 0.2) (sb-thread:join-thread (sb-thread:make-thread (lambda ()))) (sb-ext:gc :full t) (defparameter *free* (darterfly/worlds:free-pages)))")
+             (is (search "[T " (ask "(let ((ws (loop :repeat 200 :collect (darterfly/worlds:spawn *program* :entry #x56)))) (sleep 0.5) (sb-thread:join-thread (sb-thread:make-thread (lambda ()))) (sb-ext:gc :full t) (let ((lost (- *free* (darterfly/worlds:free-pages)))) (format nil \"[~a ~a]\" (and (every (lambda (w) (eq (darterfly/worlds:world-state w) :gone)) ws) (< lost 400)) lost)))"))
                  "worlds that end give their memory back")
              (is (search "[ALIVE]" (ask "(format nil \"[~a]\" (if (sb-thread:thread-alive-p (sb-thread:main-thread)) :alive :gone))"))))
         (image:finish c 5)))))
@@ -1374,7 +1374,27 @@
                            (ask (format nil "(darterfly/run:run-world \"/usr/lib/sbcl/sbcl.core\" ~a :cwd \"/\")"
                                         (argv "(progn (with-open-file (o \"/work/failed.txt\" :direction :output) (write-string \"partial\" o)) (sb-ext:exit :code 3))"))))
                    "a failed run's files are rejected")
-               (is (search "NIL" (ask "(probe-file \"/work/failed.txt\")"))))
+               (is (search "NIL" (ask "(probe-file \"/work/failed.txt\")")))
+               (ask "(progn (ensure-directories-exist \"/work/disk/\") (with-open-file (o \"/work/in.txt\" :direction :output :if-exists :supersede) (write-line \"hello world\" o)))")
+               (ask (format nil "(defparameter *disk* (sb-thread:make-thread (lambda () (darterfly/run:run-world \"/usr/lib/sbcl/sbcl.core\" ~a :cwd \"/work/\" :disk t))))"
+                            (argv (let ((*package* (find-package :darterfly/test)))
+                                    (prin1-to-string
+                                     '(progn
+                                       (let ((in (with-open-file (s "in.txt") (read-line s))))
+                                         (with-open-file (o "/work/disk/out.txt" :direction :output :if-exists :supersede)
+                                           (write-string (reverse in) o)))
+                                       (with-open-file (o "/work/big.bin" :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
+                                         (write-sequence (make-array 200000 :element-type '(unsigned-byte 8) :initial-element 7) o))
+                                       (rename-file "/work/disk/out.txt" "/work/disk/renamed.txt")
+                                       (with-open-file (o "/work/live.txt" :direction :output :if-exists :supersede)
+                                         (write-string (format nil "~a ~a" (length (directory "/work/disk/*.txt")) (with-open-file (s "/work/big.bin") (file-length s))) o))
+                                       (sleep 4)))))))
+               (is (search "[1 200000 T]" (ask "(progn (loop :repeat 100 :until (probe-file \"/work/live.txt\") :do (sleep 0.1)) (sleep 0.2) (format nil \"[~a ~a]\" (uiop:read-file-string \"/work/live.txt\") (sb-thread:thread-alive-p *disk*)))"))
+                   "a world reads and writes the real disk while it runs")
+               (is (search "(:EXIT 0 :FILES 0)" (ask "(sb-thread:join-thread *disk*)")))
+               (is (search "[dlrow olleh 200000 NIL]"
+                           (ask "(format nil \"[~a ~a ~a]\" (uiop:read-file-string \"/work/disk/renamed.txt\") (with-open-file (s \"/work/big.bin\") (file-length s)) (probe-file \"/work/disk/out.txt\"))"))
+                   "its files, a rename and a large write are on the disk"))
           (image:finish c 5))))))
 
 (defvar *run-wait* 1800)

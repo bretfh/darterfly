@@ -24,7 +24,11 @@ enum {
 typedef long (*vfs_entry)(long op, long a, long b, long c, long d);
 static vfs_entry vfs;
 
+static int boot_first;
+
 void __libsa_vfs_register(vfs_entry entry) { vfs = entry; }
+
+void __libsa_vfs_boot_first(void) { boot_first = 1; }
 
 #define KERNEL_PATH "/System/Library/Kernels/kernel"
 #define CORE_PATH "/System/Library/Kernels/darterfly.core"
@@ -140,7 +144,7 @@ int open(const char *path, int flags, ...) {
     saving++;
     return kernel_open(&saved_file);
   }
-  struct boot_file *file = vfs ? 0 : boot_file(path);
+  struct boot_file *file = vfs && !boot_first ? 0 : boot_file(path);
   if (file) return kernel_open(file);
   return (int)ret(call(VFS_open, (long)path, flags, mode, 0));
 }
@@ -211,7 +215,7 @@ off_t lseek(int fd, off_t off, int whence) {
 }
 
 int stat(const char *path, struct stat *st) {
-  struct boot_file *file = vfs ? 0 : boot_file(path);
+  struct boot_file *file = vfs && !boot_first ? 0 : boot_file(path);
   if (file) {
     kernel_stat(file, st);
     return 0;
@@ -220,7 +224,7 @@ int stat(const char *path, struct stat *st) {
 }
 
 int lstat(const char *path, struct stat *st) {
-  if (!vfs) return stat(path, st);
+  if (!vfs || (boot_first && boot_file(path))) return stat(path, st);
   return (int)ret(call(VFS_lstat, (long)path, (long)st, 0, 0));
 }
 

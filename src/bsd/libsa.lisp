@@ -264,14 +264,67 @@
     (:sendto (libsa-sendto a b))
     (:resolve (libsa-resolve (c-string a) b c d))))
 
-(defun libsa-entry (op a b c d)
+(defun libsa-entry (op a b c d &optional (proc *proc0*))
   (sb-sys:without-interrupts
-    (handler-case (or (let ((*proc* *proc0*)) (libsa-call (aref +libsa-ops+ op) a b c d)) 0)
+    (handler-case (or (let ((*proc* proc)) (libsa-call (aref +libsa-ops+ op) a b c d)) 0)
       (errno (e) (- (vfs:errno-code (errno-name e))))
       (vfs:vfs-error (e) (- (vfs:errno-code (vfs:vfs-errno e))))
       (error () (- (vfs:errno-code :eio))))))
 
 (defvar *libsa-entry* nil)
+
+(defun make-world-proc (cwd)
+  (with-bsd
+    (let ((proc (make-instance 'proc :pid (next-pid) :parent *proc0* :task darterfly/mach:*task*)))
+      (setf (proc-cwd proc) cwd
+            (proc-comm proc) "world"
+            (gethash (proc-pid proc) *procs*) proc)
+      proc)))
+
+(defun end-world-proc (proc)
+  (with-bsd
+    (loop :for fd :below (length (proc-fds proc))
+          :when (aref (proc-fds proc) fd)
+            :do (release-fd proc fd))
+    (remhash (proc-pid proc) *procs*)))
+
+(defun request-u64 (v at) (loop :for i :below 8 :sum (ash (aref v (+ at i)) (* 8 i))))
+
+(defun request-u32 (v at) (loop :for i :below 4 :sum (ash (aref v (+ at i)) (* 8 i))))
+
+(defun serve-request (proc request)
+  (let* ((op (request-u64 request 8))
+         (args (loop :for i :below 4 :collect (request-u64 request (+ 16 (* 8 i)))))
+         (sizes (loop :for i :below 4 :collect (request-u32 request (+ 48 (* 4 i)))))
+         (kinds (loop :for i :below 4 :collect (aref request (+ 64 i))))
+         (work (make-array (max 1 (reduce #'+ sizes)) :element-type '(unsigned-byte 8) :initial-element 0))
+         (offsets (let ((at 0)) (loop :for size :in sizes :collect (prog1 at (incf at size))))))
+    (let ((in 72))
+      (loop :for kind :in kinds :for size :in sizes :for at :in offsets
+            :when (and (member kind '(1 2)) (plusp size))
+              :do (replace work request :start1 at :start2 in :end2 (+ in size))
+                  (incf in size)))
+    (sb-sys:with-pinned-objects (work)
+      (let* ((base (sb-sys:sap-int (sb-sys:vector-sap work)))
+             (real (loop :for kind :in kinds :for size :in sizes :for at :in offsets :for arg :in args
+                         :collect (cond ((zerop kind) arg) ((zerop size) 0) (t (+ base at)))))
+             (result (if (and (< 0 op (length +libsa-ops+)) (not (member (aref +libsa-ops+ op) '(:spawn :socket :bind :listen :accept :connect :getsockname :getpeername :shutdown :recvfrom :sendto :resolve))))
+                         (apply #'libsa-entry op (append real (list proc)))
+                         (- (vfs:errno-code :enosys))))
+             (lens (loop :for kind :in kinds :for size :in sizes
+                         :collect (cond ((/= kind 3) 0)
+                                        ((member (aref +libsa-ops+ op) '(:read :pread :readlink)) (if (minusp result) 0 (min result size)))
+                                        (t size))))
+             (reply (make-array (+ 24 (reduce #'+ lens)) :element-type '(unsigned-byte 8) :initial-element 0)))
+        (dotimes (i 8) (setf (aref reply i) (ldb (byte 8 (* 8 i)) result)))
+        (loop :for len :in lens :for i :from 0
+              :do (dotimes (k 4) (setf (aref reply (+ 8 (* 4 i) k)) (ldb (byte 8 (* 8 k)) len))))
+        (let ((out 24))
+          (loop :for len :in lens :for at :in offsets
+                :when (plusp len)
+                  :do (replace reply work :start1 out :start2 at :end2 (+ at len))
+                      (incf out len)))
+        reply))))
 
 (defun console-fds ()
   (let ((fds (proc-fds *proc0*)))

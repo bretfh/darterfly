@@ -5,7 +5,7 @@
 
 (defconstant +magic+ #x4e555248434e4946)
 (defconstant +base+ #x0000340000000000)
-(defconstant +header+ 112)
+(defconstant +header+ 120)
 (defconstant +world-base+ #x0000400000000000)
 
 (defun read-octets (path)
@@ -103,7 +103,7 @@
          (back-at (page-up (+ (car (last offsets)) (part-length (car (last parts)))))))
     (values offsets back-at (+ back-at back-size))))
 
-(defun write-record (base size parts offsets back-at back-address back-size port)
+(defun write-record (base size parts offsets back-at back-address back-size port &optional disk)
   (let ((region (libsa "mmap" sb-alien:unsigned (sb-alien:unsigned base) (sb-alien:unsigned size)
                        (sb-alien:int 3) (sb-alien:int #x32) (sb-alien:int -1) (sb-alien:long 0))))
     (unless (= region base) (error "run: no room at ~x" base))
@@ -113,7 +113,7 @@
              (sb-sys:system-area-pointer (sb-sys:int-sap back-address)) (sb-alien:unsigned back-size)))
     (destructuring-bind (argv cwd stdin archive core image) offsets
       (declare (ignore image))
-      (let ((header (make-array 14 :element-type '(unsigned-byte 64) :initial-element 0)))
+      (let ((header (make-array 15 :element-type '(unsigned-byte 64) :initial-element 0)))
         (setf (aref header 0) +magic+
               (aref header 1) (+ base core) (aref header 2) (part-length (fifth parts))
               (aref header 3) (+ base argv) (aref header 4) (length (first parts))
@@ -121,7 +121,8 @@
               (aref header 7) (+ base cwd)
               (aref header 8) (if (plusp (length (third parts))) (+ base stdin) 0)
               (aref header 9) (+ base back-at) (aref header 10) back-size
-              (aref header 13) port)
+              (aref header 13) port
+              (aref header 14) (if disk 1 0))
         (sb-sys:with-pinned-objects (header)
           (libsa "memcpy" sb-sys:system-area-pointer (sb-sys:system-area-pointer (sb-sys:int-sap base))
                  (sb-sys:system-area-pointer (sb-sys:vector-sap header)) (sb-alien:unsigned +header+)))))))
@@ -149,49 +150,54 @@
 
 (defvar *world-runs* 0)
 
-(defun receive-result (port world timeout)
-  (let ((end (+ (get-internal-real-time) (* timeout internal-time-units-per-second))))
-    (loop
-      (handler-case
-          (multiple-value-bind (message token) (darterfly/worlds:receive port :timeout 1)
-            (darterfly/worlds:reply token #(0))
-            (return message))
-        (darterfly/worlds:world-error ()
-          (unless (eq (darterfly/worlds:world-state world) :running) (return nil))
-          (when (> (get-internal-real-time) end) (return nil)))))))
-
 (defun wait-gone (world)
   (loop :repeat 200 :until (eq (darterfly/worlds:world-state world) :gone) :do (sleep 0.05)))
 
-(defun run-world (core argv &key files cwd stdin (timeout 1800))
+(defun serve-world (port world proc timeout)
+  (let ((end (and timeout (+ (get-internal-real-time) (* timeout internal-time-units-per-second))))
+        (code nil) (archive nil) (at 0))
+    (loop
+      (handler-case
+          (multiple-value-bind (m token) (darterfly/worlds:receive port :timeout 1)
+            (case (u64-at m 0)
+              (1 (darterfly/worlds:reply token (if proc (darterfly/bsd:serve-request proc m) (make-array 24 :element-type '(unsigned-byte 8) :initial-element 255))))
+              (2 (setf code (u64-at m 8)
+                       archive (make-array (u64-at m 16) :element-type '(unsigned-byte 8))
+                       at 0)
+                 (darterfly/worlds:reply token #(0)))
+              (3 (when archive
+                   (replace archive m :start1 at :start2 8)
+                   (incf at (- (length m) 8)))
+                 (darterfly/worlds:reply token #(0)))
+              (t (darterfly/worlds:reply token #(0))))
+            (when (and archive (>= at (length archive)))
+              (return (values code archive))))
+        (darterfly/worlds:world-error ()
+          (unless (eq (darterfly/worlds:world-state world) :running) (return nil))
+          (when (and end (> (get-internal-real-time) end)) (return nil)))))))
+
+(defun run-world (core argv &key files cwd stdin disk timeout)
   (let* ((parts (record-parts core argv files cwd stdin nil))
          (base (+ +world-base+ (ash (mod (incf *world-runs*) 16) 36)))
-         (port (darterfly/worlds:make-port)))
+         (port (darterfly/worlds:make-port))
+         (proc (and disk (darterfly/bsd:make-world-proc (or cwd "/")))))
     (multiple-value-bind (offsets back-at size) (layout parts 0)
-      (write-record base size parts offsets back-at 0 0 1)
+      (write-record base size parts offsets back-at 0 0 1 disk)
       (let ((world nil))
         (unwind-protect
              (progn
                (setf world (darterfly/worlds:spawn-record base size port))
-               (let ((head (receive-result port world timeout)))
-                 (if (null head)
-                     (list :exit :stopped :files 0)
-                     (let* ((code (u64-at head 0))
-                            (archive (make-array (u64-at head 8) :element-type '(unsigned-byte 8)))
-                            (at 0))
-                       (loop :while (< at (length archive))
-                             :do (let ((m (receive-result port world 60)))
-                                   (unless m (return-from run-world (list :exit :stopped :files 0)))
-                                   (replace archive m :start1 at)
-                                   (incf at (length m))))
-                       (sb-sys:with-pinned-objects (archive)
-                         (let ((address (sb-sys:sap-int (sb-sys:vector-sap archive))))
-                           (if (zerop code)
-                               (list :exit 0 :files (unpack address (length archive)))
-                               (list :exit code :files 0 :rejected (count-entries address (length archive))))))))))
+               (multiple-value-bind (code archive) (serve-world port world proc timeout)
+                 (cond ((null code) (list :exit :stopped :files 0))
+                       (t (sb-sys:with-pinned-objects (archive)
+                            (let ((address (sb-sys:sap-int (sb-sys:vector-sap archive))))
+                              (if (zerop code)
+                                  (list :exit 0 :files (unpack address (length archive)))
+                                  (list :exit code :files 0 :rejected (count-entries address (length archive))))))))))
           (when world
             (darterfly/worlds:stop world)
             (wait-gone world))
+          (when proc (darterfly/bsd:end-world-proc proc))
           (libsa "munmap" sb-alien:int (sb-alien:unsigned base) (sb-alien:unsigned size)))))))
 
 (defun in-run-p ()
