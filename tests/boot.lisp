@@ -837,6 +837,27 @@
                (is (search "42" (listener-text-until c "42")) "and so does the listener"))
           (image:finish c 5))))))
 
+(test a-restarted-world-saves-again
+  (let ((esp (merge-pathnames "esp-save-again.img" (darterfly-file "build/"))))
+    (uiop:delete-file-if-exists esp)
+    (let ((c (image:bare-console :boot-args "init" :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 300)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "init: pid 1" :timeout 120))
+               (settled c)
+               (ask "(defvar cl-user::*saves* 0)")
+               (dotimes (i 3)
+                 (ask "(incf cl-user::*saves*)")
+                 (ask "(loop :while (find \"saved generation\" (sb-thread:list-all-threads) :key (function sb-thread:thread-name) :test (function equal)) :do (sleep 1))")
+                 (image:send c "(darterfly/install:save-generation)")
+                 (is (search "restart: core " (image:expect c '("restart: core " "Welcome to LDB") :timeout 300))
+                     "save ~d, from a world that ~:[booted cold~;was restarted by the last save~], restarts" (1+ i) (plusp i))
+                 (image:expect c "init: pid 1" :timeout 120)
+                 (settled c))
+               (is (search "3" (ask "cl-user::*saves*")) "the world carried every save"))
+          (image:finish c 5))))))
+
 (test stats-see-what-the-system-does
   (let ((c (image:bare-console)))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))

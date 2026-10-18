@@ -17,6 +17,7 @@
 (define-global core-file :u64 :count 2)
 (define-global saved-file :u64 :count 2)
 (define-global saving :u64)
+(define-global running-core :u64 :count 2)
 (define-global kfds :u64 :count 24)
 
 (define-low __libsa_vfs_register (entry) (setf vfs entry) 0)
@@ -116,7 +117,9 @@
 (define-low open-mode (path (flags :u32) (mode :u32))
   (when (= (the :u32 (strcmp path "/System/Library/Kernels/saved.core")) 0)
     (when (= (ref saved-file 0) 0)
-      (let ((at (mmap +save-base+ +save-space+ 3 #x32 #xFFFFFFFF 0)))
+      (__machdep 17 (address running-core) 0)
+      (let ((at (mmap (if (= (ref running-core 0) +save-base+) (+ +save-base+ +save-space+) +save-base+)
+                      +save-space+ 3 #x32 #xFFFFFFFF 0)))
         (when (= at (lognot 0)) (result (- 0 1)))
         (setf (ref saved-file 0) at)))
     (setf (ref saved-file 1) 0)
