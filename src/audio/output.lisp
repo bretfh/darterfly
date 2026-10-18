@@ -67,12 +67,18 @@
         (setf *idle-thread* (sb-thread:make-thread #'idle-loop :name "audio idle")))
       (codec-vendor *codec*))))
 
+(defun volume-gain (caps volume)
+  (let* ((zero (ldb (byte 7 0) caps))
+         (step-db (* 0.25 (1+ (ldb (byte 7 16) caps))))
+         (db (if (plusp volume) (* 20 (log volume 10)) -1000)))
+    (max 0 (min zero (round (+ zero (/ db step-db)))))))
+
 (defun apply-volume ()
   (when *path*
     (let* ((dac (car (last *path*)))
-           (steps (ldb (byte 7 8) (or (widget-amp-out-caps dac) 0))))
+           (caps (or (widget-amp-out-caps dac) 0)))
       (set-amp (codec-address *codec*) (widget-nid dac) :out t
-               :mute (or *muted* (<= *volume* 0)) :gain (round (* steps (max 0 (min 1 *volume*))))))))
+               :mute (or *muted* (<= *volume* 0)) :gain (volume-gain caps (max 0 (min 1 *volume*)))))))
 
 (defun start-stream ()
   (when *suspended* (bring-up))
