@@ -82,6 +82,7 @@
 (defvar *watchdog-limit* 30)
 
 (defun heartbeat ()
+  (pushnew 'quiet-watchdog sb-ext:*exit-hooks*)
   (loop (machdep 52 *watchdog-limit*) (sleep 1)))
 
 (defun quiet-watchdog () (machdep 52 0))

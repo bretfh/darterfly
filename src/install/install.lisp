@@ -28,9 +28,15 @@
     (when (probe-file path)
       (with-open-file (s path) (with-standard-io-syntax (let ((*read-eval* nil)) (read s)))))))
 
-(defun put-line (name text)
-  (with-open-file (s (esp-path name) :direction :output :if-exists :supersede)
-    (write-line text s)))
+(defun put-text (name text)
+  (let ((fresh (esp-path (concatenate 'string name ".new"))))
+    (with-open-file (s fresh :direction :output :if-exists :supersede)
+      (write-string text s))
+    (darterfly/power:flush-disks)
+    (darterfly/vfs:vfs-rename fresh (esp-path name))
+    (darterfly/power:flush-disks)))
+
+(defun put-line (name text) (put-text name (format nil "~a~%" text)))
 
 (defun link (name)
   (let ((path (esp-path name)))
@@ -127,8 +133,7 @@
         (delete-file *pending-generation*)
         (ignore-errors (darterfly/journal:trim))
         (when (getf pending :boot-conf)
-          (with-open-file (s (esp-path "boot.conf") :direction :output :if-exists :supersede)
-            (write-string (getf pending :boot-conf) s)))
+          (put-text "boot.conf" (getf pending :boot-conf)))
         (darterfly/power:flush-disks)
         (cond ((getf pending :shut-down) (darterfly/power:shut-down))
               ((getf pending :restart) (darterfly/power:restart)))))))
