@@ -53,7 +53,34 @@
 
 (defun s5-sleep-type () (sleep-type 5))
 
-(defun suspend (&key check)
+(defun cmos (register)
+  (darterfly/devices::port-write-8 #x70 register)
+  (darterfly/devices::port-read-8 #x71))
+
+(defun (setf cmos) (value register)
+  (darterfly/devices::port-write-8 #x70 register)
+  (darterfly/devices::port-write-8 #x71 value)
+  value)
+
+(defun arm-rtc-wake (event seconds)
+  (let* ((binary (logbitp 2 (cmos #x0B)))
+         (now (progn (loop while (logbitp 7 (cmos #x0A))) (cmos 0)))
+         (at (mod (+ (if binary now (+ (* 10 (ash now -4)) (logand now 15))) seconds) 60))
+         (enable (darterfly/devices::port-read-16 (+ event 2))))
+    (setf (cmos 1) (if binary at (+ (* 16 (floor at 10)) (mod at 10)))
+          (cmos 3) #xC0
+          (cmos 5) #xC0)
+    (cmos #x0C)
+    (setf (cmos #x0B) (logior (cmos #x0B) #x20))
+    (darterfly/devices::port-write-16 (+ event 2) (logior enable #x400))
+    enable))
+
+(defun disarm-rtc-wake (event enable)
+  (setf (cmos #x0B) (logand (cmos #x0B) (lognot #x20)))
+  (cmos #x0C)
+  (darterfly/devices::port-write-16 (+ event 2) enable))
+
+(defun suspend (&key check wake-after)
   (let* ((fadt (darterfly/devices::acpi-table "FACP"))
          (length (and fadt (darterfly/devices::ml-phys-read-32 (+ fadt 4))))
          (control (and fadt (darterfly/devices::ml-phys-read-32 (+ fadt 64))))
@@ -65,8 +92,10 @@
       (error "suspend: the firmware offers no S3"))
     (flush-disks)
     (darterfly/devices::suspend-devices)
-    (let ((enables (quiet-gpes fadt)))
+    (let ((enables (quiet-gpes fadt))
+          (rtc (and wake-after (arm-rtc-wake event wake-after))))
       (unwind-protect (darterfly/devices:machdep 66 (logior control (ash event 16) (ash type 32) (if check (ash 1 35) 0)) facs)
+        (when rtc (disarm-rtc-wake event rtc))
         (restore-gpes fadt enables)
         (darterfly/devices::wake-devices)))))
 

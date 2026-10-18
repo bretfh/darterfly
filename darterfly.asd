@@ -155,6 +155,13 @@
   :pathname "src/log/"
   :components ((:file "log")))
 
+(asdf:defsystem #:darterfly/health
+  :description "Health checks"
+  :depends-on (#:darterfly/log #:darterfly/bsd #:darterfly/net #:darterfly/wifi #:darterfly/display #:darterfly/devices #:darterfly/audio)
+  :serial t
+  :pathname "src/health/"
+  :components ((:file "health")))
+
 (asdf:defsystem #:darterfly/start
   :description "Boot"
   :depends-on (#:uiop #:darterfly/log #:darterfly/vfs #:darterfly/bsd #:darterfly/apfs #:darterfly/run #:darterfly/install #:darterfly/devices #:darterfly/display #:darterfly/audio #:darterfly/generation #:darterfly/net #:darterfly/wifi #:darterfly/nrepl #:darterfly/kernel)
@@ -296,7 +303,7 @@
   :depends-on (#:uiop #:darterfly/qmp #:darterfly/io #:darterfly/apfs #:darterfly/fat #:darterfly/gpt #:darterfly/install #:darterfly/cc #:darterfly/build #:darterfly/platform #:darterfly/kern #:darterfly/low #:darterfly/boot #:darterfly/link (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/image/"
-  :components ((:file "image") (:file "tcc") (:file "runtime") (:file "efi") (:file "deploy") (:file "bench")))
+  :components ((:file "image") (:file "tcc") (:file "runtime") (:file "efi") (:file "deploy") (:file "bench") (:file "hw")))
 
 (asdf:defsystem #:darterfly/server
   :description "The window server"
@@ -320,7 +327,7 @@
 
 (asdf:defsystem #:darterfly
   :description "A live, hackable OS on SBCL"
-  :depends-on (#:darterfly/mach #:darterfly/server #:darterfly/layer #:darterfly/bsd #:darterfly/init #:darterfly/shell #:darterfly/io #:darterfly/text #:darterfly/edit #:darterfly/imageio #:darterfly/kit #:darterfly/stats #:darterfly/windowserver #:darterfly/bench #:darterfly/apps #:darterfly/devices #:darterfly/vfs #:darterfly/apfs #:darterfly/fat #:darterfly/install #:darterfly/net #:darterfly/nrepl #:darterfly/run #:darterfly/generation #:darterfly/kernel #:darterfly/image #:darterfly/crypto #:darterfly/wifi #:darterfly/journal #:darterfly/worlds #:darterfly/storage #:darterfly/log #:darterfly/start)
+  :depends-on (#:darterfly/mach #:darterfly/server #:darterfly/layer #:darterfly/bsd #:darterfly/init #:darterfly/shell #:darterfly/io #:darterfly/text #:darterfly/edit #:darterfly/imageio #:darterfly/kit #:darterfly/stats #:darterfly/windowserver #:darterfly/bench #:darterfly/apps #:darterfly/devices #:darterfly/vfs #:darterfly/apfs #:darterfly/fat #:darterfly/install #:darterfly/net #:darterfly/nrepl #:darterfly/run #:darterfly/generation #:darterfly/kernel #:darterfly/image #:darterfly/crypto #:darterfly/wifi #:darterfly/journal #:darterfly/worlds #:darterfly/storage #:darterfly/log #:darterfly/start #:darterfly/health)
   :in-order-to ((asdf:test-op (asdf:test-op #:darterfly/test))))
 
 (asdf:defsystem #:darterfly/test

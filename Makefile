@@ -1,4 +1,4 @@
-.PHONY: repl check test bare desktop sbcl usb deploy generation reload bench log
+.PHONY: repl check test bare desktop sbcl usb deploy generation reload bench log hw
 
 GUIX := guix shell -m manifest.scm --
 ENV  := CL_SOURCE_REGISTRY="$$PWD//:$$GUIX_ENVIRONMENT/share/common-lisp//" ASDF_OUTPUT_TRANSLATIONS="/:$$HOME/.cache/common-lisp/darterfly/"
@@ -36,6 +36,9 @@ reload:
 
 log:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/image)" --eval "(write-string (darterfly/image:device-log \"$(HOST)\" $(if $(LINES),:lines $(LINES))))"'
+
+hw:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/image)" --eval "(unless (darterfly/image:hw \"$(HOST)\" $(if $(LABEL),:label \"$(LABEL)\") $(if $(NOSLEEP),:sleep nil)) (uiop:quit 1))"'
 
 bench:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/image)" --eval "(darterfly/image:bench $(if $(HOST),:host \"$(HOST)\") $(if $(LABEL),:label \"$(LABEL)\"))"'

@@ -2504,6 +2504,44 @@
            (is (not (search "NIL" (image:expect c (format nil "~%* ") :timeout 30))) "the network answers after waking"))
       (image:finish c 5))))
 
+(test the-clock-wakes-the-system
+  (let* ((image:*extra-qemu* (list "-global" "ICH9-LPC.disable_s3=0"))
+         (c (image:bare-console)))
+    (unwind-protect
+         (progn
+           (image:expect c "* " :timeout 90)
+           (image:send c "(progn (defvar *before* (get-universal-time)) (list :slept (darterfly/power:suspend :wake-after 5)))")
+           (is (loop :repeat 60
+                     :thereis (equal "suspended" (gethash "status" (image:qmp "query-status")))
+                     :do (sleep 0.5))
+               "the machine goes into S3")
+           (is (search "(:SLEPT 1)" (image:expect c (format nil "~%* ") :timeout 60))
+               "the RTC alarm wakes it with no one pressing anything")
+           (image:send c "(list :after (- (get-universal-time) *before*) :alarm (logbitp 5 (darterfly/power::cmos 11)))")
+           (let ((seen (image:expect c (format nil "~%* ") :timeout 30)))
+             (is (search ":ALARM NIL" seen) "the alarm is off again: ~a" seen)))
+      (image:finish c 5))))
+
+(test the-hardware-check-runs-across-a-sleep
+  (let* ((port (free-udp-port))
+         (image:*extra-qemu* (list "-global" "ICH9-LPC.disable_s3=0"))
+         (image::*expected* '(:log :network :disk))
+         (label "vm-check")
+         (c (image:bare-console :forwards (list (list :tcp port 4011)))))
+    (unwind-protect
+         (progn
+           (image:expect c "* " :timeout 90)
+           (image:send c (format nil "(progn (darterfly/net:start-network) (darterfly/nrepl:start :key ~s) :up)" (image::nrepl-key)))
+           (image:expect c ":UP" :timeout 60)
+           (let* ((out (make-string-output-stream))
+                  (ok (let ((*standard-output* out)) (image:hw "127.0.0.1" :label label :wake-after 5 :settle 60 :nrepl-port port)))
+                  (text (get-output-stream-string out)))
+             (is (eq t ok) "the check passes before and after the sleep:~%~a" text)
+             (is (search "suspend: => 1" text) "the machine slept and the clock woke it: ~a" text)
+             (is (search "display      absent" text) "a part the VM lacks is reported absent: ~a" text)))
+      (uiop:delete-directory-tree (image::results-dir (format nil "hw-~a" label)) :validate t :if-does-not-exist :ignore)
+      (image:finish c 5))))
+
 (test sound-plays-and-sleeps
   (let* ((image:*input-devices* '("virtio-keyboard-pci" "virtio-tablet-pci" "intel-hda" "hda-duplex"))
          (c (image:bare-console)))

@@ -240,7 +240,9 @@
       ((= n 72) (ok regs (log-previous-read a b)))
       ((= n 73) (panic "requested by world 0
 "))
-      ((= n 67) (ok regs (if (logand b #x100) (progn (outb a (logand b #xFF)) 0) (inb a))))
+      ((= n 67) (ok regs (if (logand b #x200)
+                             (if (logand b #x100) (progn (outw a (logand (shr b 16) #xFFFF)) 0) (inw a))
+                             (if (logand b #x100) (progn (outb a (logand b #xFF)) 0) (inb a)))))
       ((and (not (privileged)) (= n 6))
        (pair-out a (mem :u64 (+ (current-world) +w-image+)) (mem :u64 (+ (current-world) +w-image-size+)))
        (ok regs 0))
