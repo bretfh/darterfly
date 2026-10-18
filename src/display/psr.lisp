@@ -6,6 +6,7 @@
 (defconstant +cursor-surface-live-a+ #x700AC)
 
 (defvar *psr* nil)
+(defvar *psr-unreliable* nil)
 
 (pushnew 'forget-psr sb-ext:*save-hooks*)
 
@@ -16,7 +17,8 @@
     (and (logbitp 31 ctl) (= (ldb (byte 4 27) ctl) 1) (= (ldb (byte 3 24) ctl) 2))))
 
 (defun enable-psr (&optional (panel (vbt-panel)))
-  (awake (enable-psr-awake panel)))
+  (unless *psr-unreliable*
+    (awake (enable-psr-awake panel))))
 
 (defun enable-psr-awake (panel)
   (unless (edp-on-transcoder-a-p) (error "transcoder A is not driving the eDP panel"))

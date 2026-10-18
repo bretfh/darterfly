@@ -40,23 +40,18 @@
         (setf (reg +pipe-a-imr+) (logandc2 #xFFFFFFFF +flip-done+)
               (reg +pipe-a-ier+) (logior (reg +pipe-a-ier+) +flip-done+)
               (reg +pipe-a-iir+) (reg +pipe-a-iir+)
-              (reg +display-int-ctl+) (ash 1 31)
-              (reg +master-irq+) (ash 1 31))
+              (reg +display-int-ctl+) (ash 1 31))
+        (arm-events vector)
+        (setf (reg +master-irq+) (ash 1 31))
         (setf *flips-armed* vector))))
-
-(defun acknowledge-flips ()
-  (setf (reg +master-irq+) 0)
-  (setf (reg +pipe-a-iir+) (reg +pipe-a-iir+))
-  (setf (reg +master-irq+) (ash 1 31)))
 
 (defun wait-for-flip (offset &optional (seconds 0.05))
   (let ((vector (ignore-errors (arm-flips)))
         (deadline (+ (get-internal-real-time) (round (* seconds internal-time-units-per-second)))))
     (loop until (or (= (live-surface) offset) (> (get-internal-real-time) deadline))
           do (if vector
-                 (progn (devices:wait-for-interrupt (list vector) 0.02) (acknowledge-flips))
-                 (sleep 0.0005)))
-    (when vector (acknowledge-flips))))
+                 (devices:wait-for-interrupt (list vector) 0.02)
+                 (sleep 0.0005)))))
 
 (defun flip (offset)
   (awake
