@@ -1455,6 +1455,55 @@
             (image:finish c 5)
             (sb-bsd-sockets:socket-close server)))))))
 
+(test a-corrupted-world-takes-nothing-else-down
+  (let ((disk (merge-pathnames "world-corrupt.img" (darterfly-file "build/"))))
+    (uiop:delete-file-if-exists disk)
+    (darterfly/image::root-disk disk (* 256 1048576)
+                            (append (darterfly/image::root-entries)
+                                    (list (list :file "usr/lib/sbcl/sbcl.core" (image::octets (darterfly-file "build/sbcl-mt/output/sbcl.core"))))))
+    (let ((c (image:bare-console :root disk)))
+      (flet ((ask (form &optional (timeout 120)) (image:send c form) (image:expect c (format nil "~%* ") :timeout timeout))
+             (world (code &optional disk)
+               (format nil "(darterfly/run:run-world \"/usr/lib/sbcl/sbcl.core\" '~s :cwd \"/\"~:[~; :disk t~] :timeout 120)"
+                       (list "/System/Library/Kernels/kernel" "--core" "/System/Library/Kernels/darterfly.core"
+                             "--no-sysinit" "--no-userinit" "--disable-debugger" "--eval" code "--quit")
+                       disk))
+             (code (form) (let ((*package* (find-package :darterfly/test))) (prin1-to-string form))))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 90)
+               (ask "(progn (ensure-directories-exist \"/work/steady/\") (sb-ext:gc :full t) (defparameter *free* (darterfly/worlds:free-pages)))")
+               (ask (format nil "(defparameter *steady* (sb-thread:make-thread (lambda () ~a)))"
+                            (world (code '(progn
+                                         (dotimes (i 40)
+                                           (with-open-file (o (format nil "/work/steady/~d" i) :direction :output :if-exists :supersede)
+                                             (print (* i i) o))
+                                           (sleep 0.1))
+                                         (with-open-file (o "/work/steady/done" :direction :output :if-exists :supersede)
+                                           (write-string "done" o))))
+                                 t)))
+               (ask (format nil "(defparameter *wrecked* (sb-thread:make-thread (lambda () ~a)))"
+                            (world (code '(progn
+                                         (sleep 1)
+                                         (loop :for a :from sb-vm:dynamic-space-start :by 4096 :repeat 3000
+                                               :do (setf (sb-sys:sap-ref-64 (sb-sys:int-sap a) 0) #xdeadbeefdeadbeef))
+                                         (sb-ext:gc :full t)
+                                         (sb-sys:sap-ref-64 (sb-sys:int-sap #xffff800000000000) 0)
+                                         (sb-sys:sap-ref-64 (sb-sys:int-sap #xffffffff80000000) 0))))))
+               (is (search "[3 T]" (ask "(format nil \"[~a ~a]\" (+ 1 2) (sb-thread:thread-alive-p *steady*))"))
+                   "the system answers while one world is being wrecked")
+               (let ((wrecked (ask "(sb-thread:join-thread *wrecked*)" 180)))
+                 (is (not (search "(:EXIT 0 " wrecked)) "the wrecked world does not finish normally: ~a" wrecked))
+               (is (search "(:EXIT 0 :FILES 0)" (ask "(sb-thread:join-thread *steady*)" 180))
+                   "the other world finishes")
+               (is (search "[done 1521]" (ask "(format nil \"[~a ~a]\" (uiop:read-file-string \"/work/steady/done\") (string-trim '(#\\Space #\\Newline) (uiop:read-file-string \"/work/steady/39\")))"))
+                   "and its files are right")
+               (is (search "(:EXIT 0 " (ask (world "(+ 1 2)")))
+                   "a new world starts afterwards")
+               (is (search "[T " (ask "(progn (sleep 1) (sb-ext:gc :full t) (let ((lost (- *free* (darterfly/worlds:free-pages)))) (format nil \"[~a ~a]\" (< lost 4000) lost)))"))
+                   "and the wrecked world's memory came back"))
+          (image:finish c 5))))))
+
 (defvar *run-wait* 1800)
 
 (defun sbcl-run (disk core argv &key stdin script (files t))
