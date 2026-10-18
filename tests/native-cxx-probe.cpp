@@ -12,6 +12,12 @@
 #include <new>
 #include <stdexcept>
 #include <string>
+#include <sstream>
+#include <fstream>
+#include <random>
+#include <locale.h>
+#include <wchar.h>
+#include <cerrno>
 #include <thread>
 #include <vector>
 #include <cxxabi.h>
@@ -61,6 +67,34 @@ int main(int argc, char **argv) {
     FILE *f = fopen(artifact, "w"); assert(f); fclose(f);
     assert(global.value == 12 && initialization_order == 12);
     report("CONSTRUCTORS");
+    std::ostringstream formatted;
+    formatted << 42 << ' ' << 1.5;
+    assert(formatted.str() == "42 1.5");
+    std::istringstream input("37 2.5");
+    int integer = 0; double fraction = 0;
+    input >> integer >> fraction;
+    assert(integer == 37 && fraction == 2.5 && !input.fail());
+    assert(std::to_wstring(123) == L"123");
+    assert(std::wstring(L"darterfly").substr(2, 4) == L"rter");
+    assert(newlocale(LC_ALL_MASK, "C", nullptr));
+    assert(!newlocale(LC_ALL_MASK, "not-a-locale", nullptr) && errno == ENOENT);
+    mbstate_t state{}; wchar_t wc = 0;
+    assert(mbrtowc(&wc, "A", 1, &state) == 1 && wc == L'A');
+    assert(mbrtowc(&wc, "\x80", 1, &state) == size_t(-1) && errno == EILSEQ);
+    int major = 0, minor = 0, consumed = 0;
+    assert(sscanf("19.1tail", "%d.%d%n", &major, &minor, &consumed) == 2);
+    assert(major == 19 && minor == 1 && consumed == 4);
+    std::random_device random;
+    (void)random();
+    {
+        std::string path = std::string(artifact) + ".stream";
+        { std::ofstream file(path); file << "darterfly " << 19; assert(file.good()); }
+        std::ifstream file(path);
+        std::string word; int version = 0;
+        file >> word >> version;
+        assert(word == "darterfly" && version == 19 && !file.fail());
+    }
+    report("STREAMS-LOCALE");
     std::vector<int> numbers{9, 3, 7, 1};
     numbers.reserve(128); std::sort(numbers.begin(), numbers.end());
     std::string text(100, 'x'); text.replace(3, 3, "abc");

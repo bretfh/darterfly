@@ -116,8 +116,9 @@ same process needs service concurrency work. The TLS tests do not claim
 that arbitrary multithreaded foreign workloads are already supported.
 
 Memory pressure, quotas, allocator failure before FS initialization and
-complete POSIX behavior remain open. Clang, CEF and Nyxt have not been
-made runnable on Darterfly by this consolidation.
+complete POSIX behavior remain open. The subsequent
+[[file:../clang/README.org][native Clang milestone]] uses this runtime to compile C++ in a world.
+CEF and Nyxt have not been made runnable on Darterfly by this work.
 
 * Next gate toward local compiler and browser builds
 
@@ -129,9 +130,10 @@ made runnable on Darterfly by this consolidation.
    allocation, exception, RTTI and threaded-lifetime checks. Derive the
    remaining requirements from the pinned LLVM Support configuration:
    thread reclamation/concurrent services, mappings, files and process calls.
-3. Cross-seed selected Clang/LLD and C++ runtime components, run them here,
-   then rebuild them here and use that output for another working build.
-   Audit the current 128 MiB executable/segment bound against the seed.
+3. Native Clang -cc1 now compiles working C++ with shared libsa. Its seed
+   fits the 128 MiB executable bound. Bring up native LLD and TableGen,
+   rebuild the compiler/runtime here, then use that output for another
+   working build. Qualify resource limits on the larger workloads.
 4. Close the pinned generator/build-tool chain, then rebuild the engine,
    bridge and Nyxt locally. Keep Nyxt's existing backend and confine OS
    changes to justified platform adaptations. Dynamic library support is

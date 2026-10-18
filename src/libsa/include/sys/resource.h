@@ -13,6 +13,8 @@ struct rlimit { rlim_t rlim_cur, rlim_max; };
 #define RUSAGE_SELF 0
 #define RUSAGE_CHILDREN (-1)
 #define RUSAGE_THREAD 1
+#define RLIMIT_CORE 4
+#define RLIMIT_DATA 2
 #define RLIMIT_STACK 3
 #define RLIMIT_NOFILE 7
 #define RLIMIT_AS 9

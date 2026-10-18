@@ -14,8 +14,9 @@ explicit route to replacing it with locally executable build tools.
 
 Keep SBCL, low and TCC. Investigate a port of an existing C++ toolchain;
 do not write a C++ compiler or grow TCC/low into one. Clang/LLVM is the
-leading candidate if Chromium is chosen. It is not yet ported or proven
-buildable against Darterfly's runtime.
+leading candidate if Chromium is chosen. Its native -cc1 frontend now
+runs against shared libsa and compiles working C++ programs inside the OS.
+The complete compiler, linker and build-tool chain is not yet self-hosted.
 
 CEF remains a candidate, not a settled engine choice. Its existing Nyxt
 backend reduces browser-integration work. That advantage must be weighed
@@ -25,8 +26,9 @@ acceptance criterion.
 
 This document supersedes the earlier engine-first sequence. Work has
 resumed with a [[file:HOST-REFERENCE.org][built and tested Nyxt/CEF host reference]].
-The compiler port, engine source build and Darterfly engine harness remain
-outstanding. The host reference does not close those gates.
+The native frontend has now passed its first guest compilation gate.
+The compiler source rebuild, engine source build and Darterfly engine
+harness remain outstanding. The host reference does not close those gates.
 
 * Three different things we must be able to rebuild
 
@@ -118,13 +120,14 @@ its provenance rather than claiming it did not exist.
 * Current substrate and the actual gaps
 
 Initial audit: Darterfly ae6b4af on codex/nyxt-compat. Updated below for
-the native-program guest milestone on this branch. Clang and Chromium
-have not been executed on Darterfly.
+the native Clang guest milestone on this branch. Clang -cc1 compiles C++
+in a native world; Chromium has not been executed on Darterfly.
 
 | Facility | Observed implementation | What must be established next |
 |----------+-------------------------+--------------------------------|
 | Lisp compilation | SBCL, ASDF and source-generation machinery | Nyxt's full dependency graph builds locally |
-| C compilation | Embedded seed and standalone TCC; local compiler rebuild with shared libsa | Broader C corpus, bootstrap-input regeneration and C++ compiler port |
+| C compilation | Embedded seed and standalone TCC; local compiler rebuild with shared libsa | Broader C corpus and bootstrap-input regeneration |
+| C++ compilation | Native Clang 19.1.7 -cc1; C++ client and upstream LLVM demangler compiled in guest | Native LLD, generators and full compiler/runtime rebuild |
 | Linking | Lisp link-kernel and static link-native; selected x86-64 relocations | Native LLD, archives and COMDAT; cross-seed uses host LLD -r |
 | Isolated execution | Static ELF64 startup, protected segments, argv/env, exit/wait; raw and SBCL worlds | Selected LLVM C++ runtime passes; broader coverage and resource limits |
 | Process launching | BSD spawn/exec of Lisp programs and isolated static ELF; descriptor actions, cwd, wait4/signals | Native child spawn/wait and isolated SBCL run-program work; broaden attributes and groups |
@@ -139,14 +142,16 @@ A separate static ELF64 loader and waitable world lifecycle are now
 implemented; see [[file:NATIVE-PROGRAMS.org][the native-program contract and guest tests]].
 [[file:BSD-NATIVE.org][BSD execve and posix-spawn now also launch native ELF]], with inherited
 descriptors, cwd, signals and wait4. [[file:CHILD-PROCESSES.org][Native and isolated-SBCL child spawn/wait now work]] with a locally rebuilt driver. [[file:SHARED-RUNTIME.org][Native tools now reuse libsa, its allocator and static TLS]], with one public
-spawn/service path. Dynamic linkage and C++ runtime qualification remain
-missing. Count
-capabilities by behavior, not name.
+spawn/service path. [[file:../clang/README.org][Native Clang and the selected C++ runtime now pass guest tests]].
+Dynamic linkage and full standard-library qualification remain missing.
+Count capabilities by behavior, not name.
 
 The existing linker is useful for Darterfly's own image, but its explicit
-relocation cases do not establish that it can link Clang or Chromium.
+relocation cases do not establish general C++ archive/COMDAT support.
 Prefer qualifying LLD for foreign tools over turning the OS image linker
-into an unplanned general C++ linker project.
+into an unplanned general C++ linker project. The current Clang seed uses
+host LLD to resolve archives/COMDAT, then the Lisp linker for its final
+executable. Guest-generated objects link directly for the tested programs.
 
 The mapping implementation sometimes implements a file mapping by reading
 into anonymous memory. Audit the selected compiler/engine's MAP_SHARED,
@@ -257,8 +262,8 @@ by the image build, so this is not complete bootstrap-input closure.
 
 Keep this local build loop passing while qualifying C++ runtime behavior,
 thread cleanup/concurrency and dynamic linkage for the selected LLVM
-configuration. The next foreign compiler gate is Clang/LLD and its runtime,
-not a second native libc.
+configuration. Native Clang -cc1 now works with that same runtime. The
+next compiler gates are native LLD, generators and a complete local rebuild.
 
 Define executable format, startup ABI, libc/sysroot, TLS, C++ ABI, library
 loading and child-process behavior. Use a native program world, with
@@ -272,11 +277,19 @@ survives child failure. Confirm cancellation and resource cleanup.
 
 ** R2: Prove C++ runtime and native compiler execution early
 
-The static runtime portion now has booted-OS evidence. The C++ objects
-remain cross-built seed inputs; Darterfly rebuilds libsa and performs the
-final link. This does not pass R2's native compiler acceptance criterion.
-The next concrete proof is a native Clang -cc1 compiling C++ to an object,
-then a local link and execution against this runtime.
+The first native compilation gate now passes: Clang 19.1.7 -cc1 executes
+in its own world and produces C++ objects. Darterfly links them against
+shared libsa and the selected LLVM C++ runtime, then runs them in new
+worlds. Tests cover containers, constructors, exceptions, streams and a
+thread, invalid-source diagnostics, recompilation, and process cleanup.
+The same frontend compiles unchanged upstream ItaniumDemangle.cpp and a
+separate caller; the locally linked program demangles and exits correctly.
+All 13 frontend guest assertions pass. The expanded runtime test passes
+17 assertions; see [[file:../clang/README.org][the native Clang guide and recorded scope]].
+
+The frontend and C++ runtime are still imported seed artifacts. Host LLD
+resolves archives/COMDAT while building that seed. This is native C++
+compilation evidence, not completion of R3's compiler source rebuild.
 
 Using Guix as the seed builder, qualify the remaining runtime components
 and port the selected LLVM host interfaces. Run the resulting compiler
@@ -372,7 +385,7 @@ Reviewed local revisions:
 
 The pinned Nyxt/CEF host reference now works; see HOST-REFERENCE.org.
 Not yet established: engine source revision, complete build graph,
-complete C++ runtime coverage, native C++ compiler,
+complete C++ runtime coverage, a locally rebuilt Clang/LLD toolchain,
 full dynamic loader, engine harness, or memory/storage budget. This plan
 turns those into acceptance gates; it does not claim they already work.
 

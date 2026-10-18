@@ -160,7 +160,7 @@
                 (world-destroy w)
                 (result (- 0 +enomem+))))))
         (incf i))
-      (insert-at w (count-of w) (- +world-stack-top+ +world-stack-size+)
+      (insert-at w (count-of w) (- +world-stack-top+ +run-stack-size+)
                  +world-stack-top+ 3)
       (unless (the :u32 (native-copy w (- +world-stack-top+ stack-size)
                                     stack stack-size))

@@ -1,7 +1,75 @@
 #+title: Nyxt compatibility validation
 #+date: 2026-10-18
 
-* LLVM C++ runtime: current increment
+* Native Clang frontend and guest C++ compilation, 2026-10-18
+
+[[file:../clang/README.org][The native Clang guide]] records the exact seed and build recipe. The
+frontend is upstream LLVM/Clang 19.1.7 with a small -cc1 entry point and
+unchanged upstream compiler sources. Native execution uses shared Low
+libsa, allocation, TLS, descriptors and the existing world lifecycle.
+
+| Check | Result |
+|-------+--------|
+| Default seed build, including host generators and runtime | Pass |
+| make check | Pass; LOADED |
+| make test-native-clang-guest | 13 / 13 |
+| Expanded C++ runtime guest | 17 / 17 |
+| Standalone TCC/self-rebuild guest regression | 17 / 17 |
+| BSD/shared-runtime guest regression | 43 / 43 |
+| Extended ELF section-index host checks | 6 / 6 |
+| Full host suite | 1352 / 1353; same known onboarding failure |
+
+The only host-suite failure is the existing undefined
+DARTERFLY/INSTALL::FIRST-START-ENTRIES in
+FRESH-INSTALL-DOES-NOT-INHERIT-COMPLETED-SETUP. It is not counted as a pass.
+
+The guest runs Clang in a native world, compiles C++ to an ELF object,
+rebuilds libsa and startup, links locally and runs the result in another
+world. The program checks constructors, containers, exceptions and RAII,
+thread-local state, a worker thread, atomics and stream formatting. The
+harness also checks source diagnostics, deletion of stale outputs,
+recompilation from another working directory and process reaping.
+
+It then compiles unchanged upstream LLVM ItaniumDemangle.cpp and a
+separate caller inside Darterfly. The OS links both objects and runs the
+result, which verifies successful demangling and malformed-name rejection.
+This is one locally rebuilt upstream compiler component, not a complete
+local LLVM rebuild. The expanded runtime probe additionally verifies
+C-locale errors, wide strings, numeric parsing, random-device access and
+file streams.
+
+These tests boot the actual kernel and image in four-vCPU, 4 GiB QEMU/KVM;
+no physical-hardware qualification was performed. The native frontend
+artifact is 52,610,376 bytes. Its recorded SHA-256 is:
+
+#+begin_example
+0555a8cb4474e0f072f914369fe6dee8bd87f42e18b46c82657b137c3459ce70
+#+end_example
+
+The default seed recipe was also run with prerequisites enabled. Its
+final executable hash matched the tested seed. All 105 partial-link
+inputs came from the Darterfly-targeted Clang build tree; no host libc or
+startup object was imported. Host LLD still resolves seed archives and
+COMDAT, while the Lisp linker produces the final native executable.
+
+Reproducible transcript: build/native-clang-guest.log. Generated source,
+configuration, compiler and binary provenance: build/clang/provenance.json.
+
+- [[file:/tmp/darter-clang-guest2.log][13 frontend guest checks]]
+- [[file:/tmp/darter-clang-cxx-final.log][17 expanded C++ runtime guest checks]]
+- [[file:/tmp/darter-clang-tcc-regression.log][17 TCC rebuild regression checks]]
+- [[file:/tmp/darter-clang-bsd-regression.log][43 BSD/shared-runtime regression checks]]
+- [[file:/tmp/darter-clang-default-build.log][Default seed build with prerequisites]]
+- [[file:/tmp/darter-clang-check-final.log][Final compiler/load check]]
+- [[file:/tmp/darter-clang-host-final.log][Full host suite and known failure]]
+
+Next gates are native LLD/archive tools, TableGen and a native build
+runner/configuration generator, followed by a complete compiler/runtime
+rebuild and a second working stage. The frontend does not establish a
+Nyxt or CEF port, engine source rebuild, dynamic loader, complete locale
+library or arbitrary multithreaded foreign-program compatibility.
+
+* LLVM C++ runtime: preceding milestone
 
 Branch: codex/nyxt-compat. Parent: 7c45ebd. The selected LLVM libc++abi,
 libunwind and libc++ components execute in isolated worlds against shared

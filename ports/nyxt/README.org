@@ -15,6 +15,13 @@ The host reference carries a focused cl-cef lifecycle patch; see
 Base: f11c970. Branch: codex/nyxt-compat. The original networking worktree
 is independent of this worktree.
 
+* Native compiler progress
+
+[[file:../clang/README.org][Clang -cc1 now runs in an isolated world]], compiles C++ and an upstream
+LLVM component inside Darterfly, and produces objects the OS links and
+runs with shared libsa. The compiler/runtime source rebuild and browser
+engine port remain open gates in [[file:SELF-HOSTING.org][the self-hosting plan]].
+
 * Local stream sockets
 
 The BSD service implements AF_LOCAL/SOCK_STREAM socketpair and pathname
@@ -110,10 +117,9 @@ engine-first sequence. Rebuilding Nyxt's Lisp code, its native bridge and
 the engine are separate requirements; all need a local path.
 
 The pinned backend now builds and passes host integration tests on Guix.
-The engine source-build recipe remains to be qualified. Establish the
-native executable/runtime ABI,
-then prove a Darterfly-hosted C++ compiler can compile and link programs.
-Qualify its local rebuild and the required generators before committing
+The engine source-build recipe remains to be qualified. Native execution,
+selected C++ runtime behavior and guest C++ compilation now pass tests.
+Qualify the compiler's local rebuild and required generators before committing
 to a lengthy engine-only port. Nyxt's own Lisp development loop should
 become native as soon as its dependencies allow it.
 

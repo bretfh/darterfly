@@ -84,3 +84,40 @@ The upstream command-line driver is unchanged; Low builds libsa and Lisp links."
                                  root)) object :compat nil)))
     (values (link-native-program output (append (list crt tcc) support))
             (cons crt support))))
+
+(defun compile-native-cxx (compiler source object &key includes defines directory
+                              (output *standard-output*) (error *error-output*)
+                              (standard "c++20")
+                              (cxx-include "/usr/include/c++/v1")
+                              (libsa-include "/usr/src/darterfly/src/libsa/include")
+                              (resource-dir "/usr/lib/clang/19"))
+  "Run upstream Clang's cc1 frontend in a native world, producing an ELF object.
+The compiler is a recorded cross seed; compiling SOURCE happens in Darterfly."
+  (setf object (namestring (merge-pathnames object
+                            (uiop:ensure-directory-pathname
+                             (merge-pathnames (or directory (uiop:getcwd))
+                                              (uiop:getcwd))))))
+  (uiop:delete-file-if-exists object)
+  (let* ((args (append
+                (list "-cc1" "-triple" "x86_64-unknown-none-elf"
+                      "-emit-obj" "-x" "c++" (concatenate 'string "-std=" standard)
+                      "-mrelocation-model" "static" "-disable-red-zone"
+                      "-ftls-model=local-exec" "-fcxx-exceptions" "-fexceptions"
+                      "-D__darterfly__" "-nostdsysteminc"
+                      "-resource-dir" resource-dir
+                      "-internal-isystem" cxx-include
+                      "-internal-isystem" libsa-include
+                      "-internal-isystem" (concatenate 'string resource-dir "/include"))
+                (loop for i in includes append (list "-I" i))
+                (loop for d in defines collect (concatenate 'string "-D" d))
+                (list source "-o" object)))
+         (process (sb-ext:run-program compiler args :search nil :wait t
+                                      :directory directory :output output :error error)))
+    (unwind-protect
+         (let ((status (sb-ext:process-exit-code process)))
+           (unless (and (eq (sb-ext:process-status process) :exited) (eql status 0)
+                        (probe-file object))
+             (uiop:delete-file-if-exists object)
+             (return-from compile-native-cxx (values nil status)))
+           (values t status))
+      (sb-ext:process-close process))))

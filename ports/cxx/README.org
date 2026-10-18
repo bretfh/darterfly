@@ -18,10 +18,11 @@ exercise guarded statics, independent TLS, TLS destruction and exceptions.
 Main-thread TLS destruction precedes atexit/global destruction. Two
 concurrent executable instances verify independent state and artifacts.
 
-These are execution and runtime results. C++ translation and relocatable
-partial linking still happen on the Guix host. Darterfly rebuilds Low
-libsa and assembly startup and performs the final executable link itself.
-A native Clang compiler and local C++ runtime rebuild remain the next gate.
+The separate [[file:../clang/README.org][native Clang frontend]] now compiles C++ in its own world,
+including an upstream LLVM component. Darterfly rebuilds Low libsa and
+assembly startup and performs the final executable link itself. The
+runtime seed and its COMDAT partial link still originate on Guix; a local
+rebuild of the complete runtime and compiler remains an explicit gate.
 
 * Existing code, distinct responsibilities
 
@@ -104,10 +105,19 @@ libunwind uses its normal pthread lock and static DWARF discovery.
 Only the unwinder itself is compiled without C++ exceptions/RTTI, as in
 its upstream configuration; application exception handling remains on.
 
-[[file:config-site.h][The libc++ configuration]] disables filesystem, random-device, locale,
-wide-character and time-zone facilities. The recipe builds the selected
-standard-library source closure needed by the probe, not the complete
-libc++ distribution. Header availability alone does not qualify a feature.
+[[file:config-site.h][The libc++ configuration]] now enables streams, C-locale operations,
+wide strings and random-device access for the native frontend. The
+filesystem header configuration is enabled for fstream, but the complete
+filesystem implementation is not built or qualified. Time-zone support
+remains disabled. The recipe builds a selected source closure, not the
+complete libc++ distribution. Header availability alone does not qualify
+a feature.
+
+The shared libsa supplies ASCII C-locale conversion, numeric scanning and
+wide numeric formatting. Unsupported locale names and unrepresentable
+characters fail explicitly. File streams and random-device use the
+existing descriptor service and /dev/urandom. These additions belong to
+the same runtime used by Lisp worlds and standalone TCC.
 
 * Verification
 
@@ -124,14 +134,19 @@ custom terminate handling, and simultaneous instances with clean teardown.
 Allocation failure checks exercise new_handler, bad_alloc and nothrow new
 against the shared allocator's overflow rejection.
 
+The expanded probe also checks string-stream formatting and parsing,
+wide strings, C-locale errors, numeric scanning, random-device access and
+file-stream write/read. All 17 guest assertions passed on 2026-10-18.
+
 The guest transcript is build/native-cxx-guest.log. The host suite has
 focused regression checks for initializer boundary alignment/priority and
 no-op unwind relocations. See [[file:../nyxt/VALIDATION.org][the executed validation record]] for results.
 
 * Remaining boundaries
 
-- No native C++ compiler is available yet. C++ runtime/probe objects and
-  their COMDAT partial link are explicit cross-built seed artifacts.
+- Native Clang -cc1 now works. The runtime/probe objects in this standalone
+  runtime test and their COMDAT partial link remain cross-built inputs;
+  the separate Clang guest test compiles its C++ programs inside the OS.
 - Exceptions are qualified in C++ frames carrying DWARF unwind metadata.
   Unwinding through arbitrary Low, Lisp, assembly or FFI frames is not
   supported by this test. Forced pthread cancellation is not qualified.
@@ -147,28 +162,25 @@ no-op unwind relocations. See [[file:../nyxt/VALIDATION.org][the executed valida
   establish concurrent blocking file/socket services.
 - This is a selected libc++ configuration and functional probe, not the
   complete upstream test suite or complete C++ standard-library coverage.
-  Locale, streams, filesystem and other omitted components need their own
-  requirements and qualification before enabling them.
+  C-locale and stream coverage is limited to the recorded tests. Full
+  filesystem, Unicode locales and other components remain unqualified.
 - Source availability, target C++ compilation and generator execution
   must all be closed for a native runtime/compiler source rebuild.
 
-* Next toward a native compiler
+* Next toward rebuilding the compiler
 
-1. Fix a Clang/LLVM/LLD source revision and reproducible seed configuration.
-   Inventory LLVM Support's actual platform calls against this sysroot.
-   Use the current runtime probe and TCC rebuild as regression gates.
-2. Build a static Darterfly-targeted Clang seed on Guix. Bring up its
-   single-process -cc1 path first: compile a C++ translation unit to an
-   object inside a world, link against this runtime in Lisp, and run it.
-   This proves native C++ compilation before adding the full driver flow.
-3. Qualify the driver and native LLD, response files, archives/COMDAT,
-   temporary-file behavior, memory/storage limits and subprocesses. Audit
-   the existing 128 MiB executable/segment bound against real seed sizes.
-4. Bring build generators and tools onto Darterfly, then rebuild the C++
-   runtime and compiler locally and use them for another working stage.
-   Resolve thread reclamation and concurrent services against measured
-   compiler workloads rather than adding another runtime path.
-5. Continue through the pinned engine harness, engine source rebuild,
+The native frontend milestone is complete: Clang 19.1.7 compiles C++
+inside a world, and the OS links and runs its output with this runtime.
+It also recompiles upstream LLVM's Itanium demangler and runs a caller.
+The [[file:../clang/README.org][native compiler guide]] records the seed, runtime changes and tests.
+
+1. Preserve the runtime, standalone TCC and native Clang guest tests while
+   qualifying larger upstream translation units and resource limits.
+2. Bring up native LLD and archive tools, then TableGen. Replace the host
+   archive/COMDAT step and host-generated tables in the rebuild loop.
+3. Close the native build-runner and configuration-generation chain.
+   Rebuild the runtime and compiler locally, then rebuild with that output.
+4. Continue through the pinned engine harness, engine source rebuild,
    existing cl-cef bridge and Nyxt development loop in the
    [[file:../nyxt/SELF-HOSTING.org][browser self-hosting plan]]. Nyxt and CEF have not been ported by this work.
 

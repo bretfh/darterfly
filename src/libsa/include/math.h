@@ -7,6 +7,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#define HUGE_VALF __builtin_huge_valf()
+#define HUGE_VALL __builtin_huge_vall()
 #define HUGE_VAL __builtin_huge_val()
 #define INFINITY __builtin_huge_valf()
 #define NAN __builtin_nanf("")

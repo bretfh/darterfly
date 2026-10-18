@@ -14,6 +14,8 @@ extern "C" {
 #define WIFSIGNALED(s) (((s) & 0xffff) - 1u < 0xffu)
 #define WIFCONTINUED(s) ((s) == 0xffff)
 #define WCOREDUMP(s) ((s) & 0x80)
+struct rusage;
+pid_t wait4(pid_t, int *, int, struct rusage *);
 pid_t wait(int *);
 pid_t waitpid(pid_t, int *, int);
 

@@ -32,8 +32,10 @@
   (- 0 1))
 
 (define-low sysconf ((name :u32))
-  (cond ((= name 30) 4096)
+  (cond ((= name 0) 4096)
+        ((= name 30) 4096)
         ((= name 84) 1)
+        ((= name 70) 1024)
         ((= name 2) 100)
         (t (fail-with +einval+))))
 
@@ -115,6 +117,9 @@
 
 (define-low load-symbols ()
   (when (= (ref kimage 0) 0) (__machdep 6 (address kimage) 0))
+  ;; Native worlds have no kernel ELF mapping. dladdr/dlsym must report a
+  ;; missing symbol rather than dereference a failed boot-image request.
+  (when (or (= (ref kimage 0) 0) (< (ref kimage 1) 64)) (result 0))
   (let* ((k (ref kimage 0)) (sh (+ k (mem :u64 (+ k 40)))) (i 0))
     (while (< i (mem :u16 (+ k 60)))
       (let ((h (+ sh (* 64 i))))
@@ -305,3 +310,31 @@
 (define-low inet_ntop (af s d n) (fail-with +eafnosupport+) 0)
 (define-low inet_pton (af s d) (fail-with +eafnosupport+))
 (define-low getnameinfo (a b c d e f g) (- 0 2))
+
+(define-low statvfs (path buf) (fail-with +enosys+))
+(define-low fstatvfs (fd buf) (fail-with +enosys+))
+(define-low wait4 ((pid :u32) status (options :u32) usage)
+  ;; Child resource accounting is not implemented yet.
+  (when usage (memset usage 0 144))
+  (waitpid pid status options))
+
+(define-low passwd-copy (source out buf len resultp)
+  (setf (mem :u64 resultp) 0)
+  (unless source (result 0))
+  (let ((offset 0) (need 0))
+    (while (< offset 48)
+      (unless (= offset 16) (incf need (+ 1 (strlen (mem :u64 (+ source offset))))))
+      (incf offset 8))
+    (when (> need len) (result 34))
+    (memcpy out source 48)
+    (setf offset 0)
+    (while (< offset 48)
+      (unless (= offset 16)
+        (let* ((s (mem :u64 (+ source offset))) (n (+ 1 (strlen s))))
+          (memcpy buf s n) (setf (mem :u64 (+ out offset)) buf) (incf buf n)))
+      (incf offset 8)))
+  (setf (mem :u64 resultp) out) 0)
+(define-low getpwuid_r ((uid :u32) out buf len resultp)
+  (passwd-copy (getpwuid uid) out buf len resultp))
+(define-low getpwnam_r (name out buf len resultp)
+  (passwd-copy (getpwnam name) out buf len resultp))

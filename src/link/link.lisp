@@ -35,8 +35,12 @@
 
 (defun read-object (octets name region)
   (let* ((shoff (u octets 40 8))
-         (shnum (u octets 60 2))
-         (shstrndx (u octets 62 2))
+         ;; ELF uses section zero and SHT_SYMTAB_SHNDX when a large compiler
+         ;; object exceeds the 16-bit section-index space.
+         (shnum (let ((n (u octets 60 2)))
+                  (if (zerop n) (u octets (+ shoff 32) 8) n)))
+         (shstrndx (let ((n (u octets 62 2)))
+                     (if (= n #xFFFF) (u octets (+ shoff 40) 4) n)))
          (headers (loop :for i :below shnum
                         :collect (let ((h (+ shoff (* 64 i))))
                                    (list :name (u octets h 4) :type (u octets (+ h 4) 4) :flags (u octets (+ h 8) 8)
@@ -59,12 +63,21 @@
                                               (subseq octets (getf h :offset) (+ (getf h :offset) (getf h :size)))))))
     (let* ((symtab (find 2 headers :key (lambda (h) (getf h :type))))
            (strings (getf (nth (getf symtab :link) headers) :offset))
-           (symbols (loop :for at :from (getf symtab :offset) :below (+ (getf symtab :offset) (getf symtab :size)) :by 24
+           (extended (find-if (lambda (h)
+                               (and (= (getf h :type) 18)
+                                    (= (getf h :link) (position symtab headers))))
+                             headers))
+           (symbols (loop :for index :from 0 :for at :from (getf symtab :offset) :below (+ (getf symtab :offset) (getf symtab :size)) :by 24
                           :collect (let ((shndx (u octets (+ at 6) 2)))
+                                     (when (= shndx #xFFFF)
+                                       (unless (and extended (<= (* (1+ index) 4) (getf extended :size)))
+                                         (error "Missing extended ELF symbol section index in ~a" name)))
                                      (make-sym :name (c-string octets (+ strings (u octets at 4)))
                                                   :binding (ash (aref octets (+ at 4)) -4)
                                                   :section (cond ((= shndx 0) :undefined)
                                                                  ((= shndx #xFFF1) :absolute)
+                                                                 ((= shndx #xFFFF)
+                                                                  (aref sections (u octets (+ (getf extended :offset) (* index 4)) 4)))
                                                                  ((< shndx shnum) (aref sections shndx)))
                                                   :value (u octets (+ at 8) 8)
                                                   :object object)))))

@@ -1,5 +1,4 @@
 #pragma once
 #include <stdint.h>
-/* C++ iosfwd needs the state type even with wide-character I/O disabled.
-   No multibyte conversion or wide I/O functions are supplied yet. */
+/* Conversion state for the stateless C locale. Reserved for future UTF-8. */
 typedef struct { uint32_t pending, value; } mbstate_t;

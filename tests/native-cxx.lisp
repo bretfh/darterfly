@@ -62,7 +62,7 @@
                (with-open-file (s (merge-pathnames "native-cxx-guest.log" image:*build*)
                                   :direction :output :if-exists :supersede)
                  (write-string output s))
-               (dolist (label '("CONSTRUCTORS" "STL-ALLOCATION" "ALLOCATION-FAILURE" "RTTI" "EXCEPTIONS"
+               (dolist (label '("CONSTRUCTORS" "STREAMS-LOCALE" "STL-ALLOCATION" "ALLOCATION-FAILURE" "RTTI" "EXCEPTIONS"
                                 "GUARD-RETRY" "THREADS-TLS-GUARDS" "KEY-DESTRUCTORS"
                                 "FINALIZE" "CLOCK" "EXIT" "DESTRUCTION" "TERMINATE"
                                 "REPEAT" "ISOLATION" "CLEAN"))

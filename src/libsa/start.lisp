@@ -97,7 +97,7 @@
 
 (define-low __libsa_native_start (argc argv envp)
   (setf native-runtime 1)
-  (tls-init-stack (- #x00007ff000000000 (shl 1 20)) (shl 1 20))
+  (tls-init-stack (- #x00007ff000000000 (shl 8 20)) (shl 8 20))
   ;; Keep writable capacity for setenv; the loader supplies a tight vector.
   (let ((i 0))
     (while (and (< i 64) (mem :u64 (+ envp (* i 8))))

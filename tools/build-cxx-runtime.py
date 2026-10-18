@@ -29,9 +29,13 @@ def main():
     if not inc.exists():
         shutil.copytree(SOURCE / 'libcxx/include', inc)
     inc.chmod(0o755)
-    (inc / '__config_site').write_text((ROOT / 'ports/cxx/config-site.h').read_text())
-    shutil.copyfile(SOURCE / 'libcxx/vendor/llvm/default_assertion_handler.in',
-                    inc / '__assertion_handler')
+    # Preserve mtimes when the configuration is unchanged: LLVM includes
+    # these headers in thousands of translation units.
+    for target, source in [(inc / '__config_site', ROOT / 'ports/cxx/config-site.h'),
+                           (inc / '__assertion_handler', SOURCE / 'libcxx/vendor/llvm/default_assertion_handler.in')]:
+        data = source.read_bytes()
+        if not target.exists() or target.read_bytes() != data:
+            target.write_bytes(data)
     clang = shutil.which('clang')
     resource = subprocess.check_output([clang, '-print-resource-dir'], text=True).strip()
     common = [clang, '--target=x86_64-unknown-none-elf', '-c', '-O1', '-g',
@@ -53,7 +57,7 @@ def main():
     cxx = '''new_handler new_helpers verbose_abort vector string memory algorithm
              stdexcept exception typeinfo mutex mutex_destructor
              condition_variable condition_variable_destructor thread chrono
-             system_error error_category future'''.split()
+             system_error error_category future call_once random hash shared_mutex locale ios ios.instantiations iostream strstream'''.split()
     sources = [SOURCE / 'libcxxabi/src' / (x + '.cpp') for x in abi]
     sources += [SOURCE / 'libcxx/src' / (x + '.cpp') for x in cxx]
     sources += [SOURCE / 'libunwind/src' / x for x in

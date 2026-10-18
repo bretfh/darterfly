@@ -9,6 +9,12 @@ typedef struct { long long quot, rem; } lldiv_t;
 div_t div(int, int);
 ldiv_t ldiv(long, long);
 lldiv_t lldiv(long long, long long);
+#define MB_CUR_MAX 1
+int mbtowc(wchar_t *, const char *, size_t);
+int mblen(const char *, size_t);
+int wctomb(char *, wchar_t);
+size_t mbstowcs(wchar_t *, const char *, size_t);
+size_t wcstombs(char *, const wchar_t *, size_t);
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
 void *malloc(size_t);
