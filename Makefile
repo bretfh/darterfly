@@ -67,3 +67,7 @@ test-local-sockets:
 
 test-local-sockets-guest:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::socketpair-c-abi-on-darterfly)) (uiop:quit 1))"'
+
+.PHONY: test-native-guest
+test-native-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-executables-on-darterfly)) (uiop:quit 1))"'

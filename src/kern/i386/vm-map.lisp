@@ -191,7 +191,7 @@
 (define-low world-create ()
   (let ((w (kalloc +world-size+))
         (pml4 (pmap-create)))
-    (when (= pml4 0) (result 0))
+    (when (= pml4 0) (kfree w) (result 0))
     (rep-stosb w 0 +world-size+)
     (setf (mem :u64 (+ w +w-pml4+)) pml4)
     (setf next-world-id (+ next-world-id 1))

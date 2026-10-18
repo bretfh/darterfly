@@ -406,6 +406,7 @@
     n))
 
 (define-low world-stop (w)
+  (native-note-exit w 9)
   (let ((th all-threads) (self (current-thread)))
     (setf (mem :u64 (+ w +w-flags+)) (logior (mem :u64 (+ w +w-flags+)) +stopped+))
     (ports-fail w)

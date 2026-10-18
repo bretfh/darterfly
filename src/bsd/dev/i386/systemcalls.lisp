@@ -68,7 +68,7 @@
         (d (reg regs +r-r10+)))
     (unless (the :u32 (arguments-ok n a b c d)) (result (error regs +efault+)))
     (when (and (not (privileged)) (= n 1))
-      (world-stop (current-world)))
+      (native-exit (current-world) (ash (logand a 255) 8)))
     (when (and (not (privileged)) (= n 3)) (result (error regs +eperm+)))
     (when (and sigtrace (/= n 3) (/= n 4) (/= n 230))
       (kprintf "[syscall %lu thread 0x%lx (0x%lx, 0x%lx, 0x%lx) mask 0x%lx pending 0x%lx]
@@ -229,6 +229,9 @@
       ((= n 62) (ok regs (grant-memory a b (reg regs +r-rdx+) (reg regs +r-r10+))))
       ((= n 63) (ok regs (grant-vectors a b)))
       ((= n 64) (ok regs (port-into a b)))
+      ((= n 65) (ok regs (native-spawn a b (reg regs +r-rdx+)
+                                     (reg regs +r-r10+) (reg regs +r-r8+))))
+      ((= n 66) (ok regs (native-wait a)))
       ((and (not (privileged)) (= n 6))
        (pair-out a (mem :u64 (+ (current-world) +w-image+)) (mem :u64 (+ (current-world) +w-image-size+)))
        (ok regs 0))

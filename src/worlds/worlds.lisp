@@ -1,6 +1,6 @@
 (defpackage #:darterfly/worlds
   (:use #:cl)
-  (:export #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages #:spawn-record #:receive-into #:copy-from #:copy-into
+  (:export #:spawn-native #:wait-native #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages #:spawn-record #:receive-into #:copy-from #:copy-into
            #:heartbeat #:*watchdog-limit* #:quiet-watchdog #:pause #:resume #:checkpoint #:restore #:grant-memory #:grant-vectors #:port-into))
 (in-package #:darterfly/worlds)
 
@@ -198,3 +198,70 @@
 (defun world-state (world)
   (let ((flags (machdep 46 world)))
     (cond ((logtest flags 8) :gone) ((logtest flags 2) :stopped) ((logtest flags 4) :paused) (t :running))))
+
+;; Native startup uses the SysV stack layout, with a minimal auxiliary vector.
+;; This is the Darterfly trap/port ABI, not a Linux syscall ABI.
+(defun native-stack (argv envp)
+  (let* ((strings (mapcar (lambda (s)
+                            (check-type s string)
+                            (when (find #\Null s) (error "NUL in argument"))
+                            (sb-ext:string-to-octets s :external-format :utf-8
+                                                     :null-terminate t))
+                          (append argv envp)))
+         (words (+ 1 (length argv) 1 (length envp) 1 4))
+         (size (* 16 (ceiling (+ (* words 8)
+                                (reduce #'+ strings :key #'length
+                                                    :initial-value 0)) 16))))
+    (when (> size 65536) (error "Native arguments exceed 64 KiB"))
+    (let ((v (make-array size :element-type '(unsigned-byte 8)
+                             :initial-element 0))
+          (base (- #x00007FF000000000 size))
+          (at (* words 8)) (word 1))
+      (flet ((put (index value)
+               (dotimes (i 8)
+                 (setf (aref v (+ (* index 8) i))
+                       (ldb (byte 8 (* i 8)) value)))))
+        (put 0 (length argv))
+        (loop for s in strings for i from 0 do
+          (when (= i (length argv)) (incf word))
+          (put word (+ base at))
+          (replace v s :start1 at)
+          (incf at (length s))
+          (incf word))
+        ;; AT_PAGESZ, AT_NULL. The calloc-like buffer supplies terminators.
+        (put (- words 4) 6)
+        (put (- words 3) 4096))
+      v)))
+
+(defun spawn-native (path &key argv envp port)
+  "Load a static ELF64 executable into a fresh isolated world.
+ARGV includes argv[0]; the default is PATH. No descriptors are inherited.
+PORT, if supplied, is delegated as send right 1 in the child."
+  (let* ((file (with-open-file (s path :element-type '(unsigned-byte 8))
+                 (when (> (file-length s) (* 128 1024 1024))
+                   (error "Native image exceeds 128 MiB"))
+                 (let ((v (make-array (file-length s)
+                                      :element-type '(unsigned-byte 8))))
+                   (unless (= (read-sequence v s) (length v))
+                     (error "Short executable read"))
+                   v)))
+         (stack (native-stack (or argv (list (namestring path))) envp)))
+    (with-octets (f file)
+      (with-octets (s stack)
+        (machdep 65 f (length file) s (length stack) (or port 0))))))
+
+(defun wait-native (world &key nohang timeout)
+  "Reap WORLD and return its BSD wait status; NIL means still running.
+An exit code occupies bits 8..15; a terminating signal occupies bits 0..6.
+A second wait signals ECHILD. TIMEOUT never kills or reaps a live child."
+  (let ((deadline (when timeout
+                    (+ (get-internal-real-time)
+                       (* timeout internal-time-units-per-second)))))
+    (loop
+      (handler-case (return (machdep 66 world))
+        (world-error (c)
+          (unless (= (world-error-code c) 11) (error c))))
+      (when (or nohang (and deadline
+                           (>= (get-internal-real-time) deadline)))
+        (return nil))
+      (sleep 0.01))))

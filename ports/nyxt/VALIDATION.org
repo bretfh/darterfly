@@ -155,3 +155,24 @@ These temporary logs may be removed later; the checks above are rerunnable.
 - [[file:/tmp/darterfly-nyxt-guest-final.log][Guest test]]
 - [[file:/tmp/darterfly-nyxt-console2/console-0001.log][Earlier successful guest serial transcript]]
 - [[file:/tmp/darterfly-nyxt-host-version.log][Packaged Nyxt version command]]
+
+* Static native executable milestone
+
+The [[file:NATIVE-PROGRAMS.org][native-program contract]] now has a passing booted-OS test.
+make test-native-guest passed all 18 assertions. It loads a Clang-built
+ELF, checks startup state and protections, retains exit/fault status,
+cancels and reaps a looping world, rejects malformed ELF, exhausts and
+reclaims the bounded status table, and repeats 140 launch/wait cycles.
+
+The same C and assembly are compiled by TCC inside Darterfly and linked
+by link-native. That rebuilt ELF runs in a separate isolated world and
+returns the expected status. The compiler itself runs in world zero in
+this test. This is not evidence that Clang or CEF runs on Darterfly.
+
+make check passed. The existing socket guest test passed all seven
+assertions with the new exit handling. The test loader still reports the
+pre-existing FIRST-START-ENTRIES style warning; no new project warning
+appears in make check.
+
+The existing raw-world port/exit test passed all eight assertions,
+including stopping a world with a held call and reclaiming 200 worlds.

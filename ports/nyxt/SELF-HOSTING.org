@@ -117,15 +117,16 @@ its provenance rather than claiming it did not exist.
 
 * Current substrate and the actual gaps
 
-Audit point: Darterfly ae6b4af on codex/nyxt-compat. This is a targeted
-source review, not an execution test of Clang or Chromium.
+Initial audit: Darterfly ae6b4af on codex/nyxt-compat. Updated below for
+the native-program guest milestone on this branch. Clang and Chromium
+have not been executed on Darterfly.
 
 | Facility | Observed implementation | What must be established next |
 |----------+-------------------------+--------------------------------|
 | Lisp compilation | SBCL, ASDF and source-generation machinery | Nyxt's full dependency graph builds locally |
 | C compilation | Embedded TCC; compile-c/run-c/compile-units | C ABI probes needed by the chosen runtime |
-| Linking | Lisp link-kernel, selected x86-64 relocations and TLS | Native tool linker, archives, COMDAT and required ELF features |
-| Isolated execution | Raw code world-spawn and SBCL world runtime | Native executable startup, segments, argv/env, TLS, exit/wait |
+| Linking | Lisp link-kernel and static link-native; selected x86-64 relocations | Native tool linker, archives, COMDAT and required ELF features |
+| Isolated execution | Static ELF64 startup, protected segments, argv/env, exit/wait; raw and SBCL worlds | Native libc/TLS, BSD process integration and resource limits |
 | Process launching | BSD programs are registered Lisp functions | Native child execution for compiler/build commands |
 | C exec/spawn API | exec family and posix_spawn report ENOSYS | Implement or narrowly adapt measured tool requirements |
 | Foreign libraries | dlopen only exposes built-in runtime symbols | Real loading/relocation/lifetime for unchanged cl-cef and dependencies |
@@ -133,9 +134,11 @@ source review, not an execution test of Clang or Chromium.
 | IPC/readiness | Stream pairs, RAMFS named sockets, poll | Descriptor transfer, event APIs and engine-specific semantics |
 | Build storage | VFS/APFS and persistence facilities | Large source trees, metadata load, capacity and memory-pressure tests |
 
-The raw world-spawn primitive already starts machine code at an entry
-point. It is not a general ELF program loader. Likewise, the BSD function
-named execve currently dispatches registered Lisp programs; that is not
+The raw world-spawn primitive starts machine code at an entry point.
+A separate static ELF64 loader and waitable world lifecycle are now
+implemented; see [[file:NATIVE-PROGRAMS.org][the native-program contract and guest tests]].
+Dynamic linkage and native TLS are still missing. The BSD function named
+execve still dispatches registered Lisp programs; that is not
 native executable replacement. Count capabilities by behavior, not name.
 
 The existing linker is useful for Darterfly's own image, but its explicit
@@ -228,6 +231,10 @@ Stop expanding the port if the engine's source/tool chain cannot be
 reproduced or its required source inputs cannot be obtained.
 
 ** R1: Establish the foreign native-program contract
+
+Partial implementation: [[file:NATIVE-PROGRAMS.org][static ELF startup and world lifecycle]] pass
+18 guest checks, including a target-TCC/Lisp-linker build and execution.
+Descriptor/process-service integration and native libc/TLS remain open.
 
 Define executable format, startup ABI, libc/sysroot, TLS, C++ ABI, library
 loading and child-process behavior. Use a native program world, with

@@ -1,6 +1,6 @@
 (defpackage #:darterfly/link
   (:use #:cl)
-  (:export #:read-object #:link-kernel))
+  (:export #:read-object #:link-kernel #:link-native))
 (in-package #:darterfly/link)
 
 (defun u (v at n) (loop :for i :below n :sum (ash (aref v (+ at i)) (* 8 i))))
@@ -300,3 +300,38 @@
         (loop :for c :across (sb-ext:string-to-octets name) :do (vector-push-extend c table))
         (vector-push-extend 0 table)))
     (values (coerce table '(simple-array (unsigned-byte 8) (*))) at)))
+
+(defun link-native (objects &key (base #x400000) (entry "_start"))
+  "Link freestanding objects into a static ELF64 executable.
+Uses the existing relocation engine; TLS and dynamic linkage are unsupported."
+  (when (some (lambda (o) (some #'section-tls (object-sections o))) objects)
+    (error "Native TLS is not implemented"))
+  (let* ((image (lay-out :user base objects))
+         (globals (globals-of objects))
+         (start (gethash entry globals)))
+    (unless start (error "Missing native entry ~a" entry))
+    (let ((got (relocate image globals image)) (segments nil) (at 4096))
+      (dolist (group '((5 :text :rodata) (6 :data :got :tdata)))
+        (multiple-value-bind (bytes va end)
+            (segment-bytes image got (cdr group))
+          (let ((mem-end (if (= (car group) 6)
+                             (third (find :bss (image-segments image)
+                                          :key #'first)) end)))
+            (when (> mem-end va)
+              (setf at (+ (align at 4096) (mod va 4096)))
+              (push (list (car group) at va bytes (- mem-end va)) segments)
+              (incf at (length bytes))))))
+      (setf segments (nreverse segments))
+      (let ((out (octets at)))
+        (replace out #(#x7f #x45 #x4c #x46 2 1 1))
+        (put out 16 2 2) (put out 18 62 2) (put out 20 1 4)
+        (put out 24 start 8) (put out 32 64 8) (put out 52 64 2)
+        (put out 54 56 2) (put out 56 (length segments) 2)
+        (loop for (flags off va bytes memsz) in segments for i from 0
+              for h = (+ 64 (* i 56)) do
+          (put out h 1 4) (put out (+ h 4) flags 4)
+          (put out (+ h 8) off 8) (put out (+ h 16) va 8)
+          (put out (+ h 24) va 8) (put out (+ h 32) (length bytes) 8)
+          (put out (+ h 40) memsz 8) (put out (+ h 48) 4096 8)
+          (replace out bytes :start1 off))
+        out))))

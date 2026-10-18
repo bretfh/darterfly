@@ -246,7 +246,7 @@
   :pathname "src/kern/i386/"
   :components ((:file "mtrr") (:file "power") (:file "printf") (:file "rtclock") (:file "vm-map") (:file "pmap") (:file "lapic") (:file "sched")
                (:file "signal" :pathname "../../bsd/kern/signal") (:file "trap") (:file "mp")
-               (:file "systemcalls" :pathname "../../bsd/dev/i386/systemcalls") (:file "world")
+               (:file "systemcalls" :pathname "../../bsd/dev/i386/systemcalls") (:file "world") (:file "native")
                (:file "start" :pathname "../x86_64/start") (:file "init") (:file "stubs" :pathname "../x86_64/stubs") (:file "mp-desc") (:file "memory")))
 
 (asdf:defsystem #:darterfly/link
@@ -306,6 +306,6 @@
   :depends-on (#:darterfly #:fiveam (:require #:sb-posix) (:require #:sb-md5) (:require #:sb-bsd-sockets))
   :serial t
   :pathname "tests/"
-  :components ((:file "suite") (:file "local-socket") (:file "mach") (:file "server") (:file "init") (:file "boot") (:file "apfs") (:file "net") (:file "wifi") (:file "power") (:file "install") (:file "onboarding") (:static-file "socketpair-probe.c") (:static-file "low-harness.c") (:file "low"))
+  :components ((:file "suite") (:file "local-socket") (:file "native") (:file "mach") (:file "server") (:file "init") (:file "boot") (:file "apfs") (:file "net") (:file "wifi") (:file "power") (:file "install") (:file "onboarding") (:static-file "socketpair-probe.c") (:static-file "low-harness.c") (:file "low"))
   :perform (asdf:test-op (o c)
              (uiop:symbol-call :darterfly/test :run-them)))

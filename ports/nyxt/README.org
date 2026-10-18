@@ -130,3 +130,10 @@ that the imported compiler and its build tools can be rebuilt locally.
 References:
 - [[https://chromiumembedded.github.io/cef/general_usage.html][CEF processes, threads and offscreen rendering]]
 - [[https://chromium.googlesource.com/chromium/src/+/main/docs/ozone_overview.md][Chromium Ozone platform interfaces]]
+
+* Native executable milestone
+
+[[file:NATIVE-PROGRAMS.org][Static native programs now load and run in isolated worlds]], with
+arguments, exit/fault status, cancellation and reaping. The guest test also
+compiles and links its executable inside Darterfly. BSD process integration,
+native libc/TLS and the C++ compiler port remain next steps.
