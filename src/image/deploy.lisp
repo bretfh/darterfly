@@ -47,6 +47,15 @@
   (format nil "(progn ~{(with-input-from-string (s ~s) (let ((*package* (find-package \"DARTERFLY/INSTALL\"))) (loop for f = (read s nil s) until (eq f s) do (eval f)))) ~})"
           (mapcar (lambda (f) (uiop:read-file-string (source f))) *receiver-sources*)))
 
+(defun push-generation (host &key (from "10.42.0.1") (port 47100) (nrepl-port 4011))
+  (let* ((entries (append (deployment :generation t) (list (list "gen" "darterfly.core" (octets (darterfly-core)) #o644))))
+         (server (serve-deployment entries port))
+         (result (device-eval host (format nil "(progn ~a (append (darterfly/install::receive-deployment ~s ~d) (let ((dir darterfly/install::*deploy-dir*)) (list :generation (darterfly/install:install (concatenate 'string dir \"kernel\") (concatenate 'string dir \"darterfly.core\") :loader (concatenate 'string dir \"boot.efi\")) :restart (darterfly/power:restart-soon)))))"
+                                           (receiver-code) from port)
+                              :nrepl-port nrepl-port)))
+    (sb-thread:join-thread server :default nil :timeout 5)
+    result))
+
 (defun deploy (host &key (from "10.42.0.1") (port 47100) (nrepl-port 4011) (reload nil) (restart nil))
   (let* ((entries (deployment :generation (not reload)))
          (server (serve-deployment entries port))
