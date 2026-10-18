@@ -168,7 +168,6 @@
                (cpu0-rearm))
              (sched-tick)))
         ((= vector +lapic-interprocessor-interrupt+)
-         (serve-msr-request)
          (when (and (= (cpu-number) 0) (= (mem :u32 (+ (cpu-data) +c-idle+)) 0))
            (cpu0-rearm)))
         ((= vector +com1-vector+)

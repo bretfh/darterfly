@@ -77,6 +77,7 @@ Fault CR2: 0x%016lx, Error code: 0x%016lx, Fault CPU: 0x0
 
 (define-low kernel-trap (regs)
   (process-pmap-updates)
+  (serve-msr-request)
   (funnel-lock)
   (let ((user (= (logand (reg regs +r-cs+) 3) 3))
         (trapno (reg regs +r-trapno+)))
