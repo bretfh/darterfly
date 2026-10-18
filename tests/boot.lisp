@@ -1366,6 +1366,38 @@
                    "and the next run is back on the runtime darterfly booted"))
           (image:finish c 5))))))
 
+(defparameter *math-forms*
+  "(list (sin 1d0) (cos 1d0) (tan 0.5d0) (atan 1d0 2d0) (atan 0.7d0) (asin 0.3d0) (acos 0.3d0)
+         (exp 1.5d0) (exp -3.25d0) (log 10d0) (log 100d0 10) (log 0.001d0) (expt 2.5d0 1.7d0) (expt -2d0 3d0)
+         (sinh 0.3d0) (cosh 0.3d0) (tanh 0.3d0) (asinh 1d0) (acosh 2d0) (atanh 0.5d0) (log1p-test 0.01d0)
+         (rem 10.5d0 3d0) (scale-float 1.5d0 10) (sb-kernel::%hypot 3d0 4d0) (sb-kernel::%pow 9d0 0.5d0)
+         (strtod-test \"3.14159265358979323846\") (strtod-test \"1e-310\") (strtod-test \"-2.5E+300\")
+         (strtod-test \"0.1\") (strtod-test \"123456789012345678901234567890\") (coerce (strtof-test \"0.1\") 'double-float))")
+
+(defparameter *math-helpers*
+  "(progn (defun log1p-test (x) (sb-kernel::%log1p x))
+          (defun strtod-test (s) (sb-alien:alien-funcall (sb-alien:extern-alien \"strtod\" (function double sb-alien:c-string sb-alien:unsigned-long)) s 0))
+          (defun strtof-test (s) (sb-alien:alien-funcall (sb-alien:extern-alien \"strtof\" (function single-float sb-alien:c-string sb-alien:unsigned-long)) s 0)))")
+
+(test math-matches-the-host
+  (let ((c (image:bare-console)))
+    (unwind-protect
+         (progn
+           (image:expect c "* " :timeout 90)
+           (image:send c *math-helpers*)
+           (image:expect c (format nil "~%* ") :timeout 30)
+           (image:send c (format nil "(prin1-to-string ~a)" *math-forms*))
+           (let* ((r (image:expect c (format nil "~%* ") :timeout 60))
+                  (text (subseq r (1+ (position #\" r)) (position #\" r :from-end t)))
+                  (guest (let ((*read-default-float-format* 'double-float)) (read-from-string text)))
+                  (host (progn (let ((*package* (find-package :cl-user))) (eval (read-from-string *math-helpers*)))
+                               (eval (let ((*package* (find-package :cl-user))) (read-from-string *math-forms*))))))
+             (is (= (length host) (length guest)) "every value comes back: ~a" text)
+             (loop :for g :in guest :for h :in host :for i :from 0
+                   :do (is (<= (abs (- g h)) (* 1d-13 (max 1d0 (abs h))))
+                           "value ~d: the system says ~a, the host ~a" i g h))))
+      (image:finish c 5))))
+
 (test local-time-follows-the-zone-file
   (let ((disk (merge-pathnames "local-time.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists disk)
