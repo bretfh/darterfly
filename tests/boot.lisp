@@ -1680,6 +1680,27 @@
                (is (search "[3]" (ask "(format nil \"[~a]\" (+ 1 2))")) "and the system carries on"))
           (image:finish c 5))))))
 
+(test a-storage-world-serves-a-disk
+  (let ((extra (merge-pathnames "world-storage.img" (darterfly-file "build/"))))
+    (apfs:newfs extra :size (* 64 1048576) :volume-name "served"
+                      :entries (list '(:dir "notes") (list :file "hello.txt" (text (format nil "hello from the storage world~%")))))
+    (let ((c (image:bare-console :boot-args "reserve=0:9.0" :disks (list (list :nvme extra :addr "0x9")))))
+      (flet ((ask (form &optional (timeout 120)) (image:send c form) (image:expect c (format nil "~%* ") :timeout timeout)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 90)
+               (ask "(progn (darterfly/devices:start-devices) (darterfly/install::esp) (defparameter *node* (find-if (lambda (d) (string= (darterfly/devices::pci-location d) \"0:9.0\")) (darterfly/devices:find-entries 'darterfly/devices:pci-node))))")
+               (ask "(multiple-value-bind (w root) (darterfly/storage:start-storage-world *node* \"/Volumes/EFI/EFI/darterfly/gen-1/darterfly.core\") (defparameter *storage* w) (darterfly/storage:mount-remote w root \"/Volumes/served\"))" 300)
+               (is (search "hello from the storage world" (ask "(uiop:read-file-string \"/Volumes/served/hello.txt\")"))
+                   "the system reads a file through the storage world")
+               (ask "(with-open-file (o \"/Volumes/served/notes/new.txt\" :direction :output) (write-string (make-string 20000 :initial-element #\\x) o))")
+               (let ((r (ask "(format nil \"[~a ~{~a~^ ~}]\" (length (uiop:read-file-string \"/Volumes/served/notes/new.txt\")) (mapcar (function file-namestring) (directory \"/Volumes/served/notes/*.*\")))")))
+                 (is (search "[20000 new.txt]" r) "writes a file there and lists it: ~a" r))
+               (ask "(progn (darterfly/storage::call *storage* :sync) (darterfly/run:stop-world *storage*))" 120))
+          (image:finish c 5))))
+    (let ((v (image-volume extra)))
+      (is (equal 20000 (length (file-text v "/notes/new.txt"))) "and the file is on the disk"))))
+
 (defvar *run-wait* 1800)
 
 (defun sbcl-run (disk core argv &key stdin script (files t))
