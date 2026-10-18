@@ -19,11 +19,13 @@ HOST = ROOT / 'build/clang-host14'
 CMAKE = '/gnu/store/c8zkkq4dwblbvkg2589sllnzpnk2nfav-cmake-4.1.3/bin/cmake'
 NINJA = '/gnu/store/248kk7119nrvq9y7k2dzbaz0qv96kbqw-ninja-1.13.2/bin/ninja'
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--skip-prerequisites', action='store_true',
                         help='Reuse already built host generators and C++ runtime')
-    args = parser.parse_args()
+    parser.add_argument('--lld', action='store_true',
+                        help='Build the native ELF linker using the same LLVM tree')
+    args = parser.parse_args(argv)
     if not SOURCE.is_dir():
         raise SystemExit('Realize the LLVM source described in ports/cxx/README.org')
     if not args.skip_prerequisites:
@@ -56,7 +58,7 @@ set(CMAKE_SKIP_RPATH ON)
 ''')
     options = dict(CMAKE_TOOLCHAIN_FILE=toolchain, CMAKE_MAKE_PROGRAM=NINJA,
         CMAKE_C_FLAGS=flags, CMAKE_CXX_FLAGS=flags,
-        CMAKE_BUILD_TYPE='MinSizeRel', LLVM_ENABLE_PROJECTS='clang',
+        CMAKE_BUILD_TYPE='MinSizeRel', LLVM_ENABLE_PROJECTS='clang;lld',
         LLVM_EXTERNAL_PROJECTS='darter_cc1',
         LLVM_EXTERNAL_DARTER_CC1_SOURCE_DIR=ROOT / 'ports/clang',
         LLVM_TARGETS_TO_BUILD='X86', LLVM_HOST_TRIPLE='x86_64-unknown-none-elf',
@@ -68,7 +70,7 @@ set(CMAKE_SKIP_RPATH ON)
         LLVM_ENABLE_BACKTRACES='OFF', LLVM_ENABLE_CRASH_OVERRIDES='OFF',
         LLVM_ENABLE_PIC='OFF', LLVM_ENABLE_THREADS='ON', LLVM_ENABLE_EH='OFF',
         LLVM_ENABLE_RTTI='OFF', LLVM_ENABLE_PLUGINS='OFF',
-        LLVM_BUILD_TOOLS='OFF', CLANG_BUILD_TOOLS='OFF',
+        LLVM_BUILD_TOOLS='OFF', CLANG_BUILD_TOOLS='OFF', LLD_BUILD_TOOLS='OFF',
         CLANG_ENABLE_STATIC_ANALYZER='OFF', CLANG_ENABLE_ARCMT='OFF',
         CLANG_ENABLE_OBJC_REWRITER='OFF', CLANG_PLUGIN_SUPPORT='OFF',
         HAVE_SYSEXITS_H=1, HAVE_FENV_H='OFF', HAVE_DLOPEN='OFF',
@@ -76,16 +78,18 @@ set(CMAKE_SKIP_RPATH ON)
         HAVE_UNW_ADD_DYNAMIC_FDE='OFF', LLVM_ENABLE_ASSERTIONS='OFF', LLVM_ENABLE_DUMP='OFF')
     cxx.run([CMAKE, '-S', SOURCE / 'llvm', '-B', OUT, '-G', 'Ninja',
              *[f'-D{k}={v}' for k, v in options.items()]])
-    cxx.run([NINJA, '-C', OUT, '-j20', 'darter-clang'])
+    cxx.run([NINJA, '-C', OUT, '-j20', 'darter-lld' if args.lld else 'darter-clang'])
     env = os.environ.copy()
+    env['DARTERFLY_NATIVE_TOOL'] = 'lld' if args.lld else 'clang'
     profile = os.environ['GUIX_ENVIRONMENT']
     env['CL_SOURCE_REGISTRY'] = f'{ROOT}//:{profile}/share/common-lisp//'
     env['ASDF_OUTPUT_TRANSLATIONS'] = f'/:{Path.home()}/.cache/common-lisp/darterfly/'
     subprocess.run(['sbcl', '--dynamic-space-size', '4096', '--no-userinit',
                     '--script', str(ROOT / 'ports/clang/link-seed.lisp')],
                    check=True, env=env, cwd=ROOT)
-    seed = OUT / 'clang'
-    (OUT / 'provenance.json').write_text(json.dumps({
+    destination = ROOT / 'build/lld' if args.lld else OUT
+    seed = destination / ('ld.lld' if args.lld else 'clang')
+    (destination / 'provenance.json').write_text(json.dumps({
         'source': str(SOURCE), 'llvm_version': '19.1.7',
         'target': 'x86_64-unknown-none-elf',
         'compiler': subprocess.check_output([clang, '--version'], text=True),

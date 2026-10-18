@@ -95,3 +95,7 @@ test-native-cxx-guest:
 .PHONY: test-native-clang-guest
 test-native-clang-guest:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-clang-on-darterfly)) (uiop:quit 1))"'
+
+.PHONY: test-native-lld-guest
+test-native-lld-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-lld-on-darterfly)) (uiop:quit 1))"'

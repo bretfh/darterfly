@@ -16,7 +16,8 @@ Keep SBCL, low and TCC. Investigate a port of an existing C++ toolchain;
 do not write a C++ compiler or grow TCC/low into one. Clang/LLVM is the
 leading candidate if Chromium is chosen. Its native -cc1 frontend now
 runs against shared libsa and compiles working C++ programs inside the OS.
-The complete compiler, linker and build-tool chain is not yet self-hosted.
+Native LLD also links and runs that output. The complete compiler and
+build-tool chain is not yet self-hosted.
 
 CEF remains a candidate, not a settled engine choice. Its existing Nyxt
 backend reduces browser-integration work. That advantage must be weighed
@@ -127,8 +128,8 @@ in a native world; Chromium has not been executed on Darterfly.
 |----------+-------------------------+--------------------------------|
 | Lisp compilation | SBCL, ASDF and source-generation machinery | Nyxt's full dependency graph builds locally |
 | C compilation | Embedded seed and standalone TCC; local compiler rebuild with shared libsa | Broader C corpus and bootstrap-input regeneration |
-| C++ compilation | Native Clang 19.1.7 -cc1; C++ client and upstream LLVM demangler compiled in guest | Native LLD, generators and full compiler/runtime rebuild |
-| Linking | Lisp link-kernel and static link-native; selected x86-64 relocations | Native LLD, archives and COMDAT; cross-seed uses host LLD -r |
+| C++ compilation | Native Clang 19.1.7 -cc1; C++ client and upstream LLVM demangler compiled in guest | Archive utilities, generators and full compiler/runtime rebuild |
+| Linking | Native LLD handles tested archives, COMDAT, partial and final links; Lisp image linker remains | Larger compiler links, archive utilities and seed source rebuild |
 | Isolated execution | Static ELF64 startup, protected segments, argv/env, exit/wait; raw and SBCL worlds | Selected LLVM C++ runtime passes; broader coverage and resource limits |
 | Process launching | BSD spawn/exec of Lisp programs and isolated static ELF; descriptor actions, cwd, wait4/signals | Native child spawn/wait and isolated SBCL run-program work; broaden attributes and groups |
 | C exec/spawn API | One Low libsa posix_spawn/wait path for native and Lisp worlds | Attributes/groups/exec and measured tool requirements |
@@ -156,6 +157,10 @@ executable. Guest-generated objects link directly for the tested programs.
 The mapping implementation sometimes implements a file mapping by reading
 into anonymous memory. Audit the selected compiler/engine's MAP_SHARED,
 coherency and lifetime needs; an mmap symbol alone is not sufficient.
+Writable file-backed MAP_SHARED now fails with EOPNOTSUPP instead of
+silently providing a private copy. LLD uses explicit output writes or its
+upstream fallback. Read-only core mappings retain their existing path;
+general shared-file coherency and writeback remain open.
 
 Source anchors:
 - [[file:../../src/cc/cc.lisp][Current target C compilation]]
@@ -263,7 +268,7 @@ by the image build, so this is not complete bootstrap-input closure.
 Keep this local build loop passing while qualifying C++ runtime behavior,
 thread cleanup/concurrency and dynamic linkage for the selected LLVM
 configuration. Native Clang -cc1 now works with that same runtime. The
-next compiler gates are native LLD, generators and a complete local rebuild.
+next compiler gates are archive utilities, generators and a local rebuild.
 
 Define executable format, startup ABI, libc/sysroot, TLS, C++ ABI, library
 loading and child-process behavior. Use a native program world, with
@@ -305,6 +310,13 @@ Do this before committing to a long engine-only port. If it fails, record
 specific ABI/API/resource blockers and reconsider the architecture.
 
 ** R3: Close the native compiler and build-tool dependency chain
+
+[[file:../lld/README.org][Native ELF LLD now runs against shared libsa]]. It links guest-compiled
+C++ objects, extracts needed archive members, resolves COMDAT, performs
+relocatable links, and produces working executables. It also combines the
+individual imported runtime objects inside Darterfly. The runtime sources
+and LLD seed sources have not yet been fully compiled locally. Archive
+utilities, TableGen and build/configuration generation remain open.
 
 Bring the necessary build tools and generators onto Darterfly. Rebuild
 Clang/LLD and required runtimes from their pinned sources using the seed.

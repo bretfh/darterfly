@@ -32,7 +32,9 @@ def main():
     # Preserve mtimes when the configuration is unchanged: LLVM includes
     # these headers in thousands of translation units.
     for target, source in [(inc / '__config_site', ROOT / 'ports/cxx/config-site.h'),
-                           (inc / '__assertion_handler', SOURCE / 'libcxx/vendor/llvm/default_assertion_handler.in')]:
+                           (inc / '__assertion_handler', SOURCE / 'libcxx/vendor/llvm/default_assertion_handler.in'),
+                           (inc / 'cxxabi.h', SOURCE / 'libcxxabi/include/cxxabi.h'),
+                           (inc / '__cxxabi_config.h', SOURCE / 'libcxxabi/include/__cxxabi_config.h')]:
         data = source.read_bytes()
         if not target.exists() or target.read_bytes() != data:
             target.write_bytes(data)
@@ -57,7 +59,7 @@ def main():
     cxx = '''new_handler new_helpers verbose_abort vector string memory algorithm
              stdexcept exception typeinfo mutex mutex_destructor
              condition_variable condition_variable_destructor thread chrono
-             system_error error_category future call_once random hash shared_mutex locale ios ios.instantiations iostream strstream'''.split()
+             system_error error_category future call_once random hash shared_mutex regex locale ios ios.instantiations iostream strstream'''.split()
     sources = [SOURCE / 'libcxxabi/src' / (x + '.cpp') for x in abi]
     sources += [SOURCE / 'libcxx/src' / (x + '.cpp') for x in cxx]
     sources += [SOURCE / 'libunwind/src' / x for x in
@@ -72,6 +74,7 @@ def main():
             flags += ['-fno-exceptions', '-fno-rtti']
         run(common + runtime_flags + flags + [src, '-o', obj])
         objects.append(obj)
+    (OUT / 'objects.list').write_text(''.join(p.name + '\n' for p in objects))
     run(['ld.lld', '-r', *objects, '-o', OUT / 'runtime.o'])
     if '--probe' in sys.argv:
         probes = []

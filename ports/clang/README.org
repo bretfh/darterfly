@@ -16,8 +16,9 @@ startup, allocator and static TLS used by standalone TCC. LLVM libc++,
 libc++abi and libunwind supply the C++ library and exception machinery.
 
 This is not a locally rebuilt Clang distribution or a browser port. The
-full driver, native LLD, build generators and LLVM rebuild are subsequent
-milestones. The tests distinguish those claims from native compilation.
+full driver, build generators and LLVM source rebuild are subsequent
+milestones. [[file:../lld/README.org][Native ELF LLD now also links and runs guest-compiled C++]].
+The tests distinguish those claims from native compilation.
 
 * Build and bootstrap inputs
 
@@ -136,9 +137,10 @@ instead of dereferencing address zero.
 
 1. Qualify this frontend on larger upstream translation units, including
    resource limits, diagnostics, file streams and failed output writes.
-2. Bring up native LLD and archive tools on the same runtime. The Lisp
-   image linker remains useful, but is not yet a general C++ archive and
-   COMDAT linker. Retire host LLD from the seed rebuild loop.
+2. Native LLD now handles the tested archive, COMDAT and partial/final
+   links on the same runtime. Bring up archive/object utilities and
+   qualify larger compiler links. Retire host LLD from the complete seed
+   rebuild loop, including the LLVM archive resolution step.
 3. Build and run LLVM's TableGen tools in native worlds. Replace the host
    generators and regenerate the target's configured headers and tables.
 4. Supply a native build runner. A Lisp runner may initially execute a

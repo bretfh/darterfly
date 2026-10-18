@@ -21,8 +21,11 @@ concurrent executable instances verify independent state and artifacts.
 The separate [[file:../clang/README.org][native Clang frontend]] now compiles C++ in its own world,
 including an upstream LLVM component. Darterfly rebuilds Low libsa and
 assembly startup and performs the final executable link itself. The
-runtime seed and its COMDAT partial link still originate on Guix; a local
-rebuild of the complete runtime and compiler remains an explicit gate.
+runtime component objects still originate on Guix.
+[[file:../lld/README.org][Native LLD now combines those components inside Darterfly]] and links
+working C++ executables.
+Compiling the complete runtime and compiler sources locally remains an
+explicit gate.
 
 * Existing code, distinct responsibilities
 
@@ -105,7 +108,7 @@ libunwind uses its normal pthread lock and static DWARF discovery.
 Only the unwinder itself is compiled without C++ exceptions/RTTI, as in
 its upstream configuration; application exception handling remains on.
 
-[[file:config-site.h][The libc++ configuration]] now enables streams, C-locale operations,
+[[file:config-site.h][The libc++ configuration]] now enables streams, regular expressions, C-locale operations,
 wide strings and random-device access for the native frontend. The
 filesystem header configuration is enabled for fstream, but the complete
 filesystem implementation is not built or qualified. Time-zone support
@@ -176,8 +179,9 @@ The [[file:../clang/README.org][native compiler guide]] records the seed, runtim
 
 1. Preserve the runtime, standalone TCC and native Clang guest tests while
    qualifying larger upstream translation units and resource limits.
-2. Bring up native LLD and archive tools, then TableGen. Replace the host
-   archive/COMDAT step and host-generated tables in the rebuild loop.
+2. Native LLD now passes archive/COMDAT, runtime partial-link and final
+   executable tests. Bring up archive/object utilities and TableGen,
+   then replace the remaining host-generated tables and seed inputs.
 3. Close the native build-runner and configuration-generation chain.
    Rebuild the runtime and compiler locally, then rebuild with that output.
 4. Continue through the pinned engine harness, engine source rebuild,

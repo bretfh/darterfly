@@ -121,3 +121,53 @@ The compiler is a recorded cross seed; compiling SOURCE happens in Darterfly."
              (return-from compile-native-cxx (values nil status)))
            (values t status))
       (sb-ext:process-close process))))
+
+(defun link-native-cxx (linker executable objects &key directory
+                            (output *standard-output*) (error *error-output*)
+                            (script "/usr/src/darterfly/ports/lld/native.ld")
+                            relocatable)
+  "Run upstream ELF LLD in a world. Final links regenerate shared Low libsa.
+OBJECTS includes CRT0 and the C++ runtime for an executable; -r adds neither."
+  (setf executable (namestring (merge-pathnames executable
+                                (uiop:ensure-directory-pathname
+                                 (merge-pathnames (or directory (uiop:getcwd))
+                                                  (uiop:getcwd))))))
+  (let ((runtime (concatenate 'string executable ".libsa.o"))
+        (response (concatenate 'string executable ".rsp")))
+    (uiop:delete-file-if-exists executable)
+    (unwind-protect
+         (progn
+           (unless relocatable
+             (with-open-file (s runtime :direction :output :if-exists :supersede
+                                        :element-type '(unsigned-byte 8))
+               (write-sequence (darterfly/libsa:libsa-object) s)))
+           (let* ((args (append
+                         '("-m" "elf_x86_64" "--threads=1" "--no-mmap-output-file")
+                         (if relocatable '("-r")
+                             (list "-static" "--no-dynamic-linker" "--build-id=none"
+                                   "-z" "noexecstack" "-T" script runtime))
+                         objects (list "-o" executable)))
+                  ;; LLVM's own response parser avoids the world's argv limit.
+                  (process
+                    (progn
+                      (with-open-file (s response :direction :output :if-exists :supersede)
+                        (dolist (arg args)
+                          (write-char #\" s)
+                          (loop for c across arg do
+                            (when (find c '(#\" #\\)) (write-char #\\ s))
+                            (write-char c s))
+                          (write-char #\" s) (terpri s)))
+                      (sb-ext:run-program linker (list (concatenate 'string "@" response))
+                                          :search nil :wait t :directory directory
+                                          :output output :error error))))
+             (unwind-protect
+                  (let ((status (sb-ext:process-exit-code process)))
+                    (unless (and (eq :exited (sb-ext:process-status process))
+                                 (eql status 0) (probe-file executable))
+                      (uiop:delete-file-if-exists executable)
+                      (return-from link-native-cxx (values nil status)))
+                    (unless relocatable (sb-posix:chmod executable #o755))
+                    (values t status))
+               (sb-ext:process-close process))))
+      (uiop:delete-file-if-exists response)
+      (unless relocatable (uiop:delete-file-if-exists runtime)))))

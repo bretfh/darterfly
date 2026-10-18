@@ -1,0 +1,151 @@
+#+title: Native ELF LLD on Darterfly
+#+date: 2026-10-18
+#+startup: overview
+
+* What works
+
+Upstream LLD 19.1.7 runs in an isolated native world using the same Low
+libsa, allocator, static TLS, pthreads and descriptor service as Clang,
+TCC and Lisp worlds. Its ELF driver and LLVM sources are unchanged. A
+small entry point selects that driver through upstream lldMain.
+
+Clang compiles the two-file C++ runtime probe inside Darterfly. Native LLD
+links the resulting objects and the OS runs the executable in another
+world. The test covers constructors, COMDAT statics, STL, RTTI, cross-file
+exceptions, threaded TLS, streams and destructor ordering. It also links
+an archive containing a needed member and an unused member with an
+unresolved dependency; the unused member must stay unselected.
+
+LLD also performs a relocatable link of the individual upstream C++
+runtime objects inside the guest. That result supplies the runtime for
+another working executable. This replaces the host partial-link step for
+those imported objects. Their C++ compilation is still a bootstrap input;
+the complete runtime and compiler source rebuild is not yet closed.
+
+* Build and provenance
+
+The port shares the existing [[file:../clang/README.org][Clang source and configuration]] and its Guix
+channels. Both tools use the LLVM 19.1.7 source supplied by Guix's libcxx
+origin. The C++ runtime adds upstream regex.cpp to its selected closure.
+No new libc, allocator, TLS implementation or exception runtime is added.
+
+#+begin_src sh
+cd ~/git/cl/darterfly-nyxt
+# Prepare the existing SBCL/image build in a fresh worktree as usual.
+guix shell -m manifest.scm -- python3 tools/build-native-clang.py
+guix shell -m manifest.scm -- python3 tools/build-native-lld.py
+make test-native-lld-guest
+#+end_src
+
+The LLD recipe reuses the Clang recipe's cross configuration and build
+tree. By default it prepares host generators and the C++ runtime first.
+=--skip-prerequisites= is a development option for already-built inputs.
+The default recipe was exercised with prerequisites enabled.
+
+Artifacts and generated evidence:
+
+- =build/lld/ld.lld=: native static ELF executable.
+- =build/lld/ld.lld.map=: symbol map for world fault diagnosis.
+- =build/lld/provenance.json=: source, options, compiler and seed hash.
+- =build/clang/bin/darter-lld.o.inputs.json=: bootstrap archive inputs.
+- =build/cxx/objects.list=: individual runtime objects staged for the test.
+- =build/native-lld-guest.log=: actual-OS transcript.
+
+Host LLD still resolves the LLVM archives/COMDAT while creating the first
+LLD seed; the existing Lisp linker performs its final executable link.
+This is a recorded bootstrap dependency. Building a compiler from an
+imported seed is a separate milestone from compiling that seed's own
+sources locally.
+
+* Native link interface
+
+#+begin_src lisp
+(darterfly/cc:compile-native-cxx
+ "/usr/bin/clang" "/Users/darterfly/example.cpp" "/tmp/example.o")
+(darterfly/cc:compile-c
+ "/usr/src/darterfly/src/libsa/crt0.S" "/tmp/crt0.o" :compat nil)
+(darterfly/cc:link-native-cxx
+ "/usr/bin/ld.lld" "/tmp/example"
+ '("/tmp/crt0.o" "/usr/lib/cxx/runtime.o" "/tmp/example.o"))
+(sb-ext:run-program "/tmp/example" nil :search nil
+                    :output *standard-output* :error *error-output*)
+
+;; Partial linking adds neither libsa nor startup.
+(darterfly/cc:link-native-cxx
+ "/usr/bin/ld.lld" "/tmp/combined.o"
+ '("/tmp/first.o" "/tmp/second.o") :relocatable t)
+#+end_src
+
+Final links regenerate shared libsa with Low, pass the existing CRT and
+C++ runtime to LLD, and mark successful executables runnable. LLVM's own
+response-file parser handles argument lists beyond the world's argv
+limit, including paths containing spaces. Errors remove stale output;
+temporary response and libsa files are removed after the invocation.
+
+The helper selects x86-64 static ELF and one linker thread. The existing
+per-process descriptor broker serializes requests, so this qualification
+does not promise scalable parallel linker I/O or LTO. There is no host
+compiler/linker fallback when an invocation fails.
+
+* Layout and output semantics
+
+[[file:native.ld][The linker script]] describes Darterfly's existing executable ABI. It
+provides the constructor/destructor array bounds, static unwind bounds
+and TLS bounds expected by shared libsa. PT_LOAD segments occupy separate
+pages and retain read/execute, read-only, and read/write protections.
+The stack is non-executable; the image has no interpreter or dynamic
+segment. The existing kernel loader validates every resulting executable.
+
+The TLS layout respects both input alignment and libsa's minimum 16-byte
+variant-II block alignment. A separate guest program checks initialized
+and zero-filled TLS with 64 KiB alignment in the main and worker threads.
+
+The normal helper passes upstream --no-mmap-output-file. Writable file-backed
+MAP_SHARED is now rejected with EOPNOTSUPP in shared libsa: the existing
+private-copy implementation cannot provide coherent file writeback.
+Anonymous, private and read-only boot/core mappings retain their existing
+paths. This does not establish general shared-file coherency, including
+read-only mappings or later changes to mapping protection.
+An additional test omits that LLD option and exercises LLVM's own
+in-memory output fallback. It then links and runs the resulting object.
+Shared file mappings have not been implemented by this change.
+
+* Qualification and limits
+
+The guest harness boots the real Darterfly kernel/image in four-vCPU,
+4 GiB QEMU/KVM with a disposable APFS disk. It explicitly stages the
+compiler, linker, headers, runtime objects and linker script. This does
+not install the toolchain into an existing user disk or every normal
+image, and it is not physical-hardware qualification.
+
+All 18 LLD guest assertions passed on 2026-10-18.
+
+The suite checks native startup, guest C++ compilation, archive member
+selection, COMDAT resolution, final and partial linking, runtime component
+linking, execution, destructor ordering, high-alignment TLS, mapping
+errors/private-copy behavior, diagnostics, stale-output removal, recovery
+and child-process cleanup. [[file:../nyxt/VALIDATION.org][The validation record]] contains final counts
+and regression results.
+
+The archive writer in the test makes a standard indexless ar fixture from
+guest-compiled objects. It is not a native llvm-ar/ranlib port. Neither
+shared libraries, a dynamic loader, dynamic TLS, LTO nor non-x86 targets
+are qualified. Larger compiler links still need resource measurements.
+
+* Next toward rebuilding the compiler and browser
+
+1. Bring up native LLVM archive/object utilities and TableGen. Use the
+   existing native Clang/LLD pair to compile and link those tools, then
+   regenerate LLVM/Clang's tables locally.
+2. Make configuration and the build graph regenerable in Darterfly. Port
+   the required CMake/Ninja/Python pieces or provide a Lisp build runner
+   with equivalent, explicit inputs; retained host-generated files do
+   not close this requirement.
+3. Compile every selected runtime and compiler source locally, link the
+   resulting Clang/LLD, and use that generation for another build/test
+   stage. Measure memory, disk and process demands along the way.
+4. Continue with Nyxt's native dependencies and the pinned engine harness,
+   then the engine's own compiler and generator requirements. A native
+   linker does not supply Chromium's platform APIs or a dynamic loader.
+
+The [[file:../nyxt/SELF-HOSTING.org][browser self-hosting plan]] keeps those acceptance gates separate.

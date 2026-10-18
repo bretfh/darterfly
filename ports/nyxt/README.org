@@ -19,7 +19,8 @@ is independent of this worktree.
 
 [[file:../clang/README.org][Clang -cc1 now runs in an isolated world]], compiles C++ and an upstream
 LLVM component inside Darterfly, and produces objects the OS links and
-runs with shared libsa. The compiler/runtime source rebuild and browser
+runs with shared libsa. [[file:../lld/README.org][Native ELF LLD now also performs those links]],
+including archives and runtime partial linking. The source rebuild and browser
 engine port remain open gates in [[file:SELF-HOSTING.org][the self-hosting plan]].
 
 * Local stream sockets

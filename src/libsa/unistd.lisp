@@ -176,6 +176,12 @@
     1))
 
 (define-low mmap (addr len (prot :u32) (flags :u32) (fd :u32) off)
+  ;; File mappings currently provide private snapshots (or boot-image COW).
+  ;; A writable shared mapping needs coherent writeback; do not lose writes.
+  ;; LLVM can fall back to explicit output writes when mmap reports failure.
+  ;; Preserve SBCL's read-only core mappings and the existing boot sharing.
+  (when (and (= (logand flags #x20) 0) (logand flags 1) (logand prot 2))
+    (result (fail-with 95))) ; EOPNOTSUPP
   (if (= (logand flags #x20) 0)
       (let ((at (mmap addr len 3 (logior (logand flags #x10) #x22) #xFFFFFFFF 0)) (done 0) (n 0))
         (when (= at (lognot 0)) (result at))

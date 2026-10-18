@@ -1,6 +1,76 @@
 #+title: Nyxt compatibility validation
 #+date: 2026-10-18
 
+* Native ELF LLD and guest C++ linking, 2026-10-18
+
+Branch: codex/nyxt-compat. Parent: 2da6a6c. Upstream LLD 19.1.7 now runs
+in its own world against shared libsa. The ELF driver and LLVM sources
+are unchanged. See [[file:../lld/README.org][the native LLD guide, recipe and linker script]].
+
+| Check | Result |
+|-------+--------|
+| Default LLD seed build, including prerequisites | Pass |
+| make check | Pass; LOADED |
+| make test-native-lld-guest | 18 / 18 |
+| Existing native Clang guest | 13 / 13 |
+| BSD/shared-runtime guest regression | 43 / 43 |
+| Standalone TCC/self-rebuild guest regression | 17 / 17 |
+| Full host suite | 1352 / 1353; same known onboarding failure |
+
+The host-suite failure remains the undefined
+DARTERFLY/INSTALL::FIRST-START-ENTRIES in
+FRESH-INSTALL-DOES-NOT-INHERIT-COMPLETED-SETUP. It is not counted as a pass.
+
+Clang compiles both files of the C++ runtime probe inside Darterfly.
+LLD extracts the needed archive member and excludes an unused member
+whose dependency is deliberately missing. It resolves COMDAT and emits a
+static executable. The running program verifies constructors, allocation,
+RTTI, cross-file exceptions, guards, threaded TLS, streams and clocks.
+Its exit artifact verifies TLS/atexit/global/fini destructor ordering.
+
+Native LLD then combines the probe objects and all 52 individual imported
+C++ runtime objects. It links those results and runs another working
+executable. A separate Clang-built test checks 64 KiB-aligned initialized
+and zero-filled TLS in two threads. Response files handle long argument
+lists and an output path containing a space. An undefined-symbol failure
+removes stale output and temporary files; subsequent links succeed and
+all native processes are reaped.
+
+The final suite also exercises LLD's default mmap-output path. Shared
+libsa rejects writable file-backed MAP_SHARED with EOPNOTSUPP, allowing
+LLVM's upstream in-memory/write fallback to produce a usable object.
+Private-map writes leave the file unchanged. Read-only core mappings keep
+working; the change does not establish general shared-file coherency.
+
+These are actual Darterfly kernel/image boots in four-vCPU, 4 GiB
+QEMU/KVM with disposable APFS disks. No physical-hardware run was made.
+The default seed build completed with prerequisites enabled and reproduced
+the tested seed hash. Its 75 archive/object inputs all came from the
+Darterfly-targeted LLVM build tree. No host startup or libc was linked.
+
+LLD seed: 29,159,732 bytes. SHA-256:
+
+#+begin_example
+0e51164bdaa2e4f70bf867fa5c85e4c5b9e180f621d9d472dee9b242bb453f31
+#+end_example
+
+- [[file:../../build/native-lld-guest.log][Reproducible native LLD guest transcript]]
+- [[file:../../build/lld/provenance.json][Source, configuration and seed provenance]]
+- [[file:/tmp/darter-lld-guest-final2.log][18 native LLD guest checks]]
+- [[file:/tmp/darter-lld-clang-regression.log][13 native Clang regression checks]]
+- [[file:/tmp/darter-lld-bsd-regression.log][43 BSD/shared-runtime checks]]
+- [[file:/tmp/darter-lld-tcc-regression.log][17 TCC rebuild regression checks]]
+- [[file:/tmp/darter-lld-default-final.log][Default seed build with prerequisites]]
+- [[file:/tmp/darter-lld-check-final.log][Final compiler/load check]]
+- [[file:/tmp/darter-lld-host-final.log][Full host suite and known failure]]
+
+The compiler and linker seeds and runtime component objects remain
+cross-built inputs. This closes native compilation and linking for the
+tested static C++ programs, including runtime partial linking. It does
+not close the complete toolchain source rebuild. Archive utilities,
+TableGen, configuration/build-graph generation and a further locally
+built compiler stage remain ahead of the browser-engine rebuild.
+
 * Native Clang frontend and guest C++ compilation, 2026-10-18
 
 [[file:../clang/README.org][The native Clang guide]] records the exact seed and build recipe. The

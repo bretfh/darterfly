@@ -131,9 +131,10 @@ CEF and Nyxt have not been made runnable on Darterfly by this work.
    remaining requirements from the pinned LLVM Support configuration:
    thread reclamation/concurrent services, mappings, files and process calls.
 3. Native Clang -cc1 now compiles working C++ with shared libsa. Its seed
-   fits the 128 MiB executable bound. Bring up native LLD and TableGen,
-   rebuild the compiler/runtime here, then use that output for another
-   working build. Qualify resource limits on the larger workloads.
+   fits the 128 MiB executable bound. Native LLD now links its C++ output
+   and runtime components on the same libsa. Bring up TableGen and build
+   tools, rebuild compiler/runtime sources here, then use that output for
+   another working build. Qualify resource limits on the larger workloads.
 4. Close the pinned generator/build-tool chain, then rebuild the engine,
    bridge and Nyxt locally. Keep Nyxt's existing backend and confine OS
    changes to justified platform adaptations. Dynamic library support is
