@@ -75,14 +75,14 @@
       (setf (tcp-snd-una c) ack
             (tcp-unacked c) (set-difference (tcp-unacked c) acked))
       (let ((timed (find 0 acked :key #'fifth)))
-        (when timed (xmit-timer c (/ (- (get-internal-real-time) (fourth timed)) internal-time-units-per-second))))
+        (when timed (xmit-timer c (/ (float (- (get-internal-real-time) (fourth timed)) 1d0) internal-time-units-per-second))))
       bytes)))
 
 (defun xmit-timer (c rtt)
   (if (tcp-srtt c)
-      (setf (tcp-rttvar c) (+ (* 3/4 (tcp-rttvar c)) (* 1/4 (abs (- (tcp-srtt c) rtt))))
-            (tcp-srtt c) (+ (* 7/8 (tcp-srtt c)) (* 1/8 rtt)))
-      (setf (tcp-srtt c) rtt (tcp-rttvar c) (/ rtt 2)))
+      (setf (tcp-rttvar c) (+ (* 0.75d0 (tcp-rttvar c)) (* 0.25d0 (abs (- (tcp-srtt c) rtt))))
+            (tcp-srtt c) (+ (* 0.875d0 (tcp-srtt c)) (* 0.125d0 rtt)))
+      (setf (tcp-srtt c) rtt (tcp-rttvar c) (/ rtt 2d0)))
   (setf (tcp-rxtcur c) (min +rexmtmax+ (max +rtobase+ (+ (tcp-srtt c) (* 4 (tcp-rttvar c)))))))
 
 (defun flight-size (c) (seq- (tcp-snd-nxt c) (tcp-snd-una c)))
