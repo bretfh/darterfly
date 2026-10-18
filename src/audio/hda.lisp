@@ -14,7 +14,9 @@
    (last-active :initform 0 :accessor hda-last-active)
    (volume :initform 0.5 :accessor hda-volume)
    (muted :initform nil :accessor hda-muted)
-   (idle-thread :initform nil :accessor hda-idle-thread)))
+   (idle-thread :initform nil :accessor hda-idle-thread)
+   (input-streams :initform 0 :reader input-streams :writer (setf hda-input-streams))
+   (output-streams :initform 0 :reader output-streams :writer (setf hda-output-streams))))
 
 (devices:add-personality "Class" "HDAudioController" "ProviderClass" "PCIDevice" "PCIClassMatch" "0x00040300")
 
@@ -41,8 +43,6 @@
         (sleep 0.01)))
     state))
 
-(defun input-streams (c) (ldb (byte 4 8) (reg c 0 16)))
-(defun output-streams (c) (ldb (byte 4 12) (reg c 0 16)))
 
 (defun verb (c cad nid verb payload)
   (let ((command (if (> verb #xF)
@@ -90,7 +90,10 @@
   (devices::set-memory-enable d t)
   (devices::set-bus-master-enable d t)
   (setf (hda-vector c) (devices:allocate-vector))
-  (let ((present (reset-controller c)))
+  (let ((present (reset-controller c))
+        (caps (reg c 0 16)))
+    (setf (hda-input-streams c) (ldb (byte 4 8) caps)
+          (hda-output-streams c) (ldb (byte 4 12) caps))
     (setf (hda-codecs c)
           (remove nil (loop for cad below 15
                             when (logbitp cad present)

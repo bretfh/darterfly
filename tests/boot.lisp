@@ -2433,7 +2433,9 @@
              (is (search "[T]" (ask "(progn (darterfly/audio:play-tone :seconds 0.3 :level 0.1) (sleep 1) (let ((o (first (getf (first (getf (darterfly/audio:audio-status) :devices)) :outputs)))) (format nil \"[~a]\" (and o (> (getf o :played) 50000)))))"))
                  "a tone plays: the stream's position moves")
              (is (search "[T]" (ask "(progn (sleep 7) (format nil \"[~a]\" (getf (first (getf (darterfly/audio:audio-status) :devices)) :suspended)))"))
-                 "the controller sleeps once it has been quiet"))
+                 "the controller sleeps once it has been quiet")
+             (is (search "[T T NIL]" (ask "(progn (darterfly/audio:play-tone :seconds 0.3 :level 0.1) (sleep 0.6) (let* ((d (first (getf (darterfly/audio:audio-status) :devices))) (o (first (getf d :outputs)))) (sleep 1.5) (let ((after (first (getf (first (getf (darterfly/audio:audio-status) :devices)) :outputs)))) (format nil \"[~a ~a ~a]\" (not (getf d :suspended)) (> (getf o :played) 20000) (getf after :running)))))"))
+                 "after sleeping it wakes, plays and stops again"))
         (image:finish c 5)))))
 
 (test usb-ethernet-plugged-in-later
