@@ -127,6 +127,8 @@ numbers. The implementation is [[file:../../src/bsd/native.lisp][the native BSD 
 | 12 | getpid | unused | unused | none |
 | 13 | getppid | unused | unused | none |
 | 14 | pipe | unused | unused | none; reply carries two 32-bit fds |
+| 15 | spawn | search mode | zero | packed arguments, environment and actions |
+| 16 | wait | signed PID | options | none; reply carries target wait status |
 
 Descriptors are limited to 0..4095; poll accepts at most 256 entries.
 Read and write can return short counts at the 4096-byte boundary. The
@@ -168,11 +170,11 @@ cleanup. Current results are recorded in [[file:VALIDATION.org][VALIDATION.org]]
 
 * What must follow for compiler and browser builds
 
-1. Add bounded spawn/exec/wait requests for native callers and isolated
-   SBCL worlds. A compiler driver must launch its linker, inherit selected
-   descriptors, collect diagnostics and reap failures. Test a native
-   parent launching a native child; system-world BSD spawn alone is not
-   proof of this. Existing C posix_spawn stubs still report ENOSYS.
+1. [[file:CHILD-PROCESSES.org][Native and isolated-SBCL child spawn/wait now work]]. Grow the
+   remaining process API against compiler requirements: attributes,
+   process groups, cancellation and public Low libsa entry points.
+   Native C posix_spawn and isolated SBCL run-program are tested; Low's
+   separate public C posix_spawn stub still reports ENOSYS.
 2. Grow a measured libc/sysroot contract: allocation, stat and directory
    operations, clocks, mappings, TLS, threads and runtime initialization.
    Qualify each requirement with the selected compiler's actual binary

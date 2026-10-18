@@ -223,3 +223,50 @@ Reproducible guest transcript: build/native-bsd-guest.log. Temporary logs:
 - [[file:/tmp/native-bsd-host-full.log][Complete host suite and known failure]]
 - [[file:/tmp/native-bsd-guest-regressions.log][Existing guest regressions]]
 - [[file:/tmp/native-bsd-check-final.log][Final compiler/load check]]
+
+* Cross-world child spawning and waiting, 2026-10-18
+
+[[file:CHILD-PROCESSES.org][Native and isolated-SBCL child processes]] pass the expanded checks:
+
+| Check | Result |
+|-------+--------|
+| make check | Pass; LOADED |
+| make test-native-host | 48 / 48 |
+| make test-native-bsd-guest | 37 / 37 |
+| Existing native ELF guest | 18 / 18 |
+| Existing socket ABI guest | 7 / 7 |
+| Existing isolated Lisp core/disk guest | 9 / 9 |
+| Existing isolated Lisp network guest | 3 / 3 |
+| Existing Lisp process exit guest | 3 / 3 |
+| Full host suite | 1347 / 1348; same known onboarding failure |
+
+The only full-host failure remains the undefined FIRST-START-ENTRIES
+function described above. All new host assertions pass. Guest tests boot
+the actual Darterfly kernel and image in four-vCPU QEMU; this is not a
+physical-hardware qualification.
+
+The expanded native driver checks child argv/env/cwd, PID/parent identity,
+pipe redirection, open/close/dup/chdir file actions, PATH search, WNOHANG,
+blocking/any-child wait, fault status, double wait, non-child rejection,
+failed spawn cleanup and repeated launches. It rejects a registered
+supervisor Lisp command with ENOEXEC. The same driver and C runtime are
+compiled and linked locally with target TCC, then pass the same checks.
+
+Isolated SBCL runs the rebuilt tool through run-program, verifies file
+output, observes child faults, runs the native driver that launches more
+children, and supplies asynchronous pipe input. A timeout stops a Lisp
+world waiting on a native parent waiting on a looping grandchild; all
+owned descendants and native-world mappings are cleaned up. Existing
+core/disk and network world behavior also passes after ownership changes.
+
+Host checks additionally exercise request bounds, child-list authority,
+forged wait pointer layouts and target wait-status conversion.
+
+- [[file:/tmp/child-check-final.log][Final compiler/load check]]
+- [[file:/tmp/child-host-final.log][48 focused host checks]]
+- [[file:/tmp/child-guest-final.log][37 expanded guest checks]]
+- [[file:/tmp/child-regressions.log][Full host suite and existing guest regressions]]
+
+The reproducible expanded guest transcript remains
+build/native-bsd-guest.log. No Nyxt, SBCL or CEF source changes were needed
+for this step. Clang and CEF have not yet run on Darterfly.

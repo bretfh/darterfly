@@ -102,12 +102,34 @@
                         when (aref (proc-fds *proc*) fd) do (close fd)))
       (:chdir (apply #'chdir args)))))
 
-(defun posix-spawn (name argv envp &key file-actions)
-  (let ((program nil))
-    (fork (lambda () (exec-program name argv envp program))
+(defun spawn-program (name search-path)
+  (if (or (null search-path) (find #\/ name))
+      (values name (program-of name))
+      (let ((denied nil))
+        (dolist (dir (uiop:split-string search-path :separator ":"))
+          (let ((candidate (if (string= dir "") name
+                               (format nil "~a/~a" dir name))))
+            (handler-case
+                (return-from spawn-program
+                  (values candidate (program-of candidate)))
+              (errno (e)
+                (case (errno-name e)
+                  (:eacces (setf denied t))
+                  ((:enoent :enotdir) nil)
+                  (t (error e)))))))
+        (fail (if denied :eacces :enoent)))))
+
+(defun posix-spawn (name argv envp &key file-actions search-path native-only)
+  (let ((program nil) (resolved name))
+    (fork (lambda () (exec-program resolved argv envp program))
           :prepare (lambda ()
                      (spawn-file-actions file-actions)
-                     (setf program (program-of name))))))
+                     (multiple-value-setq (resolved program)
+                       (spawn-program name search-path))
+                     ;; A foreign caller must not launch a registered Lisp
+                     ;; function in the supervisor's address space.
+                     (when (and native-only (not (native-program-p program)))
+                       (fail :enoexec))))))
 
 (defvar *reboot* nil)
 

@@ -333,27 +333,49 @@
        (error () (- (vfs:errno-code :eio))))))
 
 (defun libsa-entry (op a b c d &optional (proc *proc0*))
-  (as-libsa (proc) (libsa-call (aref +libsa-ops+ op) a b c d)))
+  (as-libsa (proc)
+    (with-bsd
+      (when (or (proc-closing proc) (eq (proc-state proc) :zombie))
+        (fail :eintr))
+      (libsa-call (aref +libsa-ops+ op) a b c d))))
 
 (defvar *libsa-entry* nil)
 
 (defun make-world-proc (cwd)
   (with-bsd
-    (let ((proc (make-instance 'proc :pid (next-pid) :parent *proc0* :task darterfly/mach:*task*)))
-      (setf (proc-cwd proc) cwd
-            (proc-comm proc) "world"
+    (let ((proc (make-instance 'proc :pid (next-pid) :parent *proc0*
+                                    :task darterfly/mach:*task*)))
+      (setf (proc-cwd proc) cwd (proc-comm proc) "world"
+            (proc-world-owner proc) proc
             (gethash (proc-pid proc) *procs*) proc)
       (dotimes (fd 3)
-        (vector-push-extend (cons (make-instance 'vnode :fd fd :device t :access 2) nil) (proc-fds proc)))
+        (let ((slot (and (< fd (length (proc-fds *proc0*)))
+                         (aref (proc-fds *proc0*) fd))))
+          (when slot (incf (file-refs (car slot))))
+          (vector-push-extend (and slot (cons (car slot) (cdr slot)))
+                              (proc-fds proc))))
       proc)))
 
 (defun end-world-proc (proc)
   (with-bsd
-    (setf (proc-state proc) :zombie)
+    ;; Prevent late calls from publishing children after teardown begins.
+    (setf (proc-closing proc) t (proc-state proc) :zombie)
     (changed)
-    (loop :for fd :from 3 :below (length (proc-fds proc))
-          :when (aref (proc-fds proc) fd)
-            :do (release-fd proc fd))
+    (let ((children (loop for child being the hash-values of *procs*
+                          when (and (not (eq child proc))
+                                    (eq (proc-world-owner child) proc))
+                            collect child)))
+      (dolist (child children) (post child (signo :sigkill)))
+      (loop while (some (lambda (child) (not (eq (proc-state child) :zombie)))
+                        children)
+            do (sb-thread:condition-wait *changed* *bsd*))
+      (dolist (child children)
+        (when (proc-parent child)
+          (setf (proc-children (proc-parent child))
+                (remove child (proc-children (proc-parent child)))))
+        (remhash (proc-pid child) *procs*)))
+    (loop for fd below (length (proc-fds proc))
+          when (aref (proc-fds proc) fd) do (release-fd proc fd))
     (remhash (proc-pid proc) *procs*)))
 
 (defun request-u64 (v at) (loop :for i :below 8 :sum (ash (aref v (+ at i)) (* 8 i))))
@@ -425,16 +447,38 @@
                   (incf out len)))
     reply))
 
-(defparameter +world-refuses+ '(:spawn :waitpid))
+(defparameter +world-refuses+ '(:spawn))
 
 (defun serve-request (proc request token)
+  (when (< (length request) 72)
+    (return-from serve-request
+      (reply-octets (- (vfs:errno-code :einval)) '(0 0 0 0) #() '(0 0 0 0))))
   (let* ((op (request-u64 request 8))
          (name (and (< 0 op (length +libsa-ops+)) (aref +libsa-ops+ op)))
          (args (loop :for i :below 4 :collect (request-u64 request (+ 16 (* 8 i)))))
          (sizes (loop :for i :below 4 :collect (request-u32 request (+ 48 (* 4 i)))))
          (kinds (loop :for i :below 4 :collect (aref request (+ 64 i))))
          (offsets (let ((at 0)) (loop :for size :in sizes :collect (prog1 at (incf at size))))))
-    (cond ((or (null name) (member name +world-refuses+))
+    (cond ((eq name :waitpid)
+           ;; Do not let the generic pointer bridge interpret forged kinds.
+           (if (and (equal kinds '(0 3 0 0))
+                    (equal (list (first sizes) (third sizes) (fourth sizes))
+                           '(0 0 0))
+                    (member (second sizes) '(0 4)) (= (length request) 72))
+               (let ((status (make-array 4 :element-type '(unsigned-byte 8)
+                                          :initial-element 0)))
+                 (let ((result (as-libsa (proc)
+                                 (multiple-value-bind (pid code)
+                                     (native-wait (signed (first args))
+                                                  (third args))
+                                   (when (and code (plusp pid))
+                                     (native-put status 0 code 4))
+                                   pid))))
+                   (reply-octets result
+                                 (list 0 (if (plusp result) (second sizes) 0) 0 0)
+                                 status '(0 0 0 0))))
+               (reply-octets (- (vfs:errno-code :einval)) '(0 0 0 0) #() offsets)))
+          ((or (null name) (member name +world-refuses+))
            (reply-octets (- (vfs:errno-code :enosys)) '(0 0 0 0) #() offsets))
           ((and (eq name :poll)
                 (or (> (second args) 256)

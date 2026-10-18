@@ -93,3 +93,149 @@ void *memset(void *data, int value, size_t size) {
     while (size--) *p++ = (unsigned char)value;
     return data;
 }
+
+/* Bounded process ABI. Replace this small action pool when malloc is present. */
+#include <spawn.h>
+#include <sys/wait.h>
+#define ACTION_POOLS 8
+struct action_buffer { int used; word size, count; unsigned char data[LIMIT]; };
+static struct action_buffer action_pool[ACTION_POOLS];
+static struct action_buffer *action_buffer(const posix_spawn_file_actions_t *a) {
+    int i;
+    if (!a) return 0;
+    for (i = 0; i < ACTION_POOLS; ++i)
+        if (a->actions == &action_pool[i] && action_pool[i].used)
+            return &action_pool[i];
+    return 0;
+}
+int posix_spawn_file_actions_init(posix_spawn_file_actions_t *a) {
+    int i;
+    if (!a) return EINVAL;
+    for (i = 0; i < ACTION_POOLS; ++i) if (!action_pool[i].used) {
+        action_pool[i].used = 1; action_pool[i].size = action_pool[i].count = 0;
+        a->n = 0; a->actions = &action_pool[i]; return 0;
+    }
+    return ENOMEM;
+}
+int posix_spawn_file_actions_destroy(posix_spawn_file_actions_t *a) {
+    struct action_buffer *b = action_buffer(a);
+    if (!b) return EINVAL;
+    b->used = 0; a->actions = 0; a->n = 0; return 0;
+}
+static int add_action(posix_spawn_file_actions_t *a, word op, word x, word y,
+                      word z, const char *path) {
+    struct action_buffer *b = action_buffer(a);
+    word words[4], n = 0;
+    if (!b) return EINVAL;
+    if (path) { n = path_size(path); if (!n) return errno; }
+    if (b->count == 64 || b->size + 32 + n > LIMIT) return E2BIG;
+    words[0] = op; words[1] = x; words[2] = y; words[3] = z;
+    bytes_copy(b->data + b->size, words, 32);
+    if (n) bytes_copy(b->data + b->size + 32, path, n);
+    b->size += 32 + n; ++b->count; a->n = b->count; return 0;
+}
+int posix_spawn_file_actions_adddup2(posix_spawn_file_actions_t *a, int x, int y) {
+    if (x < 0 || x > 4095 || y < 0 || y > 4095) return EBADF;
+    return add_action(a, 1, x, y, 0, 0);
+}
+int posix_spawn_file_actions_addclose(posix_spawn_file_actions_t *a, int fd) {
+    if (fd < 0 || fd > 4095) return EBADF;
+    return add_action(a, 2, fd, 0, 0, 0);
+}
+int posix_spawn_file_actions_addclosefrom_np(posix_spawn_file_actions_t *a, int fd) {
+    if (fd < 0 || fd > 4096) return EBADF;
+    return add_action(a, 3, fd, 0, 0, 0);
+}
+int posix_spawn_file_actions_addopen(posix_spawn_file_actions_t *a, int fd,
+                                    const char *path, int flags, mode_t mode) {
+    if (fd < 0 || fd > 4095) return EBADF;
+    if (!path) return EINVAL;
+    return add_action(a, 4, fd, flags, mode, path);
+}
+int posix_spawn_file_actions_addchdir_np(posix_spawn_file_actions_t *a,
+                                        const char *path) {
+    if (!path) return EINVAL;
+    return add_action(a, 5, 0, 0, 0, path);
+}
+int posix_spawnattr_init(posix_spawnattr_t *a) {
+    if (!a) return EINVAL;
+    memset(a, 0, sizeof(*a)); return 0;
+}
+int posix_spawnattr_destroy(posix_spawnattr_t *a) { return a ? 0 : EINVAL; }
+int posix_spawnattr_setflags(posix_spawnattr_t *a, short flags) {
+    if (!a) return EINVAL;
+    if (flags) return ENOTSUP;
+    a->flags = 0; return 0;
+}
+int posix_spawnattr_setpgroup(posix_spawnattr_t *a, pid_t p) {
+    (void)a; (void)p; return ENOTSUP;
+}
+int posix_spawnattr_setsigmask(posix_spawnattr_t *a, const sigset_t *s) {
+    (void)a; (void)s; return ENOTSUP;
+}
+int posix_spawnattr_setsigdefault(posix_spawnattr_t *a, const sigset_t *s) {
+    (void)a; (void)s; return ENOTSUP;
+}
+static int pack_string(unsigned char *data, word *at, const char *s) {
+    word n = path_size(s);
+    if (!n) return errno;
+    if (*at + n > LIMIT) return E2BIG;
+    bytes_copy(data + *at, s, n); *at += n; return 0;
+}
+static const char *parent_path(void) {
+    char **p = environ;
+    if (p) while (*p) {
+        const char *s = *p++;
+        if (s[0] == 'P' && s[1] == 'A' && s[2] == 'T' && s[3] == 'H' && s[4] == '=')
+            return s + 5;
+    }
+    return "/bin:/usr/bin";
+}
+static int spawn_process(pid_t *pid, const char *path,
+                         const posix_spawn_file_actions_t *actions,
+                         const posix_spawnattr_t *attr, char *const argv[],
+                         char *const envp[], int search) {
+    unsigned char data[LIMIT];
+    word counts[3], at = 24, argc = 0, envc = 0, i;
+    struct action_buffer *b = action_buffer(actions);
+    int e; long result;
+    if (!pid || !path || !argv) return EINVAL;
+    if (actions && !b) return EINVAL;
+    if (attr && attr->flags) return ENOTSUP;
+    while (argc < 64 && argv[argc]) ++argc;
+    if (argc == 64 && argv[argc]) return E2BIG;
+    if (envp) while (envc < 64 && envp[envc]) ++envc;
+    if (envc == 64 && envp[envc]) return E2BIG;
+    counts[0] = argc; counts[1] = envc; counts[2] = b ? b->count : 0;
+    bytes_copy(data, counts, 24);
+    if ((e = pack_string(data, &at, path))) return e;
+    if ((e = pack_string(data, &at, search ? parent_path() : ""))) return e;
+    for (i = 0; i < argc; ++i)
+        if ((e = pack_string(data, &at, argv[i]))) return e;
+    for (i = 0; i < envc; ++i)
+        if ((e = pack_string(data, &at, envp[i]))) return e;
+    if (b) {
+        if (at + b->size > LIMIT) return E2BIG;
+        bytes_copy(data + at, b->data, b->size); at += b->size;
+    }
+    result = rpc(15, search, 0, data, at, 0, 0);
+    if (result < 0) return errno;
+    *pid = result; return 0;
+}
+int posix_spawn(pid_t *pid, const char *path,
+                const posix_spawn_file_actions_t *a, const posix_spawnattr_t *attr,
+                char *const argv[], char *const envp[]) {
+    return spawn_process(pid, path, a, attr, argv, envp, 0);
+}
+int posix_spawnp(pid_t *pid, const char *path,
+                 const posix_spawn_file_actions_t *a, const posix_spawnattr_t *attr,
+                 char *const argv[], char *const envp[]) {
+    return spawn_process(pid, path, a, attr, argv, envp, 1);
+}
+pid_t waitpid(pid_t pid, int *status, int options) {
+    word code = 0;
+    long result = rpc(16, (long)pid, options, 0, 0, &code, 8);
+    if (result > 0 && status) *status = code;
+    return result;
+}
+pid_t wait(int *status) { return waitpid(-1, status, 0); }

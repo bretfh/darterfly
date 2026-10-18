@@ -30,6 +30,8 @@
    (path :initform nil :accessor proc-path)
    (threads :initform nil :accessor proc-threads)
    (bindings :initform nil :accessor proc-bindings)
+   (closing :initform nil :accessor proc-closing)
+   (world-owner :initform nil :accessor proc-world-owner)
    (native-world :initform nil :accessor proc-native-world)
    (native-result :initform nil :accessor proc-native-result)
    (native-requests :initform nil :accessor proc-native-requests)))
@@ -184,6 +186,10 @@
 
 (defun fork (fn &key prepare)
   (with-bsd
+    (when (or (proc-closing *proc*) (eq (proc-state *proc*) :zombie)
+              (and (proc-world-owner *proc*)
+                   (proc-closing (proc-world-owner *proc*))))
+      (fail :eintr))
     (let* ((parent *proc*)
            (child (make-instance 'proc :pid (next-pid) :parent parent
                                        :task (darterfly/mach:task-create
@@ -196,7 +202,8 @@
                (vector-push-extend (and slot (cons (car slot) (cdr slot)))
                                    (proc-fds child)))
              (replace (proc-actions child) (proc-actions parent))
-             (setf (proc-mask child) (proc-mask parent)
+             (setf (proc-world-owner child) (proc-world-owner parent)
+                   (proc-mask child) (proc-mask parent)
                    (proc-cwd child) (proc-cwd parent)
                    (proc-root child) (proc-root parent)
                    (proc-comm child) (proc-comm parent)

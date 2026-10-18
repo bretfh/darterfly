@@ -24,3 +24,4 @@ int posix_spawn_file_actions_adddup2(posix_spawn_file_actions_t *, int, int);
 int posix_spawn_file_actions_addopen(posix_spawn_file_actions_t *, int, const char *, int, mode_t);
 int posix_spawn_file_actions_addclose(posix_spawn_file_actions_t *, int);
 int posix_spawn_file_actions_addclosefrom_np(posix_spawn_file_actions_t *, int);
+int posix_spawn_file_actions_addchdir_np(posix_spawn_file_actions_t *, const char *);

@@ -82,10 +82,75 @@
                                     :external-format :utf-8)
     (error () (fail :einval))))
 
+(defun native-spawn-request (data search)
+  ;; Counts followed by NUL strings, then typed action records. No pointers.
+  (unless (and (<= 24 (length data) +native-io-limit+) (<= search 1))
+    (fail :einval))
+  (let ((at 24) (argc (request-u64 data 0))
+        (envc (request-u64 data 8)) (count (request-u64 data 16)))
+    (unless (and (<= argc 64) (<= envc 64) (<= count 64)) (fail :e2big))
+    (labels ((string-next ()
+               (let ((end (position 0 data :start at)))
+                 (unless end (fail :einval))
+                 (prog1 (native-path (subseq data at (1+ end)))
+                   (setf at (1+ end))))))
+      (let* ((path (string-next)) (search-path (string-next))
+             (argv (loop repeat argc collect (string-next)))
+             (envp (loop repeat envc collect (string-next)))
+             (actions
+               (loop repeat count collect
+                 (progn
+                   (unless (<= (+ at 32) (length data)) (fail :einval))
+                   (let ((op (request-u64 data at))
+                         (a (request-u64 data (+ at 8)))
+                         (b (request-u64 data (+ at 16)))
+                         (c (request-u64 data (+ at 24))))
+                     (incf at 32)
+                     (case op
+                       (1 (list :dup2 (native-fd a) (native-fd b)))
+                       (2 (list :close (native-fd a)))
+                       (3 (unless (<= a 4096) (fail :ebadf))
+                          (list :closefrom a))
+                       (4 (unless (and (<= c #o7777)
+                                       (zerop (logandc2 b #o207703))
+                                       (/= (logand b 3) 3)) (fail :einval))
+                          (list :open (native-fd a) (string-next)
+                                (from-libsa-flags b) c))
+                       (5 (list :chdir (string-next)))
+                       (t (fail :einval))))))))
+        (unless (= at (length data)) (fail :einval))
+        (posix-spawn path argv envp :file-actions actions :native-only t
+                     :search-path (when (= search 1) search-path))))))
+
+(defun native-wait-status (status)
+  ;; BSD reports stay internal; the C headers and SBCL use Linux wait words.
+  (flet ((signal-number (number)
+           ;; SIGEMT and SIGINFO have no target equivalent: report SIGABRT.
+           (or (aref #(0 1 2 3 4 5 6 nil 8 9 7 11 31 13 14 15
+                       23 19 20 18 17 21 22 29 24 25 26 27 28 nil 10 12)
+                     number)
+               6)))
+    (cond ((null status) nil)
+          ((wifcontinued status) #xffff)
+          ((wifstopped status) (logior #x7f (ash (signal-number (wstopsig status)) 8)))
+          ((wifsignaled status)
+           (logior (logand status #x80) (signal-number (wtermsig status))))
+          (t status))))
+
+(defun native-wait (pid options)
+  (unless (or (= pid -1) (<= 1 pid +pid-max+)) (fail :einval))
+  (unless (zerop (logandc2 options 11)) (fail :einval))
+  (multiple-value-bind (child status)
+      (wait4 pid :nohang (logbitp 0 options) :untraced (logbitp 1 options)
+                 :continued (logbitp 3 options))
+    (values child (native-wait-status status))))
+
 (defun native-service-request (message)
   "Bounded, pointer-free service ABI for the initial single-threaded libc."
   (handler-case
       (progn
+        (when (or (proc-closing *proc*) (eq (proc-state *proc*) :zombie))
+          (fail :eintr))
         (unless (and (<= 32 (length message) (+ 32 +native-io-limit+))
                      (= (request-u64 message 0) +native-service-magic+))
           (fail :einval))
@@ -159,6 +224,13 @@
                     (let ((out (make-array 8 :element-type '(unsigned-byte 8))))
                       (native-put out 0 rd 4) (native-put out 4 wr 4)
                       (native-reply 0 out))))
+              (15 (unless (zerop b) (fail :einval))
+                  (native-reply (native-spawn-request data a)))
+              (16 (empty)
+                  (multiple-value-bind (pid status) (native-wait (signed a) b)
+                    (let ((out (make-array 8 :element-type '(unsigned-byte 8))))
+                      (native-put out 0 (or status 0))
+                      (native-reply pid out))))
               (t (fail :enosys))))))
     (errno (e) (native-reply (- (vfs:errno-code (errno-name e)))))
     (vfs:vfs-error (e) (native-reply (- (vfs:errno-code (vfs:vfs-errno e)))))))

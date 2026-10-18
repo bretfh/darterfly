@@ -66,6 +66,64 @@
           (bsd:close wr)
           (is (equalp #() (bsd:read rd 1))))))))
 
+(test native-wait-status-matches-the-c-headers
+  (is (= #xffff (bsd::native-wait-status (bsd::w-stopcode bsd::+continued+))))
+  (is (= #x137f (bsd::native-wait-status (bsd::w-stopcode 17))))
+  (is (= 7 (bsd::native-wait-status 10)))
+  (is (= 11 (bsd::native-wait-status 11)))
+  (is (= (ash 29 8) (bsd::native-wait-status (ash 29 8)))))
+
+(test native-child-requests-are-bounded
+  (with-local-process
+    (let ((data (make-array 26 :element-type '(unsigned-byte 8)
+                              :initial-element 0)))
+      (is (= -22 (native-service-result (native-request 15 0 0 #()))))
+      (is (= -22 (native-service-result (native-request 15 2 0 data))))
+      (bsd::native-put data 0 65)
+      (is (= -7 (native-service-result (native-request 15 0 0 data))))
+      (bsd::native-put data 0 0)
+      (bsd::native-put data 16 1)
+      (is (= -22 (native-service-result (native-request 15 0 0 data))))
+      (is (= -22 (native-service-result (native-request 16 0 0))))
+      (is (= -22 (native-service-result (native-request 16 -1 4))))
+      (is (= -10 (native-service-result (native-request 16 1 0))))
+      (setf (bsd::proc-closing bsd:*proc*) t)
+      (is (= -4 (native-service-result (native-request 15 0 0 data)))))))
+
+(test child-waits-only-reap-the-callers-children
+  (with-local-process
+    (let* ((bsd::*procs* (make-hash-table))
+           (child (make-instance 'bsd:proc :pid 123 :parent bsd:*proc*
+                                           :task mach:*task*)))
+      (setf (bsd::proc-children bsd:*proc*) (list child)
+            (gethash 123 bsd::*procs*) child)
+      (is (= 0 (native-service-result (native-request 16 123 1))))
+      (let ((bsd:*proc* (make-instance 'bsd:proc :pid 124 :task mach:*task*)))
+        (is (= -10 (native-service-result (native-request 16 123 1)))))
+      (setf (bsd::proc-state child) :zombie (bsd::proc-status child) (ash 29 8))
+      (let ((reply (bsd::with-bsd
+                     (bsd::native-service-request (native-request 16 -1 0)))))
+        (is (= 123 (bsd::request-u64 reply 0)))
+        (is (= (ash 29 8) (bsd::request-u64 reply 8))))
+      (is (= -10 (native-service-result (native-request 16 123 0))))
+      (is (zerop (hash-table-count bsd::*procs*))))))
+
+(test world-wait-rejects-forged-pointer-layouts
+  (with-local-process
+    (let ((request (make-array 72 :element-type '(unsigned-byte 8)
+                                 :initial-element 0)))
+      (bsd::native-put request 8 37)
+      (bsd::native-put request 16 -1)
+      (flet ((result () (bsd::signed
+                        (bsd::request-u64
+                         (bsd:serve-request bsd:*proc* request 0) 0))))
+        (is (= -22 (result)))
+        (setf (aref request 65) 3)
+        (bsd::native-put request 52 4 4)
+        (is (= -10 (result)))
+        (bsd::native-put request 52 4096 4)
+        (is (= -22 (result)))))))
+
 (in-suite guest)
 
 (test native-executables-on-darterfly
@@ -124,7 +182,9 @@
     (image::root-disk
      disk (* 512 1048576)
      (append (image::root-entries)
-             (list (list :file "Users/darterfly/native-bsd-probe"
+             (list (list :file "usr/lib/sbcl/sbcl.core"
+                         (image::octets (darterfly-file "build/sbcl-mt/output/sbcl.core")))
+                   (list :file "Users/darterfly/native-bsd-probe"
                          (image::octets exe))
                    (list :file "Users/darterfly/native-bsd-guest.lisp"
                          (image::octets
@@ -152,7 +212,12 @@
                                 "FAULT" "MALFORMED" "SOCKET" "EOF"
                                 "KILL-READ" "KILL-POLL" "KILL-CONSOLE" "NOHANG"
                                 "STOP" "CONTINUE" "KILL-LOOP"
-                                "REBUILD" "REBUILT-RUN" "RUN-PROGRAM" "REPEAT" "ALIVE"))
+                                "REBUILD" "REBUILT-RUN" "RUN-PROGRAM" "REPEAT" "ALIVE"
+                                "NATIVE-CHILDREN" "REBUILT-CHILDREN"
+                                "LISP-CHILDREN" "LISP-ARTIFACT" "LISP-FAULT"
+                                "LISP-WAIT-TEARDOWN" "LISP-DRIVER" "LISP-PIPE"
+                                "LISP-PIPE-ARTIFACT" "LISP-SPAWN-ERROR"
+                                "CHILDREN-CLEAN"))
                  (is (search (format nil "[BSD-NATIVE ~a PASS]" label) output)
                      "BSD native check ~a: ~a" label output))))
         (image:finish c 5)))))

@@ -25,6 +25,8 @@
     (darterfly/bsd:errno (e) (darterfly/bsd:errno-name e))))
 
 (bsd-mode *native-bsd-exe*)
+(bsd-file "/tmp/native-registered" (format nil "#!darterfly sh~%"))
+(bsd-mode "/tmp/native-registered")
 (ensure-directories-exist "/tmp/native-work/")
 (bsd-file "/tmp/native-work/source" "data")
 (bsd-file "/tmp/native-work/shared" "abcdef")
@@ -216,3 +218,91 @@
            (and (= 42 (+ 20 22))
                 (zerop (hash-table-count darterfly/bsd::*native-processes*))
                 (sb-thread:thread-alive-p darterfly/bsd::*native-dispatcher*)))
+
+(dolist (pair `(("NATIVE-CHILDREN" ,*native-bsd-exe*)
+                ("REBUILT-CHILDREN" "/tmp/native-bsd-rebuilt")))
+  (let ((status (bsd-wait (bsd-start "children" nil (second pair)))))
+    (format t "~&[~a child driver status ~d]~%" (first pair) status)
+    (bsd-check (first pair) (= 0 status))))
+
+;; The same spawn service is used by an otherwise unchanged isolated SBCL.
+(defun child-world (code &optional (timeout 30))
+  (darterfly/run:run-world
+   "/usr/lib/sbcl/sbcl.core"
+   (list "/System/Library/Kernels/kernel" "--core"
+         "/System/Library/Kernels/darterfly.core"
+         "--no-sysinit" "--no-userinit" "--disable-debugger"
+         "--eval" code "--quit")
+   :cwd "/" :disk t :timeout timeout))
+(bsd-check
+ "LISP-CHILDREN"
+ (equal '(:exit 0 :files 0)
+        (child-world
+         "(let ((p (sb-ext:run-program
+                    \"/tmp/native-bsd-rebuilt\" '(\"socket\") :search nil
+                    :input #P\"/tmp/native-work/source\"
+                    :output #P\"/tmp/world-child-artifact\"
+                    :error #P\"/tmp/world-child-error\")))
+             (assert (= 0 (sb-ext:process-exit-code p)))
+             (sb-ext:process-close p))")))
+(bsd-check "LISP-ARTIFACT"
+           (string= "data" (uiop:read-file-string "/tmp/world-child-artifact")))
+(bsd-check
+ "LISP-FAULT"
+ (equal '(:exit 0 :files 0)
+        (child-world
+         "(let ((p (sb-ext:run-program \"/tmp/native-bsd-rebuilt\"
+                                       '(\"fault\") :search nil)))
+             (assert (eq :signaled (sb-ext:process-status p)))
+             (assert (= 11 (sb-ext:process-exit-code p)))
+             (sb-ext:process-close p))")))
+(bsd-check
+ "LISP-WAIT-TEARDOWN"
+ (let ((result
+         (child-world
+          "(sb-ext:run-program \"/tmp/native-bsd-rebuilt\"
+                               '(\"wait-child\") :search nil
+                               :error #P\"/tmp/world-grandchild-pid\")" 5)))
+   (and (eq :stopped (getf result :exit))
+        (loop for proc being the hash-values of darterfly/bsd::*procs*
+              never (darterfly/bsd::proc-world-owner proc))
+        (zerop (hash-table-count darterfly/bsd::*native-processes*)))))
+
+(bsd-check
+ "LISP-DRIVER"
+ (equal '(:exit 0 :files 0)
+        (child-world
+         "(let ((p (sb-ext:run-program \"/tmp/native-bsd-rebuilt\"
+                                       '(\"children\") :search nil
+                                       :directory \"/tmp/native-work\")))
+             (assert (= 0 (sb-ext:process-exit-code p)))
+             (sb-ext:process-close p))")))
+(bsd-check
+ "LISP-PIPE"
+ (equal '(:exit 0 :files 0)
+        (child-world
+         "(let ((p (sb-ext:run-program \"/tmp/native-bsd-rebuilt\"
+                                       '(\"socket\") :search nil :wait nil
+                                       :input :stream
+                                       :output #P\"/tmp/world-pipe-artifact\")))
+             (assert (eq :running (sb-ext:process-status p)))
+             (write-string \"data\" (sb-ext:process-input p))
+             (finish-output (sb-ext:process-input p))
+             (close (sb-ext:process-input p))
+             (sb-ext:process-wait p)
+             (assert (= 0 (sb-ext:process-exit-code p)))
+             (sb-ext:process-close p))")))
+(bsd-check "LISP-PIPE-ARTIFACT"
+           (string= "data" (uiop:read-file-string "/tmp/world-pipe-artifact")))
+(bsd-check
+ "LISP-SPAWN-ERROR"
+ (equal '(:exit 0 :files 0)
+        (child-world
+         "(assert (handler-case
+                    (progn (sb-ext:run-program \"/does-not-exist\" nil
+                                               :search nil) nil)
+                    (error () t)))")))
+(bsd-check "CHILDREN-CLEAN"
+           (and (loop for proc being the hash-values of darterfly/bsd::*procs*
+                      never (darterfly/bsd::proc-world-owner proc))
+                (zerop (hash-table-count darterfly/bsd::*native-processes*))))
