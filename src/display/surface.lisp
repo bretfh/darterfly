@@ -8,7 +8,7 @@
     (devices::ml-phys-read-64 (+ (devices::bar-address g 0) +gtt-offset+ (* 8 (floor offset 4096))))))
 
 (defun second-surface (bytes)
-  (when (and (graphics) (logbitp 31 (reg +plane-ctl-a+)) (zerop (reg +plane-surface-a+)))
+  (when (and (graphics) (awake (and (logbitp 31 (reg +plane-ctl-a+)) (zerop (reg +plane-surface-a+)))))
     (let ((offset (* #x40000 (ceiling bytes #x40000))))
       (when (and (logbitp 0 (gtt-entry offset)) (logbitp 0 (gtt-entry (+ offset bytes -1))))
         offset))))
@@ -57,3 +57,8 @@
                  (progn (devices:wait-for-interrupt (list vector) 0.02) (acknowledge-flips))
                  (sleep 0.0005)))
     (when vector (acknowledge-flips))))
+
+(defun flip (offset)
+  (awake
+    (show-surface offset)
+    (wait-for-flip offset)))

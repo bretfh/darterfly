@@ -1,7 +1,8 @@
 (defpackage #:darterfly/display
   (:use #:cl)
   (:export #:load-dmc #:allow-dc #:enable-psr #:disable-psr #:screen-changed #:start-display
-           #:second-surface #:show-surface #:live-surface #:wait-for-flip))
+           #:second-surface #:show-surface #:live-surface #:wait-for-flip #:flip
+           #:release-unused-wells #:allow-dc6 #:forbid-dc #:awake))
 (in-package #:darterfly/display)
 
 (defparameter *dmc-path* "/Library/Firmware/i915/adlp_dmc.bin")

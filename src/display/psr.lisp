@@ -16,6 +16,9 @@
     (and (logbitp 31 ctl) (= (ldb (byte 4 27) ctl) 1) (= (ldb (byte 3 24) ctl) 2))))
 
 (defun enable-psr (&optional (panel (vbt-panel)))
+  (awake (enable-psr-awake panel)))
+
+(defun enable-psr-awake (panel)
   (unless (edp-on-transcoder-a-p) (error "transcoder A is not driving the eDP panel"))
   (when (zerop (first (aux-read #x070 1))) (error "the panel has no self-refresh"))
   (let* ((psr (getf panel :psr))
@@ -32,12 +35,12 @@
 
 (defun disable-psr ()
   (setf *psr* nil)
-  (setf (reg +psr-ctl-a+) (logandc2 (reg +psr-ctl-a+) (ash 1 31))))
+  (awake (setf (reg +psr-ctl-a+) (logandc2 (reg +psr-ctl-a+) (ash 1 31)))))
 
 (defun screen-changed ()
-  (when *psr* (setf (reg +cursor-surface-live-a+) 0)))
+  (when *psr* (awake (setf (reg +cursor-surface-live-a+) 0))))
 
 (defun start-display ()
   (when (graphics)
-    (load-dmc)
+    (awake (load-dmc))
     (enable-psr)))

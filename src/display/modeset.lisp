@@ -9,12 +9,6 @@
 (defconstant +plane-ctl-a+ #x70180)
 (defconstant +plane-surface-a+ #x7019C)
 
-(defun wait-until (what test &key (seconds 0.1))
-  (let ((deadline (+ (get-internal-real-time) (* seconds internal-time-units-per-second))))
-    (loop until (funcall test)
-          do (when (> (get-internal-real-time) deadline) (error "timed out waiting for ~a" what))
-             (sleep 0.0001))))
-
 (defun set-bits (offset bits on)
   (setf (reg offset) (if on (logior (reg offset) bits) (logandc2 (reg offset) bits))))
 
@@ -85,6 +79,9 @@
   (setf (reg +ddi-func-ctl-a+) (logior func (ash 1 31))))
 
 (defun relink ()
+  (awake (relink-awake)))
+
+(defun relink-awake ()
   (let ((psr *psr*) (func (reg +ddi-func-ctl-a+)) (plane nil))
     (when psr (disable-psr) (sleep 0.1))
     (setf plane (plane-off))
@@ -104,7 +101,6 @@
         (ignore-errors (plane-on plane))
         (list :failed (princ-to-string e) :state (ignore-errors (display-state)))))))
 
-(defconstant +dssm+ #x51004)
 (defconstant +dpclka-cfgcr0+ #x164280)
 (defconstant +pp-status+ #xC7200)
 (defconstant +pp-control+ #xC7204)
@@ -162,6 +158,9 @@
             :cycle (ceiling (+ (or (getf edp :t11-t12) 5000) 1000) 1000)))))
 
 (defun plan-display (&key mode (rate 270000) (lanes 2) (bpc 8) (pll 1))
+  (awake (plan-display-awake mode rate lanes bpc pll)))
+
+(defun plan-display-awake (mode rate lanes bpc pll)
   (let* ((vbt (vbt-panel))
          (mode (or mode (first (getf (decode-edid (read-edid)) :modes)))))
     (list :mode mode :rate rate :lanes lanes :bpc bpc :pll pll
@@ -171,6 +170,9 @@
           :panel (panel-delays vbt))))
 
 (defun compare-plan (plan)
+  (awake (compare-plan-awake plan)))
+
+(defun compare-plan-awake (plan)
   (let ((pll (getf plan :pll)))
     (remove nil
             (append
@@ -250,6 +252,9 @@
     (backlight t)))
 
 (defun modeset (&optional (plan (plan-display)))
+  (awake (modeset-awake plan)))
+
+(defun modeset-awake (plan)
   (let ((psr *psr*) (plane nil))
     (when psr (disable-psr) (sleep 0.1))
     (handler-case

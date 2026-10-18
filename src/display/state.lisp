@@ -29,6 +29,9 @@
           :surface (reg (+ +plane-1-a+ #x1C)))))
 
 (defun display-state ()
+  (awake (display-state-awake)))
+
+(defun display-state-awake ()
   (let ((func (reg +ddi-func-ctl-a+)))
     (list :edp (edp-on-transcoder-a-p)
           :bpc (nth (ldb (byte 3 20) func) '(8 10 6 12))

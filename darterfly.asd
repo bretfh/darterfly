@@ -120,7 +120,7 @@
   :depends-on (#:darterfly/devices)
   :serial t
   :pathname "src/display/"
-  :components ((:file "dmc") (:file "aux") (:file "vbt") (:file "edid") (:file "psr") (:file "state") (:file "modeset") (:file "surface")))
+  :components ((:file "dmc") (:file "power") (:file "aux") (:file "vbt") (:file "edid") (:file "psr") (:file "state") (:file "modeset") (:file "surface")))
 
 (asdf:defsystem #:darterfly/storage
   :description "Disks served by a world"

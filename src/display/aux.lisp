@@ -4,6 +4,9 @@
 (defconstant +aux-data+ #x64014)
 
 (defun aux-transfer (request address bytes reply-size)
+  (awake (aux-transfer-awake request address bytes reply-size)))
+
+(defun aux-transfer-awake (request address bytes reply-size)
   (let ((tx (append (list (logior (ash request 4) (ldb (byte 4 16) address)) (ldb (byte 8 8) address) (ldb (byte 8 0) address))
                     (when (or bytes (plusp reply-size)) (list (1- (if bytes (length bytes) reply-size))))
                     bytes)))
