@@ -84,7 +84,10 @@
       (set-property driver "MatchCategory" "DefaultMatchCategory")
       (setf (provider driver) service)
       (attach driver service)
-      (if (start driver service)
+      (if (handler-case (start driver service)
+            (error (e)
+              (format *error-output* "~&device ~a: ~a did not start: ~a~%" (entry-name service) (gethash "Class" p) e)
+              nil))
           (return driver)
           (detach driver)))))
 

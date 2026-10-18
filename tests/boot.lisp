@@ -2419,6 +2419,23 @@
         (image:*network-device* "usb-net,netdev=net0,bus=xhci.0"))
     (nrepl-check :status t)))
 
+(test sound-plays-and-sleeps
+  (let* ((image:*input-devices* '("virtio-keyboard-pci" "virtio-tablet-pci" "intel-hda" "hda-duplex"))
+         (c (image:bare-console)))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 90)
+             (is (search "AUDIO-DEVICE" (ask "(progn (darterfly/audio:start-audio) (if (darterfly/audio:audio-devices) 'audio-device 'none))"))
+                 "the HD Audio controller is matched and started")
+             (is (search "(\"" (ask "(getf (first (getf (darterfly/audio:audio-status) :devices)) :codecs)"))
+                 "it found a codec")
+             (is (search "[T]" (ask "(progn (darterfly/audio:play-tone :seconds 0.3 :level 0.1) (sleep 1) (let ((o (first (getf (first (getf (darterfly/audio:audio-status) :devices)) :outputs)))) (format nil \"[~a]\" (and o (> (getf o :played) 50000)))))"))
+                 "a tone plays: the stream's position moves")
+             (is (search "[T]" (ask "(progn (sleep 7) (format nil \"[~a]\" (getf (first (getf (darterfly/audio:audio-status) :devices)) :suspended)))"))
+                 "the controller sleeps once it has been quiet"))
+        (image:finish c 5)))))
+
 (test usb-ethernet-plugged-in-later
   (let* ((image:*input-devices* '("qemu-xhci,id=xhci" "virtio-keyboard-pci" "virtio-tablet-pci"))
          (image:*network-device* nil)

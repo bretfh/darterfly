@@ -120,7 +120,7 @@
   :depends-on (#:darterfly/devices)
   :serial t
   :pathname "src/audio/"
-  :components ((:file "hda") (:file "codec") (:file "output")))
+  :components ((:file "protocol") (:file "hda") (:file "codec") (:file "stream") (:file "mixer")))
 
 (asdf:defsystem #:darterfly/display
   :description "The display engine"
