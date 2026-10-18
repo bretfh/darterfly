@@ -67,6 +67,7 @@
   (setf runq-tail th))
 
 (define-low dequeue ()
+  (when (and sleep-request (/= (cpu-number) 0)) (result 0))
   (let ((th runq-head))
     (when th
       (setf runq-head (mem :u64 (+ th +t-runq-next+)))
@@ -162,9 +163,12 @@
           (progn
             (unless (= (the :u32 (funnel-depth)) 1)
               (panic "idle_thread: funnel depth %d" (funnel-depth)))
+            (when (and sleep-request (= (cpu-number) 0))
+              (sleep-now))
             (setf (mem :u32 (+ (cpu-data) +c-idle+)) 1)
             (let ((stopped (enter-tickless)))
               (funnel-unlock)
+              (ap-park)
               (idle-wait)
               (funnel-lock)
               (leave-tickless stopped))
@@ -452,6 +456,7 @@
   (when (logand (mem :u32 (+ (current-thread) +t-sched-flags+)) +terminate-requested+)
     (thread-terminate-self))
   (when (logand (mem :u64 (+ (current-world) +w-flags+)) +paused+) (park))
+  (when (and sleep-request (/= (cpu-number) 0)) (setf (mem :u32 (+ (cpu-data) +c-pending-ast+)) 1))
   (unless (mem :u32 (+ (cpu-data) +c-pending-ast+)) (result 0))
   (setf (mem :u32 (+ (cpu-data) +c-pending-ast+)) 0)
   (thread-block)

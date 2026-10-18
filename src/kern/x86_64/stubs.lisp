@@ -42,6 +42,21 @@
       (dolist (r (reverse +saved-registers+)) (darterfly/asm:inst pop (symbol-value r)))
       (darterfly/asm:inst add darterfly/asm:rsp-tn 16)
       (bytes #x48 #xCF))
+    (darterfly/asm:routine "sleep_save"
+      (loop :for r :in +callee-saved+ :for at :from 0 :by 8
+            :do (darterfly/asm:inst mov (darterfly/asm:ea at darterfly/asm:rdi-tn) (symbol-value r)))
+      (darterfly/asm:inst lea darterfly/asm:rdx-tn (darterfly/asm:ea 8 darterfly/asm:rsp-tn))
+      (darterfly/asm:inst mov (darterfly/asm:ea 48 darterfly/asm:rdi-tn) darterfly/asm:rdx-tn)
+      (darterfly/asm:inst mov darterfly/asm:rdx-tn (darterfly/asm:ea 0 darterfly/asm:rsp-tn))
+      (darterfly/asm:inst mov (darterfly/asm:ea 56 darterfly/asm:rdi-tn) darterfly/asm:rdx-tn)
+      (darterfly/asm:inst xor :dword (darterfly/asm:reg :dword 0) (darterfly/asm:reg :dword 0))
+      (darterfly/asm:inst ret))
+    (darterfly/asm:routine "sleep_restore"
+      (loop :for r :in +callee-saved+ :for at :from 0 :by 8
+            :do (darterfly/asm:inst mov (symbol-value r) (darterfly/asm:ea at darterfly/asm:rdi-tn)))
+      (darterfly/asm:inst mov darterfly/asm:rsp-tn (darterfly/asm:ea 48 darterfly/asm:rdi-tn))
+      (darterfly/asm:inst mov :dword (darterfly/asm:reg :dword 0) 1)
+      (darterfly/asm:inst jmp (darterfly/asm:ea 56 darterfly/asm:rdi-tn)))
     (darterfly/asm:routine "Switch_context"
       (dolist (r +callee-saved+) (darterfly/asm:inst push (symbol-value r)))
       (darterfly/asm:inst mov (darterfly/asm:ea 0 darterfly/asm:rdi-tn) darterfly/asm:rsp-tn)

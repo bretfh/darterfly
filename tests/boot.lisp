@@ -2419,6 +2419,26 @@
         (image:*network-device* "usb-net,netdev=net0,bus=xhci.0"))
     (nrepl-check :status t)))
 
+(test the-system-sleeps-and-wakes
+  (let* ((image:*extra-qemu* '("-global" "ICH9-LPC.disable_s3=0"))
+         (c (image:bare-console)))
+    (unwind-protect
+         (progn
+           (image:expect c "* " :timeout 90)
+           (image:send c "(progn (defvar *before* (get-universal-time)) (list :slept (darterfly/power:suspend)))")
+           (is (loop :repeat 60
+                     :thereis (equal "suspended" (gethash "status" (image:qmp "query-status")))
+                     :do (sleep 0.5))
+               "the machine goes into S3")
+           (sleep 3)
+           (image:qmp "system_wakeup")
+           (is (search "(:SLEPT 1)" (image:expect c (format nil "~%* ") :timeout 60))
+               "it wakes and the suspend call returns")
+           (image:send c "(list :alive (+ 1 2) :slept (>= (- (get-universal-time) *before*) 3))")
+           (is (search "(:ALIVE 3 :SLEPT T)" (image:expect c (format nil "~%* ") :timeout 30))
+               "the Lisp carries on and the wall clock counted the sleep"))
+      (image:finish c 5))))
+
 (test sound-plays-and-sleeps
   (let* ((image:*input-devices* '("virtio-keyboard-pci" "virtio-tablet-pci" "intel-hda" "hda-duplex"))
          (c (image:bare-console)))

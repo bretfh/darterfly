@@ -1,6 +1,6 @@
 (defpackage #:darterfly/power
   (:use #:cl)
-  (:export #:flush-disks #:restart #:shut-down #:restart-soon #:save-system #:*save-system*
+  (:export #:flush-disks #:restart #:shut-down #:suspend #:restart-soon #:save-system #:*save-system*
            #:note-activity #:dim-when-idle #:*dim-after* #:*dim-to*)
   (:shadow #:restart))
 (in-package #:darterfly/power)
@@ -42,14 +42,29 @@
     (#x0a (values (aref v (1+ at)) 2))
     (#x0b (values (logior (aref v (1+ at)) (ash (aref v (+ at 2)) 8)) 3))))
 
-(defun s5-sleep-type ()
+(defun sleep-type (state)
   (loop for v in (darterfly/devices::definition-blocks)
-        for at = (search #(8 95 83 53 95 18) v)
+        for at = (search (vector 8 95 83 (+ 48 state) 95 18) v)
         when at
           return (let ((p (+ at 6)))
                    (multiple-value-bind (length used) (darterfly/devices::aml-pkg-length v p)
                      (declare (ignore length))
                      (package-integer v (+ p used 1))))))
+
+(defun s5-sleep-type () (sleep-type 5))
+
+(defun suspend ()
+  (let* ((fadt (darterfly/devices::acpi-table "FACP"))
+         (length (and fadt (darterfly/devices::ml-phys-read-32 (+ fadt 4))))
+         (control (and fadt (darterfly/devices::ml-phys-read-32 (+ fadt 64))))
+         (event (and fadt (darterfly/devices::ml-phys-read-32 (+ fadt 56))))
+         (facs (and fadt (let ((x (and (>= length 140) (darterfly/devices::ml-phys-read-64 (+ fadt 132)))))
+                           (if (and x (plusp x)) x (darterfly/devices::ml-phys-read-32 (+ fadt 36))))))
+         (type (sleep-type 3)))
+    (unless (and control (plusp control) event (plusp event) facs (plusp facs) type)
+      (error "suspend: the firmware offers no S3"))
+    (flush-disks)
+    (darterfly/devices:machdep 66 (logior control (ash event 16) (ash type 32)) facs)))
 
 (defun shut-down ()
   (let* ((fadt (darterfly/devices::acpi-table "FACP"))
