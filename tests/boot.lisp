@@ -1619,6 +1619,7 @@
         (unwind-protect
              (progn
                (is (image:expect c "init: pid 1" :timeout 120))
+               (ask "(progn (ensure-directories-exist \"/Users/darterfly/worlds/\") (with-open-file (o \"/Users/darterfly/worlds/junk.checkpoint\" :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede) (write-sequence (make-array 64 :element-type '(unsigned-byte 8) :initial-element 255) o)))")
                (ask "(defparameter *p* (darterfly/run:new-world \"persist\" :checkpoint 1))")
                (ask "(loop :repeat 200 :until (ignore-errors (darterfly/run:world-eval *p* \"t\")) :do (sleep 0.05))")
                (ask "(darterfly/run:world-eval *p* \"(progn (defvar *things* (list :one :two)) (defun more (x) (push x *things*)) (more :three))\")")
@@ -1634,7 +1635,9 @@
                (is (search "(:THREE :ONE :TWO)" (ask "(loop :repeat 300 :for w := (darterfly/run:find-world \"persist\") :for r := (and w (ignore-errors (darterfly/run:world-eval w \"*things*\"))) :until r :do (sleep 0.1) :finally (return r))"))
                    "the world comes back after the power is cut, with its state")
                (is (search "(:FOUR :THREE :ONE :TWO)" (ask "(darterfly/run:world-eval (darterfly/run:find-world \"persist\") \"(more :four)\")"))
-                   "and its functions"))
+                   "and its functions")
+               (is (search "[T]" (ask "(let ((t0 (get-internal-real-time))) (dotimes (i 200) (with-open-file (o (format nil \"/tmp/q~d\" i) :direction :output :if-exists :supersede) (print i o))) (format nil \"[~a]\" (< (- (get-internal-real-time) t0) (* 3 internal-time-units-per-second))))"))
+                   "and a junk checkpoint beside it leaves the system responsive"))
           (image:finish c 5))))))
 
 (defvar *run-wait* 1800)

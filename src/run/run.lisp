@@ -351,9 +351,10 @@
 
 (defun restore-world (path &key name)
   (with-open-file (in path :element-type '(unsigned-byte 8))
-    (let* ((meta (let ((v (make-array (darterfly/worlds::read-u64 in) :element-type '(unsigned-byte 8))))
+    (let* ((meta (let ((v (make-array (darterfly/worlds::read-count in 1) :element-type '(unsigned-byte 8))))
                    (read-sequence v in)
-                   (with-standard-io-syntax (read-from-string (sb-ext:octets-to-string v :external-format :utf-8)))))
+                   (with-standard-io-syntax
+                     (let ((*read-eval* nil)) (read-from-string (sb-ext:octets-to-string v :external-format :utf-8))))))
            (base (getf meta :base))
            (name (or name (getf meta :name))))
       (when (find-world name) (error "a world named ~a is already running" name))
@@ -370,10 +371,21 @@
                 (keep-checkpointed world))
               world)))))))
 
+(defun scheduled-p (path)
+  (with-open-file (in path :element-type '(unsigned-byte 8))
+    (let ((n (darterfly/worlds::read-u64 in)))
+      (and (< 0 n 65536) (<= (+ 8 n) (file-length in))
+           (let ((v (make-array n :element-type '(unsigned-byte 8))))
+             (read-sequence v in)
+             (getf (with-standard-io-syntax
+                     (let ((*read-eval* nil)) (read-from-string (sb-ext:octets-to-string v :external-format :utf-8))))
+                   :checkpoint))))))
+
 (defun restore-worlds ()
   (loop :for file :in (directory (concatenate 'string *worlds-dir* "*.checkpoint"))
-        :collect (handler-case (world-name (restore-world (namestring file)))
-                   (error (e) (list (namestring file) (princ-to-string e))))))
+        :when (ignore-errors (scheduled-p file))
+          :collect (handler-case (world-name (restore-world (namestring file)))
+                     (serious-condition (e) (list (namestring file) (princ-to-string e))))))
 
 (defun finish-world (world) (sb-thread:join-thread (world-thread world)))
 

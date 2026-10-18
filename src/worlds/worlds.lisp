@@ -132,15 +132,21 @@
 
 (defun read-u64 (in) (let ((v (make-array 8 :element-type '(unsigned-byte 8)))) (read-sequence v in) (loop :for i :below 8 :sum (ash (aref v i) (* 8 i)))))
 
+(defun read-count (in unit)
+  (let ((n (read-u64 in)))
+    (when (> (* n unit) (- (file-length in) (file-position in))) (error "torn"))
+    n))
+
 (defun read-records (in)
   (let ((describe nil) (present nil) (where (make-hash-table)))
     (loop
       (let ((start (file-position in)))
-        (unless (= (ignore-errors (read-u64 in)) +checkpoint-magic+) (return))
+        (when (> (+ start 8) (file-length in)) (return))
+        (unless (= (read-u64 in) +checkpoint-magic+) (return))
         (handler-case
-            (let* ((d (let ((v (make-array (read-u64 in) :element-type '(unsigned-byte 8)))) (read-sequence v in) v))
-                   (p (loop :repeat (read-u64 in) :collect (read-u64 in)))
-                   (pages (loop :repeat (read-u64 in)
+            (let* ((d (let ((v (make-array (read-count in 1) :element-type '(unsigned-byte 8)))) (read-sequence v in) v))
+                   (p (loop :repeat (read-count in 8) :collect (read-u64 in)))
+                   (pages (loop :repeat (read-count in 4104)
                                 :collect (let ((descriptor (read-u64 in)))
                                            (prog1 (cons (logand descriptor (lognot 4095)) (file-position in))
                                              (file-position in (+ (file-position in) 4096)))))))
