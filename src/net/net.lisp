@@ -36,21 +36,41 @@
 (defun u32be (v at) (logior (ash (u16be v at) 16) (u16be v (+ at 2))))
 
 (defun octets (&rest parts)
-  (let ((out (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0)))
-    (dolist (p parts (coerce out '(simple-array (unsigned-byte 8) (*))))
-      (etypecase p
-        (vector (loop for b across p do (vector-push-extend b out)))))))
+  (let ((out (make-array (loop for p in parts sum (length (the vector p))) :element-type '(unsigned-byte 8)))
+        (at 0))
+    (dolist (p parts out)
+      (replace out p :start1 at)
+      (incf at (length p)))))
+
+(defun append-octets (buffer data)
+  (let* ((old (fill-pointer buffer)) (new (+ old (length data))))
+    (when (> new (array-dimension buffer 0))
+      (setf buffer (adjust-array buffer (max new (* 2 (array-dimension buffer 0))))))
+    (setf (fill-pointer buffer) new)
+    (replace buffer data :start1 old)
+    buffer))
 
 (defun be (n width)
   (let ((v (make-array width :element-type '(unsigned-byte 8))))
     (dotimes (i width v) (setf (aref v (- width 1 i)) (ldb (byte 8 (* 8 i)) n)))))
 
+(defun sum16 (v start end initial)
+  (let ((v (if (typep v '(simple-array (unsigned-byte 8) (*))) v (coerce v '(simple-array (unsigned-byte 8) (*))))))
+    (declare (type (simple-array (unsigned-byte 8) (*)) v))
+    (let ((sum initial) (last (if (oddp (- end start)) (1- end) end)))
+      (declare (type (unsigned-byte 62) sum) (type fixnum start last))
+      (locally (declare (optimize (speed 3) (safety 0)))
+        (loop for i of-type fixnum from start below last by 2
+              do (incf sum (logior (ash (aref v i) 8) (aref v (1+ i))))))
+      (when (< last end) (incf sum (ash (aref v last) 8)))
+      sum)))
+
+(defun fold16 (sum)
+  (loop while (> sum #xffff) do (setf sum (+ (logand sum #xffff) (ash sum -16))))
+  (logxor sum #xffff))
+
 (defun checksum (v &key (start 0) (end (length v)) (initial 0))
-  (let ((sum initial))
-    (loop for i from start below end by 2
-          do (incf sum (logior (ash (aref v i) 8) (if (< (1+ i) end) (aref v (1+ i)) 0))))
-    (loop while (> sum #xffff) do (setf sum (+ (logand sum #xffff) (ash sum -16))))
-    (logxor sum #xffff)))
+  (fold16 (sum16 v start end initial)))
 
 (defconstant +ethertype-ip+ #x0800)
 (defconstant +ethertype-arp+ #x0806)

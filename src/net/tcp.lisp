@@ -219,7 +219,7 @@
 
 (defun accept-data (c data fin)
   (unless (tcp-eof c)
-    (loop for b across data do (vector-push-extend b (tcp-received c)))
+    (setf (tcp-received c) (append-octets (tcp-received c) data))
     (setf (tcp-rcv-nxt c) (seq+ (tcp-rcv-nxt c) (length data)))
     (when fin
       (setf (tcp-rcv-nxt c) (seq+ (tcp-rcv-nxt c) 1) (tcp-eof c) t (tcp-out-of-order c) nil)
@@ -303,8 +303,7 @@
       (loop for start from 0 below (length data) by +sndbuf+
             do (tcp-wait (lambda () (or (tcp-reset c) (< (unsent c) +sndbuf+))) nil)
                (when (tcp-reset c) (net-fail :econnreset "tcp: connection reset"))
-               (loop for b across (subseq data start (min (length data) (+ start +sndbuf+)))
-                     do (vector-push-extend b (tcp-snd-buffer c)))
+               (setf (tcp-snd-buffer c) (append-octets (tcp-snd-buffer c) (subseq data start (min (length data) (+ start +sndbuf+)))))
                (tcp-output c)))
     (length data)))
 
