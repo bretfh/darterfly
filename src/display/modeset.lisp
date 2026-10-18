@@ -146,6 +146,9 @@
         (cons (+ +transcoder-a+ #x40) (floor (* clock (ash 1 19)) rate))
         (cons (+ +transcoder-a+ #x44) (ash 1 19))))
 
+(defun msa-register (bpc)
+  (cons (+ +transcoder-a+ #x410) (logior 1 (ash (position bpc '(6 8 10 12)) 5))))
+
 (defun func-register (lanes bpc)
   (logior (ash 1 31) (ash 1 27) (ash 2 24) (ash (position bpc '(8 10 6 12)) 20) (ash 1 8) (ash (1- lanes) 1)))
 
@@ -165,7 +168,7 @@
          (mode (or mode (first (getf (decode-edid (read-edid)) :modes)))))
     (list :mode mode :rate rate :lanes lanes :bpc bpc :pll pll
           :pll-config (combo-pll rate)
-          :registers (append (timing-registers mode) (m-n-registers (getf mode :clock) rate lanes (* 3 bpc)))
+          :registers (append (timing-registers mode) (m-n-registers (getf mode :clock) rate lanes (* 3 bpc)) (list (msa-register bpc)))
           :func (func-register lanes bpc)
           :panel (panel-delays vbt))))
 

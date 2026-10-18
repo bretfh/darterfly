@@ -9,9 +9,10 @@
 (defconstant +ddi-a-well+ #x45454)
 
 (defun lane-registers ()
-  (loop for lane below 4
-        append (loop for dw in '(#x804 #x888 #x890 #x89C #x894)
-                     collect (+ +phy-a+ (* lane #x100) dw))))
+  (cons (+ +phy-a+ #x3A0)
+        (loop for lane below 4
+              append (loop for dw in '(#x804 #x888 #x890 #x89C #x8A0 #x894)
+                           collect (+ +phy-a+ (* lane #x100) dw)))))
 
 (defun saved-registers ()
   (append (list +cdclk-pll+ +cdclk-ctl+ #x64C00 #x64C04
