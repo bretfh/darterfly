@@ -1,6 +1,8 @@
 #+title: Nyxt compatibility work
 #+startup: overview
 
+See [[file:SBOM.org][Guix SBOM exports and the compiler/engine dependency plan]].
+
 * Preservation policy
 
 Run upstream Nyxt and an existing backend as nearly unchanged as possible.

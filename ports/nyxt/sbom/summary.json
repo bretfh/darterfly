@@ -1,0 +1,41 @@
+{
+  "cef-guix-build": {
+    "component_entries": 905,
+    "sbom_file": "cef-guix-build.cdx.json",
+    "graph_nodes": 904,
+    "graph_edges": 20912,
+    "graph_file": "cef-guix-build.graphml.gz"
+  },
+  "chromium-guix-source-build": {
+    "component_entries": 1142,
+    "sbom_file": "chromium-guix-source-build.cdx.json",
+    "graph_nodes": 1141,
+    "graph_edges": 26816,
+    "graph_file": "chromium-guix-source-build.graphml.gz"
+  },
+  "llvm-guix-build": {
+    "component_entries": 264,
+    "sbom_file": "llvm-guix-build.cdx.json",
+    "graph_nodes": 263,
+    "graph_edges": 5322,
+    "graph_file": "llvm-guix-build.graphml.gz"
+  },
+  "llvm21-guix-build": {
+    "component_entries": 264,
+    "sbom_file": "llvm21-guix-build.cdx.json",
+    "graph_nodes": 263,
+    "graph_edges": 5322,
+    "graph_file": "llvm21-guix-build.graphml.gz"
+  },
+  "nyxt-guix-build": {
+    "component_entries": 1079,
+    "sbom_file": "nyxt-guix-build.cdx.json",
+    "graph_nodes": 1078,
+    "graph_edges": 25233,
+    "graph_file": "nyxt-guix-build.graphml.gz"
+  },
+  "nyxt-guix-declared": {
+    "component_entries": 1031,
+    "sbom_file": "nyxt-guix-declared.cdx.json"
+  }
+}

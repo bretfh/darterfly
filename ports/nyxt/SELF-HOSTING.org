@@ -3,6 +3,8 @@
 #+startup: overview
 #+options: toc:2 num:nil
 
+See [[file:SBOM.org][Guix SBOM exports and the compiler/engine dependency plan]].
+
 * Decision
 
 Local rebuilding is a requirement of the browser architecture. An engine
