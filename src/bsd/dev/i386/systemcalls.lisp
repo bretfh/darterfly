@@ -229,6 +229,7 @@
       ((= n 62) (ok regs (grant-memory a b (reg regs +r-rdx+) (reg regs +r-r10+))))
       ((= n 63) (ok regs (grant-vectors a b)))
       ((= n 64) (ok regs (port-into a b)))
+      ((= n 65) (ok regs (if (< a |real_ncpus|) (read-cpu-msr a b) #xFFFFFFFFFFFFFFFF)))
       ((and (not (privileged)) (= n 6))
        (pair-out a (mem :u64 (+ (current-world) +w-image+)) (mem :u64 (+ (current-world) +w-image-size+)))
        (ok regs 0))
