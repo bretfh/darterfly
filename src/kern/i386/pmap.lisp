@@ -9,6 +9,8 @@
 (defconstant +pte-pat+ #x80)
 (defconstant +pte-frame+ #x200)
 (defconstant +pte-cow+ #x400)
+(defconstant +pte-dirty+ #x40)
+(defconstant +pte-seen+ #x800)
 (defconstant +pte-nx+ (ash 1 63))
 (defconstant +pte-pfn+ #x000FFFFFFFFFF000)
 (defconstant +kernel-base+ #xFFFFFFFF80000000)

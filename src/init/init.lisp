@@ -230,6 +230,8 @@
     ;; Host-side service tests do not have the bare-metal watchdog syscall.
     (when (sb-sys:find-foreign-symbol-address "__machdep5")
       (sb-thread:make-thread #'darterfly/worlds:heartbeat :name "heartbeat"))
+    (when (sb-sys:find-foreign-symbol-address "__machdep5")
+      (sb-thread:make-thread (lambda () (sleep 2) (darterfly/run:restore-worlds)) :name "restore worlds"))
     (sb-thread:with-mutex (*lock*)
       (dolist (job *jobs*)
         (when (start-at-load-p job)

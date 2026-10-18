@@ -114,7 +114,9 @@
     (when (terminating) (result +eintr+))
     (when (and deadline (>= (rdtsc) deadline)) (result +etimedout+))
     (let ((r (the :u32 (thread-wait event deadline))))
-      (when (and (= r +thread-interrupted+) (issignal)) (result +eintr+))
+      (when (and (= r +thread-interrupted+)
+                 (or (issignal) (logand (mem :u64 (+ (current-world) +w-flags+)) +paused+)))
+        (result +eintr+))
       (when (= r +thread-timed-out+) (result +etimedout+))
       (when (and (not ready) (= r +thread-awakened+) event) (result 0)))))
 
