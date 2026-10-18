@@ -2420,8 +2420,13 @@
     (nrepl-check :status t)))
 
 (test the-system-sleeps-and-wakes
-  (let* ((image:*extra-qemu* '("-global" "ICH9-LPC.disable_s3=0"))
-         (c (image:bare-console)))
+  (let* ((nvme (namestring (merge-pathnames "sleep-nvme.img" image:*build*)))
+         (image:*extra-qemu* (list "-global" "ICH9-LPC.disable_s3=0"
+                                   "-drive" (format nil "file=~a,if=none,format=raw,id=nv" nvme)
+                                   "-device" "nvme,drive=nv,serial=sleep"))
+         (c (progn (with-open-file (s nvme :direction :output :if-exists :supersede :element-type '(unsigned-byte 8))
+                     (file-position s (1- (* 1024 1024))) (write-byte 0 s))
+                   (image:bare-console))))
     (unwind-protect
          (progn
            (image:expect c "* " :timeout 90)
@@ -2439,6 +2444,8 @@
                "the Lisp carries on and the wall clock counted the sleep")
            (image:send c "(length (darterfly/devices:read-blocks (first (darterfly/devices:find-entries 'darterfly/devices:virtio-block-storage-device)) 0 8))")
            (is (search "4096" (image:expect c (format nil "~%* ") :timeout 30)) "the disk answers after waking")
+           (image:send c "(let ((n (first (darterfly/devices:find-entries 'darterfly/devices::nvme-disk)))) (darterfly/devices:write-blocks n 8 (make-array 512 :element-type '(unsigned-byte 8) :initial-element 42)) (list :nvme (aref (darterfly/devices:read-blocks n 8 1) 511)))")
+           (is (search "(:NVME 42)" (image:expect c (format nil "~%* ") :timeout 30)) "the NVMe disk answers after waking")
            (image:send c "(darterfly/net:ping \"10.0.2.2\")")
            (is (not (search "NIL" (image:expect c (format nil "~%* ") :timeout 30))) "the network answers after waking"))
       (image:finish c 5))))
