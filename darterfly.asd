@@ -27,7 +27,7 @@
 
 (asdf:defsystem #:darterfly/io
   :description "Frame buffers and input devices"
-  :depends-on (#:uiop #:darterfly/devices (:require #:sb-posix))
+  :depends-on (#:uiop #:darterfly/devices #:darterfly/display (:require #:sb-posix))
   :serial t
   :pathname "src/io/"
   :components ((:file "framebuffer") (:file "hid") (:file "report") (:file "blend") (:file "keymap")))
@@ -90,7 +90,7 @@
 
 (asdf:defsystem #:darterfly/apps
   :description "Applications"
-  :depends-on (#:darterfly/layer #:darterfly/server #:darterfly/bsd #:darterfly/text #:darterfly/imageio #:darterfly/kit #:darterfly/edit #:darterfly/install #:darterfly/generation #:darterfly/devices #:darterfly/net #:darterfly/wifi #:darterfly/journal #:darterfly/worlds #:darterfly/storage)
+  :depends-on (#:darterfly/layer #:darterfly/server #:darterfly/bsd #:darterfly/text #:darterfly/imageio #:darterfly/kit #:darterfly/edit #:darterfly/install #:darterfly/generation #:darterfly/devices #:darterfly/net #:darterfly/wifi #:darterfly/display #:darterfly/journal #:darterfly/worlds #:darterfly/storage)
   :serial t
   :pathname "src/apps/"
   :components ((:file "hello") (:file "terminal") (:file "listener") (:file "forcequit") (:file "editor") (:file "generations") (:file "onboarding") (:file "session") (:file "fetch") (:file "install") (:file "ocicl")))
@@ -114,6 +114,13 @@
   :serial t
   :pathname "src/wifi/"
   :components ((:file "eapol") (:file "firmware") (:file "ax210") (:file "join")))
+
+(asdf:defsystem #:darterfly/display
+  :description "The display engine"
+  :depends-on (#:darterfly/devices)
+  :serial t
+  :pathname "src/display/"
+  :components ((:file "dmc") (:file "aux") (:file "psr")))
 
 (asdf:defsystem #:darterfly/storage
   :description "Disks served by a world"

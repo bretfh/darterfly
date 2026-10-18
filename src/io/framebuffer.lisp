@@ -45,6 +45,7 @@
                             :do (setf (sb-sys:sap-ref-8 sap at) (ldb (byte 8 0) p)
                                       (sb-sys:sap-ref-8 sap (+ at 1)) (ldb (byte 8 8) p)
                                       (sb-sys:sap-ref-8 sap (+ at 2)) (ldb (byte 8 16) p)))))))
+    (darterfly/display:screen-changed)
     fb))
 
 (defun fill-rect (fb x y width height argb)

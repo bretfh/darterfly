@@ -1,0 +1,26 @@
+(in-package #:darterfly/display)
+
+(defconstant +aux-ctl+ #x64010)
+(defconstant +aux-data+ #x64014)
+
+(defun aux-transfer (request address bytes reply-size)
+  (let ((tx (append (list (logior (ash request 4) (ldb (byte 4 16) address)) (ldb (byte 8 8) address) (ldb (byte 8 0) address)
+                          (1- (if bytes (length bytes) reply-size)))
+                    bytes)))
+    (loop while (logbitp 31 (reg +aux-ctl+)))
+    (loop for i from 0 below (length tx) by 4
+          do (setf (reg (+ +aux-data+ i)) (loop for j below 4 sum (ash (or (nth (+ i j) tx) 0) (- 24 (* 8 j))))))
+    (setf (reg +aux-ctl+) (logior (ash 1 31) (ash 1 30) (ash 1 29) (ash 1 28) (ash 3 26) (ash 1 25)
+                                  (ash (length tx) 20) (ash 17 5) 31))
+    (let ((status (loop for s = (reg +aux-ctl+) unless (logbitp 31 s) return s)))
+      (setf (reg +aux-ctl+) status)
+      (when (logtest status (logior (ash 1 28) (ash 1 25)))
+        (error "the AUX transfer at ~x failed: ~x" address status))
+      (let ((reply (loop for i below (ldb (byte 5 20) status)
+                         collect (ldb (byte 8 (- 24 (* 8 (mod i 4)))) (reg (+ +aux-data+ (* 4 (floor i 4))))))))
+        (unless (zerop (ldb (byte 4 4) (first reply)))
+          (error "the panel refused the AUX transfer at ~x: ~x" address (first reply)))
+        (rest reply)))))
+
+(defun aux-read (address size) (aux-transfer 9 address nil size))
+(defun aux-write (address &rest bytes) (aux-transfer 8 address bytes 0))

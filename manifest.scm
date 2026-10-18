@@ -108,4 +108,4 @@
              "adwaita-icon-theme"
              "librsvg"
              "zstd"))
-  (list sbcl-source tinycc-source ocicl-source iwlwifi-firmware)))
+  (list sbcl-source tinycc-source ocicl-source iwlwifi-firmware i915-firmware)))

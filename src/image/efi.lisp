@@ -152,12 +152,12 @@
   (tree-entries (format nil "~a/share/ocicl-source/" (uiop:getenv "GUIX_ENVIRONMENT")) "usr/src/ocicl"
                 :skip '(".git" ".github" ".githooks" "docs" "releng" "test" "ocicl" "ocicl.old")))
 
-(defparameter *firmware* '("iwlwifi-ty-a0-gf-a0-77.ucode" "iwlwifi-ty-a0-gf-a0.pnvm"))
+(defparameter *firmware* '("iwlwifi-ty-a0-gf-a0-77.ucode" "iwlwifi-ty-a0-gf-a0.pnvm" "i915/adlp_dmc.bin"))
 
 (defun firmware-entries ()
   (loop :for name :in *firmware*
         :for packed := (format nil "~a/lib/firmware/~a.zst" (uiop:getenv "GUIX_ENVIRONMENT") name)
-        :for plain := (build-path name)
+        :for plain := (build-path (substitute #\- #\/ name))
         :do (uiop:run-program (list "zstd" "-d" "-f" "-q" "-o" (uiop:native-namestring plain) packed))
         :collect (list :file (concatenate 'string "Library/Firmware/" name) (octets plain))))
 
