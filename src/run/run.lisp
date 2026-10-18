@@ -1,7 +1,7 @@
 (defpackage #:darterfly/run
   (:use #:cl)
   (:export #:run-core #:run-world #:start-world #:finish-world #:stop-world #:world-eval #:attach #:world-id #:world-name
-           #:new-world #:list-worlds #:find-world #:save-world #:restart-world #:checkpoint-world #:restore-world #:restore-worlds #:*worlds-dir* #:collect #:tree-files #:in-run-p))
+           #:new-world #:list-worlds #:find-world #:save-world #:restart-world #:checkpoint-world #:restore-world #:restore-worlds #:*worlds-dir* #:collect #:tree-files #:in-run-p #:in-world-p))
 (in-package #:darterfly/run)
 
 (defconstant +magic+ #x4e555248434e4946)
@@ -429,6 +429,9 @@
       (when (or (null line) (string= (string-trim " " line) ":q")) (return))
       (unless (string= (string-trim " " line) "")
         (format output "~a~%" (handler-case (world-eval world line) (error (e) (format nil "world ~d: ~a" (world-id world) e))))))))
+
+(defun in-world-p ()
+  (/= 0 (libsa "__libsa_in_world" sb-alien:int)))
 
 (defun in-run-p ()
   (/= 0 (libsa "__libsa_run_active" sb-alien:int)))

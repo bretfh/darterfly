@@ -156,6 +156,13 @@
               (when (= (ldb (byte 7 0) (config-read-8 d #xe)) 1)
                 (probe-bus bridge (config-read-8 d #x19) d)))))))))
 
+(defun pci-location (d) (format nil "~x:~x.~x" (pci-bus d) (pci-device d) (pci-function d)))
+
+(defun reserved-p (d)
+  (let ((reserve (boot-arg "reserve")))
+    (and (stringp reserve)
+         (member (pci-location d) (uiop:split-string reserve :separator ",") :test #'string-equal))))
+
 (defvar *bsd-units* 0)
 (defvar *interface-units* 0)
 
@@ -171,6 +178,7 @@
     (setf *registry-root* root *bsd-units* 0 *interface-units* 0)
     (probe-bus bridge (ml-phys-read-8 (+ mcfg 54)) bridge)
     (dolist (d (find-entries 'pci-node root))
-      (register-service d))
+      (unless (reserved-p d)
+        (register-service d)))
     (start-root-image expert)
     root))

@@ -517,6 +517,8 @@ const char *__libsa_run_start(int *argc, char **argv, int max) {
 
 int __libsa_run_active(void) { return record && !record->result; }
 
+int __libsa_in_world(void) { return record && !record->result && record->port; }
+
 int __libsa_run_stdin(void) { return stdin_fd >= 0; }
 
 int __libsa_run_result(uint64_t *archive, uint64_t *size, uint64_t *code) {

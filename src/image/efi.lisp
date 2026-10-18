@@ -316,7 +316,7 @@
          for nvme = (and (consp disk) (eq (car disk) :nvme))
          append (list "-drive" (format nil "if=none,id=disk~d,format=raw,file=~a" i (uiop:native-namestring (if nvme (second disk) disk)))
                       "-device" (if nvme
-                                    (format nil "nvme,serial=nvme~d,drive=disk~d" i i)
+                                    (format nil "nvme,serial=nvme~d,drive=disk~d~@[,addr=~a~]" i i (getf (cddr disk) :addr))
                                     (format nil "virtio-blk-pci,drive=disk~d" i))))
    (list "-netdev" (format nil "user,id=net0~{,hostfwd=~(~a~)::~d-:~d~}" (loop for (proto host guest) in forwards append (list proto host guest))))
    (loop :for device :in *input-devices* :append (list "-device" device))

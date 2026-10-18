@@ -19,6 +19,15 @@
       (asdf:register-immutable-system system))))
 
 (defun darterfly-boot ()
+  (if (darterfly/run:in-world-p)
+      (darterfly-world-boot)
+      (darterfly-system-boot)))
+
+(defun darterfly-world-boot ()
+  (setf sb-sys::*sbcl-homedir-pathname* (sb-impl::%sbcl-homedir-pathname))
+  (darterfly-asdf))
+
+(defun darterfly-system-boot ()
   (darterfly/vfs:vfs-start)
   (darterfly/bsd::libsa-start)
   (darterfly/apfs:mountroot)

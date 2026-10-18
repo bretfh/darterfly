@@ -38,7 +38,15 @@
     (list :row-bytes (sb-sys:sap-ref-32 sap 4) :width (sb-sys:sap-ref-32 sap 8) :height (sb-sys:sap-ref-32 sap 12)
           :depth (sb-sys:sap-ref-32 sap 16) :base (sb-sys:sap-ref-64 sap 48))))
 
-(defun phys-sap (pa) (sb-sys:int-sap (+ +physmap-base+ pa)))
+(defvar *phys-window* nil)
+
+(pushnew 'forget-phys-window sb-ext:*save-hooks*)
+
+(defun forget-phys-window () (setf *phys-window* nil))
+
+(defun phys-window () (or *phys-window* (setf *phys-window* (machdep 61))))
+
+(defun phys-sap (pa) (sb-sys:int-sap (+ (phys-window) pa)))
 (defun ml-phys-read-8 (pa) (sb-sys:sap-ref-8 (phys-sap pa) 0))
 (defun ml-phys-read-16 (pa) (sb-sys:sap-ref-16 (phys-sap pa) 0))
 (defun ml-phys-read-32 (pa) (sb-sys:sap-ref-32 (phys-sap pa) 0))

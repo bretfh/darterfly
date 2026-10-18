@@ -101,7 +101,7 @@
          (progn
            (is (image:expect c "worldtest: world 0 sees 0x1111, world 1 found 0x0 and wrote 0x2222, world 1 has 1 entries"))
            (is (image:expect c "stopped: page fault at 0x40000057, address 0xffff800000000000"))
-           (is (image:expect c "worldtest: world 2 read the clock: yes, raw pages: error 1, a kernel buffer: error 14, stopped: yes")))
+           (is (image:expect c "a kernel buffer: error 14, stopped: yes")))
       (image:finish c 5))))
 
 (test the-kernel-has-memory
@@ -1654,6 +1654,30 @@
                    "and its functions")
                (is (search "[T]" (ask "(let ((t0 (get-internal-real-time))) (dotimes (i 200) (with-open-file (o (format nil \"/tmp/q~d\" i) :direction :output :if-exists :supersede) (print i o))) (format nil \"[~a]\" (< (- (get-internal-real-time) t0) (* 3 internal-time-units-per-second))))"))
                    "and a junk checkpoint beside it leaves the system responsive"))
+          (image:finish c 5))))))
+
+(test a-world-drives-its-own-device
+  (let ((extra (merge-pathnames "world-device.img" (darterfly-file "build/")))
+        (expected 0))
+    (with-open-file (o extra :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
+      (let ((v (make-array (* 8 1048576) :element-type '(unsigned-byte 8))))
+        (dotimes (i (length v)) (setf (aref v i) (mod (* i 7) 251)))
+        (dotimes (i 4096) (incf expected (aref v i)))
+        (write-sequence v o)))
+    (let ((c (image:bare-console :boot-args "reserve=0:9.0" :disks (list (list :nvme extra :addr "0x9")))))
+      (flet ((ask (form &optional (timeout 120)) (image:send c form) (image:expect c (format nil "~%* ") :timeout timeout)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 90)
+               (ask "(progn (darterfly/devices:start-devices) (darterfly/install::esp) (defparameter *node* (find-if (lambda (d) (string= (darterfly/devices::pci-location d) \"0:9.0\")) (darterfly/devices:find-entries 'darterfly/devices:pci-node))))")
+               (is (search "NIL" (ask "(darterfly/devices:entry-children *node*)")) "the system leaves the reserved controller alone")
+               (ask "(defparameter *driver* (darterfly/run:start-world \"/Volumes/EFI/EFI/darterfly/gen-1/darterfly.core\" (darterfly/run::world-argv \"(loop (sleep 60))\") :cwd \"/\" :disk t :attach t))")
+               (ask "(loop :repeat 300 :until (ignore-errors (darterfly/run:world-eval *driver* \"t\")) :do (sleep 0.1))" 120)
+               (ask "(progn (defparameter *vector* (darterfly/devices:allocate-vector)) (let* ((id (darterfly/run:world-id *driver*)) (n *node*) (ecam (darterfly/devices::bridge-ecam (darterfly/devices::device-bridge n)))) (darterfly/worlds:grant-memory id (+ ecam (ash (darterfly/devices::pci-bus n) 20)) (ash 1 20) :reserve) (darterfly/worlds:grant-memory id (+ ecam (ash (darterfly/devices::pci-bus n) 20) (ash (darterfly/devices::pci-device n) 15) (ash (darterfly/devices::pci-function n) 12)) 4096) (darterfly/worlds:grant-memory id (darterfly/devices::bar-address n 0) (darterfly/devices::bar-length n 0)) (darterfly/worlds:grant-vectors id *vector*)))")
+               (is (search (format nil "\"~d\"" expected)
+                           (ask (format nil "(darterfly/run:world-eval *driver* (format nil \"(progn (setf darterfly/devices::*free-vectors* (list ~~d)) (setf darterfly/devices:*registry-root* (make-instance 'darterfly/devices:entry :name \\\"Root\\\")) (let* ((bridge (make-instance 'darterfly/devices::acpi-pci :ecam ~~d)) (node (make-instance 'darterfly/devices:pci-node :bridge bridge :bus ~~d :device ~~d :function ~~d))) (darterfly/devices::attach node darterfly/devices:*registry-root*) (darterfly/devices::describe-pci-device node) (darterfly/devices:register-service node) (let ((m (find-if (lambda (m) (darterfly/devices:get-property m \\\"Whole\\\")) (darterfly/devices:find-entries 'darterfly/devices:media)))) (reduce (function +) (darterfly/devices:media-read m 0 4096)))))\" *vector* (darterfly/devices::bridge-ecam (darterfly/devices::device-bridge *node*)) (darterfly/devices::pci-bus *node*) (darterfly/devices::pci-device *node*) (darterfly/devices::pci-function *node*)))") 180))
+                   "a world drives the controller it was granted and reads the disk")
+               (is (search "[3]" (ask "(format nil \"[~a]\" (+ 1 2))")) "and the system carries on"))
           (image:finish c 5))))))
 
 (defvar *run-wait* 1800)

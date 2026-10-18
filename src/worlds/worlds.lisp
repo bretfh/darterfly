@@ -1,7 +1,7 @@
 (defpackage #:darterfly/worlds
   (:use #:cl)
   (:export #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages #:spawn-record #:receive-into #:copy-from #:copy-into
-           #:heartbeat #:*watchdog-limit* #:quiet-watchdog #:pause #:resume #:checkpoint #:restore))
+           #:heartbeat #:*watchdog-limit* #:quiet-watchdog #:pause #:resume #:checkpoint #:restore #:grant-memory #:grant-vectors))
 (in-package #:darterfly/worlds)
 
 (define-condition world-error (error)
@@ -78,6 +78,12 @@
   (loop (machdep 52 *watchdog-limit*) (sleep 1)))
 
 (defun quiet-watchdog () (machdep 52 0))
+
+(defun grant-memory (world pa length &optional (kind :uncached))
+  (machdep 62 world pa length (ecase kind (:memory 0) (:uncached 1) (:write-combining 2) (:reserve 3))))
+
+(defun grant-vectors (world &rest vectors)
+  (machdep 63 world (reduce #'logior vectors :key (lambda (v) (ash 1 (- v #x30))) :initial-value 0)))
 
 (defun pause (world) (machdep 53 world))
 
