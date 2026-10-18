@@ -2424,6 +2424,7 @@
          (image:*extra-qemu* (list "-global" "ICH9-LPC.disable_s3=0"
                                    "-drive" (format nil "file=~a,if=none,format=raw,id=nv" nvme)
                                    "-device" "nvme,drive=nv,serial=sleep"))
+         (image:*input-devices* '("qemu-xhci,id=xhci" "usb-kbd,bus=xhci.0" "virtio-keyboard-pci" "virtio-tablet-pci"))
          (c (progn (with-open-file (s nvme :direction :output :if-exists :supersede :element-type '(unsigned-byte 8))
                      (file-position s (1- (* 1024 1024))) (write-byte 0 s))
                    (image:bare-console))))
@@ -2446,6 +2447,8 @@
            (is (search "4096" (image:expect c (format nil "~%* ") :timeout 30)) "the disk answers after waking")
            (image:send c "(let ((n (first (darterfly/devices:find-entries 'darterfly/devices::nvme-disk)))) (darterfly/devices:write-blocks n 8 (make-array 512 :element-type '(unsigned-byte 8) :initial-element 42)) (list :nvme (aref (darterfly/devices:read-blocks n 8 1) 511)))")
            (is (search "(:NVME 42)" (image:expect c (format nil "~%* ") :timeout 30)) "the NVMe disk answers after waking")
+           (image:send c "(list :usb (mapcar #'darterfly/devices:entry-name (darterfly/devices:find-entries 'darterfly/devices::usb-hid-device)))")
+           (is (search "(:USB (\"Keyboard\"))" (image:expect c (format nil "~%* ") :timeout 30)) "the USB keyboard is back after waking")
            (image:send c "(darterfly/net:ping \"10.0.2.2\")")
            (is (not (search "NIL" (image:expect c (format nil "~%* ") :timeout 30))) "the network answers after waking"))
       (image:finish c 5))))
