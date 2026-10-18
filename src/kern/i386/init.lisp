@@ -185,6 +185,7 @@
           (kprintf "restart: no room for the run's user image
 "))
         (map-boot-user-image))
+    (heartbeat 0)
     (setf restart-core core)
     (setf restart-core-size size)
     (setf (mem :u64 (+ self +t-sigmask+)) 0)

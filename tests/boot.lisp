@@ -1556,8 +1556,33 @@
                    "the restarted world has its state")
                (is (search "(:SECOND :AND-THIS :REMEMBER-ME)" (ask "(darterfly/run:world-eval *again* \"(note :second)\")"))
                    "and its functions")
-               (ask "(darterfly/run:stop-world *again*)"))
+               (ask "(darterfly/run:stop-world *again*)")
+               (ask "(defparameter *kept* (darterfly/run:new-world \"kept\" :restart :on-failure))")
+               (ask "(loop :repeat 200 :until (ignore-errors (darterfly/run:world-eval *kept* \"t\")) :do (sleep 0.05))")
+               (ask "(ignore-errors (darterfly/run:world-eval *kept* \"(sb-ext:exit :code 3 :abort t)\"))")
+               (is (search "\"T\"" (ask "(loop :repeat 200 :for w := (darterfly/run:find-world \"kept\") :for r := (and w (not (eq w *kept*)) (ignore-errors (darterfly/run:world-eval w \"t\"))) :until r :do (sleep 0.1) :finally (return r))"))
+                   "a supervised world that dies is started again")
+               (ask "(darterfly/run:stop-world (darterfly/run:find-world \"kept\"))")
+               (is (search "NIL" (ask "(progn (sleep 3) (darterfly/run:find-world \"kept\"))"))
+                   "and one stopped on purpose stays stopped"))
           (image:finish c 5))))))
+
+(test a-wedged-system-world-is-reported-and-restarted
+  (let ((c (image:bare-console :boot-args "init")))
+    (flet ((ask (form &optional (timeout 60)) (image:send c form) (image:expect c (format nil "~%* ") :timeout timeout)))
+      (unwind-protect
+           (progn
+             (is (image:expect c "init: pid 1" :timeout 120))
+             (ask "(progn (setf darterfly/worlds:*watchdog-limit* 4) (sleep 2) (find \"heartbeat\" (sb-thread:list-all-threads) :key (function sb-thread:thread-name) :test (function equal)))")
+             (sleep 5)
+             (is (search "[ALIVE]" (ask "(format nil \"[~a]\" :alive)")) "a busy but healthy world 0 is left alone")
+             (image:send c "(progn (sb-thread:make-thread (lambda () (sb-sys:without-gcing (loop)))) (sleep 0.5) (sb-ext:gc :full t))")
+             (is (image:expect c "watchdog: world 0 has not checked in for 4 s" :timeout 60)
+                 "a world 0 stuck in a garbage collection is noticed")
+             (is (image:expect c "watchdog:   thread" :timeout 10) "and its threads are reported")
+             (is (image:expect c "watchdog: world 0 is still silent; restarting the machine" :timeout 30)
+                 "and the machine restarts instead of staying frozen"))
+        (image:finish c 5)))))
 
 (defvar *run-wait* 1800)
 

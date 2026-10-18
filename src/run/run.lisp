@@ -229,7 +229,7 @@
   (let ((at (or (position "--eval" argv :test #'string=) (position "--quit" argv :test #'string=) (length argv))))
     (append (subseq argv 0 at) (list "--eval" *attach-prelude*) (subseq argv at))))
 
-(defstruct (world (:constructor make-world)) id inward thread name core)
+(defstruct (world (:constructor make-world)) id inward thread name core stopping restarts)
 
 (defvar *worlds* nil)
 (defvar *worlds-lock* (sb-thread:make-mutex :name "worlds"))
@@ -249,9 +249,23 @@
                 "--no-sysinit" "--no-userinit" "--disable-debugger")
           (loop :for e :in evals :append (list "--eval" e))))
 
-(defun new-world (name &key (core "/usr/lib/sbcl/sbcl.core") (cwd "/") (evals (list "(loop (sleep 60))")))
+(defun failed-p (result) (not (eql 0 (getf result :exit))))
+
+(defun new-world (name &key (core "/usr/lib/sbcl/sbcl.core") (cwd "/") (evals (list "(loop (sleep 60))")) restart (restarts nil))
   (when (find-world name) (error "a world named ~a is already running" name))
-  (start-world core (apply #'world-argv evals) :cwd cwd :disk t :attach t :name name))
+  (let ((world (start-world core (apply #'world-argv evals) :cwd cwd :disk t :attach t :name name)))
+    (setf (world-restarts world) restarts)
+    (when restart
+      (sb-thread:make-thread
+       (lambda ()
+         (let ((result (finish-world world))
+               (recent (remove-if (lambda (time) (< time (- (get-universal-time) 60))) restarts)))
+           (when (and (not (world-stopping world)) (failed-p result) (< (length recent) 5))
+             (sleep (if recent 2 0))
+             (new-world name :core core :cwd cwd :evals evals :restart restart
+                             :restarts (cons (get-universal-time) recent)))))
+       :name (format nil "supervise ~a" name)))
+    world))
 
 (defun save-world (world path)
   (world-eval world (concatenate 'string ":save " path))
@@ -293,6 +307,7 @@
 (defun finish-world (world) (sb-thread:join-thread (world-thread world)))
 
 (defun stop-world (world)
+  (setf (world-stopping world) t)
   (darterfly/worlds:stop (world-id world))
   (finish-world world))
 

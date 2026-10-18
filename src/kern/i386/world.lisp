@@ -388,3 +388,45 @@
       (incf off +page-size+))
     (pmap-flush-tlbs)
     len))
+
+(define-global beat-at :u64)
+(define-global beat-limit :u64)
+(define-global beat-warned :u64)
+
+(define-low machine-reset ()
+  (cli)
+  (outb #xCF9 2)
+  (outb #xCF9 6)
+  (while 1 (hlt)))
+
+(define-low heartbeat ((seconds :u64))
+  (setf beat-limit (* seconds (ref commpage 0)))
+  (setf beat-at (rdtsc))
+  (setf beat-warned 0)
+  0)
+
+(define-low watchdog-deadline ()
+  (if beat-limit (+ beat-at (* beat-limit (if beat-warned 2 1))) 0))
+
+(define-low watchdog-report ()
+  (let ((th all-threads))
+    (while th
+      (when (and (= (world-of th) (world-0)) (/= (mem :u32 (+ th +t-state+)) +th-terminate+))
+        (let ((frame (- (mem :u64 (+ th +t-kstack-top+)) +saved-state-size+)))
+          (kprintf "watchdog:   thread 0x%lx state %u rip 0x%lx rsp 0x%lx
+" (mem :u64 (+ th +t-thread-id+)) (mem :u32 (+ th +t-state+))
+                   (mem :u64 (+ frame 136)) (mem :u64 (+ frame 160)))))
+      (setf th (mem :u64 (+ th +t-all-next+))))))
+
+(define-low watchdog-check ()
+  (when (and beat-limit (> (rdtsc) (+ beat-at beat-limit)))
+    (if (not beat-warned)
+        (progn
+          (setf beat-warned 1)
+          (kprintf "watchdog: world 0 has not checked in for %lu s; its threads:
+" (truncate beat-limit (ref commpage 0)))
+          (watchdog-report))
+        (when (> (rdtsc) (+ beat-at (* 2 beat-limit)))
+          (kprintf "watchdog: world 0 is still silent; restarting the machine
+")
+          (machine-reset)))))

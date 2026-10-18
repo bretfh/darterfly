@@ -170,7 +170,7 @@
             (setf (mem :u32 (+ (cpu-data) +c-idle+)) 0))))))
 
 (define-low next-deadline ()
-  (let ((best 0) (th all-threads) (w (world-0)))
+  (let ((best (watchdog-deadline)) (th all-threads) (w (world-0)))
     (while w
       (let ((d (mem :u64 (+ w +w-real-deadline+))))
         (when (and d (or (= best 0) (< d best))) (setf best d)))
@@ -422,6 +422,7 @@
   (panic "thread_terminate_self: came back"))
 
 (define-low sched-tick ()
+  (when (= (cpu-number) 0) (watchdog-check))
   (when (= (cpu-number) 0)
     (let ((now (rdtsc)) (th all-threads))
       (while th

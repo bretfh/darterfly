@@ -57,6 +57,7 @@
   name)
 
 (defun stop-threads (&optional keep)
+  (darterfly/worlds:quiet-watchdog)
   (darterfly/vfs:vfs-sync)
   (flet ((others ()
            (remove-if (lambda (th) (or (eq th sb-thread:*current-thread*) (sb-thread::thread-ephemeral-p th)

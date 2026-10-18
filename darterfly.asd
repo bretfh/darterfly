@@ -13,7 +13,7 @@
 
 (asdf:defsystem #:darterfly/init
   :description "init and service"
-  :depends-on (#:darterfly/bsd #:darterfly/mach)
+  :depends-on (#:darterfly/bsd #:darterfly/mach #:darterfly/worlds)
   :serial t
   :pathname "src/init/"
   :components ((:file "init")))
@@ -189,7 +189,7 @@
 
 (asdf:defsystem #:darterfly/install
   :description "Generations"
-  :depends-on (#:uiop #:darterfly/fat #:darterfly/low #:darterfly/platform #:darterfly/kern #:darterfly/link #:darterfly/gpt #:darterfly/apfs #:darterfly/devices #:darterfly/vfs #:darterfly/power #:darterfly/bsd #:darterfly/journal (:require #:sb-bsd-sockets))
+  :depends-on (#:uiop #:darterfly/fat #:darterfly/low #:darterfly/platform #:darterfly/kern #:darterfly/link #:darterfly/gpt #:darterfly/apfs #:darterfly/devices #:darterfly/vfs #:darterfly/power #:darterfly/bsd #:darterfly/journal #:darterfly/worlds (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/install/"
   :components ((:file "install") (:file "disk") (:file "deploy")))
