@@ -73,6 +73,28 @@
     (zero-page (nvme-queue-cq q))
     q))
 
+(defun apst-table (page)
+  (let ((table (make-array 32 :initial-element 0)) (target 0))
+    (loop for state from (ml-phys-read-8 (+ page 263)) downto 0
+          for at = (+ page 2048 (* 32 state))
+          do (setf (aref table state) target)
+             (when (logbitp 1 (ml-phys-read-8 (+ at 3)))
+               (let ((entry (ml-phys-read-32 (+ at 4))) (exit (ml-phys-read-32 (+ at 8))))
+                 (when (<= exit 100000)
+                   (setf target (logior (ash state 3) (ash (if (<= (+ entry exit) 15000) 100 2000) 8)))))))
+    table))
+
+(defun enable-apst (n)
+  (let ((page (vm-page-grab)))
+    (zero-page page)
+    (nvme-command n (nvme-admin n) #x06 :prp1 page :cdw10 1)
+    (when (logbitp 0 (ml-phys-read-8 (+ page 265)))
+      (let ((table (apst-table page)))
+        (zero-page page)
+        (dotimes (i 32) (ml-phys-write-64 (+ page (* 8 i)) (aref table i)))
+        (nvme-command n (nvme-admin n) #x09 :prp1 page :cdw10 #x0C :cdw11 1)
+        t))))
+
 (defmethod start ((n nvme-disk) (d pci-node))
   (let ((map (map-device-memory-with-index d 0)))
     (unless map (return-from start nil))
@@ -111,7 +133,8 @@
       (nvme-command n admin #x01 :prp1 (nvme-queue-sq io)
                                  :cdw10 (logior (ash (1- +nvme-queue-size+) 16) 1)
                                  :cdw11 (logior (ash 1 16) 1))
-      (setf (nvme-io n) io)))
+      (setf (nvme-io n) io))
+    (ignore-errors (enable-apst n)))
   (setf (nvme-data n) (loop :repeat +nvme-pages+ :collect (vm-page-grab))
         (nvme-prp-list n) (vm-page-grab))
   (loop :for pa :in (rest (nvme-data n)) :for at :from 0 :by 8
