@@ -37,8 +37,7 @@
       (tcc "tcc_delete" sb-alien:void (sb-sys:system-area-pointer state)))))
 
 (defparameter *libsa-sources*
-  '("syscall.c" "stdio.c" "stdlib.c" "math.c"
-    "setjmp.s" "start.c" "strtod.c" "run.c"))
+  '("stdio.c" "math.c" "strtod.c" "run.c"))
 
 (defparameter *runtime-sources*
   '("alloc.c" "arena.c" "backtrace.c" "breakpoint.c" "coalesce.c" "coreparse.c" "dynbind.c" "funcall.c"

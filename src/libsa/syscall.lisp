@@ -16,4 +16,4 @@
 (define-low __machdep (n a b)
   (trap #x82 n a b 0 0 0))
 
-(defun libsa-object () (package-object "DARTERFLY/LIBSA" :extra (list "va_next")))
+(defun libsa-object () (package-object "DARTERFLY/LIBSA" :extra (list "va_next") :routines (jump-routines)))

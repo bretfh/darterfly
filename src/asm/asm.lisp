@@ -32,7 +32,8 @@
   (let ((label (sb-assem:gen-label)))
     (push (cons label name) *quads*)
     (sb-assem::emit-label label)
-    (dotimes (i 8) (inst byte 0))))
+    (dotimes (i 8) (inst byte 0))
+    label))
 
 (defmacro routine (name &body body)
   `(let ((section (sb-assem::make-section))
