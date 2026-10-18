@@ -100,34 +100,27 @@ in Nyxt. It still means porting Chromium/Blink/V8 and their OS dependencies.
 The current cl-cef uses native BrowserView windows; it does not already
 present offscreen buffers through Darterfly's graphics API.
 
-Next gates, in order:
+The current architecture review is
+[[file:SELF-HOSTING.org][Browser and toolchain self-hosting]]. It supersedes the earlier
+engine-first sequence. Rebuilding Nyxt's Lisp code, its native bridge and
+the engine are separate requirements; all need a local path.
 
-1. Reproduce a pinned Nyxt/CEF configuration on the Guix host, including a
-   page and Nyxt's own HTML interface panels. The existing Electron Guix
-   package is a separate behavior reference with a different source pin.
-2. Measure the engine's real platform/build closure. Inventory dynamic
-   loading, threads, synchronization, shared memory, IPC, subprocesses,
-   filesystem, networking/TLS, fonts, input and surface presentation.
-3. Cross-build a minimal engine harness and qualify it in a Darterfly
-   world before loading Nyxt. First acceptance: render local HTML/CSS/JS
-   into a CPU buffer, deliver input, and survive a renderer restart.
-4. Adapt the existing backend's presentation boundary to Darterfly. Keep
-   changes small, upstreamable where possible, and exercise Nyxt's own UI
-   as well as page content. Then test HTTPS, downloads and persistence.
-5. Bring the engine's complete source-build closure onto Darterfly for
-   browser self-hosting. Native execution and native rebuilding are
-   separate milestones.
+First pin and reproduce the existing backend on Guix and enumerate the
+source-build dependencies. Establish the native executable/runtime ABI,
+then prove a Darterfly-hosted C++ compiler can compile and link programs.
+Qualify its local rebuild and the required generators before committing
+to a lengthy engine-only port. Nyxt's own Lisp development loop should
+become native as soon as its dependencies allow it.
 
-CEF supports offscreen rendering and Chromium exposes Ozone platform
-interfaces. Those are integration points, not substitutes for the OS port.
-WPE WebKit is worth a bounded comparison if the CEF experiment fails, but
-it would require a new Nyxt integration and is not a free compatibility
-shortcut. A remote browser could provide interim access, but would not
-satisfy native, self-hosted browsing.
+CEF is a candidate, not a final choice. Its current upstream build path
+includes Clang/libc++ and Rust tooling, not simply a C++ wrapper. Compare
+complete native build and update costs with other engine routes using
+pinned evidence. A host-built binary distribution proves no source-build
+closure. A permanent external build dependency does not meet the goal.
 
-A C++ compiler need not run on Darterfly to execute an externally built
-engine. Low can implement platform glue; it cannot compile Chromium's C++
-sources. Full browser self-hosting still requires that build toolchain.
+Low remains suitable for platform glue. Importing an initially cross-built
+compiler does not prevent later native self-hosting; the plan must prove
+that the imported compiler and its build tools can be rebuilt locally.
 
 References:
 - [[https://chromiumembedded.github.io/cef/general_usage.html][CEF processes, threads and offscreen rendering]]
