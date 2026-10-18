@@ -39,6 +39,7 @@
 
 (define-low log-keep (va size)
   (when (< size (+ 4096 262144)) (result 0))
+  (setf log-previous-size #xFFFFFFFFFFFFFFFF)
   (when (= (mem :u64 va) +log-magic+)
     (let* ((head (mem :u32 (+ va 16)))
            (from (mem :u32 (+ va 20)))
@@ -77,11 +78,15 @@
   (mem :u32 log-head-at))
 
 (define-low log-previous-read (buffer count)
+  (when (= log-previous-size #xFFFFFFFFFFFFFFFF) (result 0))
   (let ((i 0))
     (while (and (< i count) (< i log-previous-size))
       (setf (mem :u8 (+ buffer i)) (ref log-previous i))
       (incf i)))
   log-previous-size)
+
+(define-low log-previous-found ()
+  (/= log-previous-size #xFFFFFFFFFFFFFFFF))
 
 (define-low serial-init ()
   (outb +ier+ #x00)

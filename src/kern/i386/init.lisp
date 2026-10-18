@@ -240,8 +240,11 @@
         (kept-size (mem :u64 (+ args +keep-size+))))
     (pmap-bootstrap args)
     (when (and kept (the :u32 (log-keep (+ kept +physmap-base+) kept-size)))
-      (kprintf "log: kept at 0x%lx; the last boot left %lu bytes unread
-" kept (log-previous-read 0 0))))
+      (if (the :u32 (log-previous-found))
+          (kprintf "log: kept at 0x%lx; the last boot left %lu bytes unread
+" kept (log-previous-read 0 0))
+          (kprintf "log: kept at 0x%lx; nothing kept from the last boot
+" kept))))
   (console-init)
   (kalloc-init)
   (kprintf "vm: %lu MB free
