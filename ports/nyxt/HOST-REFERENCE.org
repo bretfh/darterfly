@@ -1,0 +1,227 @@
+#+title: Nyxt and CEF: the Guix host reference
+#+date: 2026-10-18
+#+startup: overview
+#+options: toc:2 num:nil
+
+* Scope
+
+This work establishes a host reference for Nyxt's existing CEF backend.
+The native bridge is built from source in Guix. The engine inside libcef
+is an upstream binary seed. This does not yet build Chromium from source,
+run a browser in Darterfly, or establish native compiler self-hosting.
+
+The experiment stays on codex/nyxt-compat. Nyxt's application Lisp sources
+are unchanged. A small, explicit cl-cef patch fixes engine teardown.
+The original Nyxt checkout and the user's Guix package definitions are
+unchanged; experiments use a disposable checkout under /tmp.
+
+* Exact reference
+
+| Component | Reference |
+|-----------+-----------|
+| Nyxt | cfa068ea781fe4866ae435c2950c00c5ec51cfee |
+| cl-cef | 257c6421bb173cbe50d2b5a2a1066bace15347fc plus teardown patch |
+| CEF | 147.0.14+g76d2442+chromium-147.0.7727.138 |
+| CEF source | 76d244268947a52f43755983ef83766a353a1335 |
+| Chromium source tag | 147.0.7727.138 |
+| Host SBCL | 2.6.4 |
+| Bridge compiler | Guix GCC 14.3.0, C++20 |
+
+[[file:cef-reference.json][Machine-readable pin and source metadata]] records the archive's
+SHA-256, upstream SHA-1, exact download size and source references.
+The downloaded archive matched both its published size and SHA-1; the
+Guix origin additionally verifies its recorded SHA-256.
+
+CEF 147 is a compatibility experiment near the Guix Chromium source-build
+baseline. It is not a production security-update selection. Moving to a
+shipping release requires repeating the tests and source-build work.
+
+* Host package and resource layout
+
+[[file:guix/darterfly/packages/cef.scm][Guix module]] defines two packages:
+
+- cef-sdk-reference preserves the upstream SDK's Release, Resources,
+  include, cmake and wrapper-source directories. Its ELF library search
+  paths point to Guix inputs. It does not rebuild libcef.
+- cl-cef-native builds the C++ bridge, helper executable and CEF C++ wrapper.
+  The bridge, helper and engine resources install together in lib/cl-cef.
+  CEF's license and third-party credits install under share/doc.
+
+The native package needs libX11 explicitly for linking. Guix's default
+CMake build type is RelWithDebInfo; the binary SDK supplies Release, so
+this recipe selects Release. ANGLE's GLES library also needs X11, Xext
+and XCB in its runtime search path. Guix's RUNPATH validation caught the
+missing entries before the runtime tests.
+
+NSS dynamically loads libnssckbi.so. The test environment includes the
+NSS output and its lib/nss directory on LD_LIBRARY_PATH. A packaged Nyxt
+launcher must supply that path as well. Supplying only ordinary lib paths
+produced a root-certificate-module error during browser initialization.
+
+The host bridge can be compiled with GCC. This does not mean the full
+Chromium engine can use that same compiler configuration unchanged.
+
+* Nyxt source compatibility adjustments
+
+The isolated checkout contains Nyxt's pinned submodules. Two dependency
+selections already present in the user's working Guix Nyxt recipe are
+reused for SBCL 2.6.4:
+
+- named-readtables moves to 4a96687aaebd509da100b8f1dfe6a02c745f41e7.
+  The original pin fails while FSet merges readtables under this SBCL.
+- mgl-pax is added at e924cd01e322c1b2a5b48a442e1aa2b9bf3df964 to supply
+  mgl-pax-bootstrap, required by the selected named-readtables.
+
+Closer-mop is fetched from its author's Codeberg location at the same
+commit Nyxt already pins. No application rewrite is required for these
+build fixes. The reproduction script records these adjustments explicitly.
+
+* Teardown correction
+
+[[file:patches/cl-cef-quit-on-ui-thread.patch][Bridge patch]] addresses two separate CEF lifecycle requirements.
+
+First, CefQuitMessageLoop must run on the thread running CefRunMessageLoop.
+The original bridge called it directly from the Lisp caller's thread. The
+single-view probe completed its page checks but hung during shutdown.
+Dispatching the request through the bridge's existing UI mechanism fixes
+that thread mismatch.
+
+Second, browser close is asynchronous. Nyxt owns multiple engine views,
+including its page and interface bars. Stopping the loop immediately can
+leave browsers and CEF observer references alive during CefShutdown.
+The patch requests closure on the UI thread, waits for OnBeforeClose,
+then releases bridge-owned CEF objects before quitting the loop.
+DevTools registrations are released before their browsers are destroyed,
+including during ordinary view destruction.
+Application event callbacks stop once termination begins because Nyxt
+clears its browser state during quit.
+
+The smoke runner checks process exit and rejects CEF check failures and
+UI-thread errors as well as missing success markers. A printed page-test
+success is insufficient if engine teardown fails afterward.
+
+* Reproduce
+
+Use the channel revisions recorded in [[file:sbom/channels.scm][channels.scm]]. The scripts
+use the active Guix, and record its channels in the experiment directory.
+They do not change the user's installed profile or current channels.
+
+#+begin_src sh
+  guix build -L ports/nyxt/guix cl-cef-native --cores=4
+  bash ports/nyxt/host-reference.sh /tmp/darterfly-nyxt-reference-new
+#+end_src
+
+[[file:host-reference.sh][Host script]] requires a new directory. It fetches the pinned
+sources, applies the documented dependency selections, builds Nyxt with
+NYXT_RENDERER=cef, and runs the bridge and complete-browser tests.
+The bridge is built separately, so Nyxt's makefile does not need to build
+it a second time. The source and runtime paths are supplied to the tests.
+
+[[file:host-build-manifest.scm][Build manifest]] and [[file:host-test-manifest.scm][test manifest]] describe the host tools.
+The test runner starts its own Xvfb display and temporary XDG directories.
+It uses a private Nyxt socket and no user configuration. It terminates
+its own process groups on timeout and retains logs in the chosen directory.
+The local fixtures need no external website or user account.
+
+The test configuration supplies CEF resource paths through Nyxt's normal
+--load interface. It is test configuration, not a patched Nyxt source file.
+
+* What the tests cover
+
+[[file:tests/cef-host-smoke.lisp][Bridge probe]] exercises:
+
+1. Launching the real engine from SBCL through CFFI.
+2. A Lisp-defined URL scheme serving HTML to an engine renderer process.
+3. A JavaScript value returning to Lisp through the helper process.
+4. CSS layout producing the expected element width.
+5. DOM text returning to Lisp.
+6. Asynchronous browser close completing.
+7. Message-loop termination and engine shutdown.
+
+[[file:tests/nyxt-cef-host-smoke.lisp][Nyxt probe]] loads the full saved Nyxt image with its CEF renderer,
+opens a page from a loopback HTTP server, evaluates JavaScript and measures
+CSS through Nyxt's
+own buffer API, then invokes Nyxt's quit command. Its page, status and
+message views exercise more of the backend's lifecycle than a single view.
+
+These tests do not establish GPU acceleration, online TLS behavior,
+audio/video, downloads, accessibility, hostile-page sandboxing, or extended
+interactive stability. The existing binding disables CEF sandboxing; the
+local-fixture tests retain that behavior. They establish integration, not
+production security isolation.
+
+* Recorded result
+
+The complete reproduction script was run in a new directory and exited
+with status 0. The bridge passed all seven assertions. The saved Nyxt image
+loaded the HTTP fixture, returned JavaScript and CSS results through its
+API, and exited with status 0 after quit. The final logs contain no CEF
+observer-check failure or missing NSS root-certificate-module error.
+
+- [[file:host-validation/result.json][Build paths, executable hash and validation scope]]
+- [[file:host-validation/bridge-smoke.log][Bridge assertions and shutdown]]
+- [[file:host-validation/nyxt-smoke.log][Complete Nyxt test log, including remaining warnings]]
+- [[file:host-validation/nyxt-submodules.txt][Actual Nyxt submodule revisions]]
+- [[file:sbom/cl-cef-host-build.cdx.json][Guix host-reference build SBOM]]
+
+No Darterfly kernel or runtime code changed in this step. The earlier
+guest socket checks were not rerun for these host packaging changes.
+
+* Recorded limitations from the host run
+
+The full browser exits successfully but can emit warnings from queued
+history and UI tasks after Nyxt clears its global browser object. Those
+warnings remain; they are distinct from the CEF teardown hang and observer
+check failure fixed by the bridge patch. This is not a claim of warning-free
+or production-ready browser behavior.
+
+* Source rebuilding: the important remaining distinction
+
+The Guix ungoogled-chromium recipe in the earlier SBOM uses Chromium
+147.0.7727.137 with patches and Clang/LLVM/LLD 21.1.8. Our CEF source tag
+is 147.0.7727.138. These are nearby references, not interchangeable builds.
+
+The upstream source tag's own update scripts pin:
+
+| Tool | Upstream reference |
+|------+--------------------|
+| Clang/LLVM | llvmorg-23-init-5669-g8a0be0bc, package subrevision 1 |
+| Rust | 6f54d591c3116ee7f8ce9321ddeca286810cc142, subrevision 2 |
+| GN | d8c2f07d653520568da7cace755a87dad241b72d |
+| Ninja | version:3@1.12.1.chromium.4 |
+| Siso | bea0f245b6973702ddcb457090706d03145855f8 |
+
+The source-metadata URLs and hashes in cef-reference.json make those
+observations reproducible. Listing Siso here records the DEPS pin; it does
+not prove Siso is required in a Ninja-based build configuration.
+
+There are two source-build routes to qualify: preserve upstream's exact
+compiler/tool pins, or adapt Guix's system-toolchain patches and build
+configuration to the selected CEF branch. The latter could reuse more
+Guix work but must pass an actual CEF build. Selecting LLVM 21 or 22 by
+name alone does not settle this choice.
+
+A source-building CEF Guix recipe still needs pinned CEF and Chromium
+sources, the applicable CEF patch set, a complete dependency source graph,
+resource generation, explicit GN targets and tested build flags. It cannot
+be obtained by relabeling this binary SDK recipe or blindly inheriting the
+ungoogled browser's pruning and installation phases.
+
+The filesystem had approximately 58 GiB free before this experiment.
+No full Chromium source build was attempted. The current binary SDK and
+bridge results must not be reported as a successful engine source build.
+
+* Darterfly work this reference makes concrete
+
+The reference demonstrates the interfaces that the native tool and engine
+worlds will eventually need: executable startup, subprocesses, dynamic
+libraries, threads/TLS, IPC, asynchronous teardown, resource files and a
+window/rendering integration path. These interfaces still need Darterfly
+implementations or explicitly scoped adaptations.
+
+The next OS implementation milestone remains a native executable loader
+and process lifecycle in isolated worlds, with small compiled programs as
+fixtures. Then bring up a C++ compiler and its runtime, and prove a local
+compiler rebuild. Keep the existing TCC path working during that process.
+The CEF engine source-build recipe is a parallel prerequisite; the host
+browser milestone does not waive the requirement to rebuild it locally.

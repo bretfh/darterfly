@@ -3,6 +3,10 @@
 #+startup: overview
 #+options: toc:2 num:nil
 
+See [[file:HOST-REFERENCE.org][the subsequent built Nyxt/CEF host reference]]. Its
+[[file:sbom/cl-cef-host-build.cdx.json][Guix build SBOM]] contains 906 entries, including Guix.
+Its engine is still a binary seed, and its bridge has an explicit patch.
+
 * Use the inventory Guix already provides
 
 Guix directly exports CycloneDX SBOMs. There was no need to reconstruct

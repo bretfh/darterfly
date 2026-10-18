@@ -37,5 +37,12 @@
   "nyxt-guix-declared": {
     "component_entries": 1031,
     "sbom_file": "nyxt-guix-declared.cdx.json"
+  },
+  "cl-cef-host-build": {
+    "component_entries": 906,
+    "graph_nodes": 905,
+    "graph_edges": 21871,
+    "sbom_file": "cl-cef-host-build.cdx.json",
+    "graph_file": "cl-cef-host-build.graphml.gz"
   }
 }

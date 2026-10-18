@@ -22,3 +22,6 @@ export_graph cef-guix-build \
 export_graph chromium-guix-source-build ungoogled-chromium
 export_graph llvm-guix-build clang llvm lld
 export_graph llvm21-guix-build clang@21.1.8 llvm@21.1.8 lld@21.1.8
+
+# Subsequent host reference, distinct from the original CEF 117 inventory.
+export_graph cl-cef-host-build -L "$here/../guix" cl-cef-native

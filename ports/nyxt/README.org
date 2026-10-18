@@ -8,7 +8,9 @@ See [[file:SBOM.org][Guix SBOM exports and the compiler/engine dependency plan]]
 Run upstream Nyxt and an existing backend as nearly unchanged as possible.
 Implement platform facilities in Darterfly and carry an explicit patch set
 where required. Replacing Nyxt's UI, commands, persistence, or renderer
-wholesale is not the plan. No Nyxt or cl-cef sources were changed here.
+wholesale is not the plan. Nyxt application sources remain unchanged.
+The host reference carries a focused cl-cef lifecycle patch; see
+[[file:HOST-REFERENCE.org][the built and tested Guix reference]].
 
 Base: f11c970. Branch: codex/nyxt-compat. The original networking worktree
 is independent of this worktree.
@@ -107,8 +109,9 @@ The current architecture review is
 engine-first sequence. Rebuilding Nyxt's Lisp code, its native bridge and
 the engine are separate requirements; all need a local path.
 
-First pin and reproduce the existing backend on Guix and enumerate the
-source-build dependencies. Establish the native executable/runtime ABI,
+The pinned backend now builds and passes host integration tests on Guix.
+The engine source-build recipe remains to be qualified. Establish the
+native executable/runtime ABI,
 then prove a Darterfly-hosted C++ compiler can compile and link programs.
 Qualify its local rebuild and the required generators before committing
 to a lengthy engine-only port. Nyxt's own Lisp development loop should

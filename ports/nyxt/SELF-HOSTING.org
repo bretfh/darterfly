@@ -23,9 +23,10 @@ against engine porting, native build dependencies, and ongoing updates.
 A working Guix CEF binary is a reference experiment, not this decision's
 acceptance criterion.
 
-This document supersedes the earlier engine-first sequence. Implementation
-is paused for this review. No Nyxt/CEF build, compiler port, or engine
-harness was completed during this planning pass.
+This document supersedes the earlier engine-first sequence. Work has
+resumed with a [[file:HOST-REFERENCE.org][built and tested Nyxt/CEF host reference]].
+The compiler port, engine source build and Darterfly engine harness remain
+outstanding. The host reference does not close those gates.
 
 * Three different things we must be able to rebuild
 
