@@ -90,7 +90,7 @@
 
 (asdf:defsystem #:darterfly/apps
   :description "Applications"
-  :depends-on (#:darterfly/layer #:darterfly/server #:darterfly/bsd #:darterfly/text #:darterfly/imageio #:darterfly/kit #:darterfly/edit #:darterfly/install #:darterfly/generation #:darterfly/devices #:darterfly/net #:darterfly/wifi #:darterfly/display #:darterfly/journal #:darterfly/worlds #:darterfly/storage)
+  :depends-on (#:darterfly/layer #:darterfly/server #:darterfly/bsd #:darterfly/text #:darterfly/imageio #:darterfly/kit #:darterfly/edit #:darterfly/install #:darterfly/generation #:darterfly/devices #:darterfly/net #:darterfly/wifi #:darterfly/display #:darterfly/audio #:darterfly/journal #:darterfly/worlds #:darterfly/storage)
   :serial t
   :pathname "src/apps/"
   :components ((:file "hello") (:file "terminal") (:file "listener") (:file "forcequit") (:file "editor") (:file "generations") (:file "onboarding") (:file "session") (:file "fetch") (:file "install") (:file "ocicl")))
@@ -114,6 +114,13 @@
   :serial t
   :pathname "src/wifi/"
   :components ((:file "eapol") (:file "firmware") (:file "ax210") (:file "join")))
+
+(asdf:defsystem #:darterfly/audio
+  :description "HD Audio"
+  :depends-on (#:darterfly/devices)
+  :serial t
+  :pathname "src/audio/"
+  :components ((:file "hda") (:file "codec") (:file "output")))
 
 (asdf:defsystem #:darterfly/display
   :description "The display engine"
