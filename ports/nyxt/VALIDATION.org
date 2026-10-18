@@ -1,7 +1,71 @@
-#+title: Nyxt compatibility: first IPC increment
+#+title: Nyxt compatibility validation
 #+date: 2026-10-18
 
-* Scope
+* Named sockets and polling: current increment
+
+Branch: codex/nyxt-compat. Parent: 793bfc1. No Nyxt or cl-cef source changes.
+This is an IPC/platform milestone, not a running Nyxt browser or engine.
+
+| Check | Result |
+|-------+--------|
+| make check | Passed, LOADED |
+| Focused local-socket host suite | 103 assertions passed |
+| Complete host suite | 1,299 passed, one existing onboarding failure |
+| Guest C ABI test | Seven assertions passed |
+| Named-socket C reference on Linux | Exit zero |
+
+The guest rebuilt the image with these changes, booted Darterfly, and
+compiled the expanded C probe with target TCC. The probe passed both in
+world zero and in a separate world through the real port-vfs bridge.
+Another isolated C client connected to a Lisp listener in world zero,
+sent a byte, blocked in poll for a delayed response, and received it.
+The listener finished successfully and the OS remained responsive.
+
+Coverage includes socket creation/flags, socket fstat and pathname stat,
+nonblocking accept, listen/connect/accept, local and peer addresses,
+truncated and zero-capacity address output, malformed lengths, timeout
+measurement, negative/invalid poll descriptors, EOF, half-close, hangup,
+unlink/rebind and listener teardown. Host tests additionally cover queue
+backpressure, blocking accept/connect wakeups, interruption, cancellation
+of empty indefinite polls on world teardown, synthetic TCP queue state,
+and rejection of truncated or inconsistent poll wire requests.
+
+The expanded guest test caught C fstat still returning S_IFIFO for socket
+descriptors. That path now reports S_IFSOCK, and the final guest run passes.
+
+The Linux reference compiles with clang -Wall -Wextra -Werror and invokes
+named_probe from tests/socketpair-probe.c. Darterfly-only checks cover its
+256-entry poll bound and prevalidation of an invalid accept output pointer.
+The legacy socketpair untouched-output assertion differs on this host's
+Linux error path; the full combined probe is therefore not claimed as a
+passing Linux reference in this increment. It remains enforced on Darterfly.
+
+The complete host suite still fails only at the pre-existing undefined
+DARTERFLY/INSTALL::FIRST-START-ENTRIES call, reproduced on the unchanged
+parent during the first increment. No test was skipped or weakened.
+
+Limits: named sockets currently require RAMFS (/tmp). No abstract Unix
+addresses, descriptor/credential passing, complete socket options,
+select/epoll, or native engine subprocess support was added. TCP/console
+poll samples queues at 10ms intervals; those paths have not been qualified
+under a browser workload. The guest tests establish cross-world functional
+IPC, not a security qualification of the entire foreign-service protocol,
+permissions, cancellation paths or resource limits.
+
+No full guest/recovery suite or physical-hardware qualification was run.
+Fresh make sbcl succeeded in the previous increment; this increment reused
+that bootstrap and rebuilt its guest image through the test harness.
+
+Latest logs:
+- [[file:/tmp/darterfly-named-check.log][Compiler check]]
+- [[file:/tmp/darterfly-named-host-final.log][Focused host suite]]
+- [[file:/tmp/darterfly-named-all-host-final.log][Complete host suite]]
+- [[file:/tmp/darterfly-named-guest-final.log][Guest C and cross-world checks]]
+
+* Historical first increment: anonymous pairs
+
+The following records the earlier 793bfc1 validation, before named sockets
+and polling were implemented.
 
 Base commit: f11c970. These results concern anonymous local stream pairs,
 not a running Nyxt browser on Darterfly. No Nyxt/backend source was patched.

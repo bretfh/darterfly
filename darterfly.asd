@@ -9,7 +9,7 @@
   :depends-on (#:darterfly/mach #:darterfly/net #:darterfly/vfs #:darterfly/worlds)
   :serial t
   :pathname "src/bsd/"
-  :components ((:file "errno") (:file "proc") (:file "file") (:file "socket") (:file "local-socket") (:file "vfs") (:file "stdio") (:file "exec") (:file "libsa")))
+  :components ((:file "errno") (:file "proc") (:file "file") (:file "socket") (:file "vfs") (:file "local-socket") (:file "poll") (:file "stdio") (:file "exec") (:file "libsa")))
 
 (asdf:defsystem #:darterfly/init
   :description "init and service"

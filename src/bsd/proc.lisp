@@ -128,6 +128,7 @@
 
 (defun sleep-until (predicate)
   (loop
+    (when (eq (proc-state *proc*) :zombie) (fail :eintr))
     (let ((value (funcall predicate)))
       (when value (return value)))
     (when (and (plusp (deliverable *proc*)) (deliver *proc*))

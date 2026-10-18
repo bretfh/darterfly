@@ -1,10 +1,16 @@
 (in-package #:darterfly/bsd)
 
-;; Anonymous local stream sockets. Each direction uses the existing bounded
-;; pipe storage and lifetime counters; stream I/O adds half-close wakeups.
+;; Local stream sockets share bounded pipe storage. Pathnames resolve through
+;; the VFS; the registry is keyed by RAM vnode identity, never by pathname.
 (defclass local-socket (socket)
-  ((input :initarg :input :reader local-input)
-   (output :initarg :output :reader local-output)
+  ((input :initarg :input :initform nil :accessor local-input)
+   (output :initarg :output :initform nil :accessor local-output)
+   (state :initform :new :accessor local-state)
+   (node :initform nil :accessor local-node)
+   (name :initform "" :accessor local-name)
+   (peer-name :initform "" :accessor local-peer-name)
+   (backlog :initform 1 :accessor local-backlog)
+   (queue :initform nil :accessor local-queue)
    (read-shut :initform nil :accessor local-read-shut)
    (write-shut :initform nil :accessor local-write-shut)))
 
@@ -15,13 +21,86 @@
     (fail (if (member domain (list +af-inet+ +af-inet6+)) :eopnotsupp :eafnosupport)))
   (unless (= type +sock-stream+) (fail :eprotonosupport))
   (unless (zerop protocol) (fail :eprotonosupport))
-  (let ((a (make-instance 'pipe-buffer)) (b (make-instance 'pipe-buffer)))
-    (values (make-instance 'local-socket :type type :flags 2
-                           :input (make-instance 'read-end :buffer a)
-                           :output (make-instance 'write-end :buffer b))
-            (make-instance 'local-socket :type type :flags 2
-                           :input (make-instance 'read-end :buffer b)
-                           :output (make-instance 'write-end :buffer a)))))
+  (let ((a (new-local-socket type protocol))
+        (b (new-local-socket type protocol)))
+    (join-local a b)
+    (values a b)))
+
+(defvar *local-names* (make-hash-table :test 'eq))
+
+(defun new-local-socket (type protocol)
+  (unless (and (= type +sock-stream+) (zerop protocol))
+    (fail :eprotonosupport))
+  (make-instance 'local-socket :type type :flags 2))
+
+(defun join-local (a b)
+  (let ((ab (make-instance 'pipe-buffer)) (ba (make-instance 'pipe-buffer)))
+    (setf (local-input a) (make-instance 'read-end :buffer ba)
+          (local-output a) (make-instance 'write-end :buffer ab)
+          (local-input b) (make-instance 'read-end :buffer ab)
+          (local-output b) (make-instance 'write-end :buffer ba)
+          (local-state a) :connected (local-state b) :connected
+          (local-peer-name a) (local-name b)
+          (local-peer-name b) (local-name a))))
+
+(defun local-path (name)
+  (unless (and (stringp name) (plusp (length name))) (fail :einval))
+  (when (> (length (sb-ext:string-to-octets name :external-format :utf-8)) 107)
+    (fail :enametoolong))
+  (path name))
+
+(defun local-bind (s name)
+  (unless (and (eq (local-state s) :new) (null (local-node s)))
+    (fail :einval))
+  (vfs
+    (vfs::with-vfs
+      (multiple-value-bind (dir leaf) (vfs::namei-parent (local-path name))
+        (when (vfs:vnop-lookup dir leaf) (fail :eaddrinuse))
+        (let ((node (vfs::vnop-mksocket dir leaf
+                                      (logand #o777 (lognot vfs:*umask*)))))
+          (setf (local-node s) node (local-name s) name
+                (gethash node *local-names*) s)))))
+  0)
+
+(defun local-listen (s backlog)
+  (unless (and (local-node s) (member (local-state s) '(:new :listening)))
+    (fail :einval))
+  (setf (local-state s) :listening
+        (local-backlog s) (max 1 (min 128 backlog)))
+  (changed)
+  0)
+
+(defun local-connect (s name)
+  (when (eq (local-state s) :connected) (fail :eisconn))
+  (unless (eq (local-state s) :new) (fail :einval))
+  (let* ((node (vfs (vfs:namei (local-path name))))
+         (listener (gethash node *local-names*)))
+    (unless listener (fail :econnrefused))
+    (sleep-until
+     (lambda ()
+       (when (eq (local-state s) :closed) (fail :ebadf))
+       (unless (eq (local-state listener) :listening) (fail :econnrefused))
+       (or (< (length (local-queue listener)) (local-backlog listener))
+           (and (nonblocking-p s) (fail :eagain)))))
+    ;; Recheck after dropping the lock while waiting for backlog space.
+    (unless (eq (local-state s) :new) (fail :eisconn))
+    (let ((accepted (new-local-socket +sock-stream+ 0)))
+      (setf (local-name accepted) (local-name listener))
+      (join-local s accepted)
+      (setf (local-queue listener)
+            (nconc (local-queue listener) (list accepted)))))
+  (changed)
+  0)
+
+(defun local-accept (s)
+  (unless (eq (local-state s) :listening) (fail :einval))
+  (sleep-until (lambda ()
+                 (unless (eq (local-state s) :listening) (fail :einval))
+                 (or (local-queue s)
+                     (and (nonblocking-p s) (fail :eagain)))))
+  (let ((accepted (pop (local-queue s))))
+    (changed)
+    (values (fd-alloc accepted 3) (local-peer-name accepted) :local)))
 
 (defun socketpair (domain type &optional (protocol 0))
   (syscall
@@ -29,6 +108,7 @@
       (values (fd-alloc a) (fd-alloc b)))))
 
 (defun shutdown-local (s how)
+  (unless (local-input s) (fail :enotconn))
   (unless (member how '(0 1 2)) (fail :einval))
   (when (and (member how '(0 2)) (not (local-read-shut s)))
     (setf (local-read-shut s) t)
@@ -46,6 +126,7 @@
       (shutdown-local s how))))
 
 (defmethod file-read ((s local-socket) count)
+  (unless (local-input s) (fail :enotconn))
   (when (minusp count) (fail :einval))
   (when (zerop count) (return-from file-read #()))
   (let ((buffer (buffer (local-input s))))
@@ -64,6 +145,7 @@
       taken)))
 
 (defmethod file-write ((s local-socket) data)
+  (unless (local-output s) (fail :enotconn))
   (let ((buffer (buffer (local-output s))) (written 0))
     (when (or (local-write-shut s) (zerop (readers buffer)))
       (broken-pipe))
@@ -91,4 +173,9 @@
     written))
 
 (defmethod file-close ((s local-socket))
-  (shutdown-local s 2))
+  (when (local-input s) (shutdown-local s 2))
+  (when (eq (gethash (local-node s) *local-names*) s)
+    (remhash (local-node s) *local-names*))
+  (dolist (pending (local-queue s)) (file-close pending))
+  (setf (local-queue s) nil (local-state s) :closed)
+  (changed))

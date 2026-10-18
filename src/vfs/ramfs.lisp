@@ -68,7 +68,7 @@
   (setf (node-size n) size))
 
 (defmethod vnop-getattr ((n ram-node))
-  (make-vattr :mode (logior (ecase (vnode-type n) (:vdir #o040000) (:vreg #o100000) (:vlnk #o120000)) (node-mode n))
+  (make-vattr :mode (logior (ecase (vnode-type n) (:vdir #o040000) (:vreg #o100000) (:vlnk #o120000) (:vsock #o140000)) (node-mode n))
               :uid (node-uid n) :gid (node-gid n)
               :size (case (vnode-type n) (:vreg (node-size n)) (:vlnk (length (sb-ext:string-to-octets (node-target n) :external-format :utf-8))) (t 0))
               :nlink (if (eq (vnode-type n) :vdir) 2 1)
@@ -79,6 +79,9 @@
   (node-target n))
 
 (defmethod vnop-create ((dir ram-node) name mode) (add-child dir name (make-ram-node :vreg mode)))
+(defmethod vnop-mksocket ((dir ram-node) name mode)
+  (add-child dir name (make-ram-node :vsock mode)))
+
 (defmethod vnop-mkdir ((dir ram-node) name mode) (add-child dir name (make-ram-node :vdir mode)))
 
 (defmethod vnop-symlink ((dir ram-node) name target)

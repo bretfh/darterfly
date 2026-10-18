@@ -134,10 +134,10 @@
       (declare (ignore b))
       (is (eq :einval (local-errno (lambda () (bsd:shutdown a 3)))))
       (is (eq :einval (local-errno (lambda () (bsd:read a -1)))))
-      (is (eq :eopnotsupp (local-errno (lambda () (bsd:bind a "localhost" 1)))))
-      (is (eq :eopnotsupp (local-errno (lambda () (bsd:listen a)))))
-      (is (eq :eopnotsupp (local-errno (lambda () (bsd:accept a)))))
-      (is (eq :eopnotsupp (local-errno (lambda () (bsd:connect a "localhost" 1))))))))
+      (is (eq :einval (local-errno (lambda () (bsd:bind a "localhost" 1)))))
+      (is (eq :einval (local-errno (lambda () (bsd:listen a)))))
+      (is (eq :einval (local-errno (lambda () (bsd:accept a)))))
+      (is (eq :eisconn (local-errno (lambda () (bsd:connect a "localhost" 1))))))))
 
 (test local-stream-foreign-abi
   (with-local-process
@@ -177,6 +177,174 @@
         (bsd:write a #(6 2 6))
         (is (equalp #(6 2 6) (bsd:read b 3)))))))
 
+(defmacro with-local-filesystem (&body body)
+  `(let ((darterfly/vfs:*root* nil) (darterfly/vfs::*cwd* nil) (darterfly/vfs:*mounts* nil)
+         (darterfly/vfs::*files* (make-hash-table))
+         (bsd::*local-names* (make-hash-table :test 'eq)))
+     (darterfly/vfs:vfs-mount (darterfly/vfs:make-ram-node :vdir #o755) "/")
+     (with-local-process ,@body)))
+
+(test named-stream-lifetimes
+  (with-local-filesystem
+    (let ((server (bsd:socket 1 1)) (client (bsd:socket 1 1))
+          (replacement (bsd:socket 1 1)))
+      (is (= 0 (bsd:bind server "/nyxt")))
+      (is (= #o140000 (logand #o170000 (getf (bsd:stat "/nyxt") :mode))))
+      (is (eq :eaddrinuse (local-errno (lambda () (bsd:bind replacement "/nyxt")))))
+      (is (eq :econnrefused (local-errno (lambda () (bsd:connect client "/nyxt")))))
+      (bsd:listen server 1)
+      (is (equal '(0) (bsd::poll-fds (list (list server 1)) 0)))
+      (bsd:connect client "/nyxt")
+      (is (equal '(1) (bsd::poll-fds (list (list server 1)) 0)))
+      (let ((accepted (bsd:accept server)))
+        (bsd:unlink "/nyxt")
+        (is (eq :enoent (local-errno (lambda () (bsd:connect replacement "/nyxt")))))
+        (bsd:bind replacement "/nyxt")
+        (bsd:listen replacement)
+        (bsd:close server)
+        (is (= 1 (bsd:write client #(42))))
+        (is (equalp #(42) (bsd:read accepted 1)))
+        (let ((next (bsd:socket 1 1)))
+          (bsd:connect next "/nyxt")
+          (is (integerp (bsd:accept replacement))))))))
+
+(test named-backlog-and-stale-names
+  (with-local-filesystem
+    (let ((server (bsd:socket 1 1)) (a (bsd:socket 1 1)) (b (bsd:socket 1 1)))
+      (bsd:bind server "/nyxt")
+      (bsd:listen server 1)
+      (bsd:fcntl server bsd:+f-setfl+ bsd:+o-nonblock+)
+      (is (eq :eagain (local-errno (lambda () (bsd:accept server)))))
+      (bsd:connect a "/nyxt")
+      (bsd:fcntl b bsd:+f-setfl+ bsd:+o-nonblock+)
+      (is (eq :eagain (local-errno (lambda () (bsd:connect b "/nyxt")))))
+      (bsd:accept server)
+      (is (= 0 (bsd:connect b "/nyxt")))
+      (bsd:close server)
+      (is (equalp #() (bsd:read b 1)) "closing listener closes unaccepted peers")
+      (let ((c (bsd:socket 1 1)))
+        (is (eq :econnrefused (local-errno (lambda () (bsd:connect c "/nyxt")))))
+        (is (eq :eaddrinuse (local-errno (lambda () (bsd:bind c "/nyxt")))))
+        (bsd:unlink "/nyxt")
+        (is (= 0 (bsd:bind c "/nyxt")))))))
+
+(test poll-readiness-timeout-and-close
+  (with-local-process
+    (multiple-value-bind (a b) (bsd:socketpair 1 1)
+      (is (equal '(0 4 0 32) (bsd::poll-fds (list (list a 1) (list a 4)
+                                                               '(-1 5) '(99999 0)) 0)))
+      (let ((start (get-internal-real-time)))
+        (is (equal '(0) (bsd::poll-fds (list (list a 1)) 30)))
+        (is (>= (/ (- (get-internal-real-time) start) internal-time-units-per-second) 0.025)))
+      (let ((worker (local-worker (lambda () (bsd::poll-fds (list (list a 1)) -1)))))
+        (wait-local-syscall bsd:*proc*)
+        (bsd:write b #(7))
+        (is (equal '(1) (sb-thread:join-thread worker))))
+      (bsd:read a 1)
+      (bsd:write a (make-array bsd::+pipe-size+ :element-type '(unsigned-byte 8)))
+      (is (equal '(0) (bsd::poll-fds (list (list a 4)) 0)))
+      (bsd:read b 1)
+      (is (equal '(4) (bsd::poll-fds (list (list a 4)) 0)))
+      (bsd:close b)
+      (let ((events (first (bsd::poll-fds (list (list a 0)) 0))))
+        (is (logtest events #x10) "hangup reported even without requested events")
+        (is (logtest events #x8))))))
+
+(test poll-pipes-and-regular-files
+  (with-local-filesystem
+    (multiple-value-bind (a b) (bsd:pipe)
+      (is (equal '(0 4) (bsd::poll-fds (list (list a 1) (list b 4)) 0)))
+      (bsd:write b #(1))
+      (bsd:close b)
+      (is (equal '(17) (bsd::poll-fds (list (list a 1)) 0)))
+      (is (equalp #(1) (bsd:read a 1)))
+      (is (equal '(16) (bsd::poll-fds (list (list a 1)) 0))))
+    (let ((fd (bsd:open "/file" (logior bsd:+o-creat+ bsd:+o-rdwr+))))
+      (is (equal '(5) (bsd::poll-fds (list (list fd 5)) 0))))))
+
+(test named-accept-and-backlog-wake
+  (with-local-filesystem
+    (let ((server (bsd:socket 1 1)) (a (bsd:socket 1 1))
+          (b (bsd:socket 1 1)))
+      (bsd:bind server "/nyxt")
+      (bsd:listen server 1)
+      (let ((worker (local-worker (lambda () (bsd:accept server)))))
+        (wait-local-syscall bsd:*proc*)
+        (bsd:connect a "/nyxt")
+        (is (integerp (sb-thread:join-thread worker))))
+      ;; Worker threads don't inherit dynamic VFS bindings; capture them.
+      (bsd:connect b "/nyxt")
+      (let* ((c (bsd:socket 1 1))
+             (root darterfly/vfs:*root*)
+             (cwd darterfly/vfs::*cwd*)
+             (names bsd::*local-names*)
+             (worker
+               (local-worker
+                (lambda ()
+                  (let ((darterfly/vfs:*root* root)
+                        (darterfly/vfs::*cwd* cwd)
+                        (darterfly/vfs:*mounts* nil)
+                        (bsd::*local-names* names))
+                    (bsd:connect c "/nyxt"))))))
+        (wait-local-syscall bsd:*proc*)
+        (bsd:accept server)
+        (is (eql 0 (sb-thread:join-thread worker)))))))
+
+(test poll-interruption-and-world-teardown
+  (with-local-process
+    (let ((worker (local-worker (lambda () (bsd::poll-fds nil -1)))))
+      (wait-local-syscall bsd:*proc*)
+      (sb-thread:interrupt-thread worker (lambda () (bsd::fail :eintr)))
+      (let ((result (sb-thread:join-thread worker)))
+        (is (and (typep result 'bsd:errno) (eq :eintr (bsd:errno-name result)))))))
+  (let* ((bsd:*proc* (bsd:make-world-proc "/"))
+         (worker (local-worker (lambda () (bsd::poll-fds nil -1)))))
+    (unwind-protect
+         (progn
+           (wait-local-syscall bsd:*proc*)
+           (bsd:end-world-proc bsd:*proc*)
+           (let ((result (sb-thread:join-thread worker)))
+             (is (and (typep result 'bsd:errno)
+                      (eq :eintr (bsd:errno-name result))))))
+      (bsd:end-world-proc bsd:*proc*))))
+
+(test poll-network-queue-state
+  (with-local-process
+    (let* ((fd (bsd:socket 2 1))
+           (s (bsd::fd-socket fd))
+           (pcb (darterfly/net::make-connection :state :established)))
+      (setf (bsd::socket-pcb s) pcb)
+      (unwind-protect
+           (progn
+             (is (equal '(4) (bsd::poll-fds (list (list fd 5)) 0)))
+             (vector-push-extend 42 (darterfly/net::tcp-received pcb))
+             (is (equal '(5) (bsd::poll-fds (list (list fd 5)) 0)))
+             (setf (darterfly/net::tcp-reset pcb) t)
+             (is (logtest #x18 (first (bsd::poll-fds (list (list fd 0)) 0)))))
+        ;; A synthetic PCB has no live TCP peer to complete a close handshake.
+        (setf (bsd::socket-pcb s) nil)))))
+
+(test poll-world-request-bounds
+  (with-local-process
+    (let ((request (make-array 80 :element-type '(unsigned-byte 8)
+                                  :initial-element 0)))
+      (setf (aref request 0) 1 (aref request 8) 50
+            (aref request 16) 1 (aref request 24) 1
+            (aref request 48) 8 (aref request 64) 6)
+      ;; A negative pollfd is ignored, and revents is overwritten on return.
+      (fill request 255 :start 72 :end 76)
+      (setf (aref request 78) 99)
+      (let ((reply (bsd:serve-request bsd:*proc* request 0)))
+        (is (= 0 (bsd::request-u64 reply 0)))
+        (is (= 8 (bsd::request-u32 reply 8)))
+        (is (= 0 (aref reply 30))))
+      (setf (aref request 24) 2)
+      (is (= -22 (bsd::signed (bsd::request-u64
+                              (bsd:serve-request bsd:*proc* request 0) 0))))
+      (setf (aref request 24) 1)
+      (is (= -22 (bsd::signed (bsd::request-u64
+                              (bsd:serve-request bsd:*proc* (subseq request 0 72) 0) 0)))))))
+
 (in-suite guest)
 
 (test socketpair-c-abi-on-darterfly
@@ -202,5 +370,19 @@
                      "an isolated world uses the actual port-vfs socketpair bridge"))
                (is (search "[RESULT 0]"
                            (ask "(format nil \"[RESULT ~a]\" (uiop:read-file-string \"/tmp/socketpair-result\"))")))
+               (ask "(defparameter *nyxt-server* (darterfly/bsd:socket 1 1))")
+               (ask "(darterfly/bsd:bind *nyxt-server* \"/tmp/nyxt-world.sock\")")
+               (ask "(darterfly/bsd:listen *nyxt-server*)")
+               (ask "(defparameter *nyxt-worker* (sb-thread:make-thread (lambda () (let ((fd (darterfly/bsd:accept *nyxt-server*))) (unwind-protect (progn (unless (equalp #(110) (darterfly/bsd:read fd 1)) (error \"bad request\")) (sleep 0.1) (darterfly/bsd:write fd #(121))) (darterfly/bsd:close fd))))))")
+               (let ((code "(let ((status (darterfly/cc:run-c \"/Users/darterfly/socketpair-probe.c\" :args '(\"client\")))) (with-open-file (s \"/tmp/cross-world-result\" :direction :output :if-exists :supersede) (prin1 status s)) (sb-ext:exit :code (if (eql status 0) 0 1)))"))
+                 (is (search "(:EXIT 0 :FILES 0)"
+                             (ask (format nil "(darterfly/run:run-world \"/Volumes/EFI/EFI/darterfly/gen-1/darterfly.core\" (darterfly/run::world-argv ~s) :cwd \"/\" :disk t :timeout 120)" code)))
+                     "isolated C client talks to a system-world Lisp listener"))
+               (is (search "[CROSS 0]"
+                           (ask "(format nil \"[CROSS ~a]\" (uiop:read-file-string \"/tmp/cross-world-result\"))")))
+               (is (search "[SERVER 1]"
+                           (ask "(format nil \"[SERVER ~a]\" (sb-thread:join-thread *nyxt-worker* :timeout 5 :default :timeout))")))
+               (ask "(darterfly/bsd:close *nyxt-server*)")
+               (ask "(darterfly/bsd:unlink \"/tmp/nyxt-world.sock\")")
                (is (search "[ALIVE 42]" (ask "(format nil \"[ALIVE ~a]\" (+ 40 2))"))))
           (image:finish c 5))))))

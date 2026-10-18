@@ -60,3 +60,11 @@ struct linger { int l_onoff; int l_linger; };
 
 int socketpair(int domain, int type, int protocol, int sv[2]);
 int shutdown(int fd, int how);
+
+int socket(int domain, int type, int protocol);
+int bind(int fd, const struct sockaddr *addr, socklen_t len);
+int listen(int fd, int backlog);
+int accept(int fd, struct sockaddr *addr, socklen_t *len);
+int connect(int fd, const struct sockaddr *addr, socklen_t len);
+int getsockname(int fd, struct sockaddr *addr, socklen_t *len);
+int getpeername(int fd, struct sockaddr *addr, socklen_t *len);

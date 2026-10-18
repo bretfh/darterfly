@@ -3,79 +3,132 @@
 
 * Preservation policy
 
-Run upstream Nyxt and its existing backend as nearly unchanged as
-possible. Follow the SBCL port model: implement platform facilities in
-Darterfly and carry a small, explicit patch set where required. Replacing
-Nyxt's UI, commands, persistence, or renderer wholesale is not the plan.
+Run upstream Nyxt and an existing backend as nearly unchanged as possible.
+Implement platform facilities in Darterfly and carry an explicit patch set
+where required. Replacing Nyxt's UI, commands, persistence, or renderer
+wholesale is not the plan. No Nyxt or cl-cef sources were changed here.
 
 Base: f11c970. Branch: codex/nyxt-compat. The original networking worktree
-is independent of this worktree. No Nyxt or cl-cef sources were changed.
+is independent of this worktree.
 
-* First increment: anonymous local stream pairs
+* Local stream sockets
 
-The BSD service implements AF_LOCAL/SOCK_STREAM socketpair with two
-bounded byte queues, blocking/nonblocking I/O, EOF, duplicate descriptor
-lifetimes, and read/write shutdown. The foreign socketpair entry supports
-SOCK_NONBLOCK and SOCK_CLOEXEC. F_GETFD/F_SETFD now expose the stored
-close-on-exec bit. World calls marshal the two output descriptors through
-appended service operation 49; existing operation numbers do not change.
+The BSD service implements AF_LOCAL/SOCK_STREAM socketpair and pathname
+socket/bind/listen/connect/accept. Each connection has two bounded byte
+queues, blocking/nonblocking I/O, partial writes, EOF, duplicate descriptor
+lifetimes, and read/write shutdown. The C entries support SOCK_NONBLOCK,
+SOCK_CLOEXEC, F_GETFD/F_SETFD and local getsockname/getpeername. Accepted
+sockets start blocking and without close-on-exec, as ordinary accept does.
 
-The implementation lives in src/bsd/local-socket.lisp. Each direction
-reuses the pipe-buffer storage and lifetime counters. Socket stream writes
-can make partial progress without the atomic-write guarantee of pipes.
+Named endpoints currently live on RAMFS, including the guest's /tmp.
+They are real socket vnodes with S_IFSOCK, not placeholder regular files.
+Unsupported filesystems return EOPNOTSUPP. Names resolve through the VFS
+and the caller's cwd/root. Socket identity follows the vnode: unlink and
+rebind do not redirect old connections. Closing leaves a stale pathname
+until unlink; connecting to it returns ECONNREFUSED. Closing a listener
+closes queued, unaccepted peers. Backlogs are bounded to 1..128 entries.
 
-The low wrapper leaves the caller's descriptor array unchanged on errors.
-Foreign descriptors start at three to avoid libsa's console handling.
-Internet sockets now report unsupported shutdown instead of falsely
-claiming a shutdown occurred; TCP half-close remains to be implemented.
+Source: src/bsd/local-socket.lisp, src/bsd/socket.lisp, and the RAMFS
+socket-node operation. Each direction reuses pipe-buffer storage and
+lifetime counters. Stream writes do not promise pipe write atomicity.
 
-This is deliberately a supported subset, not complete AF_UNIX support:
+* Readiness and the world bridge
 
-- Named socket creation/bind/connect/accept is still missing. That is
-  required for Nyxt's existing startup socket and cl-electron transport.
-- Datagram/seqpacket pairs, SCM_RIGHTS and credential passing are absent.
-- Local getsockname/getpeername return EOPNOTSUPP in this increment.
-- Foreign socket options and readiness/polling still need real semantics.
-- Ordinary Lisp fork descriptor inheritance is not native engine exec.
-- Isolation and resource quotas need qualification before hostile content.
+poll now checks real descriptor state instead of treating every ordinary
+file descriptor as readable and writable. It handles local listeners and
+streams, pipes, regular files, invalid descriptors, negative ignored
+entries, timeouts, EOF/hangup, and interrupted waits. TCP/UDP readiness
+reads the transport queues; console readiness queries the kernel directly.
+Unsupported device types report POLLERR instead of invented readiness.
+
+BSD queue changes wake waiters immediately. Network and console readiness
+are sampled at intervals of at most 10ms because those producers do not
+signal the BSD condition variable yet. This is a functional compatibility
+step, not the final event mechanism for a large browser workload.
+
+Foreign poll supports at most 256 entries per call. Operation 50 is appended
+to the service protocol; socketpair remains operation 49. An input/output
+buffer kind carries pollfd records and socklen_t capacities through the
+world bridge. Address output respects the supplied capacity and returns
+the full required length, including when capacity is zero. Socket addresses
+are decoded within their supplied lengths. Poll request sizes are checked
+before the service accesses the marshalled array.
+
+World teardown marks the service process ended and wakes blocking calls,
+including an indefinite poll with no descriptors. No Nyxt changes are
+needed to use these C interfaces.
 
 * Validation
 
-Host tests cover bidirectional byte streams, partial reads/writes,
-buffering limits, duplicate lifetimes, half-close, nonblocking errors,
-blocked-reader/writer wakeups, foreign flags, errno, and service replies.
+Run =make check= and =make test-local-sockets= for compiler and host checks.
+Run =make sbcl= once in a fresh worktree, then
+=make test-local-sockets-guest= for the guest test. It uses a disposable
+file-backed disk, not a physical device.
 
-The guest test compiles tests/socketpair-probe.c using Darterfly's TCC.
-It runs the probe in the system world and an isolated world, exercising
-the low C entry points and the actual port-vfs path. It also checks that
-the system remains responsive after the isolated world exits.
-
-Run =make test-local-sockets= for the host checks. Run =make sbcl= once
-in a fresh worktree, then =make test-local-sockets-guest= for the guest.
-The guest uses a disposable file-backed disk, not a physical device.
-The existing host onboarding test FRESH-INSTALL-DOES-NOT-INHERIT-COMPLETED-
-SETUP refers to undefined FIRST-START-ENTRIES at the parent revision.
-Keep that pre-existing failure distinct from these compatibility tests.
+The guest compiles tests/socketpair-probe.c with target TCC and executes
+it in the system world and a separate world through port-vfs. A second
+isolated client connects to a system-world Lisp listener, sends a byte,
+waits in poll for a delayed reply, receives it, and exits. The test checks
+that the system remains responsive. It does not launch Nyxt or an engine.
 
 See [[file:VALIDATION.org][recorded validation and limitations]].
 
-* Next gates
+* Remaining compatibility work
 
-1. Pin and reproduce the existing Nyxt/CEF host configuration. Keep the
-   Guix Electron recipe as a separate behavior/dependency reference;
-   its source pin differs from the current local Nyxt checkout.
-2. Audit the selected engine's actual OS/build dependency closure. CEF's
-   wrapper size does not represent the Chromium platform port size.
-3. Implement named local sockets, readiness, and descriptor transfer with
-   bounded data, lifetimes, cancellation, and cross-world tests.
-4. Support the foreign libraries needed by the selected unchanged backend
-   through a deliberate loading/linking strategy and correct ABI.
-5. Add a world-facing graphics endpoint over the existing compositor.
-   Prefer adapting the existing engine/backend platform integration over
-   rewriting Nyxt or replacing cl-cef with an unrelated implementation.
-6. Cross-build the engine for Darterfly, qualify native execution, then
-   bring its complete source-build toolchain onto Darterfly.
+- Named sockets on APFS and other filesystems; Linux abstract addresses.
+- Datagram/seqpacket sockets, SCM_RIGHTS, and credential passing.
+- Real socket options, TCP half-close, select/epoll and event descriptors.
+- Producer-driven console/network poll wakeups and larger poll sets.
+- Complete library loading, ABI coverage, and native engine subprocesses.
+- Cancellation/resource quotas and namespace/permission isolation suitable
+  for untrusted applications. The existing VFS permission model is not
+  made into a security boundary by adding socket vnodes.
+
+Internet shutdown still reports EOPNOTSUPP. An isolated address space does
+not by itself establish a browser sandbox. The filesystem namespace is
+shared subject to the service process's existing root/cwd configuration.
+
+* Engine direction
+
+Nyxt supplies the Lisp browser interface and control logic. It delegates
+HTML/CSS layout, JavaScript execution and page rendering to an engine.
+The checked-out tree has existing Electron, WebKit and CEF backends.
+
+The first feasibility candidate remains the existing CEF backend. This
+avoids adding Electron's Node runtime while preserving a backend already
+in Nyxt. It still means porting Chromium/Blink/V8 and their OS dependencies.
+The current cl-cef uses native BrowserView windows; it does not already
+present offscreen buffers through Darterfly's graphics API.
+
+Next gates, in order:
+
+1. Reproduce a pinned Nyxt/CEF configuration on the Guix host, including a
+   page and Nyxt's own HTML interface panels. The existing Electron Guix
+   package is a separate behavior reference with a different source pin.
+2. Measure the engine's real platform/build closure. Inventory dynamic
+   loading, threads, synchronization, shared memory, IPC, subprocesses,
+   filesystem, networking/TLS, fonts, input and surface presentation.
+3. Cross-build a minimal engine harness and qualify it in a Darterfly
+   world before loading Nyxt. First acceptance: render local HTML/CSS/JS
+   into a CPU buffer, deliver input, and survive a renderer restart.
+4. Adapt the existing backend's presentation boundary to Darterfly. Keep
+   changes small, upstreamable where possible, and exercise Nyxt's own UI
+   as well as page content. Then test HTTPS, downloads and persistence.
+5. Bring the engine's complete source-build closure onto Darterfly for
+   browser self-hosting. Native execution and native rebuilding are
+   separate milestones.
+
+CEF supports offscreen rendering and Chromium exposes Ozone platform
+interfaces. Those are integration points, not substitutes for the OS port.
+WPE WebKit is worth a bounded comparison if the CEF experiment fails, but
+it would require a new Nyxt integration and is not a free compatibility
+shortcut. A remote browser could provide interim access, but would not
+satisfy native, self-hosted browsing.
 
 A C++ compiler need not run on Darterfly to execute an externally built
-engine. Cross compilation does not eliminate the engine OS port, and
-complete suite self-hosting still requires its build closure locally.
+engine. Low can implement platform glue; it cannot compile Chromium's C++
+sources. Full browser self-hosting still requires that build toolchain.
+
+References:
+- [[https://chromiumembedded.github.io/cef/general_usage.html][CEF processes, threads and offscreen rendering]]
+- [[https://chromium.googlesource.com/chromium/src/+/main/docs/ozone_overview.md][Chromium Ozone platform interfaces]]

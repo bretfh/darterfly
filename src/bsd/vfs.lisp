@@ -92,7 +92,7 @@
     (let ((file (fd-file fd)))
       (if (typep file 'vnode)
           (vfs (let ((v (vfs:fd-vnode (vfs-fd file)))) (stat-plist (vfs:vnop-getattr v) (vfs:vnode-id v))))
-          (list :mode +s-ififo+ :size 0 :nlink 1 :ino 0 :mtime 0)))))
+          (list :mode (if (typep file 'socket) #o140000 +s-ififo+) :size 0 :nlink 1 :ino 0 :mtime 0)))))
 
 (defun mkdir (name &optional (mode #o755))
   (syscall (vfs (vfs:vfs-mkdir (path name) mode)) 0))
