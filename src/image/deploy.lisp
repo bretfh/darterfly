@@ -47,7 +47,14 @@
   (format nil "(progn ~{(with-input-from-string (s ~s) (let ((*package* (find-package \"DARTERFLY/INSTALL\"))) (loop for f = (read s nil s) until (eq f s) do (eval f)))) ~})"
           (mapcar (lambda (f) (uiop:read-file-string (source f))) *receiver-sources*)))
 
-(defun push-generation (host &key (from "10.42.0.1") (port 47100) (nrepl-port 4011))
+(defun address-toward (host)
+  (let ((s (make-instance 'sb-bsd-sockets:inet-socket :type :datagram :protocol :udp)))
+    (unwind-protect
+         (progn (sb-bsd-sockets:socket-connect s (sb-bsd-sockets:make-inet-address host) 9)
+                (format nil "~{~d~^.~}" (coerce (sb-bsd-sockets:socket-name s) 'list)))
+      (sb-bsd-sockets:socket-close s))))
+
+(defun push-generation (host &key (from (address-toward host)) (port 47100) (nrepl-port 4011))
   (let* ((entries (append (deployment :generation t) (list (list "gen" "darterfly.core" (octets (darterfly-core)) #o644))))
          (server (serve-deployment entries port))
          (result (device-eval host (format nil "(progn ~a (append (darterfly/install::receive-deployment ~s ~d) (let ((dir darterfly/install::*deploy-dir*)) (list :generation (darterfly/install:install (concatenate 'string dir \"kernel\") (concatenate 'string dir \"darterfly.core\") :loader (concatenate 'string dir \"boot.efi\")) :restart (darterfly/power:restart-soon)))))"
@@ -56,7 +63,7 @@
     (sb-thread:join-thread server :default nil :timeout 5)
     result))
 
-(defun deploy (host &key (from "10.42.0.1") (port 47100) (nrepl-port 4011) (reload nil) (restart nil))
+(defun deploy (host &key (from (address-toward host)) (port 47100) (nrepl-port 4011) (reload nil) (restart nil))
   (let* ((entries (deployment :generation (not reload)))
          (server (serve-deployment entries port))
          (result (device-eval host (format nil "(progn ~a (append (darterfly/install::receive-deployment ~s ~d) ~a))"
