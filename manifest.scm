@@ -5,7 +5,8 @@
              (guix build-system copy)
              ((guix licenses) #:prefix license:)
              (gnu packages compression)
-             (gnu packages lisp))
+             (gnu packages lisp)
+             (nongnu packages linux))
 
 (define tinycc-source
   (package
@@ -98,5 +99,6 @@
              "tzdata"
              "font-adwaita"
              "adwaita-icon-theme"
-             "librsvg"))
-  (list sbcl-source tinycc-source ocicl-source)))
+             "librsvg"
+             "zstd"))
+  (list sbcl-source tinycc-source ocicl-source iwlwifi-firmware)))
