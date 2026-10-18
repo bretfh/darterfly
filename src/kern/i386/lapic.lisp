@@ -67,12 +67,20 @@
   (setf (mem :u32 (lapic +lapic-lint0+)) (ash 1 16))
   (setf (mem :u32 (lapic +lapic-svr+)) (logior #x100 +lapic-spurious-vector+)))
 
-(define-low start-timer ()
-  (setf (mem :u32 (lapic +lapic-timer-divide-config+)) 3)
-  (setf (mem :u32 (lapic +lapic-timer+)) (logior +lapic-timer-vector+ +lapic-timer-periodic+))
-  (setf (mem :u32 (lapic +lapic-timer-initial-count+)) per-tick))
+(define-global armed-at :u64 :export t)
+(define-global tick-due :u64)
 
-(define-global wake-at :u64 :export t)
+(define-low tick-tsc () (truncate (ref commpage 0) +hz+))
+
+(define-low start-timer ()
+  (if (= (cpu-number) 0)
+      (progn
+        (setf tick-due (+ (rdtsc) (tick-tsc)))
+        (cpu0-rearm))
+      (progn
+        (setf (mem :u32 (lapic +lapic-timer-divide-config+)) 3)
+        (setf (mem :u32 (lapic +lapic-timer+)) (logior +lapic-timer-vector+ +lapic-timer-periodic+))
+        (setf (mem :u32 (lapic +lapic-timer-initial-count+)) per-tick))))
 
 (define-low timer-stop ()
   (setf (mem :u32 (lapic +lapic-timer+)) (logior +lapic-timer-vector+ (ash 1 16)))
@@ -85,6 +93,16 @@
     (setf (mem :u32 (lapic +lapic-timer-divide-config+)) 3)
     (setf (mem :u32 (lapic +lapic-timer+)) +lapic-timer-vector+)
     (setf (mem :u32 (lapic +lapic-timer-initial-count+)) counts)))
+
+(define-low arm-at (target)
+  (let ((now (rdtsc)))
+    (setf armed-at target)
+    (timer-oneshot (if (> target now) (- target now) 1))))
+
+(define-low cpu0-rearm ()
+  (let ((target tick-due) (d (next-deadline)))
+    (when (and d (< d target)) (setf target d))
+    (arm-at target)))
 
 (define-low lapic-init-slave ()
   (enable-lapic)
@@ -117,10 +135,18 @@
 
 (define-low lapic-interrupt (vector)
   (cond ((= vector +lapic-timer-vector+)
-         (when (= (cpu-number) 0)
-           (incf ticks)
-           (bsd-hardclock))
-         (sched-tick))
+         (if (= (cpu-number) 0)
+             (progn
+               (when (>= (rdtsc) tick-due)
+                 (incf ticks)
+                 (setf tick-due (+ (rdtsc) (tick-tsc))))
+               (bsd-hardclock)
+               (sched-tick)
+               (cpu0-rearm))
+             (sched-tick)))
+        ((= vector +lapic-interprocessor-interrupt+)
+         (when (and (= (cpu-number) 0) (= (mem :u32 (+ (cpu-data) +c-idle+)) 0))
+           (cpu0-rearm)))
         ((= vector +com1-vector+)
          (serial-interrupt)
          (bsd-serial-wakeup))
