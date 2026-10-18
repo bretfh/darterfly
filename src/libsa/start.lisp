@@ -83,6 +83,16 @@
 (define-low tls-init ()
   (tls-init-stack (- #x00007ff000000000 (shl 8 20)) (shl 8 20)))
 
+(define-low __libsa_init_arrays ()
+  (let ((at (absolute "__preinit_array_start")))
+    (while (< at (absolute "__preinit_array_end"))
+      (call-pointer (mem :u64 at))
+      (incf at 8)))
+  (let ((at (absolute "__init_array_start")))
+    (while (< at (absolute "__init_array_end"))
+      (call-pointer (mem :u64 at))
+      (incf at 8))))
+
 (define-global native-runtime :u64)
 
 (define-low __libsa_native_start (argc argv envp)
@@ -97,6 +107,7 @@
   (setf environ (address env-storage))
   (stdio-init)
   (__libsa_vfs_register (code-address port-vfs))
+  (__libsa_init_arrays)
   (exit (main (the :u32 argc) argv environ)))
 
 (define-low _libsa_start (cmdline)

@@ -120,19 +120,70 @@
   (let ((p 0))
     (if (= (the :u32 (posix_memalign (address p) align n)) 0) p 0)))
 
-(define-global exit-handlers :u64 :count 32)
-(define-global exit-handler-count :u64)
+(define-global exit-head :u64)
+(define-global exit-lock :u8 :count 16)
 
-(define-low atexit (f)
-  (when (= exit-handler-count 32) (result (- 0 1)))
-  (setf (ref exit-handlers exit-handler-count) f)
-  (incf exit-handler-count)
-  0)
+;; The platform owns destructor registration; LLVM owns the C++ ABI proper.
+;; A record is next, function, argument and DSO identity (all pointer-sized).
+(define-low __cxa_atexit (f arg dso)
+  (let ((entry (malloc 32)))
+    (unless entry (result (- 0 1)))
+    (setf (mem :u64 (+ entry 8)) f)
+    (setf (mem :u64 (+ entry 16)) arg)
+    (setf (mem :u64 (+ entry 24)) dso)
+    (pthread_mutex_lock (address exit-lock))
+    (setf (mem :u64 entry) exit-head)
+    (setf exit-head entry)
+    (pthread_mutex_unlock (address exit-lock))
+    0))
+
+(define-low atexit (f) (__cxa_atexit f 0 0))
+
+(define-low __cxa_finalize (dso)
+  (while 1
+    (pthread_mutex_lock (address exit-lock))
+    (let ((link (address exit-head)) (entry exit-head) (f 0) (arg 0))
+      (while (and entry dso (/= (mem :u64 (+ entry 24)) dso))
+        (setf link entry)
+        (setf entry (mem :u64 entry)))
+      (unless entry
+        (pthread_mutex_unlock (address exit-lock))
+        (result 0))
+      ;; Remove before calling: recursion and registration in a destructor work.
+      (setf (mem :u64 link) (mem :u64 entry))
+      (setf f (mem :u64 (+ entry 8)))
+      (setf arg (mem :u64 (+ entry 16)))
+      (pthread_mutex_unlock (address exit-lock))
+      (free entry)
+      (call-pointer f arg))))
+
+;; Offset 24 of the existing thread pointer is reserved for C++ destructors.
+(define-low __cxa_thread_atexit_impl (f arg dso)
+  (let ((entry (malloc 24)) (head (+ (fs-word 0) 24)))
+    (unless entry (result (- 0 1)))
+    (setf (mem :u64 entry) (mem :u64 head))
+    (setf (mem :u64 (+ entry 8)) f)
+    (setf (mem :u64 (+ entry 16)) arg)
+    (setf (mem :u64 head) entry)
+    0))
+
+(define-low __libsa_thread_dtors ()
+  (let ((head (+ (fs-word 0) 24)))
+    (while (mem :u64 head)
+      (let* ((entry (mem :u64 head)) (f (mem :u64 (+ entry 8)))
+             (arg (mem :u64 (+ entry 16))))
+        (setf (mem :u64 head) (mem :u64 entry))
+        (free entry)
+        (call-pointer f arg)))))
 
 (define-low exit ((code :u32))
-  (while exit-handler-count
-    (decf exit-handler-count)
-    (call-pointer (ref exit-handlers exit-handler-count)))
+  (__libsa_thread_dtors)
+  (__cxa_finalize 0)
+  (let ((at (absolute "__fini_array_end"))
+        (start (absolute "__fini_array_start")))
+    (while (> at start)
+      (decf at 8)
+      (call-pointer (mem :u64 at))))
   (_exit code))
 
 (define-low |_Exit| ((code :u32)) (_exit code))
@@ -157,3 +208,25 @@
   (dprintf 2 "assertion failed: %s at %s:%u in %s
 " e file line fn)
   (abort))
+
+;; SysV returns div_t packed in RAX, and ldiv_t/lldiv_t in RAX:RDX.
+(defun division-routines ()
+  (loop for name in '("div" "ldiv" "lldiv") collect
+    (darterfly/asm:routine name
+      (if (string= name "div")
+          (progn
+            (darterfly/asm:inst movsx '(:dword :qword) darterfly/asm:rax-tn
+                               (darterfly/asm:reg :dword 7))
+            (darterfly/asm:inst movsx '(:dword :qword) darterfly/asm:rcx-tn
+                               (darterfly/asm:reg :dword 6)))
+          (progn
+            (darterfly/asm:inst mov darterfly/asm:rax-tn darterfly/asm:rdi-tn)
+            (darterfly/asm:inst mov darterfly/asm:rcx-tn darterfly/asm:rsi-tn)))
+      (darterfly/asm:inst cqo)
+      (darterfly/asm:inst idiv darterfly/asm:rcx-tn)
+      (when (string= name "div")
+        (darterfly/asm:inst mov :dword (darterfly/asm:reg :dword 0)
+                           (darterfly/asm:reg :dword 0))
+        (darterfly/asm:inst shl darterfly/asm:rdx-tn 32)
+        (darterfly/asm:inst or darterfly/asm:rax-tn darterfly/asm:rdx-tn))
+      (darterfly/asm:inst ret))))

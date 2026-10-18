@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <sys/time.h>
 struct rusage {
   struct timeval ru_utime, ru_stime;
@@ -19,3 +22,7 @@ int getrlimit(int, struct rlimit *);
 int setrlimit(int, const struct rlimit *);
 int getpriority(int, id_t);
 int setpriority(int, id_t, int);
+
+#ifdef __cplusplus
+}
+#endif

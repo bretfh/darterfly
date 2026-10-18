@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #define RTLD_LAZY 1
 #define RTLD_NOW 2
 #define RTLD_GLOBAL 0x100
@@ -10,3 +13,7 @@ int dlclose(void *);
 char *dlerror(void);
 void *dlsym(void *, const char *);
 int dladdr(const void *, Dl_info *);
+
+#ifdef __cplusplus
+}
+#endif

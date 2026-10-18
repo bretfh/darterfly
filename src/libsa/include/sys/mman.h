@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <sys/types.h>
 #define PROT_NONE 0
 #define PROT_READ 1
@@ -29,3 +32,7 @@ int msync(void *, size_t, int);
 int mlock(const void *, size_t);
 #define MCL_CURRENT 1
 #define MCL_FUTURE 2
+
+#ifdef __cplusplus
+}
+#endif

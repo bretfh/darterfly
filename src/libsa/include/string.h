@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <stddef.h>
 void *memcpy(void *, const void *, size_t);
 void *memmove(void *, const void *, size_t);
@@ -19,6 +22,7 @@ char *strstr(const char *, const char *);
 char *strdup(const char *);
 char *strndup(const char *, size_t);
 char *strerror(int);
+int strerror_r(int, char *, size_t);
 char *strsignal(int);
 size_t strspn(const char *, const char *);
 size_t strcspn(const char *, const char *);
@@ -26,3 +30,7 @@ char *strtok(char *, const char *);
 char *strpbrk(const char *, const char *);
 int strcasecmp(const char *, const char *);
 int strncasecmp(const char *, const char *, size_t);
+
+#ifdef __cplusplus
+}
+#endif

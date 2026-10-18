@@ -278,3 +278,13 @@
               ((signed< c 0) (setf hi mid))
               (t (setf lo (+ mid 1))))))
     0))
+
+(define-low strerror_r ((err :u32) buf size)
+  (let* ((message (strerror err)) (length (strlen message)))
+    (when (<= size length)
+      (when size
+        (memcpy buf message (- size 1))
+        (setf (mem :u8 (+ buf size -1)) 0))
+      (result +erange+))
+    (memcpy buf message (+ length 1))
+    0))

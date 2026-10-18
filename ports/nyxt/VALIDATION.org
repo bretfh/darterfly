@@ -1,7 +1,72 @@
 #+title: Nyxt compatibility validation
 #+date: 2026-10-18
 
-* Standalone TCC: current compiler milestone
+* LLVM C++ runtime: current increment
+
+Branch: codex/nyxt-compat. Parent: 7c45ebd. The selected LLVM libc++abi,
+libunwind and libc++ components execute in isolated worlds against shared
+Low libsa. The upstream C++ sources are unchanged.
+
+| Check | Result |
+|-------+--------|
+| make check | Passed, LOADED |
+| Final C++ actual-OS suite | 16 passed |
+| Native BSD/shared-runtime guest regression | 43 passed |
+| Standalone TCC/self-rebuild guest regression | 17 passed |
+| Focused linker host suite | Seven passed |
+| Complete host suite | 1,346 passed; one existing onboarding failure |
+
+The final C++ probe is compiled with ordinary application flags. Target
+compilation clears host include-path environment variables and uses the
+explicit libsa/libc++/compiler builtin headers. This caught an accidental
+host mbstate_t header dependency; the final build supplies that state type
+from libsa. No host libc is linked into the target executable.
+
+All guest suites boot the actual Darterfly image in four-vCPU QEMU. The
+C++ runtime and probe objects are declared Guix-hosted Clang/LLD seed
+inputs. Inside Darterfly, Low regenerates shared libsa, embedded TCC builds
+startup, and the existing Lisp linker produces the executable. Native
+Clang, native LLD and a local C++ source rebuild are not claimed.
+
+The runtime probe passes initializer priority and global construction;
+vector/string/sorting and shared/unique ownership; aligned allocation and
+division-result ABI; new_handler, bad_alloc and nothrow allocation failure;
+RTTI/demangling; cross-unit exceptions, automatic-object destruction and
+exception_ptr rethrow; constructor-guard retry; four concurrent threads
+with TLS destruction and exceptions; pthread key destructor iterations;
+80 destructor registrations and idempotent DSO finalization; and clocks.
+
+The exit artifact verifies main-thread TLS destruction before atexit and
+global destruction, followed by the fini array. A custom terminate handler
+returns the expected status for an uncaught exception. Two concurrent
+instances produce independent artifacts and leave no native processes.
+
+Initial OS tests exposed constructor boundaries preceding alignment
+padding and omitted LLVM unwind sections. The linker now publishes aligned
+array bounds, reads SHT_X86_64_UNWIND and ignores R_X86_64_NONE records.
+The focused host regressions preserve these fixes. The TCC regression still
+produces identical second/third compiler generations with the new runtime.
+
+The sole complete-host failure remains the existing onboarding call to
+undefined DARTERFLY/INSTALL::FIRST-START-ENTRIES. The runtime cross-build
+also emits an upstream warning that this platform has no ELAST definition;
+libc++ uses its generic strerror_r path. This is not a failed build or a
+claim of complete error-message or standard-library coverage.
+
+- [[file:/tmp/cxx-guest-final.log][Final C++ guest suite: 16 checks]]
+- [[file:/tmp/cxx-bsd-regression.log][Native/shared-runtime regression: 43 checks]]
+- [[file:/tmp/cxx-tcc-regression.log][TCC build loop regression: 17 checks]]
+- [[file:/tmp/cxx-host-focused.log][Focused linker regressions: seven checks]]
+- [[file:/tmp/cxx-host.log][Complete host suite and known failure]]
+- [[file:/tmp/cxx-check-final.log][Final compiler/load check]]
+- [[file:../../build/cxx/provenance.json][Runtime source, compiler/linker versions and build flags]]
+
+The guest transcript is build/native-cxx-guest.log. See
+[[file:../cxx/README.org][the runtime guide and next native compiler steps]] for the static-only
+configuration, omitted standard-library features and remaining lifecycle,
+concurrency and source-rebuild work.
+
+* Standalone TCC: compiler milestone
 
 Branch: codex/nyxt-compat. Parent: 9d99083. The pinned upstream tcc.c driver
 now runs unchanged in an isolated native world against the existing Low

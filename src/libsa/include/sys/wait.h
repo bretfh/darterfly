@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <sys/types.h>
 #define WNOHANG 1
 #define WUNTRACED 2
@@ -13,3 +16,7 @@
 #define WCOREDUMP(s) ((s) & 0x80)
 pid_t wait(int *);
 pid_t waitpid(pid_t, int *, int);
+
+#ifdef __cplusplus
+}
+#endif

@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <stdint.h>
 typedef uint64_t Elf64_Addr, Elf64_Off, Elf64_Xword;
 typedef int64_t Elf64_Sxword;
@@ -80,3 +83,7 @@ typedef struct {
 #define EI_OSABI 7
 #define ELFOSABI_NONE 0
 #define ELF64_R_INFO(s, t) (((uint64_t)(s) << 32) + (t))
+
+#ifdef __cplusplus
+}
+#endif

@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <sys/types.h>
 #define STDIN_FILENO 0
 #ifndef SEEK_SET
@@ -71,3 +74,7 @@ int tcsetpgrp(int, pid_t);
 #define F_TLOCK 2
 #define F_TEST 3
 #define _POSIX_VDISABLE 0
+
+#ifdef __cplusplus
+}
+#endif

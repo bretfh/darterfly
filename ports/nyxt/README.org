@@ -144,7 +144,8 @@ target TCC, then runs the result with verified redirected I/O.
 
 [[file:CHILD-PROCESSES.org][Child spawning from native programs and isolated SBCL worlds]], including a locally rebuilt native driver launching children.
 [[file:SHARED-RUNTIME.org][Native tools now reuse the existing libsa, allocator and static TLS]].
-The duplicate C runtime is gone. C++ startup, thread cleanup/concurrent
+The duplicate C runtime is gone. The selected C++ startup/runtime now
+has its own qualification below. Thread memory reclamation/concurrent
 services, dynamic loading and the compiler port remain ahead.
 
 * Standalone compiler milestone
@@ -154,3 +155,11 @@ shared runtime. It compiles a working native client and rebuilds TCC and
 its compiler support objects inside Darterfly. Low and the Lisp linker
 remain the runtime builder and linker. This establishes the local C
 compiler loop; the C++ compiler and browser-engine gates remain open.
+
+* C++ runtime milestone
+
+[[file:../cxx/README.org][LLVM's selected C++ runtime now runs in isolated worlds against shared libsa]].
+Constructor/destructor ordering, exceptions, RTTI, standard containers,
+allocation and threaded lifetimes have booted-OS evidence. C++ objects
+remain cross-built seed inputs; native Clang/LLD and local source rebuilds
+are the next compiler gate.

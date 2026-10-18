@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #define LOG_EMERG 0
 #define LOG_ALERT 1
 #define LOG_CRIT 2
@@ -35,3 +38,7 @@
 void openlog(const char *, int, int);
 void syslog(int, const char *, ...);
 void closelog(void);
+
+#ifdef __cplusplus
+}
+#endif

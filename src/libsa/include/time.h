@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <sys/types.h>
 struct timespec { time_t tv_sec; long tv_nsec; };
 struct tm {
@@ -33,3 +36,7 @@ void tzset(void);
 extern long timezone;
 extern int daylight;
 extern char *tzname[2];
+
+#ifdef __cplusplus
+}
+#endif

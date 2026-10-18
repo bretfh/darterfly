@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <sys/types.h>
 #include <time.h>
 #define SIGHUP 1
@@ -112,3 +115,7 @@ int sigaltstack(const stack_t *, stack_t *);
 int kill(pid_t, int);
 int killpg(pid_t, int);
 int raise(int);
+
+#ifdef __cplusplus
+}
+#endif

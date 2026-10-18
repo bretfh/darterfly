@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <stddef.h>
 #include <stdarg.h>
 #include <sys/types.h>
@@ -57,3 +60,7 @@ int setvbuf(FILE *, char *, int, size_t);
 void setbuf(FILE *, char *);
 int remove(const char *);
 int rename(const char *, const char *);
+
+#ifdef __cplusplus
+}
+#endif

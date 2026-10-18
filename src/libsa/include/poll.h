@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 typedef unsigned long nfds_t;
 struct pollfd { int fd; short events, revents; };
 #define POLLIN 0x001
@@ -8,3 +11,7 @@ struct pollfd { int fd; short events, revents; };
 #define POLLHUP 0x010
 #define POLLNVAL 0x020
 int poll(struct pollfd *, nfds_t, int);
+
+#ifdef __cplusplus
+}
+#endif

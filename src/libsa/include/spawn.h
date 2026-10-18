@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <sys/types.h>
 #include <signal.h>
 typedef struct { short flags; pid_t pgroup; sigset_t mask, def; } posix_spawnattr_t;
@@ -25,3 +28,7 @@ int posix_spawn_file_actions_addopen(posix_spawn_file_actions_t *, int, const ch
 int posix_spawn_file_actions_addclose(posix_spawn_file_actions_t *, int);
 int posix_spawn_file_actions_addclosefrom_np(posix_spawn_file_actions_t *, int);
 int posix_spawn_file_actions_addchdir_np(posix_spawn_file_actions_t *, const char *);
+
+#ifdef __cplusplus
+}
+#endif

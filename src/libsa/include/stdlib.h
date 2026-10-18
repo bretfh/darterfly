@@ -1,5 +1,14 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <stddef.h>
+typedef struct { int quot, rem; } div_t;
+typedef struct { long quot, rem; } ldiv_t;
+typedef struct { long long quot, rem; } lldiv_t;
+div_t div(int, int);
+ldiv_t ldiv(long, long);
+lldiv_t lldiv(long long, long long);
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
 void *malloc(size_t);
@@ -12,6 +21,8 @@ void abort(void) __attribute__((noreturn));
 void exit(int) __attribute__((noreturn));
 void _Exit(int) __attribute__((noreturn));
 int atexit(void (*)(void));
+int __cxa_atexit(void (*)(void *), void *, void *);
+void __cxa_finalize(void *);
 char *getenv(const char *);
 int setenv(const char *, const char *, int);
 int unsetenv(const char *);
@@ -38,3 +49,7 @@ void srand(unsigned);
 long random(void);
 void srandom(unsigned);
 int system(const char *);
+
+#ifdef __cplusplus
+}
+#endif

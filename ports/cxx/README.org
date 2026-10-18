@@ -1,0 +1,181 @@
+#+title: C++ runtime on Darterfly's shared libsa
+#+date: 2026-10-18
+#+startup: overview
+#+options: toc:2 num:nil
+
+* The result and its scope
+
+A C++20 program runs in an isolated Darterfly world using LLVM's existing
+libc++abi, libunwind and selected libc++ components. The executable uses
+the same Low libsa, allocator, static TLS, pthreads and BSD descriptors as
+SBCL and standalone TCC. Each world retains private runtime state.
+
+The probe exercises constructors, destructors, strings, vectors, sorting,
+shared/unique ownership, over-aligned allocation, RTTI and demangling.
+Exceptions cross translation-unit boundaries, unwind automatic objects,
+and survive exception_ptr capture/rethrow. Four concurrent worker threads
+exercise guarded statics, independent TLS, TLS destruction and exceptions.
+Main-thread TLS destruction precedes atexit/global destruction. Two
+concurrent executable instances verify independent state and artifacts.
+
+These are execution and runtime results. C++ translation and relocatable
+partial linking still happen on the Guix host. Darterfly rebuilds Low
+libsa and assembly startup and performs the final executable link itself.
+A native Clang compiler and local C++ runtime rebuild remain the next gate.
+
+* Existing code, distinct responsibilities
+
+#+begin_example
+upstream C++ program
+    |
+    +-- libc++: containers, strings, ownership, threads, clocks
+    +-- libc++abi: new/delete, guards, RTTI, exception machinery
+    +-- libunwind: DWARF stack walking and exception propagation
+    |
+existing Low libsa
+    allocator / thread pointer / pthreads / stdio / lifecycle hooks
+    |
+existing BSD process and descriptor service
+    |
+Darterfly kernel world, memory mappings, threads and ports
+#+end_example
+
+The C++ sources are unchanged LLVM sources. Darterfly does not substitute
+an imitation of std::vector, a private allocator, a second libc, or a new
+exception implementation. The source list and compilation flags are
+explicit in [[file:../../tools/build-cxx-runtime.py][the cross-build recipe]].
+
+The platform additions belong in shared libsa:
+
+- C ABI linkage in headers when included from C++.
+- Native startup calls preinit/init arrays in priority order.
+- A shared destructor registry handles atexit, __cxa_atexit and
+  __cxa_finalize, with reverse registration order and DSO filtering.
+  Records are removed before invocation, and callbacks run outside its
+  lock. Registration uses the existing allocator instead of a fixed pool.
+- __cxa_thread_atexit_impl stores a destructor list in the existing thread
+  pointer. pthread exit drains it before pthread-specific destructors.
+  Normal process exit drains the calling thread's C++ destructors before
+  global destructors, then runs the fini array in reverse order.
+- pthread-specific destructors now run, including up to four passes when
+  callbacks repopulate a key. LLVM's std::thread uses this machinery.
+- Shared pthread reader/writer locks protect the upstream unwinder cache.
+- strerror_r, division-result ABI routines and missing header constants
+  complete interfaces used by this runtime configuration.
+
+The Lisp linker now recognizes LLVM's x86-64 unwind-section type, retains
+and relocates .eh_frame, ignores R_X86_64_NONE records, sorts initializer
+priorities, and publishes aligned constructor/destructor/unwind bounds.
+libunwind uses its existing static-image discovery mode. No Linux loader
+or Linux executable is involved in target execution.
+
+* Source and build provenance
+
+The runtime source is the Guix libcxx 19.1.7 origin. Its exact source store
+item is pinned in the recipe. [[file:channels.scm][The Guix and Nonguix channel revisions]] record
+the source/tooling reference. This qualification used host Clang 22.1.8.
+The runtime pin is distinct from the earlier browser-engine/toolchain
+reference; reconcile the production pins before building the compiler.
+
+#+begin_src sh
+# On the recorded channels, realize the source:
+guix build --source libcxx@19.1.7
+# If the channels have changed:
+guix time-machine -C ports/cxx/channels.scm -- \
+  build --source libcxx@19.1.7
+
+# Cross-build the runtime and probe with the normal project environment:
+guix shell -m manifest.scm -- \
+  python3 tools/build-cxx-runtime.py --probe
+
+# Rebuild shared libsa and link/run in the actual OS:
+make test-native-cxx-guest
+#+end_src
+
+The target is x86_64-unknown-none-elf with local-exec TLS and Darterfly's
+own C headers. No host C headers or host libc are linked into the result.
+The recipe records compiler/linker versions, sources and flags in
+build/cxx/provenance.json. Its outputs include runtime.o and probe.o.
+Host LLD -r combines upstream COMDAT sections before the final Lisp link;
+this is an explicit bootstrap dependency, not a native LLD claim.
+
+libc++abi exceptions, RTTI, thread-safe guards and new/delete are enabled.
+libunwind uses its normal pthread lock and static DWARF discovery.
+Only the unwinder itself is compiled without C++ exceptions/RTTI, as in
+its upstream configuration; application exception handling remains on.
+
+[[file:config-site.h][The libc++ configuration]] disables filesystem, random-device, locale,
+wide-character and time-zone facilities. The recipe builds the selected
+standard-library source closure needed by the probe, not the complete
+libc++ distribution. Header availability alone does not qualify a feature.
+
+* Verification
+
+The tests boot the actual Darterfly kernel/image in four-vCPU QEMU with a
+disposable disk. This is not physical-hardware qualification. The guest
+links against a freshly generated shared libsa and runs the result through
+ordinary sb-ext:run-program, which launches a separate native world.
+
+The exit artifact must read TAGZ: main-thread TLS destructor, atexit
+callback, global object destructor, then fini-array callback. Additional
+checks cover 80 registered destructors, DSO-specific finalization exactly
+once, constructor retry after an exception, repeated pthread key cleanup,
+custom terminate handling, and simultaneous instances with clean teardown.
+Allocation failure checks exercise new_handler, bad_alloc and nothrow new
+against the shared allocator's overflow rejection.
+
+The guest transcript is build/native-cxx-guest.log. The host suite has
+focused regression checks for initializer boundary alignment/priority and
+no-op unwind relocations. See [[file:../nyxt/VALIDATION.org][the executed validation record]] for results.
+
+* Remaining boundaries
+
+- No native C++ compiler is available yet. C++ runtime/probe objects and
+  their COMDAT partial link are explicit cross-built seed artifacts.
+- Exceptions are qualified in C++ frames carrying DWARF unwind metadata.
+  Unwinding through arbitrary Low, Lisp, assembly or FFI frames is not
+  supported by this test. Forced pthread cancellation is not qualified.
+- The loader remains static. Shared objects, dynamic TLS, dlopen/dlclose,
+  DSO lifetime tracking and engine foreign-library loading remain open.
+- pthread join still retains thread allocations until world teardown.
+  This change runs their destructors; it does not claim complete thread
+  memory reclamation. Key reuse, detached-thread reclamation, fairness and
+  exhaustive pthread semantics also remain unqualified.
+- BSD requests are still serialized per process. A blocking descriptor
+  call can obstruct another thread in that process. Condition variables
+  and the tested locks use kernel waits directly; passing them does not
+  establish concurrent blocking file/socket services.
+- This is a selected libc++ configuration and functional probe, not the
+  complete upstream test suite or complete C++ standard-library coverage.
+  Locale, streams, filesystem and other omitted components need their own
+  requirements and qualification before enabling them.
+- Source availability, target C++ compilation and generator execution
+  must all be closed for a native runtime/compiler source rebuild.
+
+* Next toward a native compiler
+
+1. Fix a Clang/LLVM/LLD source revision and reproducible seed configuration.
+   Inventory LLVM Support's actual platform calls against this sysroot.
+   Use the current runtime probe and TCC rebuild as regression gates.
+2. Build a static Darterfly-targeted Clang seed on Guix. Bring up its
+   single-process -cc1 path first: compile a C++ translation unit to an
+   object inside a world, link against this runtime in Lisp, and run it.
+   This proves native C++ compilation before adding the full driver flow.
+3. Qualify the driver and native LLD, response files, archives/COMDAT,
+   temporary-file behavior, memory/storage limits and subprocesses. Audit
+   the existing 128 MiB executable/segment bound against real seed sizes.
+4. Bring build generators and tools onto Darterfly, then rebuild the C++
+   runtime and compiler locally and use them for another working stage.
+   Resolve thread reclamation and concurrent services against measured
+   compiler workloads rather than adding another runtime path.
+5. Continue through the pinned engine harness, engine source rebuild,
+   existing cl-cef bridge and Nyxt development loop in the
+   [[file:../nyxt/SELF-HOSTING.org][browser self-hosting plan]]. Nyxt and CEF have not been ported by this work.
+
+* Upstream references
+
+- [[https://libcxxabi.llvm.org/][LLVM C++ ABI library]]
+- [[https://libcxx.llvm.org/VendorDocumentation.html][libc++ configuration and vendor documentation]]
+- [[file:../../tests/native-cxx-probe.cpp][C++ runtime probe]]
+- [[file:../../tests/native-cxx-other.cpp][Second translation unit and exception source]]
+- [[file:../../tests/native-cxx-guest.lisp][Actual-OS linking and world lifecycle test]]

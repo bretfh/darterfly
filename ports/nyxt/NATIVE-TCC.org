@@ -142,7 +142,8 @@ The fix is in shared libsa and applies to every world.
 - The source and test root disk are deliberately small. Compiler source
   builds at LLVM/Chromium scale still need resource and filesystem tests.
 - TCC does not close the C++ toolchain or browser-engine gates. Clang/LLD,
-  the required C++ runtime and engine build generators remain unported.
+  the C++ compiler and engine build generators remain unported. A selected
+  [[file:../cxx/README.org][LLVM C++ runtime now runs here]] using cross-built C++ objects.
 
 * What follows
 
@@ -151,9 +152,10 @@ Qualify compiler-generated code and failure behavior against a broader C
 corpus, and close the staged-input regeneration gap. Keep the compiler
 support objects reproducible alongside their compiler and sysroot.
 
-Proceed to a minimal selected C++ runtime workload and LLVM host-port
-requirements. Add missing behavior to the shared runtime, preserving this
-TCC build loop. The next compiler gate remains a native Clang/LLD seed,
+Preserve the selected C++ runtime workload alongside this build loop.
+Proceed to measured LLVM host-port requirements. Add missing behavior to
+the shared runtime while preserving this TCC build loop. The next compiler
+gate remains a native Clang/LLD seed,
 a working C++ artifact, then a local compiler rebuild. The subsequent
 engine and Nyxt gates remain in [[file:SELF-HOSTING.org][the browser self-hosting plan]].
 

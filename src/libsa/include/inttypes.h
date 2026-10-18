@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <stdint.h>
 #define PRId8 "d"
 #define PRId16 "d"
@@ -23,3 +26,7 @@
 #define SCNu64 "lu"
 intmax_t strtoimax(const char *, char **, int);
 uintmax_t strtoumax(const char *, char **, int);
+
+#ifdef __cplusplus
+}
+#endif

@@ -1,0 +1,143 @@
+#include "native-cxx-probe.hpp"
+#include <algorithm>
+#include <cassert>
+#include <chrono>
+#include <condition_variable>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <exception>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <stdexcept>
+#include <string>
+#include <thread>
+#include <vector>
+#include <cxxabi.h>
+#include <pthread.h>
+
+int initialization_order;
+std::atomic<int> unwound{0}, static_constructions{0}, tls_destroyed{0};
+static const char *artifact;
+static void append(char c) {
+    FILE *f = fopen(artifact, "a");
+    if (!f || fwrite(&c, 1, 1, f) != 1 || fclose(f)) _Exit(99);
+}
+__attribute__((constructor(101))) static void first() { initialization_order = 1; }
+struct Global {
+    int value;
+    Global() : value(initialization_order) {}
+    ~Global() { if (artifact) append('G'); }
+} global;
+__attribute__((destructor(201))) static void finished() { if (artifact) append('Z'); }
+struct Local {
+    int value = 17;
+    bool main = false;
+    ~Local() { ++tls_destroyed; if (main) append('T'); }
+};
+thread_local Local local;
+thread_local int initialized = 29;
+struct alignas(256) Aligned { long value = 91; };
+static int attempts, new_handler_calls;
+static int retry() {
+    static int value = [] { if (++attempts == 1) throw 19; return 67; }();
+    return value;
+}
+static int finalized;
+static void increment(void *) { ++finalized; }
+static pthread_key_t key;
+static int key_passes;
+static void key_dtor(void *) { if (++key_passes < 3) pthread_setspecific(key, &key); }
+static void report(const char *name) { printf("[CXX %s PASS]\n", name); }
+
+int main(int argc, char **argv) {
+    if (argc == 2 && !strcmp(argv[1], "terminate")) {
+        std::set_terminate([] { _Exit(77); });
+        throw std::runtime_error("uncaught");
+    }
+    assert(argc == 2);
+    artifact = argv[1];
+    FILE *f = fopen(artifact, "w"); assert(f); fclose(f);
+    assert(global.value == 12 && initialization_order == 12);
+    report("CONSTRUCTORS");
+    std::vector<int> numbers{9, 3, 7, 1};
+    numbers.reserve(128); std::sort(numbers.begin(), numbers.end());
+    std::string text(100, 'x'); text.replace(3, 3, "abc");
+    auto shared = std::make_shared<std::string>(text);
+    auto copy = shared;
+    assert(numbers[0] == 1 && numbers[3] == 9 && copy->substr(3, 3) == "abc");
+    auto aligned = new Aligned;
+    assert((reinterpret_cast<unsigned long>(aligned) & 255) == 0 && aligned->value == 91);
+    delete aligned;
+    std::unique_ptr<int[]> array(new int[64]{}); assert(array[63] == 0);
+    auto quotient = std::div(-17, 5);
+    auto wide = std::ldiv(-10000000017L, 5L);
+    auto widest = std::lldiv(-10000000017LL, 5LL);
+    assert(quotient.quot == -3 && quotient.rem == -2);
+    assert(wide.quot == -2000000003L && wide.rem == -2);
+    assert(widest.quot == wide.quot && widest.rem == wide.rem);
+    report("STL-ALLOCATION");
+    std::set_new_handler([] { ++new_handler_calls; std::set_new_handler(nullptr); });
+    try { (void)::operator new(static_cast<std::size_t>(-1)); assert(false); }
+    catch (const std::bad_alloc &) { assert(new_handler_calls == 1); }
+    assert(::operator new(static_cast<std::size_t>(-1), std::nothrow) == nullptr);
+    report("ALLOCATION-FAILURE");
+    auto base = std::unique_ptr<Base>(make_derived());
+    Base *raw_base = base.get();
+    assert(dynamic_cast<Derived *>(raw_base) && typeid(*raw_base) == typeid(Derived));
+    assert(base->value() == 83);
+    int demangle_status;
+    char *name = abi::__cxa_demangle(typeid(Derived).name(), nullptr, nullptr, &demangle_status);
+    assert(demangle_status == 0 && !strcmp(name, "Derived")); free(name);
+    report("RTTI");
+    std::exception_ptr saved;
+    try { throw_across_units(); assert(false); }
+    catch (const std::runtime_error &e) {
+        assert(!strcmp(e.what(), "across translation units"));
+        saved = std::current_exception();
+    }
+    try { std::rethrow_exception(saved); assert(false); }
+    catch (const std::runtime_error &) { assert(unwound == 1); }
+    try { numbers.at(999); assert(false); }
+    catch (const std::out_of_range &) {}
+    report("EXCEPTIONS");
+    try { retry(); assert(false); } catch (int n) { assert(n == 19); }
+    assert(retry() == 67 && attempts == 2);
+    report("GUARD-RETRY");
+    std::mutex mutex;
+    std::condition_variable cv;
+    int ready = 0;
+    bool go = false;
+    std::thread threads[4];
+    for (auto &thread : threads) thread = std::thread([&] {
+        assert(local.value == 17 && initialized == 29);
+        local.value = 81; initialized = 3;
+        { std::unique_lock<std::mutex> lock(mutex); ++ready; cv.notify_all();
+          cv.wait(lock, [&] { return go; }); }
+        assert(shared_static().value == 73 && other_static() == 73);
+        try { throw_across_units(); } catch (const std::runtime_error &) {}
+    });
+    { std::unique_lock<std::mutex> lock(mutex);
+      cv.wait(lock, [&] { return ready == 4; }); go = true; cv.notify_all(); }
+    for (auto &thread : threads) thread.join();
+    assert(tls_destroyed == 4 && local.value == 17 && initialized == 29);
+    assert(static_constructions == 1 && unwound == 5);
+    local.main = true;
+    report("THREADS-TLS-GUARDS");
+    assert(pthread_key_create(&key, key_dtor) == 0);
+    std::thread key_thread([] { assert(pthread_setspecific(key, &key) == 0); });
+    key_thread.join(); assert(key_passes == 3); pthread_key_delete(key);
+    report("KEY-DESTRUCTORS");
+    int dso;
+    for (int i = 0; i != 80; ++i) assert(__cxa_atexit(increment, nullptr, &dso) == 0);
+    __cxa_finalize(&dso); __cxa_finalize(&dso);
+    assert(finalized == 80);
+    assert(std::atexit([] { append('A'); }) == 0);
+    report("FINALIZE");
+    auto before = std::chrono::steady_clock::now();
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    assert(std::chrono::steady_clock::now() >= before);
+    report("CLOCK");
+    return 42;
+}

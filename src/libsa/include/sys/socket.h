@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <sys/types.h>
 typedef unsigned socklen_t;
 typedef unsigned short sa_family_t;
@@ -68,3 +71,7 @@ int accept(int fd, struct sockaddr *addr, socklen_t *len);
 int connect(int fd, const struct sockaddr *addr, socklen_t len);
 int getsockname(int fd, struct sockaddr *addr, socklen_t *len);
 int getpeername(int fd, struct sockaddr *addr, socklen_t *len);
+
+#ifdef __cplusplus
+}
+#endif

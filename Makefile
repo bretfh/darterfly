@@ -87,3 +87,7 @@ test-native-tcc-guest:
 .PHONY: test-native-tcc-large-guest
 test-native-tcc-large-guest:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::standalone-tcc-large-output-on-darterfly)) (uiop:quit 1))"'
+
+.PHONY: test-native-cxx-guest
+test-native-cxx-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-cxx-runtime-on-darterfly)) (uiop:quit 1))"'

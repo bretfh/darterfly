@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #define CHAR_BIT 8
 #define SCHAR_MIN (-128)
 #define SCHAR_MAX 127
@@ -22,3 +25,7 @@
 #define NAME_MAX 255
 #define PIPE_BUF 4096
 #define IOV_MAX 1024
+
+#ifdef __cplusplus
+}
+#endif

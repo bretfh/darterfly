@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #define TIOCGPGRP 0x540F
 #define TIOCSPGRP 0x5410
 #define TIOCGWINSZ 0x5413
@@ -8,3 +11,7 @@
 #define FIONREAD 0x541B
 struct winsize { unsigned short ws_row, ws_col, ws_xpixel, ws_ypixel; };
 int ioctl(int, unsigned long, ...);
+
+#ifdef __cplusplus
+}
+#endif
