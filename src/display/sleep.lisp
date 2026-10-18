@@ -30,6 +30,7 @@
 (defvar *saved-plan* nil)
 (defvar *saved-psr* nil)
 (defvar *sleeping* nil)
+(defvar *wake-differences* nil)
 
 (defun saved (offset) (cdr (assoc offset *saved*)))
 
@@ -93,7 +94,11 @@
          (output-on *saved-plan* (saved +plane-ctl-a+))
          (setf *flips-armed* nil)
          (arm-flips)
-         (when *saved-psr* (enable-psr)))
+         (when *saved-psr* (enable-psr))
+         (setf *wake-differences*
+               (loop for (offset . value) in *saved*
+                     unless (= value (reg offset))
+                       collect (list (format nil "~x" offset) :before (format nil "~x" value) :after (format nil "~x" (reg offset))))))
     (setf *saved* nil *sleeping* nil)
     (release-awake)))
 

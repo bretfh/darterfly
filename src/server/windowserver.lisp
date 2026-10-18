@@ -156,6 +156,16 @@
 (defun damage-all ()
   (damage 0 0 (io:framebuffer-width *framebuffer*) (io:framebuffer-height *framebuffer*)))
 
+(defun redraw-after-wake (event device)
+  (declare (ignore device))
+  (when (and (eq event :woke) *framebuffer*)
+    (sb-thread:with-mutex (*lock*)
+      (damage-all)
+      (render))))
+
+(setf darterfly/devices:*device-hooks*
+      (append (remove 'redraw-after-wake darterfly/devices:*device-hooks*) (list 'redraw-after-wake)))
+
 (defun render ()
   (let* ((fb *framebuffer*)
          (whole (list 0 0 (io:framebuffer-width fb) (io:framebuffer-height fb)))
