@@ -1236,9 +1236,9 @@
              (progn
                (is (image:expect c "boot.efi: generation gen-2"))
                (image:expect c "* " :timeout 60)
-               (is (search "T" (ask "(darterfly/cc:compile-c \"src/libsa/string.c\" \"/tmp/string.o\" :directory \"/usr/src/darterfly/\")")))
-               (is (search (cdr (assoc "libsa/string.o" host :test #'string=))
-                           (ask "(progn (require :sb-md5) (string-downcase (format nil \"~{~2,'0x~}\" (coerce (sb-md5:md5sum-file \"/tmp/string.o\") 'list))))"))
+               (ask "(darterfly/cc:compile-units \"/tmp/again/\" :units (list (find \"runtime/search.o\" (darterfly/cc:units) :key (lambda (u) (getf u :name)) :test (function string=))))")
+               (is (search (cdr (assoc "runtime/search.o" host :test #'string=))
+                           (ask "(progn (require :sb-md5) (string-downcase (format nil \"~{~2,'0x~}\" (coerce (sb-md5:md5sum-file \"/tmp/again/runtime/search.o\") 'list))))"))
                    "the TinyCC darterfly built makes the same object again"))
           (image:finish c 5))))))
 
@@ -2504,6 +2504,8 @@
                (is (image:expect c "init: pid 1" :timeout 120) "init starts from the NVMe root")
                (is (search "NVME" (ask "(string-upcase (type-of (darterfly/devices:media-device darterfly/apfs::*root-media*)))"))
                    "the root is on the NVMe")
+               (is (search "T" (ask "(> (darterfly/apfs::nx-block-count (darterfly/apfs::wvolume-nx (darterfly/apfs::vnode-mount (darterfly/vfs:namei \"/\")))) (* 2 262144))"))
+                   "the root fills the disk, not a fixed gigabyte")
                (is (search "(\"gen-1\")" (ask "(darterfly/install:generations)")) "the installed system finds its own ESP")
                (is (search "T" (ask "(progn (with-open-file (s \"/Users/darterfly/kept\" :direction :output :if-exists :supersede) (write-line \"kept\" s)) (darterfly/vfs:vfs-sync) (probe-file \"/Users/darterfly/kept\") t)")))
                (let ((screen (screen-until (lambda (s) (= #xff2e5c8f (image:pixel s 5 300))) 60)))
@@ -2524,6 +2526,51 @@
                (is (image:expect c "init: pid 1" :timeout 120))
                (is (search "(\"gen-1\" \"gen-2\")" (ask "(darterfly/install:generations)"))))
           (image:finish c 5))))))
+
+(test a-power-cut-mid-install-leaves-nothing-half-bootable
+  (let* ((stick (image:usb-image))
+         (disk (merge-pathnames "install-cut.img" (darterfly-file "build/"))))
+    (with-open-file (s disk :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
+      (file-position s (1- (* 4096 1048576)))
+      (write-byte 0 s))
+    (flet ((installer ()
+             (stick-machine "-drive" (format nil "if=none,id=stick,format=raw,snapshot=on,file=~a" (uiop:native-namestring stick))
+                            "-device" "usb-storage,bus=xhci.0,drive=stick,bootindex=0"
+                            "-drive" (format nil "if=none,id=disk,format=raw,file=~a" (uiop:native-namestring disk))
+                            "-device" "nvme,serial=disk,drive=disk"))
+           (installed ()
+             (stick-machine "-drive" (format nil "if=none,id=disk,format=raw,file=~a" (uiop:native-namestring disk))
+                            "-device" "nvme,serial=disk,drive=disk,bootindex=0")))
+      (let ((c (installer)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "init: pid 1" :timeout 120))
+               (image:send c "(darterfly/install:install-disk :progress (lambda (step) (format t \"~&install: ~a~%\" step)))")
+               (is (image:expect c "install: Copying the system" :timeout 300) "the copy starts")
+               (sleep 3))
+          (image:finish c 0)))
+      (let ((c (installed)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "BdsDxe: failed to load" :timeout 60) "the cut disk has no loader yet, so the firmware passes it over")
+               (is (not (search "init: pid 1" (image:transcript c))) "and nothing half-installed starts"))
+          (image:finish c 0)))
+      (let ((c (installer)))
+        (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
+          (unwind-protect
+               (progn
+                 (is (image:expect c "init: pid 1" :timeout 120))
+                 (is (search "\"" (ask "(darterfly/install:install-disk)")) "installing again over the cut disk works")
+                 (image:send c "(sb-ext:exit)")
+                 (image:expect c "exit(0)" :timeout 120))
+            (image:finish c 5))))
+      (let ((c (installed)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "boot.efi: generation gen-1" :timeout 60))
+               (is (image:expect c "init: pid 1" :timeout 120) "and it boots"))
+          (image:finish c 5))))
+    (delete-file disk)))
 
 (in-suite recovery)
 
