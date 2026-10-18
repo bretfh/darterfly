@@ -1,6 +1,6 @@
 (defpackage #:darterfly/run
   (:use #:cl)
-  (:export #:run-core #:run-world #:collect #:tree-files #:in-run-p))
+  (:export #:run-core #:run-world #:start-world #:finish-world #:stop-world #:world-eval #:attach #:world-id #:collect #:tree-files #:in-run-p))
 (in-package #:darterfly/run)
 
 (defconstant +magic+ #x4e555248434e4946)
@@ -183,29 +183,91 @@
           (unless (eq (darterfly/worlds:world-state world) :running) (return nil))
           (when (and end (> (get-internal-real-time) end)) (return nil)))))))
 
-(defun run-world (core argv &key files cwd stdin disk timeout)
-  (let* ((parts (record-parts core argv files cwd stdin nil))
+(defparameter *attach-prelude*
+  "(sb-thread:make-thread
+    (lambda ()
+      (let ((buf (make-array 65536 :element-type '(unsigned-byte 8)))
+            (out (make-array 3 :element-type '(unsigned-byte 64)))
+            (call (lambda (n a b c d e)
+                    (sb-alien:alien-funcall
+                     (sb-alien:extern-alien \"__machdep5\" (function sb-alien:long sb-alien:long sb-alien:unsigned-long sb-alien:unsigned-long
+                                                                    sb-alien:unsigned-long sb-alien:unsigned-long sb-alien:unsigned-long))
+                     n a b c d e))))
+        (loop
+          (let ((n (sb-sys:with-pinned-objects (buf out)
+                     (funcall call 42 2 (sb-sys:sap-int (sb-sys:vector-sap buf)) 65536 (sb-sys:sap-int (sb-sys:vector-sap out)) 0))))
+            (when (minusp n) (return))
+            (let* ((token (aref out 0))
+                   (text (sb-ext:octets-to-string buf :end n :external-format :utf-8))
+                   (reply (sb-ext:string-to-octets
+                           (handler-case
+                               (let* ((values nil)
+                                      (printed (with-output-to-string (*standard-output*)
+                                                 (setf values (multiple-value-list (eval (read-from-string text)))))))
+                                 (format nil \"~a~{~s~^ ~}\" printed values))
+                             (error (e)
+                               (format nil \"error: ~a~%~a\" e
+                                       (with-output-to-string (s) (sb-debug:print-backtrace :stream s :count 15)))))
+                           :external-format :utf-8)))
+              (when (> (length reply) 60000) (setf reply (subseq reply 0 60000)))
+              (sb-sys:with-pinned-objects (reply)
+                (funcall call 43 token (sb-sys:sap-int (sb-sys:vector-sap reply)) (length reply) 0 0)))))))
+    :name \"attach\")")
+
+(defun with-prelude (argv)
+  (let ((at (or (position "--eval" argv :test #'string=) (position "--quit" argv :test #'string=) (length argv))))
+    (append (subseq argv 0 at) (list "--eval" *attach-prelude*) (subseq argv at))))
+
+(defstruct (world (:constructor make-world)) id inward thread)
+
+(defun start-world (core argv &key files cwd stdin disk timeout attach)
+  (let* ((parts (record-parts core (if attach (with-prelude argv) argv) files cwd stdin nil))
          (base (+ +world-base+ (ash (mod (incf *world-runs*) 16) 36)))
          (port (darterfly/worlds:make-port))
          (proc (and disk (darterfly/bsd:make-world-proc (or cwd "/")))))
     (multiple-value-bind (offsets back-at size) (layout parts 0)
       (write-record base size parts offsets back-at 0 0 1 disk)
-      (let ((world nil))
-        (unwind-protect
-             (progn
-               (setf world (darterfly/worlds:spawn-record base size port))
-               (multiple-value-bind (code archive) (serve-world port world proc timeout)
-                 (cond ((null code) (list :exit :stopped :files 0))
-                       (t (sb-sys:with-pinned-objects (archive)
-                            (let ((address (sb-sys:sap-int (sb-sys:vector-sap archive))))
-                              (if (zerop code)
-                                  (list :exit 0 :files (unpack address (length archive)))
-                                  (list :exit code :files 0 :rejected (count-entries address (length archive))))))))))
-          (when world
-            (darterfly/worlds:stop world)
-            (wait-gone world))
-          (when proc (darterfly/bsd:end-world-proc proc))
-          (libsa "munmap" sb-alien:int (sb-alien:unsigned base) (sb-alien:unsigned size)))))))
+      (multiple-value-bind (id inward) (darterfly/worlds:spawn-record base size port)
+        (make-world
+         :id id :inward inward
+         :thread (sb-thread:make-thread
+                  (lambda ()
+                    (unwind-protect
+                         (multiple-value-bind (code archive) (serve-world port id proc timeout)
+                           (cond ((null code) (list :exit :stopped :files 0))
+                                 (t (sb-sys:with-pinned-objects (archive)
+                                      (let ((address (sb-sys:sap-int (sb-sys:vector-sap archive))))
+                                        (if (zerop code)
+                                            (list :exit 0 :files (unpack address (length archive)))
+                                            (list :exit code :files 0 :rejected (count-entries address (length archive)))))))))
+                      (darterfly/worlds:stop id)
+                      (wait-gone id)
+                      (when proc (darterfly/bsd:end-world-proc proc))
+                      (libsa "munmap" sb-alien:int (sb-alien:unsigned base) (sb-alien:unsigned size))))
+                  :name (format nil "world ~d" id)))))))
+
+(defun finish-world (world) (sb-thread:join-thread (world-thread world)))
+
+(defun stop-world (world)
+  (darterfly/worlds:stop (world-id world))
+  (finish-world world))
+
+(defun run-world (core argv &rest keys &key files cwd stdin disk timeout)
+  (declare (ignore files cwd stdin disk timeout))
+  (finish-world (apply #'start-world core argv keys)))
+
+(defun world-eval (world form)
+  (sb-ext:octets-to-string (darterfly/worlds:call (world-inward world) (if (stringp form) form (prin1-to-string form)))
+                           :external-format :utf-8))
+
+(defun attach (world &key (input *standard-input*) (output *standard-output*))
+  (loop
+    (format output "~&world ~d> " (world-id world))
+    (finish-output output)
+    (let ((line (read-line input nil)))
+      (when (or (null line) (string= (string-trim " " line) ":q")) (return))
+      (unless (string= (string-trim " " line) "")
+        (format output "~a~%" (handler-case (world-eval world line) (error (e) (format nil "world ~d: ~a" (world-id world) e))))))))
 
 (defun in-run-p ()
   (/= 0 (libsa "__libsa_run_active" sb-alien:int)))

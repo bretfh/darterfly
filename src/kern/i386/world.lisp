@@ -52,14 +52,17 @@
       (incf i))
     0))
 
-(define-low port-create ()
+(define-low port-make (receiver)
   (let ((p (kalloc +port-size+)))
     (rep-stosb p 0 +port-size+)
-    (setf (mem :u64 (+ p +p-receiver+)) (current-world))
+    (setf (mem :u64 (+ p +p-receiver+)) receiver)
     (setf (mem :u64 (+ p +p-next+)) all-ports)
     (setf all-ports p)
-    (let ((name (name-add (current-world) p +receive-right+)))
-      (if name name (- 0 +enomem+)))))
+    p))
+
+(define-low port-create ()
+  (let ((name (name-add (current-world) (port-make (current-world)) +receive-right+)))
+    (if name name (- 0 +enomem+))))
 
 (define-low call-live (m)
   (let ((x all-calls))
@@ -290,10 +293,11 @@
 
 (defconstant +run-stack-size+ (ash 8 20))
 
-(define-low world-run (base (size :u64) (name :u64))
+(define-low world-run (base (size :u64) (name :u64) out)
   (let ((p (name-port (current-world) name 1)))
     (unless p (result (- 0 +ebadf+)))
     (unless (and (user-range base size) size) (result (- 0 +einval+)))
+    (when (and out (not (the :u32 (user-ok out 8 1)))) (result (- 0 +efault+)))
     (let ((w (world-create)))
       (unless w (result (- 0 +enomem+)))
       (unless (and (the :u32 (load-image w user-file))
@@ -307,6 +311,9 @@
       (setf (mem :u64 (+ w +w-image-size+)) user-file-size)
       (insert-at w 0 (- +world-stack-top+ +run-stack-size+) +world-stack-top+ 3)
       (name-add w p 0)
+      (let ((inward (port-make w)))
+        (name-add w inward +receive-right+)
+        (when out (setf (mem :u64 out) (name-add (current-world) inward 0))))
       (thread-create-user-in w user-entry (- +world-stack-top+ 72) 0 0)
       (mem :u64 (+ w +w-id+)))))
 

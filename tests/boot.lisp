@@ -1504,6 +1504,35 @@
                    "and the wrecked world's memory came back"))
           (image:finish c 5))))))
 
+(test the-system-attaches-to-a-running-world
+  (let ((disk (merge-pathnames "world-attach.img" (darterfly-file "build/"))))
+    (uiop:delete-file-if-exists disk)
+    (darterfly/image::root-disk disk (* 256 1048576)
+                            (append (darterfly/image::root-entries)
+                                    (list (list :file "usr/lib/sbcl/sbcl.core" (image::octets (darterfly-file "build/sbcl-mt/output/sbcl.core"))))))
+    (let ((c (image:bare-console :root disk)))
+      (flet ((ask (form &optional (timeout 120)) (image:send c form) (image:expect c (format nil "~%* ") :timeout timeout)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 90)
+               (ask (format nil "(defparameter *w* (darterfly/run:start-world \"/usr/lib/sbcl/sbcl.core\" '~s :cwd \"/\" :attach t))"
+                            (list "/System/Library/Kernels/kernel" "--core" "/System/Library/Kernels/darterfly.core"
+                                  "--no-sysinit" "--no-userinit" "--disable-debugger"
+                                  "--eval" "(defvar *counter* 0)" "--eval" "(loop (incf *counter*) (sleep 0.05))")))
+               (is (search "\"3\"" (ask "(loop :repeat 100 :for r := (ignore-errors (darterfly/run:world-eval *w* \"(+ 1 2)\")) :until r :do (sleep 0.1) :finally (return r))"))
+                   "a form evaluates inside the world")
+               (is (search "[T]" (ask "(format nil \"[~a]\" (plusp (parse-integer (darterfly/run:world-eval *w* \"*counter*\"))))"))
+                   "and sees the world's own running state")
+               (ask "(darterfly/run:world-eval *w* \"(defun sq (x) (* x x))\")")
+               (is (search "\"144\"" (ask "(darterfly/run:world-eval *w* \"(sq 12)\")"))
+                   "a function defined from the system runs in the world")
+               (is (search "error: " (ask "(darterfly/run:world-eval *w* \"(car 1)\")"))
+                   "an error in the world comes back as text")
+               (is (search "(:EXIT :STOPPED" (ask "(darterfly/run:stop-world *w*)"))
+                   "and the world can be stopped")
+               (is (search "[3]" (ask "(format nil \"[~a]\" (+ 1 2))"))))
+          (image:finish c 5))))))
+
 (defvar *run-wait* 1800)
 
 (defun sbcl-run (disk core argv &key stdin script (files t))

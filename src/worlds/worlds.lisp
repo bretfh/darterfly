@@ -64,7 +64,10 @@
 
 (defun stop (world) (machdep 45 world))
 
-(defun spawn-record (base size port) (machdep 48 base size port))
+(defun spawn-record (base size port)
+  (let ((out (make-array 1 :element-type '(unsigned-byte 64) :initial-element 0)))
+    (with-octets (os out)
+      (values (machdep 48 base size port os) (aref out 0)))))
 
 (defun free-pages () (machdep 47))
 

@@ -224,7 +224,7 @@
       ((and (not (privileged)) (= n 17))
        (pair-out a (mem :u64 (+ (current-world) +w-core+)) (mem :u64 (+ (current-world) +w-core-size+)))
        (ok regs 0))
-      ((= n 48) (ok regs (world-run a b (reg regs +r-rdx+))))
+      ((= n 48) (ok regs (world-run a b (reg regs +r-rdx+) (reg regs +r-r10+))))
       ((= n 40) (ok regs (port-create)))
       ((= n 41) (ok regs (port-call a b (reg regs +r-rdx+) (reg regs +r-r10+) (reg regs +r-r8+))))
       ((= n 42) (ok regs (port-receive a b (reg regs +r-rdx+) (reg regs +r-r10+)
