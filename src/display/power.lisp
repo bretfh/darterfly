@@ -39,17 +39,22 @@
   (write-dc-state 0)
   (wait-until "the display registers to come back" #'registers-alive-p :seconds 0.05))
 
+(defun wait-for-power-change (&optional seconds)
+  (sb-thread:condition-wait *power-changed* *power-lock* :timeout seconds)
+  (unless (sb-thread:holding-mutex-p *power-lock*)
+    (sb-thread:grab-mutex *power-lock*)))
+
 (defun dc-loop ()
   (sb-thread:with-mutex (*power-lock*)
     (loop
       (if (and (zerop *awake*) (plusp *dc-target*))
           (let ((left (- *asleep-after* (get-internal-real-time))))
             (if (plusp left)
-                (sb-thread:condition-wait *power-changed* *power-lock* :timeout (/ left internal-time-units-per-second))
+                (wait-for-power-change (/ left internal-time-units-per-second))
                 (progn (unless (= (logand (reg +dc-state-en+) 3) *dc-target*)
                          (write-dc-state *dc-target*))
-                       (sb-thread:condition-wait *power-changed* *power-lock*))))
-          (sb-thread:condition-wait *power-changed* *power-lock*)))))
+                       (wait-for-power-change))))
+          (wait-for-power-change)))))
 
 (defun call-awake (function)
   (sb-thread:with-recursive-lock (*power-lock*)
