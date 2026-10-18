@@ -1,7 +1,7 @@
 (defpackage #:darterfly/run
   (:use #:cl)
   (:export #:run-core #:run-world #:start-world #:finish-world #:stop-world #:world-eval #:attach #:world-id #:world-name
-           #:new-world #:list-worlds #:find-world #:save-world #:restart-world #:checkpoint-world #:restore-world #:collect #:tree-files #:in-run-p))
+           #:new-world #:list-worlds #:find-world #:save-world #:restart-world #:checkpoint-world #:restore-world #:restore-worlds #:*worlds-dir* #:collect #:tree-files #:in-run-p))
 (in-package #:darterfly/run)
 
 (defconstant +magic+ #x4e555248434e4946)
@@ -151,6 +151,8 @@
 
 (defvar *world-runs* 0)
 
+(defparameter *worlds-dir* "/Users/darterfly/worlds/")
+
 (defun wait-gone (world)
   (loop :repeat 200 :until (eq (darterfly/worlds:world-state world) :gone) :do (sleep 0.05)))
 
@@ -230,7 +232,7 @@
   (let ((at (or (position "--eval" argv :test #'string=) (position "--quit" argv :test #'string=) (length argv))))
     (append (subseq argv 0 at) (list "--eval" *attach-prelude*) (subseq argv at))))
 
-(defstruct (world (:constructor make-world)) id inward thread name core stopping restarts command cwd disk base)
+(defstruct (world (:constructor make-world)) id inward thread name core stopping restarts command cwd disk base every)
 
 (defvar *worlds* nil)
 (defvar *worlds-lock* (sb-thread:make-mutex :name "worlds"))
@@ -252,10 +254,14 @@
 
 (defun failed-p (result) (not (eql 0 (getf result :exit))))
 
-(defun new-world (name &key (core "/usr/lib/sbcl/sbcl.core") (cwd "/") (evals (list "(loop (sleep 60))")) restart (restarts nil))
+(defun new-world (name &key (core "/usr/lib/sbcl/sbcl.core") (cwd "/") (evals (list "(loop (sleep 60))")) restart (restarts nil) checkpoint)
   (when (find-world name) (error "a world named ~a is already running" name))
   (let ((world (start-world core (apply #'world-argv evals) :cwd cwd :disk t :attach t :name name)))
     (setf (world-restarts world) restarts)
+    (when checkpoint
+      (setf (world-every world) checkpoint)
+      (ensure-directories-exist *worlds-dir*)
+      (keep-checkpointed world))
     (when restart
       (sb-thread:make-thread
        (lambda ()
@@ -328,16 +334,20 @@
            :name (format nil "world ~d" id)))
     world))
 
-(defun checkpoint-world (world path)
-  (with-open-file (out path :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
-    (let ((meta (sb-ext:string-to-octets
-                 (with-standard-io-syntax
-                   (prin1-to-string (list :name (world-name world) :core (world-core world) :argv (world-command world)
-                                          :cwd (world-cwd world) :disk (world-disk world) :base (world-base world))))
-                 :external-format :utf-8)))
-      (write-sequence (darterfly/worlds::u64-octets (length meta)) out)
-      (write-sequence meta out)
-      (darterfly/worlds:checkpoint (world-id world) out))))
+(defun checkpoint-world (world path &key full)
+  (let ((fresh (or full (not (probe-file path)))))
+    (with-open-file (out path :direction :output :element-type '(unsigned-byte 8)
+                              :if-exists (if fresh :supersede :append) :if-does-not-exist :create)
+      (when fresh
+        (let ((meta (sb-ext:string-to-octets
+                     (with-standard-io-syntax
+                       (prin1-to-string (list :name (world-name world) :core (world-core world) :argv (world-command world)
+                                              :cwd (world-cwd world) :disk (world-disk world) :base (world-base world)
+                                              :checkpoint (world-every world))))
+                     :external-format :utf-8)))
+          (write-sequence (darterfly/worlds::u64-octets (length meta)) out)
+          (write-sequence meta out)))
+      (darterfly/worlds:checkpoint (world-id world) out :full fresh))))
 
 (defun restore-world (path &key name)
   (with-open-file (in path :element-type '(unsigned-byte 8))
@@ -353,15 +363,43 @@
         (multiple-value-bind (offsets back-at size) (layout parts 0)
           (write-record base size parts offsets back-at 0 0 1 (getf meta :disk))
           (multiple-value-bind (id inward) (darterfly/worlds:restore in base size port)
-            (launch-world id inward port base size (getf meta :disk) nil
-                          :name name :core (getf meta :core) :argv (getf meta :argv) :cwd (getf meta :cwd))))))))
+            (let ((world (launch-world id inward port base size (getf meta :disk) nil
+                                       :name name :core (getf meta :core) :argv (getf meta :argv) :cwd (getf meta :cwd))))
+              (when (getf meta :checkpoint)
+                (setf (world-every world) (getf meta :checkpoint))
+                (keep-checkpointed world))
+              world)))))))
+
+(defun restore-worlds ()
+  (loop :for file :in (directory (concatenate 'string *worlds-dir* "*.checkpoint"))
+        :collect (handler-case (world-name (restore-world (namestring file)))
+                   (error (e) (list (namestring file) (princ-to-string e))))))
 
 (defun finish-world (world) (sb-thread:join-thread (world-thread world)))
+
+(defun checkpoint-path (name) (format nil "~a~a.checkpoint" *worlds-dir* name))
 
 (defun stop-world (world)
   (setf (world-stopping world) t)
   (darterfly/worlds:stop (world-id world))
-  (finish-world world))
+  (prog1 (finish-world world)
+    (when (world-every world) (ignore-errors (delete-file (checkpoint-path (world-name world)))))))
+
+(defun keep-checkpointed (world)
+  (sb-thread:make-thread
+   (lambda ()
+     (loop :for n :from 0
+           :do (sleep (world-every world))
+               (when (or (world-stopping world) (not (eq (darterfly/worlds:world-state (world-id world)) :running)))
+                 (return))
+               (handler-case
+                   (if (and (plusp n) (zerop (mod n 50)))
+                       (let ((fresh (concatenate 'string (checkpoint-path (world-name world)) ".new")))
+                         (checkpoint-world world fresh :full t)
+                         (rename-file fresh (checkpoint-path (world-name world))))
+                       (checkpoint-world world (checkpoint-path (world-name world))))
+                 (error (e) (format *error-output* "~&checkpoint of ~a: ~a~%" (world-name world) e)))))
+   :name (format nil "checkpoint ~a" (world-name world))))
 
 (defun run-world (core argv &rest keys &key files cwd stdin disk timeout)
   (declare (ignore files cwd stdin disk timeout))

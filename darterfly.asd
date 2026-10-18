@@ -13,7 +13,7 @@
 
 (asdf:defsystem #:darterfly/init
   :description "init and service"
-  :depends-on (#:darterfly/bsd #:darterfly/mach #:darterfly/worlds)
+  :depends-on (#:darterfly/bsd #:darterfly/mach #:darterfly/worlds #:darterfly/run)
   :serial t
   :pathname "src/init/"
   :components ((:file "init")))

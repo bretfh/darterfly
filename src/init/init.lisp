@@ -228,6 +228,7 @@
                 (length *jobs*) (hash-table-count *services*) (count-if #'unavailable *jobs*)))
     (bsd:bsdthread-create #'reaper "reaper")
     (sb-thread:make-thread #'darterfly/worlds:heartbeat :name "heartbeat")
+    (sb-thread:make-thread (lambda () (sleep 2) (darterfly/run:restore-worlds)) :name "restore worlds")
     (sb-thread:with-mutex (*lock*)
       (dolist (job *jobs*)
         (when (start-at-load-p job)
