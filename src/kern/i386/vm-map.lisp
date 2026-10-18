@@ -166,6 +166,8 @@
   (when (and (>= va +user-top+) (logand err 4) (not (privileged))) (result 0))
   (when (the :u32 (pmap-access-ok (page-down va) err)) (result 1))
   (let ((x (lookup (map-for va) va)))
+    (when (and x (logand err 2) (logand (mem :u64 (+ x 16)) +prot-write+) (< va +user-top+))
+      (when (the :u32 (cow-fault va (mem :u64 (+ x 16)))) (result 1)))
     (when (or (not x) (logand err 1) (not (mem :u64 (+ x 16)))) (result 0))
     (when (and (logand err 2) (not (logand (mem :u64 (+ x 16)) +prot-write+))) (result 0))
     (when (and (logand err #x10) (not (logand (mem :u64 (+ x 16)) +prot-execute+))) (result 0))

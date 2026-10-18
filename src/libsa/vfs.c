@@ -113,6 +113,12 @@ static ssize_t kernel_read(int fd, void *buf, size_t n, off_t *off) {
   return (ssize_t)n;
 }
 
+const char *__libsa_boot_data(int fd, size_t *size) {
+  if (!kfd(fd)) return 0;
+  *size = kfds[fd - KERNEL_FD].file->size;
+  return kfds[fd - KERNEL_FD].file->data;
+}
+
 static void kernel_stat(struct boot_file *f, struct stat *st) {
   memset(st, 0, sizeof *st);
   st->st_mode = S_IFREG | 0555;

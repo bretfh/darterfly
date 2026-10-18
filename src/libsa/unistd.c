@@ -217,10 +217,29 @@ int h_errno;
 
 int __libsa_fd_console(int fd);
 
+const char *__libsa_boot_data(int fd, size_t *size);
+
+static int map_shared(void *at, size_t len, int prot, int fd, off_t off) {
+  size_t size;
+  const char *data = __libsa_boot_data(fd, &size);
+  size_t whole = len & ~(size_t)4095;
+  if (!data || ((uintptr_t)at & 4095) || ((uintptr_t)(data + off) & 4095) || (size_t)off >= size) return 0;
+  if (whole > size - (size_t)off) whole = (size - (size_t)off) & ~(size_t)4095;
+  if (!whole || __machdep5(MACHDEP_map_shared, (long)at, (long)(data + off), (long)whole, 0, 0) != (long)whole) return 0;
+  if (whole < len) {
+    size_t rest = len - whole;
+    if (rest > size - (size_t)off - whole) rest = size - (size_t)off - whole;
+    memcpy((char *)at + whole, data + off + whole, rest);
+  }
+  if (prot != (PROT_READ | PROT_WRITE)) mprotect(at, len, prot);
+  return 1;
+}
+
 void *mmap(void *addr, size_t len, int prot, int flags, int fd, off_t off) {
   if (!(flags & MAP_ANONYMOUS)) {
     void *at = mmap(addr, len, PROT_READ | PROT_WRITE, (flags & MAP_FIXED) | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (at == MAP_FAILED) return at;
+    if (map_shared(at, len, prot, fd, off)) return at;
     for (size_t done = 0; done < len;) {
       ssize_t n = pread(fd, (char *)at + done, len - done, off + (off_t)done);
       if (n < 0) {

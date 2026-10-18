@@ -1375,6 +1375,11 @@
                                         (argv "(progn (with-open-file (o \"/work/failed.txt\" :direction :output) (write-string \"partial\" o)) (sb-ext:exit :code 3))"))))
                    "a failed run's files are rejected")
                (is (search "NIL" (ask "(probe-file \"/work/failed.txt\")")))
+               (ask "(progn (sb-ext:gc :full t) (defparameter *before* (darterfly/worlds:free-pages)))")
+               (ask (format nil "(defparameter *sleeper* (sb-thread:make-thread (lambda () (darterfly/run:run-world \"/usr/lib/sbcl/sbcl.core\" ~a :cwd \"/\"))))" (argv "(sleep 6)")))
+               (is (search "[T " (ask "(progn (sleep 4) (sb-ext:gc :full t) (let ((mb (round (- *before* (darterfly/worlds:free-pages)) 256))) (format nil \"[~a ~a]\" (< mb 55) mb)))"))
+                   "a running world shares the core's pages instead of copying them")
+               (ask "(sb-thread:join-thread *sleeper*)")
                (ask "(progn (ensure-directories-exist \"/work/disk/\") (with-open-file (o \"/work/in.txt\" :direction :output :if-exists :supersede) (write-line \"hello world\" o)))")
                (ask (format nil "(defparameter *disk* (sb-thread:make-thread (lambda () (darterfly/run:run-world \"/usr/lib/sbcl/sbcl.core\" ~a :cwd \"/work/\" :disk t))))"
                             (argv (let ((*package* (find-package :darterfly/test)))

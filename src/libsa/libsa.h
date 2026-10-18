@@ -38,6 +38,7 @@
 #define MACHDEP_core_file 17
 #define MACHDEP_restart 19
 #define MACHDEP_port_call 41
+#define MACHDEP_map_shared 51
 
 long __syscall(long n, long a, long b, long c, long d, long e, long f);
 long __machdep(long n, long a, long b);

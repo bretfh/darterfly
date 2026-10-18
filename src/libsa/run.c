@@ -484,8 +484,8 @@ const char *__libsa_run_start(int *argc, char **argv, int max) {
   record = r;
   __libsa_run_core((const char *)r->core, r->core_size);
   if (r->result) return 0;
+  if (r->port) __libsa_vfs_boot_first();
   if (r->disk) {
-    __libsa_vfs_boot_first();
     __libsa_vfs_register(port_vfs);
     *argc = 0;
     for (const char *p = (const char *)r->argv; p < (const char *)r->argv + r->argv_size && *argc < max - 1; p += strlen(p) + 1)
