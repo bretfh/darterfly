@@ -18,6 +18,8 @@
 (defconstant +ramdisk-size+ 1552)
 (defconstant +core-start+ 1560)
 (defconstant +core-size+ 1568)
+(defconstant +keep-start+ 1592)
+(defconstant +keep-size+ 1600)
 
 (define-global serial-event :u64)
 (define-global restart-core :u64 :extern t)
@@ -234,6 +236,10 @@
       ((= n 68) (ok regs (changed-memory a b)))
       ((= n 69) (ok regs (log-read a b (if b (reg regs +r-rdx+) 0))))
       ((= n 70) (ok regs (log-started)))
+      ((= n 71) (ok regs (log-drained a)))
+      ((= n 72) (ok regs (log-previous-read a b)))
+      ((= n 73) (panic "requested by world 0
+"))
       ((= n 67) (ok regs (if (logand b #x100) (progn (outb a (logand b #xFF)) 0) (inb a))))
       ((and (not (privileged)) (= n 6))
        (pair-out a (mem :u64 (+ (current-world) +w-image+)) (mem :u64 (+ (current-world) +w-image-size+)))

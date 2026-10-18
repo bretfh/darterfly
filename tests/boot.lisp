@@ -672,6 +672,11 @@
                 (return seen)))
             (sleep 1)))
 
+(defun settled (c)
+  (image:send c ":sync")
+  (image:expect c ":SYNC" :timeout 120)
+  (image:expect c "* " :timeout 120))
+
 (defun count-restarts (c)
   (let ((text (image:transcript c)))
     (loop with at = 0 for hit = (search "restart: core " text :start2 at)
@@ -811,6 +816,7 @@
                (image:send c "(darterfly/install:save-generation)")
                (is (image:expect c "restart: core " :timeout 300) "the running image is saved and restarted")
                (is (image:expect c "init: pid 1" :timeout 120) "the session comes back")
+               (settled c)
                (is (search ":MADE-LIVE" (ask "(cl-user::made-live)")) "what was made live is still there")
                (is (search "42" (listener-text-until c "42")) "the listener comes back with what it held")
                (is (search "T" (ask "(loop :repeat 600 :until (equal \"gen-2\" (darterfly/install:current)) :do (sleep 0.5) :finally (return (equal \"gen-2\" (darterfly/install:current))))"))
@@ -826,6 +832,7 @@
              (progn
                (is (image:expect c "boot.efi: generation gen-2" :timeout 60) "the saved system boots")
                (is (image:expect c "init: pid 1" :timeout 120))
+               (settled c)
                (is (search ":MADE-LIVE" (ask "(cl-user::made-live)")) "a change made live survives a cold boot")
                (is (search "42" (listener-text-until c "42")) "and so does the listener"))
           (image:finish c 5))))))
@@ -947,6 +954,25 @@
                (image:expect c "* " :timeout 120)
                (let ((seen (ask "(progn (sleep 3) (let ((text (uiop:read-file-string darterfly/log:*system-log*))) (list :boots (count-if (lambda (line) (eql 20 (search (concatenate (quote string) \"darterfly Kernel\" \" Version\") line))) (uiop:split-string text :separator '(#\\Newline))) :error (and (search \"breaker: broken on purpose\" text) t))))")))
                  (is (search "(:BOOTS 2 :ERROR T)" seen) "the next boot finds the last one's log and adds its own: ~a" seen)))
+          (image:finish c 5))))))
+
+(test a-panic-restarts-and-the-next-boot-logs-it
+  (let ((disk (merge-pathnames "panic-log.img" (darterfly-file "build/")))
+        (image::*reboot* t))
+    (uiop:delete-file-if-exists disk)
+    (let ((c (image:bare-console :root disk)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 120)
+               (ask "(progn (sleep 2) :ready)")
+               (image:send c "(darterfly/log::machdep 73)")
+               (is (image:expect c "panic(cpu 0" :timeout 30))
+               (is (image:expect c "panic: restarting the machine" :timeout 30) "a panic restarts the machine")
+               (is (image:expect c "the last boot left" :timeout 120) "the next boot finds the last one's ring")
+               (image:expect c "* " :timeout 120)
+               (let ((seen (ask "(progn (sleep 3) (let ((text (uiop:read-file-string darterfly/log:*system-log*))) (list :ended (and (search (concatenate 'string \"log: the last boot\" \" ended\") text) t) :panic (and (search (concatenate 'string \"| panic(cpu 0\" \" caller\") text) t) :why (and (search (concatenate 'string \"): requested by\" \" world 0\") text) t))))")))
+                 (is (search "(:ENDED T :PANIC T :WHY T)" seen) "the panic is in the log after the restart: ~a" seen)))
           (image:finish c 5))))))
 
 (test a-program-that-quits-ends-only-its-own-process

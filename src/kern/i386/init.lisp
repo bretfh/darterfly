@@ -236,7 +236,12 @@
   (kprintf "mp_desc: gdt, idt and ktss loaded
 ")
   (vm-page-bootstrap args)
-  (pmap-bootstrap args)
+  (let ((kept (mem :u64 (+ args +keep-start+)))
+        (kept-size (mem :u64 (+ args +keep-size+))))
+    (pmap-bootstrap args)
+    (when (and kept (the :u32 (log-keep (+ kept +physmap-base+) kept-size)))
+      (kprintf "log: kept at 0x%lx; the last boot left %lu bytes unread
+" kept (log-previous-read 0 0))))
   (console-init)
   (kalloc-init)
   (kprintf "vm: %lu MB free

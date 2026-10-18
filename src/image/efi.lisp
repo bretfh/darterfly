@@ -299,6 +299,7 @@
 (defvar *input-devices* '("virtio-keyboard-pci" "virtio-tablet-pci"))
 (defvar *network-device* "virtio-net-pci,netdev=net0,romfile=")
 (defvar *extra-qemu* nil)
+(defvar *reboot* nil)
 
 (defun bare-qemu (esp &optional disks root forwards)
   (append
@@ -326,7 +327,8 @@
    (list "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
         "-monitor" (format nil "unix:~a,server=on,wait=off" (monitor-path))
         "-qmp" (format nil "unix:~a,server=on,wait=off" (qmp-path))
-        "-display" "none" "-serial" "stdio" "-no-reboot")))
+        "-display" "none" "-serial" "stdio")
+   (unless *reboot* (list "-no-reboot"))))
 
 (defun root-boot-args (boot-args root)
   (if root (format nil "rd=disk2s1 ~a" boot-args) boot-args))
