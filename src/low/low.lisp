@@ -3,7 +3,7 @@
   (:shadow #:compile)
   (:export #:define-low #:define-global #:low-object #:inb #:outb #:ref #:mem #:pause #:result #:while
            #:package-object #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:monitor #:sti-mwait #:outw #:address
-           #:rep-movsb #:rep-stosb #:&va #:va-next #:rdtsc #:rdtscp #:trap #:trap-errno #:return-address
+           #:rep-movsb #:rep-stosb #:&va #:va-next #:rdtsc #:rdtscp #:trap #:trap-errno #:exchange #:fetch-add #:fs-word #:return-address
            #:invlpg #:set-cr3 #:cpuid-edx #:cpuid #:cpu-data #:fxsave #:fxrstor #:code-address #:call-pointer #:read-cr #:set-cr #:fninit #:compare-and-swap #:rdrand #:int3 #:build-date #:*build-date* #:lidt #:ltr
            #:efi-call #:wide #:define-efi-entry #:package-image
            #:signed< #:signed<= #:signed> #:signed>= #:sar #:sign-extend #:signed-truncate #:signed-rem))
@@ -419,6 +419,16 @@
                     (inst jmp :nc done)
                     (inst neg rax-tn)
                     (sb-assem::emit-label done)))))
+             ((exchange fetch-add)
+              (compile (second args)) (spush rax-tn)
+              (compile (first args))
+              (inst mov rdx-tn rax-tn)
+              (spop rcx-tn)
+              (dolist (b (if (eq (find-symbol (symbol-name op) '#:darterfly/low) 'exchange) '(#x87 #x0A) '(#xF0 #x0F #xC1 #x0A)))
+                (inst byte b))
+              (inst mov :dword (reg :dword 0) (reg :dword 1)))
+             (fs-word (dolist (b '(#x64 #x48 #x8B #x04 #x25)) (inst byte b))
+                      (dotimes (i 4) (inst byte (ldb (byte 8 (* 8 i)) (first args)))))
              (rdtscp (dolist (b '(#x0F #x01 #xF9)) (inst byte b))
                      (inst mov :dword (reg :dword 0) (reg :dword 1)))
              (lidt (compile (first args))
