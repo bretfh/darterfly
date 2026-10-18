@@ -228,6 +228,7 @@
                                            (if b (deadline-after (truncate b 1000000) (* (rem b 1000000) 1000)) 0))))
       ((= n 62) (ok regs (grant-memory a b (reg regs +r-rdx+) (reg regs +r-r10+))))
       ((= n 63) (ok regs (grant-vectors a b)))
+      ((= n 64) (ok regs (port-into a b)))
       ((and (not (privileged)) (= n 6))
        (pair-out a (mem :u64 (+ (current-world) +w-image+)) (mem :u64 (+ (current-world) +w-image-size+)))
        (ok regs 0))

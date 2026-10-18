@@ -1696,7 +1696,7 @@
                (ask "(with-open-file (o \"/Volumes/served/notes/new.txt\" :direction :output) (write-string (make-string 20000 :initial-element #\\x) o))")
                (let ((r (ask "(format nil \"[~a ~{~a~^ ~}]\" (length (uiop:read-file-string \"/Volumes/served/notes/new.txt\")) (mapcar (function file-namestring) (directory \"/Volumes/served/notes/*.*\")))")))
                  (is (search "[20000 new.txt]" r) "writes a file there and lists it: ~a" r))
-               (ask "(progn (darterfly/storage::call *storage* :sync) (darterfly/run:stop-world *storage*))" 120))
+               (ask "(progn (darterfly/storage:sync-remote \"/Volumes/served\") (darterfly/run:stop-world *storage*))" 120))
           (image:finish c 5))))
     (let ((v (image-volume extra)))
       (is (equal 20000 (length (file-text v "/notes/new.txt"))) "and the file is on the disk"))))

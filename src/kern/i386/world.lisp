@@ -705,3 +705,12 @@
 (define-low window-io (pa)
   (let ((va (window-io-in (current-world) pa)))
     (if va va (- 0 +eperm+))))
+
+(define-low port-into ((id :u64) out)
+  (let ((w (world-by-id id)))
+    (when (or (not w) (logand (mem :u64 (+ w +w-flags+)) +privileged+)) (result (- 0 +einval+)))
+    (unless (the :u32 (user-ok out 16 1)) (result (- 0 +efault+)))
+    (let ((p (port-make w)))
+      (setf (mem :u64 out) (name-add w p +receive-right+))
+      (setf (mem :u64 (+ out 8)) (name-add (current-world) p 0))
+      0)))

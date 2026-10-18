@@ -1,7 +1,7 @@
 (defpackage #:darterfly/worlds
   (:use #:cl)
   (:export #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages #:spawn-record #:receive-into #:copy-from #:copy-into
-           #:heartbeat #:*watchdog-limit* #:quiet-watchdog #:pause #:resume #:checkpoint #:restore #:grant-memory #:grant-vectors))
+           #:heartbeat #:*watchdog-limit* #:quiet-watchdog #:pause #:resume #:checkpoint #:restore #:grant-memory #:grant-vectors #:port-into))
 (in-package #:darterfly/worlds)
 
 (define-condition world-error (error)
@@ -27,9 +27,16 @@
 
 (defun make-port () (machdep 40))
 
+(defvar *reply-buffer* nil)
+
+(defun reply-buffer ()
+  (or *reply-buffer* (setf *reply-buffer* (make-array +max-message+ :element-type '(unsigned-byte 8)))))
+
 (defun call (port message)
   (let ((m (octets message))
-        (r (make-array +max-message+ :element-type '(unsigned-byte 8))))
+        (r (if (eq sb-thread:*current-thread* (sb-thread:main-thread))
+               (reply-buffer)
+               (make-array 4096 :element-type '(unsigned-byte 8)))))
     (with-octets (ms m)
       (with-octets (rs r)
         (subseq r 0 (machdep 41 port ms (length m) rs (length r)))))))
@@ -84,6 +91,11 @@
 
 (defun grant-vectors (world &rest vectors)
   (machdep 63 world (reduce #'logior vectors :key (lambda (v) (ash 1 (- v #x30))) :initial-value 0)))
+
+(defun port-into (world)
+  (let ((out (make-array 2 :element-type '(unsigned-byte 64))))
+    (with-octets (o out) (machdep 64 world o))
+    (values (aref out 0) (aref out 1))))
 
 (defun pause (world) (machdep 53 world))
 
