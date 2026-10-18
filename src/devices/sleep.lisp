@@ -30,5 +30,9 @@
                (error (c) (format *error-output* "~&device ~a: ~a~%" (entry-name e) c)))))
     (when root (walk root))))
 
-(defun suspend-devices () (each-device #'suspend :children-first))
-(defun wake-devices () (each-device #'wake :parents-first))
+(defun suspend-devices ()
+  (when *registry-root* (announce :suspending *registry-root*))
+  (each-device #'suspend :children-first))
+(defun wake-devices ()
+  (each-device #'wake :parents-first)
+  (when *registry-root* (announce :woke *registry-root*)))

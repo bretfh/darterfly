@@ -65,8 +65,31 @@
       (error "suspend: the firmware offers no S3"))
     (flush-disks)
     (darterfly/devices:suspend-devices)
-    (unwind-protect (darterfly/devices:machdep 66 (logior control (ash event 16) (ash type 32)) facs)
-      (darterfly/devices:wake-devices))))
+    (let ((enables (quiet-gpes fadt)))
+      (unwind-protect (darterfly/devices:machdep 66 (logior control (ash event 16) (ash type 32)) facs)
+        (restore-gpes fadt enables)
+        (darterfly/devices:wake-devices)))))
+
+(defun gpe-block (fadt)
+  (let ((port (darterfly/devices::ml-phys-read-32 (+ fadt 80)))
+        (length (darterfly/devices::ml-phys-read-8 (+ fadt 92))))
+    (and (plusp port) (plusp length) (values port (floor length 2)))))
+
+(defun quiet-gpes (fadt)
+  (multiple-value-bind (port half) (gpe-block fadt)
+    (when port
+      (loop for i below half
+            collect (prog1 (darterfly/devices:port-read-8 (+ port half i))
+                      (darterfly/devices:port-write-8 (+ port half i) 0)
+                      (darterfly/devices:port-write-8 (+ port i) #xFF))))))
+
+(defun restore-gpes (fadt enables)
+  (multiple-value-bind (port half) (gpe-block fadt)
+    (when port
+      (loop for i below half
+            for enable in enables
+            do (darterfly/devices:port-write-8 (+ port i) #xFF)
+               (darterfly/devices:port-write-8 (+ port half i) enable)))))
 
 (defun shut-down ()
   (let* ((fadt (darterfly/devices::acpi-table "FACP"))

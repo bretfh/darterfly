@@ -42,7 +42,7 @@
     (setf (mem :u64 (+ facs 24)) 0)
     (setf sleep-tsc (rdtsc))
     (wbinvd)
-    (outw sleep-event #x8000)
+    (outw sleep-event #xC731)
     (let ((v (logand (inw sleep-control) (lognot (shl 7 10)))))
       (setf v (logior v (shl sleep-type 10)))
       (outw sleep-control v)

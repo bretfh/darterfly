@@ -56,16 +56,22 @@
                        (wait-for-power-change))))
           (wait-for-power-change)))))
 
-(defun call-awake (function)
+(defun hold-awake ()
   (sb-thread:with-recursive-lock (*power-lock*)
     (when (= 1 (incf *awake*))
       (handler-bind ((error (lambda (e) (declare (ignore e)) (decf *awake*))))
-        (wake))))
+        (wake)))))
+
+(defun release-awake ()
+  (sb-thread:with-recursive-lock (*power-lock*)
+    (when (zerop (decf *awake*))
+      (setf *asleep-after* (+ (get-internal-real-time) (ceiling (* 17 internal-time-units-per-second) 1000)))
+      (sb-thread:condition-notify *power-changed*))))
+
+(defun call-awake (function)
+  (hold-awake)
   (unwind-protect (funcall function)
-    (sb-thread:with-recursive-lock (*power-lock*)
-      (when (zerop (decf *awake*))
-        (setf *asleep-after* (+ (get-internal-real-time) (ceiling (* 17 internal-time-units-per-second) 1000)))
-        (sb-thread:condition-notify *power-changed*)))))
+    (release-awake)))
 
 (defmacro awake (&body body) `(call-awake (lambda () ,@body)))
 

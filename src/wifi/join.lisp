@@ -515,6 +515,13 @@
 
 (pushnew 'wifi-device-changed devices:*device-hooks*)
 
+(defun wifi-woke (event device)
+  (declare (ignore device))
+  (let ((d (and (eq event :woke) darterfly/net:*interface* (darterfly/net::interface-device darterfly/net:*interface*))))
+    (when (typep d 'wireless-interface) (lost d :woke))))
+
+(pushnew 'wifi-woke devices:*device-hooks*)
+
 (defun confirm-wifi ()
   (setf *wifi-confirmed* t))
 
