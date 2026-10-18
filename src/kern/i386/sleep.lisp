@@ -17,6 +17,7 @@
 (define-global ram-hashes :u64 :count 524288)
 (define-global changed-chunks :u64 :count 4096)
 (define-global nchanged :u64)
+(define-global hash-ticks :u64 :count 2)
 (define-global resume-stack :u8 :count 16384 :alignment 16)
 
 (define-low ap-park ()
@@ -38,8 +39,11 @@
 (define-low chunk-hash (pa)
   (let ((h 0) (at (+ pa +physmap-base+)) (end (+ pa +physmap-base+ #x10000)))
     (while (< at end)
-      (setf h (logxor (+ (shl h 7) (shr h 57)) (mem :u64 at)))
-      (incf at 8))
+      (let ((i 0))
+        (while (< i 64)
+          (setf h (logxor (+ (shl h 7) (shr h 57)) (mem :u64 (+ at i))))
+          (incf i 8)))
+      (incf at +page-size+))
     h))
 
 (define-low hash-ram ((compare :u32))
@@ -60,6 +64,9 @@
     k))
 
 (define-low changed-memory (buffer (count :u64))
+  (setf (mem :u64 buffer) (truncate (* 1000 (ref hash-ticks 0)) (ref commpage 0)))
+  (setf (mem :u64 (+ buffer 8)) (truncate (* 1000 (ref hash-ticks 1)) (ref commpage 0)))
+  (incf buffer 16)
   (let ((i 0))
     (while (and (< i nchanged) (< i count))
       (setf (mem :u64 (+ buffer (* 8 i))) (ref changed-chunks i))
@@ -110,10 +117,13 @@
     (funnel-lock)
     (if (and (= sleep-parked others) boot-page sleep-facs)
         (progn
-          (when sleep-check (cli) (hash-ram 0))
+          (when sleep-check
+            (cli)
+            (let ((t0 (rdtsc))) (hash-ram 0) (setf (ref hash-ticks 0) (- (rdtsc) t0))))
           (if (= (sleep-save (address sleep-context)) 0)
               (enter-s3)
-              (when sleep-check (hash-ram 1))))
+              (when sleep-check
+                (let ((t0 (rdtsc))) (hash-ram 1) (setf (ref hash-ticks 1) (- (rdtsc) t0))))))
         (kprintf "sleep: %u of %u cpus parked, page 0x%lx, facs 0x%lx; not sleeping
 " sleep-parked others boot-page sleep-facs))
     (setf (ref commpage 2) (- (rtc-epoch) (truncate (- (rdtsc) (ref commpage 1)) (ref commpage 0))))

@@ -71,17 +71,18 @@
         (darterfly/devices::wake-devices)))))
 
 (defun changed-memory ()
-  (let ((buffer (make-array 4096 :element-type '(unsigned-byte 64))))
+  (let ((buffer (make-array 4098 :element-type '(unsigned-byte 64))))
     (sb-sys:with-pinned-objects (buffer)
       (let* ((n (min 4096 (darterfly/devices:machdep 68 (sb-sys:sap-int (sb-sys:vector-sap buffer)) 4096)))
-             (chunks (sort (coerce (subseq buffer 0 n) 'list) #'<)))
+             (chunks (sort (coerce (subseq buffer 2 (+ 2 n)) 'list) #'<)))
         (loop with runs = nil
               for pa in chunks
               do (if (and runs (= pa (cdr (first runs))))
                      (setf (cdr (first runs)) (+ pa #x10000))
                      (push (cons pa (+ pa #x10000)) runs))
-              finally (return (mapcar (lambda (r) (list (format nil "~x" (car r)) (format nil "~x" (cdr r)) (floor (- (cdr r) (car r)) 1024)))
-                                      (nreverse runs))))))))
+              finally (return (list :ms (list (aref buffer 0) (aref buffer 1))
+                                    :ranges (mapcar (lambda (r) (list (format nil "~x" (car r)) (format nil "~x" (cdr r)) (floor (- (cdr r) (car r)) 1024)))
+                                                    (nreverse runs)))))))))
 
 (defun gpe-block (fadt)
   (let ((port (darterfly/devices::ml-phys-read-32 (+ fadt 80)))
