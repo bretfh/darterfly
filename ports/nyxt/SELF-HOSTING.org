@@ -126,8 +126,8 @@ have not been executed on Darterfly.
 | Lisp compilation | SBCL, ASDF and source-generation machinery | Nyxt's full dependency graph builds locally |
 | C compilation | Embedded TCC; compile-c/run-c/compile-units | C ABI probes needed by the chosen runtime |
 | Linking | Lisp link-kernel and static link-native; selected x86-64 relocations | Native tool linker, archives, COMDAT and required ELF features |
-| Isolated execution | Static ELF64 startup, protected segments, argv/env, exit/wait; raw and SBCL worlds | Native libc/TLS, BSD process integration and resource limits |
-| Process launching | BSD programs are registered Lisp functions | Native child execution for compiler/build commands |
+| Isolated execution | Static ELF64 startup, protected segments, argv/env, exit/wait; raw and SBCL worlds | Native libc/TLS and resource limits |
+| Process launching | BSD spawn/exec of Lisp programs and isolated static ELF; descriptor actions, cwd, wait4/signals | Child spawning from native tools and isolated SBCL worlds |
 | C exec/spawn API | exec family and posix_spawn report ENOSYS | Implement or narrowly adapt measured tool requirements |
 | Foreign libraries | dlopen only exposes built-in runtime symbols | Real loading/relocation/lifetime for unchanged cl-cef and dependencies |
 | Threads and memory | pthread and mmap/mprotect implementations | C++ runtime semantics, TLS destructors, mappings and failure behavior |
@@ -137,9 +137,10 @@ have not been executed on Darterfly.
 The raw world-spawn primitive starts machine code at an entry point.
 A separate static ELF64 loader and waitable world lifecycle are now
 implemented; see [[file:NATIVE-PROGRAMS.org][the native-program contract and guest tests]].
-Dynamic linkage and native TLS are still missing. The BSD function named
-execve still dispatches registered Lisp programs; that is not
-native executable replacement. Count capabilities by behavior, not name.
+[[file:BSD-NATIVE.org][BSD execve and posix-spawn now also launch native ELF]], with inherited
+descriptors, cwd, signals and wait4. Dynamic linkage, native TLS and
+spawn/wait requests from native callers remain missing. Count
+capabilities by behavior, not name.
 
 The existing linker is useful for Darterfly's own image, but its explicit
 relocation cases do not establish that it can link Clang or Chromium.
@@ -234,7 +235,9 @@ reproduced or its required source inputs cannot be obtained.
 
 Partial implementation: [[file:NATIVE-PROGRAMS.org][static ELF startup and world lifecycle]] pass
 18 guest checks, including a target-TCC/Lisp-linker build and execution.
-Descriptor/process-service integration and native libc/TLS remain open.
+[[file:BSD-NATIVE.org][BSD process integration and bounded descriptor services]] now also pass
+booted-OS tests, including a target-rebuilt runtime doing redirected I/O.
+Native child spawning, fuller libc/TLS and dynamic linkage remain open.
 
 Define executable format, startup ABI, libc/sysroot, TLS, C++ ABI, library
 loading and child-process behavior. Use a native program world, with

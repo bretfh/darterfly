@@ -55,6 +55,7 @@
       (fd-alloc file))))
 
 (defun dup2 (fd new)
+  (unless (<= 0 new 4095) (fail :ebadf))
   (syscall
     (let ((file (fd-file fd)))
       (unless (= fd new)

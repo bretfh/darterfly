@@ -97,6 +97,11 @@
         (incf done n)))
     1))
 
+(define-low native-validate (file (size :u64))
+  (when (> size (ash 128 20)) (result (- 0 +einval+)))
+  (unless (the :u32 (user-ok file size 0)) (result (- 0 +efault+)))
+  (if (the :u32 (native-elf-ok file size)) 0 (- 0 8)))
+
 (define-low native-spawn (file (size :u64) stack (stack-size :u64) name)
   (when (or (> size (ash 128 20)) (< stack-size 16)
             (> stack-size 65536) (logand stack-size 15))

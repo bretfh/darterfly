@@ -81,7 +81,8 @@ immediately. Console and network queues are sampled at most 10ms apart."
                       (+ (get-internal-real-time)
                          (ceiling (* timeout internal-time-units-per-second) 1000)))))
       (loop
-        (when (eq (proc-state *proc*) :zombie) (fail :eintr))
+        (when (or (eq (proc-state *proc*) :zombie)
+                  (proc-native-result *proc*)) (fail :eintr))
         (let ((results
                 (loop :for (fd events) :in entries
                       :collect

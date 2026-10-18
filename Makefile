@@ -71,3 +71,11 @@ test-local-sockets-guest:
 .PHONY: test-native-guest
 test-native-guest:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-executables-on-darterfly)) (uiop:quit 1))"'
+
+.PHONY: test-native-bsd-guest
+test-native-bsd-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-bsd-spawn-on-darterfly)) (uiop:quit 1))"'
+
+.PHONY: test-native-host
+test-native-host:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-bsd)) (uiop:quit 1))"'

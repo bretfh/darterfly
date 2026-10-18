@@ -45,11 +45,11 @@ The kernel keeps 128 native status slots. Exited children retain a slot
 until waited for, while their address spaces can already be reclaimed.
 Exhaustion returns EAGAIN rather than silently dropping statuses.
 
-These are world identifiers, not BSD process identifiers. The existing
-BSD execve/posix-spawn dispatcher still handles registered Lisp programs.
-There is no native descriptor inheritance, cwd setup, or shell launch
-integration in this increment. spawn-native is an explicit image-loading
-API; it reads a file and does not enforce its executable permission bits.
+These are world identifiers, not BSD process identifiers. The separate
+[[file:BSD-NATIVE.org][BSD native-process integration]] now supplies execve/posix-spawn,
+descriptor inheritance and actions, cwd, signals and wait4. The raw
+spawn-native API shown here remains an explicit image-loading API; it
+reads a file and does not enforce its executable permission bits.
 
 An optional :port delegates one send right, named 1 in the child. A native
 program can use the existing port protocol to request services. No port
@@ -104,13 +104,14 @@ thread initialization or C++ exception runtime.
 - [[file:../../src/kern/i386/native.lisp][Kernel ELF validation, segment loading and retained status slots]].
 - [[file:../../src/worlds/worlds.lisp][Lisp spawn-native, argument packing and wait-native interfaces]].
 - [[file:../../src/link/link.lisp][link-native, using the existing object relocation engine]].
-- [[file:../../src/bsd/dev/i386/systemcalls.lisp][Supervisor calls 65 and 66, and native exit handling]].
+- [[file:../../src/bsd/dev/i386/systemcalls.lisp][Supervisor calls 65 through 67, and native exit handling]].
 - [[file:../../src/kern/i386/trap.lisp][Fatal faults stop the world and record a signal]].
 
 Supervisor call 65 takes image address/length, stack address/length, and
 an optional receive-port name. It creates an unprivileged world. Call 66
 reaps a completed native world and returns its status, or negative EAGAIN
-while it still exists. Both calls are restricted to the system world.
+while it still exists. Call 67 validates an image without creating a world. All three calls
+are restricted to the system world.
 They use the kernel's numeric error convention: EAGAIN is 11, unlike the
 BSD service layer's EAGAIN value of 35. Do not mix the two namespaces.
 
@@ -172,11 +173,11 @@ host compilation or an image build alone as a successful guest test.
 
 * Next steps toward the compiler and browser
 
-1. Connect these native world lifetimes to BSD process records, exec and
-   spawn, descriptor actions, working directories and waitpid. Add a
-   checked service ABI for native libc, including cancellation of blocked
-   reads and polls. Keep the native world's identity as the authority for
-   its service requests. The existing world service refuses spawn/waitpid.
+1. Extend the implemented [[file:BSD-NATIVE.org][BSD process and descriptor service]] with
+   child spawning and waiting from native callers and isolated SBCL worlds.
+   System-world BSD spawn, descriptor actions, cwd, wait4 and blocked I/O
+   cancellation now work. The existing isolated Lisp-world service still
+   refuses spawn/waitpid; native callers also need that capability.
 2. Establish native libc startup and TLS, then qualify memory mapping,
    threads, atomics, filesystem operations and clocks against real tools.
    Add resource accounting and graceful allocation failure. The fixed

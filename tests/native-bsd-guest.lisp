@@ -1,0 +1,218 @@
+(in-package #:cl-user)
+
+(defparameter *native-bsd-exe* "/Users/darterfly/native-bsd-probe")
+(defun bsd-check (label ok)
+  (format t "~&[BSD-NATIVE ~a ~a]~%" label (if ok "PASS" "FAIL"))
+  (finish-output)
+  ok)
+(defun bsd-file (path text)
+  (with-open-file (s path :direction :output :if-exists :supersede)
+    (write-string text s)))
+(defun bsd-mode (path)
+  (darterfly/vfs:vnop-setattr (darterfly/vfs:namei path) :mode #o755))
+(defun bsd-start (mode &optional actions (exe *native-bsd-exe*))
+  (darterfly/bsd:posix-spawn exe (list exe mode "source") '("BUILD=native")
+                            :file-actions actions))
+(defun bsd-wait (pid)
+  (loop repeat 500 do
+    (multiple-value-bind (found status) (darterfly/bsd:wait4 pid :nohang t)
+      (unless (zerop found) (return-from bsd-wait status)))
+    (sleep 0.01))
+  (darterfly/bsd:kill pid :sigkill)
+  (error "Child ~d did not exit" pid))
+(defun bsd-error-name (fn)
+  (handler-case (progn (funcall fn) nil)
+    (darterfly/bsd:errno (e) (darterfly/bsd:errno-name e))))
+
+(bsd-mode *native-bsd-exe*)
+(ensure-directories-exist "/tmp/native-work/")
+(bsd-file "/tmp/native-work/source" "data")
+(bsd-file "/tmp/native-work/shared" "abcdef")
+(let* ((parent-cwd (darterfly/bsd:getcwd))
+       (fd (darterfly/bsd:open "/tmp/native-work/shared" 0)))
+  (unwind-protect
+       (progn
+         (dolist (to '(8 9 10 11)) (darterfly/bsd:dup2 fd to))
+         (darterfly/bsd::with-bsd
+           (setf (cdr (aref (darterfly/bsd::proc-fds darterfly/bsd:*proc*) 9)) t
+                 (cdr (aref (darterfly/bsd::proc-fds darterfly/bsd:*proc*) 10)) t))
+         (darterfly/bsd:read fd 2)
+         (let* ((pid (bsd-start
+                      "copy"
+                      `((:chdir "/tmp/native-work")
+                        (:dup2 ,fd 7) (:close ,fd) (:close 8)
+                        (:dup2 10 10) (:close 11)
+                        (:open 1 "artifact" ,(logior darterfly/bsd:+o-wronly+
+                                                   darterfly/bsd:+o-creat+
+                                                   darterfly/bsd:+o-trunc+))
+                        (:open 2 "diagnostics" ,(logior darterfly/bsd:+o-wronly+
+                                                      darterfly/bsd:+o-creat+
+                                                      darterfly/bsd:+o-trunc+)))))
+                (status (bsd-wait pid)))
+           (format t "~&[BSD-NATIVE COPY status ~d]~%" status)
+           (bsd-check "COPY-EXIT" (= status (ash 23 8)))
+           (bsd-check "ARTIFACT"
+                      (string= "cddata" (uiop:read-file-string
+                                         "/tmp/native-work/artifact")))
+           (let ((ids (darterfly/run::read-octets
+                       "/tmp/native-work/diagnostics")))
+             (bsd-check "IDENTITY"
+                        (and (= (length ids) 8)
+                             (= pid (darterfly/bsd::request-u32 ids 0))
+                             (= (darterfly/bsd:getpid)
+                                (darterfly/bsd::request-u32 ids 4))))))
+         (bsd-check "OFFSET" (= 6 (darterfly/bsd:lseek fd 0 :cur)))
+         (bsd-check "PARENT-FDS"
+                    (and (every (lambda (n)
+                                  (not (bsd-error-name
+                                        (lambda () (darterfly/bsd:fcntl n 3)))))
+                                '(8 9 10 11))
+                         (cdr (aref (darterfly/bsd::proc-fds
+                                     darterfly/bsd:*proc*) 10))))
+         (bsd-check "PARENT-CWD" (string= parent-cwd (darterfly/bsd:getcwd)))
+         (bsd-check "CREATED"
+                    (string= "built" (uiop:read-file-string
+                                      "/tmp/native-work/created"))))
+    (dolist (n (list fd 8 9 10 11))
+      (ignore-errors (darterfly/bsd:close n)))))
+
+;; Fail before publishing a child. Prepared descriptor references must unwind.
+(let ((before (hash-table-count darterfly/bsd::*procs*)))
+  (with-open-file (s "/tmp/bad-elf" :direction :output
+                     :element-type '(unsigned-byte 8))
+    (write-sequence #(127 69 76 70 0 0 0 0) s))
+  (bsd-mode "/tmp/bad-elf")
+  (bsd-check "BAD-ELF"
+             (eq :enoexec (bsd-error-name
+                           (lambda () (bsd-start "exit" nil "/tmp/bad-elf")))))
+  (bsd-check "BAD-ACTION"
+             (eq :ebadf (bsd-error-name
+                         (lambda () (bsd-start "exit" '((:dup2 999 1)))))))
+  (bsd-check "NO-CHILD-LEAK"
+             (= before (hash-table-count darterfly/bsd::*procs*))))
+(bsd-check "FAULT" (= 11 (bsd-wait (bsd-start "fault"))))
+(bsd-check "MALFORMED" (= 0 (bsd-wait (bsd-start "bad"))))
+
+(multiple-value-bind (a b) (darterfly/bsd:socketpair 1 1)
+  (unwind-protect
+       (let ((pid (bsd-start "socket" `((:dup2 ,b 0) (:dup2 ,b 1)
+                                        (:closefrom 3)))))
+         (darterfly/bsd:close b)
+         (setf b nil)
+         (darterfly/bsd:write a #(112 105 110 103))
+         (bsd-check "SOCKET"
+                    (and (equalp #(112 105 110 103) (darterfly/bsd:read a 4))
+                         (= 0 (bsd-wait pid))))
+         (bsd-check "EOF" (equalp #() (darterfly/bsd:read a 1))))
+    (ignore-errors (darterfly/bsd:close a))
+    (when b (ignore-errors (darterfly/bsd:close b)))))
+
+;; Kill while the process thread is inside a blocking descriptor operation.
+(dolist (mode '("read" "poll" "console"))
+  (multiple-value-bind (rd wr) (darterfly/bsd:pipe)
+    (multiple-value-bind (ready-r ready-w) (darterfly/bsd:pipe)
+      (let ((pid nil))
+        (unwind-protect
+             (progn
+               (setf pid (bsd-start (if (string= mode "console") "read" mode)
+                                    `((:dup2 ,rd 0) (:dup2 ,ready-w 2)
+                                      (:closefrom 3)
+                                      ,@(when (string= mode "console")
+                                          '((:open 0 "/dev/console" 0))))))
+               (darterfly/bsd:close rd) (setf rd nil)
+               (darterfly/bsd:close ready-w) (setf ready-w nil)
+               (unless (equalp #(114 101 97 100 121)
+                               (darterfly/bsd:read ready-r 5))
+                 (error "No native ready notification"))
+               (sleep 0.05)
+               (when (string= mode "read")
+                 (bsd-check "NOHANG"
+                            (zerop (darterfly/bsd:wait4 pid :nohang t))))
+               (darterfly/bsd:kill pid :sigkill)
+               (bsd-check (cond ((string= mode "read") "KILL-READ")
+                                ((string= mode "poll") "KILL-POLL")
+                                (t "KILL-CONSOLE"))
+                          (= 9 (bsd-wait pid)))
+               (setf pid nil))
+          (when pid (ignore-errors (darterfly/bsd:kill pid :sigkill)))
+          (dolist (fd (list rd wr ready-r ready-w))
+            (when fd (ignore-errors (darterfly/bsd:close fd)))))))))
+
+(let ((pid (bsd-start "loop")))
+  (unwind-protect
+       (progn
+         (loop repeat 100 until (darterfly/bsd::proc-native-world
+                                  (darterfly/bsd:pfind pid)) do (sleep 0.01))
+         (darterfly/bsd:kill pid :sigstop)
+         (multiple-value-bind (found status) (darterfly/bsd:wait4 pid :untraced t)
+           (bsd-check "STOP"
+                      (and (= found pid) (darterfly/bsd:wifstopped status)
+                           (eq :paused
+                               (darterfly/worlds:world-state
+                                (darterfly/bsd::proc-native-world
+                                 (darterfly/bsd:pfind pid)))))))
+         (darterfly/bsd:kill pid :sigcont)
+         (multiple-value-bind (found status) (darterfly/bsd:wait4 pid :continued t)
+           (bsd-check "CONTINUE"
+                      (and (= found pid) (darterfly/bsd:wifcontinued status))))
+         (darterfly/bsd:kill pid :sigkill)
+         (bsd-check "KILL-LOOP" (= 9 (bsd-wait pid))))
+    (ignore-errors (darterfly/bsd:kill pid :sigkill))))
+
+;; Rebuild the real native I/O runtime with target TCC, then BSD-spawn it.
+(bsd-check
+ "REBUILD"
+ (let* ((root "/usr/src/darterfly/")
+        (sources '("src/native/start.S" "src/native/io.c"
+                   "tests/native-bsd-probe.c"))
+        (objects
+          (loop for source in sources for i from 0
+                for out = (format nil "/tmp/native-bsd-~d.o" i)
+                do (unless (darterfly/cc:compile-c
+                            (concatenate 'string root source) out :compat nil)
+                     (error "Cannot compile ~a" source))
+                collect (darterfly/link:read-object
+                         (darterfly/run::read-octets out) out :user))))
+   (with-open-file (s "/tmp/native-bsd-rebuilt" :direction :output
+                      :element-type '(unsigned-byte 8))
+     (write-sequence (darterfly/link:link-native objects) s))
+   (bsd-mode "/tmp/native-bsd-rebuilt")
+   t))
+(bsd-check
+ "REBUILT-RUN"
+ (and (= 0 (bsd-wait
+            (bsd-start "socket"
+                       `((:open 0 "/tmp/native-work/source" 0)
+                         (:open 1 "/tmp/rebuilt-artifact"
+                          ,(logior darterfly/bsd:+o-wronly+
+                                   darterfly/bsd:+o-creat+))
+                         (:closefrom 3))
+                       "/tmp/native-bsd-rebuilt")))
+      (string= "data" (uiop:read-file-string "/tmp/rebuilt-artifact"))))
+;; Lisp build drivers use this path through libsa, rather than BSD directly.
+(bsd-check
+ "RUN-PROGRAM"
+ (let ((process (sb-ext:run-program
+                 "/tmp/native-bsd-rebuilt" '("socket") :search nil :wait nil
+                 :input #P"/tmp/native-work/source"
+                 :output #P"/tmp/sbcl-native-artifact"
+                 :error #P"/tmp/sbcl-native-diagnostics"
+                 :if-output-exists :supersede :if-error-exists :supersede)))
+   (unwind-protect
+        (progn
+          (unless (loop repeat 500
+                        when (eq :exited (sb-ext:process-status process))
+                          return t
+                        do (sleep 0.01))
+            (sb-ext:process-kill process 9)
+            (error "RUN-PROGRAM child did not exit"))
+          (and (= 0 (sb-ext:process-exit-code process))
+               (string= "data"
+                        (uiop:read-file-string "/tmp/sbcl-native-artifact"))))
+     (sb-ext:process-close process))))
+(bsd-check "REPEAT"
+           (loop repeat 70 always (= (ash 17 8) (bsd-wait (bsd-start "exit")))))
+(bsd-check "ALIVE"
+           (and (= 42 (+ 20 22))
+                (zerop (hash-table-count darterfly/bsd::*native-processes*))
+                (sb-thread:thread-alive-p darterfly/bsd::*native-dispatcher*)))

@@ -176,3 +176,50 @@ appears in make check.
 
 The existing raw-world port/exit test passed all eight assertions,
 including stopping a world with a held call and reclaiming 200 worlds.
+
+* BSD native process and descriptor milestone, 2026-10-18
+
+[[file:BSD-NATIVE.org][The BSD native-process contract]] now passes these checks:
+
+| Check | Result |
+|-------+--------|
+| make check | Pass; LOADED |
+| make test-native-host | 26 / 26 |
+| make test-native-bsd-guest | 26 / 26 |
+| Existing native ELF guest | 18 / 18 |
+| Existing socket ABI guest | 7 / 7 |
+| Existing raw-world port/lifecycle guest | 8 / 8 |
+| Existing Lisp process exit guest | 3 / 3 |
+| Full host suite | 1325 / 1326; known onboarding failure |
+
+The remaining host failure is the previously recorded undefined
+DARTERFLY/INSTALL::FIRST-START-ENTRIES in
+FRESH-INSTALL-DOES-NOT-INHERIT-COMPLETED-SETUP. It remains unfixed and is
+not counted as a pass. The new native host checks pass within that suite.
+
+The native BSD guest verifies executable permission/setup, argv/env/cwd,
+PID/PPID, shared file offsets, descriptor closure and CLOEXEC, redirected
+artifacts and diagnostics, pipes, inherited sockets, polling and EOF.
+Bad images and bad spawn actions leave no published child. Native faults
+produce waitable signal status. Malformed service requests are rejected.
+Kill works during read, poll, console read and a native loop; stop and
+continue report through wait4. Seventy successive spawn/reap cycles leave
+no active native process mappings and keep the shared broker alive.
+
+The guest compiles the runtime and probe with target TCC and links them
+with the Lisp linker. That locally rebuilt program runs in a new world,
+reads a redirected file and writes a verified artifact. SBCL run-program
+also launches it with file redirection and obtains its exit code. TCC
+itself still executes in the system world in this test.
+
+No native parent spawning a child, C++ compiler, Nyxt or engine execution
+is claimed by these tests. No physical-hardware run was performed; these
+are actual Darterfly kernel/image boots under four-vCPU QEMU.
+
+Reproducible guest transcript: build/native-bsd-guest.log. Temporary logs:
+
+- [[file:/tmp/native-bsd-run-program.log][Final BSD native guest, including RUN-PROGRAM]]
+- [[file:/tmp/native-bsd-host2.log][Focused host checks]]
+- [[file:/tmp/native-bsd-host-full.log][Complete host suite and known failure]]
+- [[file:/tmp/native-bsd-guest-regressions.log][Existing guest regressions]]
+- [[file:/tmp/native-bsd-check-final.log][Final compiler/load check]]

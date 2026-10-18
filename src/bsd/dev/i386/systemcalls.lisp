@@ -217,7 +217,9 @@
     (unless (or (privileged) (= n 3) (= n 4) (and (= n 16) (user-ok a b 1)) (and (>= n 40) (<= n 43)) (= n 49) (= n 50) (= n 51)
                 (and (or (= n 6) (= n 17)) (user-ok a 16 1))
                 (= n 9) (= n 30) (= n 10) (= n 14) (= n 12) (= n 13) (= n 61))
-      (result (error regs +eperm+)))
+      (result (if (and (>= n 65) (<= n 67))
+                  (ok regs (- 0 +eperm+))
+                  (error regs +eperm+))))
     (cond
       ((= n 61) (ok regs (if (privileged) +physmap-base+ +phys-window+)))
       ((and (not (privileged)) (= n 9)) (ok regs (window-pages 1)))
@@ -232,6 +234,7 @@
       ((= n 65) (ok regs (native-spawn a b (reg regs +r-rdx+)
                                      (reg regs +r-r10+) (reg regs +r-r8+))))
       ((= n 66) (ok regs (native-wait a)))
+      ((= n 67) (ok regs (native-validate a b)))
       ((and (not (privileged)) (= n 6))
        (pair-out a (mem :u64 (+ (current-world) +w-image+)) (mem :u64 (+ (current-world) +w-image-size+)))
        (ok regs 0))

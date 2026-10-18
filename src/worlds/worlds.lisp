@@ -1,6 +1,6 @@
 (defpackage #:darterfly/worlds
   (:use #:cl)
-  (:export #:spawn-native #:wait-native #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages #:spawn-record #:receive-into #:copy-from #:copy-into
+  (:export #:spawn-native #:spawn-native-image #:read-native-image #:wait-native #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages #:spawn-record #:receive-into #:copy-from #:copy-into
            #:heartbeat #:*watchdog-limit* #:quiet-watchdog #:pause #:resume #:checkpoint #:restore #:grant-memory #:grant-vectors #:port-into))
 (in-package #:darterfly/worlds)
 
@@ -233,22 +233,33 @@
         (put (- words 3) 4096))
       v)))
 
+(defun read-native-image (path)
+  "Read and validate an immutable executable snapshot before BSD exec commits."
+  (let ((file (with-open-file (s path :element-type '(unsigned-byte 8))
+                (when (> (file-length s) (* 128 1024 1024))
+                  (error 'world-error :code 8))
+                (let ((v (make-array (file-length s)
+                                     :element-type '(unsigned-byte 8))))
+                  (unless (= (read-sequence v s) (length v))
+                    (error "Short executable read"))
+                  v))))
+    (with-octets (f file) (machdep 67 f (length file)))
+    file))
+
+(defun spawn-native-image (image &key argv envp port)
+  "Start a previously read ELF image. The kernel revalidates it at launch."
+  (let ((stack (native-stack argv envp)))
+    (with-octets (f image)
+      (with-octets (s stack)
+        (machdep 65 f (length image) s (length stack) (or port 0))))))
+
 (defun spawn-native (path &key argv envp port)
   "Load a static ELF64 executable into a fresh isolated world.
 ARGV includes argv[0]; the default is PATH. No descriptors are inherited.
 PORT, if supplied, is delegated as send right 1 in the child."
-  (let* ((file (with-open-file (s path :element-type '(unsigned-byte 8))
-                 (when (> (file-length s) (* 128 1024 1024))
-                   (error "Native image exceeds 128 MiB"))
-                 (let ((v (make-array (file-length s)
-                                      :element-type '(unsigned-byte 8))))
-                   (unless (= (read-sequence v s) (length v))
-                     (error "Short executable read"))
-                   v)))
-         (stack (native-stack (or argv (list (namestring path))) envp)))
-    (with-octets (f file)
-      (with-octets (s stack)
-        (machdep 65 f (length file) s (length stack) (or port 0))))))
+  (spawn-native-image (read-native-image path)
+                      :argv (or argv (list (namestring path)))
+                      :envp envp :port port))
 
 (defun wait-native (world &key nohang timeout)
   "Reap WORLD and return its BSD wait status; NIL means still running.

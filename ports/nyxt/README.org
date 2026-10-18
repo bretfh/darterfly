@@ -135,5 +135,10 @@ References:
 
 [[file:NATIVE-PROGRAMS.org][Static native programs now load and run in isolated worlds]], with
 arguments, exit/fault status, cancellation and reaping. The guest test also
-compiles and links its executable inside Darterfly. BSD process integration,
-native libc/TLS and the C++ compiler port remain next steps.
+compiles and links its executable inside Darterfly.
+
+[[file:BSD-NATIVE.org][BSD spawn and descriptor integration]] now connects those worlds to
+process IDs, wait4, signals, inherited descriptors and bounded native I/O.
+The guest rebuilds the runtime with target TCC and runs the resulting
+program with verified redirected I/O. Native child spawning, fuller
+libc/TLS and the C++ compiler port remain next steps.
