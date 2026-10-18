@@ -282,6 +282,8 @@
       (setf (proc-cwd proc) cwd
             (proc-comm proc) "world"
             (gethash (proc-pid proc) *procs*) proc)
+      (dotimes (fd 3)
+        (vector-push-extend (cons (make-instance 'vnode :fd fd :device t :access 2) nil) (proc-fds proc)))
       proc)))
 
 (defun end-world-proc (proc)
@@ -316,6 +318,37 @@
          (length octets))))
     (t (- (vfs:errno-code :enosys)))))
 
+(defun serve-socket-transfer (proc token op fd there size request sizes)
+  (let ((address (make-array 28 :element-type '(unsigned-byte 8) :initial-element 0))
+        (length (make-array 4 :element-type '(unsigned-byte 8) :initial-element 0)))
+    (values
+     (case op
+       (:sendto
+        (let ((octets (make-array size :element-type '(unsigned-byte 8)))
+              (to (subseq request 72 (+ 72 (third sizes)))))
+          (sb-sys:with-pinned-objects (octets)
+            (darterfly/worlds:copy-from token there (sb-sys:sap-int (sb-sys:vector-sap octets)) size))
+          (as-libsa (proc)
+            (if (and (= (socket-type (fd-socket fd)) +sock-dgram+) (plusp (length to)))
+                (sb-sys:with-pinned-objects (to)
+                  (multiple-value-bind (ip port) (get-sockaddr (sb-sys:sap-int (sb-sys:vector-sap to)))
+                    (sendto fd octets ip port)))
+                (write fd octets)))))
+       (:recvfrom
+        (as-libsa (proc)
+          (let ((octets (if (= (socket-type (fd-socket fd)) +sock-dgram+)
+                            (multiple-value-bind (data ip port) (recvfrom fd size)
+                              (sb-sys:with-pinned-objects (address length)
+                                (put-sockaddr ip port (sb-sys:sap-int (sb-sys:vector-sap address)) (sb-sys:sap-int (sb-sys:vector-sap length))))
+                              data)
+                            (read fd size))))
+            (setf octets (coerce octets '(simple-array (unsigned-byte 8) (*))))
+            (sb-sys:with-pinned-objects (octets)
+              (darterfly/worlds:copy-into token there (sb-sys:sap-int (sb-sys:vector-sap octets)) (length octets)))
+            (length octets))))
+       (t (- (vfs:errno-code :enosys))))
+     (if (eq op :recvfrom) (list nil nil address length) (list nil nil nil nil)))))
+
 (defun reply-octets (result lens work offsets)
   (let ((reply (make-array (+ 24 (reduce #'+ lens)) :element-type '(unsigned-byte 8) :initial-element 0)))
     (dotimes (i 8) (setf (aref reply i) (ldb (byte 8 (* 8 i)) result)))
@@ -328,8 +361,7 @@
                   (incf out len)))
     reply))
 
-(defparameter +world-refuses+
-  '(:spawn :socket :bind :listen :accept :connect :getsockname :getpeername :shutdown :recvfrom :sendto :resolve))
+(defparameter +world-refuses+ '(:spawn :waitpid))
 
 (defun serve-request (proc request token)
   (let* ((op (request-u64 request 8))
@@ -340,6 +372,13 @@
          (offsets (let ((at 0)) (loop :for size :in sizes :collect (prog1 at (incf at size))))))
     (cond ((or (null name) (member name +world-refuses+))
            (reply-octets (- (vfs:errno-code :enosys)) '(0 0 0 0) #() offsets))
+          ((member name '(:sendto :recvfrom))
+           (multiple-value-bind (result outs) (serve-socket-transfer proc token name (first args) (second args) (second sizes) request sizes)
+             (let* ((lens (loop :for out :in outs :for size :in sizes :collect (if out (min size (length out)) 0)))
+                    (work (apply #'concatenate '(vector (unsigned-byte 8)) (loop :for out :in outs :for len :in lens :collect (if out (subseq out 0 len) #()))))
+                    (at 0)
+                    (starts (loop :for len :in lens :collect (prog1 at (incf at len)))))
+               (reply-octets result lens work starts))))
           ((member (second kinds) '(4 5))
            (reply-octets (serve-transfer proc token name (first args) (second args) (second sizes) (fourth args))
                          '(0 0 0 0) #() offsets))

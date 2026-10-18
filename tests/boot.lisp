@@ -1403,6 +1403,53 @@
                    "its files, a rename and a large write are on the disk"))
           (image:finish c 5))))))
 
+(test a-world-uses-the-network
+  (let ((disk (merge-pathnames "world-net.img" (darterfly-file "build/"))))
+    (uiop:delete-file-if-exists disk)
+    (darterfly/image::root-disk disk (* 256 1048576)
+                            (append (darterfly/image::root-entries)
+                                    (list (list :file "usr/lib/sbcl/sbcl.core" (image::octets (darterfly-file "build/sbcl-mt/output/sbcl.core"))))))
+    (multiple-value-bind (server port) (host-listener)
+      (let* ((acceptor (sb-thread:make-thread
+                        (lambda ()
+                          (handler-case
+                              (sb-sys:with-deadline (:seconds 120)
+                                (let* ((conn (sb-bsd-sockets:socket-accept server))
+                                       (st (sb-bsd-sockets:socket-make-stream conn :input t :output t :element-type 'character)))
+                                  (prog1 (read-line st)
+                                    (write-line "hello world, from the host" st)
+                                    (finish-output st)
+                                    (sb-bsd-sockets:socket-close conn))))
+                            (error (e) (princ-to-string e))))))
+             (c (image:bare-console :root disk))
+             (code (let ((*package* (find-package :darterfly/test)))
+                     (prin1-to-string
+                      `(progn
+                         (load "/usr/lib/sbcl/contrib/sb-bsd-sockets.fasl")
+                         (let* ((s (make-instance (find-symbol "INET-SOCKET" "SB-BSD-SOCKETS") :type :stream :protocol :tcp)))
+                           (funcall (find-symbol "SOCKET-CONNECT" "SB-BSD-SOCKETS") s #(10 0 2 2) ,port)
+                           (let ((st (funcall (find-symbol "SOCKET-MAKE-STREAM" "SB-BSD-SOCKETS") s :input t :output t :element-type 'character)))
+                             (write-line "hello host, from a world" st)
+                             (finish-output st)
+                             (with-open-file (o "/work/net.txt" :direction :output :if-exists :supersede)
+                               (write-string (read-line st) o)))))))))
+        (flet ((ask (form &optional (timeout 120)) (image:send c form) (image:expect c (format nil "~%* ") :timeout timeout)))
+          (unwind-protect
+               (progn
+                 (image:expect c "* " :timeout 90)
+                 (ask "(darterfly/net:start-network)")
+                 (ask "(ensure-directories-exist \"/work/\")")
+                 (is (search "(:EXIT 0 :FILES 0)"
+                             (ask (format nil "(darterfly/run:run-world \"/usr/lib/sbcl/sbcl.core\" '~s :cwd \"/\" :disk t :timeout 100)"
+                                          (list "/System/Library/Kernels/kernel" "--core" "/System/Library/Kernels/darterfly.core"
+                                                "--no-sysinit" "--no-userinit" "--disable-debugger" "--eval" code "--quit")))))
+                 (is (equal "hello host, from a world" (sb-thread:join-thread acceptor :default nil :timeout 30))
+                     "the host hears the world")
+                 (is (search "hello world, from the host" (ask "(uiop:read-file-string \"/work/net.txt\")"))
+                     "and the world hears the host"))
+            (image:finish c 5)
+            (sb-bsd-sockets:socket-close server)))))))
+
 (defvar *run-wait* 1800)
 
 (defun sbcl-run (disk core argv &key stdin script (files t))

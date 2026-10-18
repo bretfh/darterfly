@@ -161,7 +161,13 @@
       (handler-case
           (multiple-value-bind (n token) (darterfly/worlds:receive-into port m :timeout 1)
             (case (u64-at m 0)
-              (1 (darterfly/worlds:reply token (if proc (darterfly/bsd:serve-request proc m token) (make-array 24 :element-type '(unsigned-byte 8) :initial-element 255))))
+              (1 (let ((request (subseq m 0 n)))
+                   (sb-thread:make-thread
+                    (lambda ()
+                      (darterfly/worlds:reply token (if proc
+                                                        (darterfly/bsd:serve-request proc request token)
+                                                        (make-array 24 :element-type '(unsigned-byte 8) :initial-element 255))))
+                    :name "world call")))
               (2 (setf code (u64-at m 8)
                        archive (make-array (u64-at m 16) :element-type '(unsigned-byte 8))
                        at 0)

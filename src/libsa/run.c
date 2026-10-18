@@ -19,7 +19,9 @@ enum {
   VFS_open = 1, VFS_close, VFS_read, VFS_write, VFS_pread, VFS_pwrite, VFS_lseek, VFS_stat, VFS_lstat, VFS_fstat,
   VFS_readlink, VFS_symlink, VFS_mkdir, VFS_rmdir, VFS_unlink, VFS_rename, VFS_chdir, VFS_fchdir, VFS_getcwd,
   VFS_realpath, VFS_chmod, VFS_fchmod, VFS_chown, VFS_fchown, VFS_truncate, VFS_ftruncate, VFS_dup, VFS_dup2,
-  VFS_fcntl, VFS_readdir, VFS_link, VFS_utimes, VFS_fsync, VFS_umask, VFS_pipe, VFS_spawn, VFS_waitpid
+  VFS_fcntl, VFS_readdir, VFS_link, VFS_utimes, VFS_fsync, VFS_umask, VFS_pipe, VFS_spawn, VFS_waitpid,
+  VFS_socket, VFS_bind, VFS_listen, VFS_accept, VFS_connect, VFS_getsockname, VFS_getpeername, VFS_shutdown,
+  VFS_recvfrom, VFS_sendto, VFS_resolve
 };
 
 enum { ARG_INT, ARG_STRING, ARG_IN, ARG_OUT, ARG_FROM, ARG_INTO };
@@ -409,8 +411,29 @@ static long port_vfs(long op, long a, long b, long c, long d) {
     kinds[0] = ARG_OUT; lens[0] = 2 * sizeof(int); break;
   case VFS_waitpid:
     kinds[1] = ARG_OUT; lens[1] = sizeof(int); break;
+  case VFS_bind: case VFS_connect:
+    kinds[1] = ARG_IN; lens[1] = args[2] > 28 ? 28 : args[2]; break;
+  case VFS_accept: case VFS_getsockname: case VFS_getpeername:
+    kinds[1] = ARG_OUT; lens[1] = 28; kinds[2] = ARG_OUT; lens[2] = sizeof(unsigned); break;
+  case VFS_resolve:
+    kinds[0] = ARG_STRING; kinds[1] = ARG_OUT; lens[1] = 8 * 16; kinds[2] = ARG_OUT; lens[2] = 8 * sizeof(int); break;
+  case VFS_recvfrom: {
+    long *v = (long *)b;
+    args[1] = v[0]; args[2] = v[2]; args[3] = v[3];
+    kinds[1] = ARG_INTO; lens[1] = v[1] > PORT_CHUNK ? PORT_CHUNK : v[1];
+    kinds[2] = ARG_OUT; lens[2] = 28; kinds[3] = ARG_OUT; lens[3] = sizeof(unsigned);
+    break;
+  }
+  case VFS_sendto: {
+    long *v = (long *)b;
+    args[1] = v[0]; args[2] = v[2]; args[3] = c;
+    kinds[1] = ARG_FROM; lens[1] = v[1] > PORT_CHUNK ? PORT_CHUNK : v[1];
+    kinds[2] = ARG_IN; lens[2] = v[2] ? v[3] : 0;
+    break;
+  }
   case VFS_close: case VFS_lseek: case VFS_fchdir: case VFS_fchmod: case VFS_fchown: case VFS_ftruncate:
-  case VFS_dup: case VFS_dup2: case VFS_fcntl: case VFS_fsync: case VFS_umask:
+  case VFS_dup: case VFS_dup2: case VFS_fcntl: case VFS_fsync: case VFS_umask: case VFS_socket: case VFS_listen:
+  case VFS_shutdown:
     break;
   default:
     return -ENOSYS;
