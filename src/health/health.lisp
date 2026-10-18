@@ -34,12 +34,16 @@
                      :gateway gateway :ms (and rtt (round (* rtt 1000)))))))))
 
 (define-check :wifi
-  (if (null darterfly/wifi::*card*)
-      (list :absent)
-      (let ((status (darterfly/wifi:network-status)))
-        (list (if (and (eq (getf status :kind) :wifi) (getf status :up)) :ok :fail)
-              :ssid (getf status :ssid) :signal (getf status :signal)
-              :rejoining (and darterfly/wifi::*link* (darterfly/wifi::wireless-rejoining darterfly/wifi::*card*))))))
+  (cond ((and (null darterfly/wifi::*card*) darterfly/net:*interface*
+              (darterfly/wifi::wired-p (darterfly/net::interface-device darterfly/net:*interface*)))
+         (list :off :because :cable))
+        ((null darterfly/wifi::*card*)
+         (list :absent))
+        (t
+         (let ((status (darterfly/wifi:network-status)))
+           (list (if (and (eq (getf status :kind) :wifi) (getf status :up)) :ok :fail)
+                 :ssid (getf status :ssid) :signal (getf status :signal)
+                 :rejoining (and darterfly/wifi::*link* (darterfly/wifi::wireless-rejoining darterfly/wifi::*card*)))))))
 
 (define-check :display
   (if (null (darterfly/display::graphics))
