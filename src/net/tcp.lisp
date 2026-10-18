@@ -12,6 +12,8 @@
 (defconstant +rtobase+ 1)
 (defconstant +rexmtmax+ 64)
 (defconstant +sndbuf+ 65536)
+(defconstant +rcvbuf+ (* 1024 1024))
+(defconstant +window-shift+ 5)
 
 (defvar *tcp-lock* (sb-thread:make-mutex :name "tcp"))
 (defvar *tcp-changed* (sb-thread:make-waitqueue))
@@ -19,6 +21,7 @@
 (defvar *listeners* (make-hash-table))
 (defvar *next-port* 49152)
 (defvar *tcp-timer* nil)
+(defvar *acks-due* nil)
 
 (defstruct (connection (:conc-name tcp-))
   local-port remote-ip remote-port (state :closed) (maxseg +mss+)
@@ -27,7 +30,7 @@
   (eof nil) (reset nil) listener (closed-at nil) (out-of-order nil)
   (snd-buffer (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0)) (snd-off 0)
   (snd-cwnd (* +cwnd-init-pkts+ +mss+)) (snd-ssthresh +window+) snd-recover (dupacks 0) (bytes-acked 0)
-  srtt rttvar (rxtcur +rtobase+))
+  srtt rttvar (rxtcur +rtobase+) (snd-scale 0) (rcv-scale 0) (ack-pending nil))
 
 (defstruct listener port (pending nil))
 
@@ -42,12 +45,31 @@
   (let* ((header-length (+ 20 (length options)))
          (segment (octets (be (tcp-local-port c) 2) (be (tcp-remote-port c) 2) (be seq 4)
                           (be (if (logtest flags +ack+) (tcp-rcv-nxt c) 0) 4)
-                          (be (ash (/ header-length 4) 4) 1) (be flags 1) (be +window+ 2) (be 0 2) (be 0 2)
+                          (be (ash (/ header-length 4) 4) 1) (be flags 1) (be (advertised-window c flags) 2) (be 0 2) (be 0 2)
                           options (coerce data '(vector (unsigned-byte 8))))))
     (replace segment (be (transport-checksum (source-address (tcp-remote-ip c)) (tcp-remote-ip c) 6 segment) 2) :start1 16)
     (send-ip 6 (tcp-remote-ip c) segment)))
 
-(defun mss-option (c) (octets (be 2 1) (be 4 1) (be (tcp-maxseg c) 2)))
+(defun advertised-window (c flags)
+  (let ((free (max 0 (- +rcvbuf+ (length (tcp-received c))))))
+    (if (logtest flags +syn+)
+        (min free +window+)
+        (min +window+ (ash free (- (tcp-rcv-scale c)))))))
+
+(defun syn-options (c)
+  (octets (be 2 1) (be 4 1) (be (tcp-maxseg c) 2) (be 1 1) (be 3 1) (be 3 1) (be +window-shift+ 1)))
+
+(defun window-shift-offered (packet offset)
+  (loop with at = 20
+        while (< at offset)
+        do (case (aref packet at)
+             (0 (return nil))
+             (1 (incf at))
+             (t (when (and (= (aref packet at) 3) (< (+ at 2) offset))
+                  (return (min 14 (aref packet (+ at 2)))))
+                (incf at (max 2 (aref packet (1+ at))))))))
+
+(defun mss-option (c) (syn-options c))
 
 (defun maxseg-for (ip) (if (ip6-p ip) (- +mss+ 20) +mss+))
 
@@ -156,6 +178,7 @@
          (offset (* 4 (ash (aref packet 12) -4)))
          (flags (aref packet 13)) (window (u16be packet 14))
          (data (subseq packet offset))
+         (shift (and (logtest flags +syn+) (window-shift-offered packet offset)))
          (key (tcp-key dst-port src src-port)))
     (sb-thread:with-recursive-lock (*tcp-lock*)
       (let ((c (gethash key *connections*)))
@@ -165,6 +188,7 @@
                                      :irs seq :rcv-nxt (seq+ seq 1) :snd-wnd window
                                      :maxseg (maxseg-for src) :snd-cwnd (* +cwnd-init-pkts+ (maxseg-for src))
                                      :listener (gethash dst-port *listeners*))))
+             (when shift (setf (tcp-snd-scale c) shift (tcp-rcv-scale c) +window-shift+))
              (let ((iss (new-iss))) (setf (tcp-iss c) iss (tcp-snd-una c) iss (tcp-snd-nxt c) iss))
              (setf (gethash key *connections*) c)
              (queue-segment c (logior +syn+ +ack+) #())))
@@ -178,6 +202,7 @@
            (remhash key *connections*))
           ((eq (tcp-state c) :syn-sent)
            (when (and (logtest flags +syn+) (logtest flags +ack+) (ack-up-to c ack))
+             (when shift (setf (tcp-snd-scale c) shift (tcp-rcv-scale c) +window-shift+))
              (setf (tcp-irs c) seq (tcp-rcv-nxt c) (seq+ seq 1) (tcp-snd-wnd c) window (tcp-state c) :established)
              (send-segment c +ack+ (tcp-snd-nxt c))))
           (t
@@ -185,9 +210,9 @@
              (let ((acked (ack-up-to c ack)))
                (cond (acked (unless (eq (tcp-state c) :syn-received) (ack-rcvd c acked)))
                      ((and (= ack (tcp-snd-una c)) (zerop (length data)) (not (logtest flags (logior +syn+ +fin+)))
-                           (= window (tcp-snd-wnd c)) (tcp-unacked c))
+                           (= (ash window (tcp-snd-scale c)) (tcp-snd-wnd c)) (tcp-unacked c))
                       (dupack-rcvd c))))
-             (setf (tcp-snd-wnd c) window)
+             (setf (tcp-snd-wnd c) (ash window (tcp-snd-scale c)))
              (when (and (eq (tcp-state c) :syn-received) (all-acked-p c))
                (setf (tcp-state c) :established)
                (let ((l (tcp-listener c))) (when l (setf (listener-pending l) (append (listener-pending l) (list c))))))
@@ -197,10 +222,25 @@
                  (:closing (setf (tcp-state c) :time-wait (tcp-closed-at c) (get-internal-real-time)))
                  (:last-ack (setf (tcp-state c) :closed) (remhash key *connections*)))))
            (when (or (plusp (length data)) (logtest flags +fin+))
-             (receive-in-order c seq data (logtest flags +fin+))
-             (send-segment c +ack+ (tcp-snd-nxt c)))
+             (if (and (= seq (tcp-rcv-nxt c)) (not (logtest flags +fin+)) (null (tcp-out-of-order c)))
+                 (progn (receive-in-order c seq data nil)
+                        (unless (tcp-ack-pending c)
+                          (setf (tcp-ack-pending c) t)
+                          (push c *acks-due*)))
+                 (progn (receive-in-order c seq data (logtest flags +fin+))
+                        (setf (tcp-ack-pending c) nil)
+                        (send-segment c +ack+ (tcp-snd-nxt c)))))
            (tcp-output c))))
       (sb-thread:condition-broadcast *tcp-changed*))))
+
+(defun flush-acks ()
+  (when *acks-due*
+    (sb-thread:with-recursive-lock (*tcp-lock*)
+      (dolist (c (shiftf *acks-due* nil))
+        (when (tcp-ack-pending c)
+          (setf (tcp-ack-pending c) nil)
+          (handler-case (send-segment c +ack+ (tcp-snd-nxt c))
+            (net-error () nil)))))))
 
 (defun receive-in-order (c seq data fin)
   (let ((behind (seq- (tcp-rcv-nxt c) seq)))
@@ -311,8 +351,11 @@
   (sb-thread:with-recursive-lock (*tcp-lock*)
     (tcp-wait (lambda () (or (plusp (length (tcp-received c))) (tcp-eof c) (tcp-reset c))) timeout)
     (cond ((plusp (length (tcp-received c)))
-           (prog1 (coerce (tcp-received c) '(simple-array (unsigned-byte 8) (*)))
-             (setf (tcp-received c) (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0))))
+           (let ((closing (> (length (tcp-received c)) (floor +rcvbuf+ 2))))
+             (prog1 (coerce (tcp-received c) '(simple-array (unsigned-byte 8) (*)))
+               (setf (tcp-received c) (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0))
+               (when (and closing (member (tcp-state c) '(:established :fin-wait-1 :fin-wait-2)))
+                 (handler-case (send-segment c +ack+ (tcp-snd-nxt c)) (net-error () nil))))))
           ((or (tcp-eof c) (tcp-reset c)) nil)
           (t (make-array 0 :element-type '(unsigned-byte 8))))))
 
