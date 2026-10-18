@@ -16,7 +16,8 @@ Keep SBCL, low and TCC. Investigate a port of an existing C++ toolchain;
 do not write a C++ compiler or grow TCC/low into one. Clang/LLVM is the
 leading candidate if Chromium is chosen. Its native -cc1 frontend now
 runs against shared libsa and compiles working C++ programs inside the OS.
-Native LLD also links and runs that output. The complete compiler and
+Native LLD also links and runs that output. Native llvm-ar and both
+TableGen tools now run on the same runtime. The complete compiler and
 build-tool chain is not yet self-hosted.
 
 CEF remains a candidate, not a settled engine choice. Its existing Nyxt
@@ -128,8 +129,10 @@ in a native world; Chromium has not been executed on Darterfly.
 |----------+-------------------------+--------------------------------|
 | Lisp compilation | SBCL, ASDF and source-generation machinery | Nyxt's full dependency graph builds locally |
 | C compilation | Embedded seed and standalone TCC; local compiler rebuild with shared libsa | Broader C corpus and bootstrap-input regeneration |
-| C++ compilation | Native Clang 19.1.7 -cc1; C++ client and upstream LLVM demangler compiled in guest | Archive utilities, generators and full compiler/runtime rebuild |
-| Linking | Native LLD handles tested archives, COMDAT, partial and final links; Lisp image linker remains | Larger compiler links, archive utilities and seed source rebuild |
+| C++ compilation | Native Clang 19.1.7 -cc1; C++ client and upstream LLVM demangler compiled in guest | Full compiler/runtime source rebuild and configuration regeneration |
+| Linking | Native LLD handles tested archives, COMDAT, partial and final links; Lisp image linker remains | Larger compiler links, configuration regeneration and seed source rebuild |
+| Archives | Native llvm-ar and ranlib create, modify and index tested archives | Larger compiler archives and remaining object utilities |
+| Table generation | Native LLVM and Clang TableGen; attributes, declarations and x86 registers match reference | Complete table set and local generator source rebuild |
 | Isolated execution | Static ELF64 startup, protected segments, argv/env, exit/wait; raw and SBCL worlds | Selected LLVM C++ runtime passes; broader coverage and resource limits |
 | Process launching | BSD spawn/exec of Lisp programs and isolated static ELF; descriptor actions, cwd, wait4/signals | Native child spawn/wait and isolated SBCL run-program work; broaden attributes and groups |
 | C exec/spawn API | One Low libsa posix_spawn/wait path for native and Lisp worlds | Attributes/groups/exec and measured tool requirements |
@@ -268,7 +271,8 @@ by the image build, so this is not complete bootstrap-input closure.
 Keep this local build loop passing while qualifying C++ runtime behavior,
 thread cleanup/concurrency and dynamic linkage for the selected LLVM
 configuration. Native Clang -cc1 now works with that same runtime. The
-next compiler gates are archive utilities, generators and a local rebuild.
+archive and TableGen tools also run locally. The next gates are build
+configuration regeneration and complete compiler/runtime source rebuilds.
 
 Define executable format, startup ABI, libc/sysroot, TLS, C++ ABI, library
 loading and child-process behavior. Use a native program world, with
@@ -315,8 +319,15 @@ specific ABI/API/resource blockers and reconsider the architecture.
 C++ objects, extracts needed archive members, resolves COMDAT, performs
 relocatable links, and produces working executables. It also combines the
 individual imported runtime objects inside Darterfly. The runtime sources
-and LLD seed sources have not yet been fully compiled locally. Archive
-utilities, TableGen and build/configuration generation remain open.
+and LLD seed sources have not yet been fully compiled locally.
+
+[[file:../llvm-tools/README.org][Native llvm-ar and both TableGen tools now use the same shared runtime]].
+The guest generates LLVM attributes, Clang declarations and x86 register
+tables and compares them with the pinned host build. A local TD edit feeds
+native Clang, llvm-ar and LLD to produce a working executable. Archive
+replacement changes the running program. The seed tools themselves remain
+cross compiled; complete table and build/configuration regeneration remain
+part of the source-rebuild gate.
 
 Bring the necessary build tools and generators onto Darterfly. Rebuild
 Clang/LLD and required runtimes from their pinned sources using the seed.

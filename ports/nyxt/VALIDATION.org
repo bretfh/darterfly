@@ -1,6 +1,72 @@
 #+title: Nyxt compatibility validation
 #+date: 2026-10-18
 
+* Native LLVM archive and TableGen tools, 2026-10-18
+
+Branch: codex/nyxt-compat. Parent: 87b603f. Upstream llvm-ar, llvm-tblgen
+and clang-tblgen 19.1.7 run in separate native worlds against the existing
+shared libsa and C++ runtime. No runtime implementation or upstream source
+was changed. See [[file:../llvm-tools/README.org][the native tools guide and source-rebuild sequence]].
+
+| Check | Result |
+|-------+--------|
+| Aggregate seed build, including prerequisites | Pass |
+| make test-native-llvm-tools-guest | 23 / 23 |
+| Existing native LLD guest | 18 / 18 |
+| Existing native Clang guest | 13 / 13 |
+| make check | Pass; LOADED |
+| Full host suite | 1352 / 1353; same known onboarding failure |
+
+The host failure is the existing undefined
+DARTERFLY/INSTALL::FIRST-START-ENTRIES in
+FRESH-INSTALL-DOES-NOT-INHERIT-COMPLETED-SETUP. It is not a passing check.
+
+The aggregate seed recipe completed with prerequisites enabled. Its
+recorded archive/object input counts are 29 for llvm-ar, 73 for LLVM
+TableGen and 26 for Clang TableGen; all belong to the Darterfly-targeted
+LLVM build tree. The normal Clang and legacy LLD build entry points were
+also exercised after the common recipe extension.
+
+The guest regenerated LLVM attributes, Clang declaration nodes and x86
+register information, matching the pinned host build byte for byte. It
+edited a TD file locally and compiled a C++ program that requires the new
+attribute and generated Clang declarations. Native llvm-ar produced an
+archive, LLD selected its needed member, and another world ran the result.
+An unused member's missing dependency stayed unselected. Replacing a
+member changed the program's result from 42 to 43.
+
+The archive tests cover deterministic contents, listing, extraction,
+replacement, deletion, response files, paths with spaces and indexing.
+They remove the symbol table and require llvm-ranlib to reconstruct it.
+Both generators reject malformed input, archive errors preserve usable
+contents, and later jobs still succeed. All native children are reaped.
+
+The harness boots the actual kernel/image in four-vCPU, 4 GiB QEMU/KVM.
+It explicitly stages seeds and sources on a disposable APFS disk; there
+was no physical-hardware run or installation into the user's normal disk.
+The seeds' own complete source rebuild and the browser engine remain open.
+
+Seed sizes and SHA-256:
+
+| Tool | Bytes | SHA-256 |
+|------+-------+---------|
+| llvm-ar | 6971128 | e509e0a159ef165497f64b4ef4ebd2f62e3f4c62edb7cb2ceb1cdd02b3c87866 |
+| llvm-tblgen | 3302240 | 0ec39fafab58e622950fd3b749d80aad777c8d23d26a19e180299fcccf38e9dc |
+| clang-tblgen | 1970696 | d45491c36cf417fc2f718945efb2e3490c94940b78a51dba879b49fac3e2d00d |
+
+Evidence:
+
+- [[file:../../build/native-llvm-tools-guest.log][Actual-OS native tools transcript]]
+- [[file:../../build/llvm-tools/llvm-ar.json][llvm-ar provenance]]
+- [[file:../../build/llvm-tools/llvm-tblgen.json][LLVM TableGen provenance]]
+- [[file:../../build/llvm-tools/clang-tblgen.json][Clang TableGen provenance]]
+- [[file:/tmp/darter-tools-build-all.log][Default aggregate seed build]]
+- [[file:/tmp/darter-tools-guest-final.log][Final native tools guest run]]
+- [[file:/tmp/darter-tools-lld-regression.log][Native LLD regression]]
+- [[file:/tmp/darter-tools-clang-regression.log][Native Clang regression]]
+- [[file:/tmp/darter-tools-check.log][Compiler/load check]]
+- [[file:/tmp/darter-tools-host.log][Full host suite]]
+
 * Native ELF LLD and guest C++ linking, 2026-10-18
 
 Branch: codex/nyxt-compat. Parent: 2da6a6c. Upstream LLD 19.1.7 now runs

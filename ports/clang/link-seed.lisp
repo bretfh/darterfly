@@ -1,9 +1,11 @@
 (require :asdf)
 (asdf:load-system :darterfly/cc)
 (defparameter *native-tool* (or (uiop:getenv "DARTERFLY_NATIVE_TOOL") "clang"))
-(assert (member *native-tool* '("clang" "lld") :test #'string=))
+(assert (member *native-tool* '("clang" "lld" "llvm-ar" "llvm-tblgen" "clang-tblgen") :test #'string=))
 (defparameter *native-output*
-  (if (string= *native-tool* "lld") "build/lld/ld.lld" "build/clang/clang"))
+  (cond ((string= *native-tool* "lld") "build/lld/ld.lld")
+        ((string= *native-tool* "clang") "build/clang/clang")
+        (t (format nil "build/llvm-tools/~a" *native-tool*))))
 (defparameter *native-inputs*
   (list (format nil "build/clang/bin/darter-~a.o" *native-tool*)
         "build/cxx/runtime.o" "build/cxx/crt0.o"))

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cross-seed the upstream Clang frontend for Darterfly's shared libsa."""
+"""Cross-seed upstream LLVM tools for Darterfly's shared libsa."""
 import argparse
 import hashlib
 import json
@@ -23,9 +23,13 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--skip-prerequisites', action='store_true',
                         help='Reuse already built host generators and C++ runtime')
-    parser.add_argument('--lld', action='store_true',
-                        help='Build the native ELF linker using the same LLVM tree')
+    selector = parser.add_mutually_exclusive_group()
+    selector.add_argument('--lld', action='store_true',
+                          help='Build the native ELF linker using the same LLVM tree')
+    selector.add_argument('--tool', choices=['clang', 'lld', 'llvm-ar',
+                                            'llvm-tblgen', 'clang-tblgen'])
     args = parser.parse_args(argv)
+    tool = args.tool or ('lld' if args.lld else 'clang')
     if not SOURCE.is_dir():
         raise SystemExit('Realize the LLVM source described in ports/cxx/README.org')
     if not args.skip_prerequisites:
@@ -78,18 +82,20 @@ set(CMAKE_SKIP_RPATH ON)
         HAVE_UNW_ADD_DYNAMIC_FDE='OFF', LLVM_ENABLE_ASSERTIONS='OFF', LLVM_ENABLE_DUMP='OFF')
     cxx.run([CMAKE, '-S', SOURCE / 'llvm', '-B', OUT, '-G', 'Ninja',
              *[f'-D{k}={v}' for k, v in options.items()]])
-    cxx.run([NINJA, '-C', OUT, '-j20', 'darter-lld' if args.lld else 'darter-clang'])
+    cxx.run([NINJA, '-C', OUT, '-j20', 'darter-' + tool])
     env = os.environ.copy()
-    env['DARTERFLY_NATIVE_TOOL'] = 'lld' if args.lld else 'clang'
+    env['DARTERFLY_NATIVE_TOOL'] = tool
     profile = os.environ['GUIX_ENVIRONMENT']
     env['CL_SOURCE_REGISTRY'] = f'{ROOT}//:{profile}/share/common-lisp//'
     env['ASDF_OUTPUT_TRANSLATIONS'] = f'/:{Path.home()}/.cache/common-lisp/darterfly/'
     subprocess.run(['sbcl', '--dynamic-space-size', '4096', '--no-userinit',
                     '--script', str(ROOT / 'ports/clang/link-seed.lisp')],
                    check=True, env=env, cwd=ROOT)
-    destination = ROOT / 'build/lld' if args.lld else OUT
-    seed = destination / ('ld.lld' if args.lld else 'clang')
-    (destination / 'provenance.json').write_text(json.dumps({
+    directory = tool if tool in ('clang', 'lld') else 'llvm-tools'
+    destination = ROOT / 'build' / directory
+    seed = destination / ('ld.lld' if tool == 'lld' else tool)
+    provenance = 'provenance.json' if directory == tool else tool + '.json'
+    (destination / provenance).write_text(json.dumps({
         'source': str(SOURCE), 'llvm_version': '19.1.7',
         'target': 'x86_64-unknown-none-elf',
         'compiler': subprocess.check_output([clang, '--version'], text=True),

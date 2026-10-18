@@ -128,15 +128,17 @@ and child-process cleanup. [[file:../nyxt/VALIDATION.org][The validation record]
 and regression results.
 
 The archive writer in the test makes a standard indexless ar fixture from
-guest-compiled objects. It is not a native llvm-ar/ranlib port. Neither
-shared libraries, a dynamic loader, dynamic TLS, LTO nor non-x86 targets
-are qualified. Larger compiler links still need resource measurements.
+guest-compiled objects. That earlier fixture remains a linker regression.
+A separate [[file:../llvm-tools/README.org][native llvm-ar/ranlib suite]] now creates and modifies archives
+in the OS. Neither shared libraries, a dynamic loader, dynamic TLS, LTO
+nor non-x86 targets are qualified. Larger compiler links still need
+resource measurements.
 
 * Next toward rebuilding the compiler and browser
 
-1. Bring up native LLVM archive/object utilities and TableGen. Use the
-   existing native Clang/LLD pair to compile and link those tools, then
-   regenerate LLVM/Clang's tables locally.
+1. Native llvm-ar and both TableGen tools now pass their first guest
+   workloads. Compile their own sources with native Clang/LLD, extend
+   generation to the full selected build, and qualify larger archives.
 2. Make configuration and the build graph regenerable in Darterfly. Port
    the required CMake/Ninja/Python pieces or provide a Lisp build runner
    with equivalent, explicit inputs; retained host-generated files do

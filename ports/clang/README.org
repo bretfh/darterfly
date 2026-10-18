@@ -138,11 +138,13 @@ instead of dereferencing address zero.
 1. Qualify this frontend on larger upstream translation units, including
    resource limits, diagnostics, file streams and failed output writes.
 2. Native LLD now handles the tested archive, COMDAT and partial/final
-   links on the same runtime. Bring up archive/object utilities and
-   qualify larger compiler links. Retire host LLD from the complete seed
-   rebuild loop, including the LLVM archive resolution step.
-3. Build and run LLVM's TableGen tools in native worlds. Replace the host
-   generators and regenerate the target's configured headers and tables.
+   links on the same runtime. Native llvm-ar now supplies archives;
+   qualify other needed object utilities and larger compiler links. Retire
+   host LLD from the complete seed rebuild loop, including the LLVM
+   archive resolution step.
+3. [[file:../llvm-tools/README.org][Both TableGen tools now run in native worlds]]. Extend the qualified
+   LLVM/Clang/x86 generation to every table required by the chosen build,
+   then regenerate the target's configured headers locally.
 4. Supply a native build runner. A Lisp runner may initially execute a
    recorded build graph; a complete rebuild must regenerate that graph
    locally and account for CMake/Ninja/Python or their replacements.

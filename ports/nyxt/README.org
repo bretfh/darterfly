@@ -20,8 +20,9 @@ is independent of this worktree.
 [[file:../clang/README.org][Clang -cc1 now runs in an isolated world]], compiles C++ and an upstream
 LLVM component inside Darterfly, and produces objects the OS links and
 runs with shared libsa. [[file:../lld/README.org][Native ELF LLD now also performs those links]],
-including archives and runtime partial linking. The source rebuild and browser
-engine port remain open gates in [[file:SELF-HOSTING.org][the self-hosting plan]].
+including archives and runtime partial linking.
+[[file:../llvm-tools/README.org][Native llvm-ar and both TableGen tools]] extend that local build chain.
+The source rebuild and browser engine port remain open gates in [[file:SELF-HOSTING.org][the self-hosting plan]].
 
 * Local stream sockets
 
@@ -168,5 +169,6 @@ compiler loop; the C++ compiler and browser-engine gates remain open.
 [[file:../cxx/README.org][LLVM's selected C++ runtime now runs in isolated worlds against shared libsa]].
 Constructor/destructor ordering, exceptions, RTTI, standard containers,
 allocation and threaded lifetimes have booted-OS evidence. C++ objects
-remain cross-built seed inputs; native Clang/LLD and local source rebuilds
-are the next compiler gate.
+start as cross-built seed inputs. Native Clang/LLD, llvm-ar and both
+TableGen tools now run on this runtime; complete local source rebuilds
+and configuration regeneration remain the next compiler gate.
