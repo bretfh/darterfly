@@ -28,6 +28,7 @@
    (ht :initform nil :accessor link-ht)
    (signal :initform nil :accessor link-signal)
    (frames :initform nil :accessor link-frames)
+   (block-acks :initform nil :accessor link-block-acks)
    (lock :initform (sb-thread:make-mutex :name "wifi link") :reader link-lock)))
 
 (defun mac-octets (text)
@@ -259,6 +260,37 @@
     (when (and (>= (length body) 8) (equalp (subseq body 0 6) #(#xAA #xAA 3 0 0 0)))
       (values (logior (ash (aref body 6) 8) (aref body 7)) (subseq body 8)))))
 
+(defun block-ack-action (l f)
+  (and (>= (length f) 27) (= (aref f 0) #xD0) (equalp (subseq f 10 16) (link-bssid l))
+       (= (aref f 24) 3) (member (aref f 25) '(0 2))
+       (aref f 25)))
+
+(defun answer-addba (l f)
+  (let* ((token (aref f 26))
+         (params (logior (aref f 27) (ash (aref f 28) 8)))
+         (timeout (logior (aref f 29) (ash (aref f 30) 8)))
+         (ssn (ash (logior (aref f 31) (ash (aref f 32) 8)) -4))
+         (tid (ldb (byte 4 2) params))
+         (size (let ((asked (ldb (byte 10 6) params))) (if (zerop asked) 64 (min 64 asked))))
+         (baid (ignore-errors
+                (u32le (getf (command-ok (link-card l) 5 #x16
+                                         (octets (le-u32 0) (le-u32 1) tid 0 0 0 (le-u16 ssn) (le-u16 size)))
+                             :payload)
+                       0)))
+         (bssid (link-bssid l)))
+    (when baid
+      (setf (link-block-acks l) (cons (cons tid baid) (remove tid (link-block-acks l) :key #'car))))
+    (transmit l (octets (frame-header #xD0 0 bssid (getf (card-nvm (link-card l)) :mac) bssid (next-seq l))
+                        3 1 token (le-u16 (if baid 0 37))
+                        (le-u16 (logior 2 (ash tid 2) (ash size 6))) (le-u16 timeout)))
+    (list :tid tid :ssn ssn :size size :baid baid)))
+
+(defun end-block-ack (l f)
+  (let ((tid (ldb (byte 4 4) (logior (aref f 26) (ash (aref f 27) 8)))))
+    (when (assoc tid (link-block-acks l))
+      (ignore-errors (command-ok (link-card l) 5 #x16 (octets (le-u32 2) (le-u32 1) (le-u32 tid))))
+      (setf (link-block-acks l) (remove tid (link-block-acks l) :key #'car)))))
+
 (defun data-from-bss-p (l f)
   (and (>= (length f) 24) (= 2 (ldb (byte 2 2) (aref f 0))) (= 2 (logand 3 (aref f 1)))
        (equalp (subseq f 10 16) (link-bssid l))))
@@ -398,6 +430,10 @@
           (when (and f signal (> signal -256) (>= (length f) 16) (equalp (subseq f 10 16) (link-bssid l)))
             (setf (link-signal l) (if (link-signal l) (round (+ (* 7 (link-signal l)) signal) 8) signal)))
           (progn
+            (let ((action (and f (block-ack-action l f))))
+              (when action
+                (sb-thread:make-thread (if (zerop action) #'answer-addba #'end-block-ack)
+                                       :name "wifi block ack" :arguments (list l f))))
             (when (and f (data-from-bss-p l f) (decrypted-p f status))
               (if (eql +eapol-ethertype+ (data-payload f))
                   (multiple-value-bind (reply events) (supplicant-receive (link-supplicant l) (nth-value 1 (data-payload f)))
