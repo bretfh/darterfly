@@ -181,7 +181,7 @@
             (when (and archive (>= at (length archive)))
               (return (values code archive))))
         (darterfly/worlds:world-error ()
-          (unless (eq (darterfly/worlds:world-state world) :running) (return nil))
+          (when (member (darterfly/worlds:world-state world) (quote (:stopped :gone))) (return nil))
           (when (and end (> (get-internal-real-time) end)) (return nil)))))))
 
 (defparameter *attach-prelude*
@@ -197,7 +197,8 @@
         (loop
           (let ((n (sb-sys:with-pinned-objects (buf out)
                      (funcall call 42 2 (sb-sys:sap-int (sb-sys:vector-sap buf)) 65536 (sb-sys:sap-int (sb-sys:vector-sap out)) 0))))
-            (when (minusp n) (return))
+            (when (and (minusp n) (/= n -4)) (return))
+            (when (plusp n)
             (let* ((token (aref out 0))
                    (text (sb-ext:octets-to-string buf :end n :external-format :utf-8))
                    (save (and (> (length text) 6) (string= \":save \" text :end2 6) (subseq text 6)))
@@ -222,7 +223,7 @@
                                               (lambda ()
                                                 (sb-thread:join-thread me :default nil)
                                                 (sb-ext:save-lisp-and-die save))))
-                (return)))))))
+                (return))))))))
     :name \"attach\")")
 
 (defun with-prelude (argv)

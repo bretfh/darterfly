@@ -440,9 +440,18 @@
   (setf (mem :u32 (+ th +t-sched-flags+)) (logior (mem :u32 (+ th +t-sched-flags+)) +terminate-requested+))
   (thread-abort-safely th))
 
+(define-low park ()
+  (let ((w (current-world)))
+    (setf (mem :u64 (+ w +w-parked+)) (+ (mem :u64 (+ w +w-parked+)) 1))
+    (thread-wakeup (+ w +w-parked+) 1)
+    (while (and (logand (mem :u64 (+ w +w-flags+)) +paused+) (not (terminating)))
+      (thread-wait (+ w +w-flags+) 0))
+    (setf (mem :u64 (+ w +w-parked+)) (- (mem :u64 (+ w +w-parked+)) 1))))
+
 (define-low sched-ast ()
   (when (logand (mem :u32 (+ (current-thread) +t-sched-flags+)) +terminate-requested+)
     (thread-terminate-self))
+  (when (logand (mem :u64 (+ (current-world) +w-flags+)) +paused+) (park))
   (unless (mem :u32 (+ (cpu-data) +c-pending-ast+)) (result 0))
   (setf (mem :u32 (+ (cpu-data) +c-pending-ast+)) 0)
   (thread-block))

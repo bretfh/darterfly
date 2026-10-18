@@ -246,7 +246,7 @@
 (define-low world-state (id)
   (reap-threads)
   (let ((w (world-by-id id)))
-    (unless w (result (if (and id (<= id next-world-id)) 4 (- 0 +einval+))))
+    (unless w (result (if (and id (<= id next-world-id)) +gone+ (- 0 +einval+))))
     (mem :u64 (+ w +w-flags+))))
 
 (define-low load-image (w file)
@@ -430,3 +430,30 @@
           (kprintf "watchdog: world 0 is still silent; restarting the machine
 ")
           (machine-reset)))))
+
+(define-low live-threads (w)
+  (let ((th all-threads) (n 0))
+    (while th
+      (when (and (= (world-of th) w) (/= (mem :u32 (+ th +t-state+)) +th-terminate+)) (incf n))
+      (setf th (mem :u64 (+ th +t-all-next+))))
+    n))
+
+(define-low world-pause ((id :u64))
+  (let ((w (world-by-id id)) (th all-threads) (tries 0))
+    (when (or (not w) (logand (mem :u64 (+ w +w-flags+)) +privileged+)) (result (- 0 +einval+)))
+    (setf (mem :u64 (+ w +w-flags+)) (logior (mem :u64 (+ w +w-flags+)) +paused+))
+    (while th
+      (when (and (= (world-of th) w) (/= (mem :u32 (+ th +t-state+)) +th-terminate+))
+        (thread-abort-safely th))
+      (setf th (mem :u64 (+ th +t-all-next+))))
+    (while (and (< (mem :u64 (+ w +w-parked+)) (live-threads w)) (< tries 2000))
+      (thread-wait (+ w +w-parked+) (deadline-after 0 1000000))
+      (incf tries))
+    (if (< (mem :u64 (+ w +w-parked+)) (live-threads w)) (- 0 +etimedout+) (live-threads w))))
+
+(define-low world-resume ((id :u64))
+  (let ((w (world-by-id id)))
+    (unless w (result (- 0 +einval+)))
+    (setf (mem :u64 (+ w +w-flags+)) (logand (mem :u64 (+ w +w-flags+)) (lognot +paused+)))
+    (thread-wakeup (+ w +w-flags+) 1)
+    0))

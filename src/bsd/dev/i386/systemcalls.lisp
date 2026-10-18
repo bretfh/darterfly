@@ -274,6 +274,8 @@
       ((= n 25) (ok regs (mem :u32 (+ (cpu-data) +cpu-phys-number+))))
       ((= n 26) (machine-reset))
       ((= n 52) (ok regs (heartbeat a)))
+      ((= n 53) (ok regs (world-pause a)))
+      ((= n 54) (ok regs (world-resume a)))
       ((= n 27) (cli) (outw a b) (while 1 (hlt)))
       ((= n 28) (ok regs (thread-times a b)))
       ((= n 29) (ok regs (cpu-times a)))

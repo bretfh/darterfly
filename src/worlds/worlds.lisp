@@ -1,7 +1,7 @@
 (defpackage #:darterfly/worlds
   (:use #:cl)
   (:export #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages #:spawn-record #:receive-into #:copy-from #:copy-into
-           #:heartbeat #:*watchdog-limit* #:quiet-watchdog))
+           #:heartbeat #:*watchdog-limit* #:quiet-watchdog #:pause #:resume))
 (in-package #:darterfly/worlds)
 
 (define-condition world-error (error)
@@ -79,6 +79,10 @@
 
 (defun quiet-watchdog () (machdep 52 0))
 
+(defun pause (world) (machdep 53 world))
+
+(defun resume (world) (machdep 54 world))
+
 (defun world-state (world)
   (let ((flags (machdep 46 world)))
-    (cond ((logtest flags 4) :gone) ((logtest flags 2) :stopped) (t :running))))
+    (cond ((logtest flags 8) :gone) ((logtest flags 2) :stopped) ((logtest flags 4) :paused) (t :running))))
