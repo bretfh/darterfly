@@ -174,8 +174,9 @@
   (darterfly/link:link-kernel
    (list (darterfly/link:read-object (darterfly/platform:platform-object) "platform.o" :kernel)
          (darterfly/link:read-object (darterfly/kern:kern-object) "kern.o" :kernel))
-   (loop :for (name . octets) :in user-objects
-         :collect (darterfly/link:read-object octets name :user))))
+   (cons (darterfly/link:read-object (darterfly/libsa:libsa-object) "libsa.o" :user)
+         (loop :for (name . octets) :in user-objects
+               :collect (darterfly/link:read-object octets name :user)))))
 
 (defun read-octets (path)
   (with-open-file (s path :element-type '(unsigned-byte 8))

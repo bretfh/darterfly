@@ -3,7 +3,7 @@
   (:shadow #:compile)
   (:export #:define-low #:define-global #:low-object #:inb #:outb #:ref #:mem #:pause #:result #:while
            #:package-object #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:monitor #:sti-mwait #:outw #:address
-           #:rep-movsb #:rep-stosb #:&va #:va-next #:rdtsc #:return-address
+           #:rep-movsb #:rep-stosb #:&va #:va-next #:rdtsc #:rdtscp #:trap #:trap-errno #:return-address
            #:invlpg #:set-cr3 #:cpuid-edx #:cpuid #:cpu-data #:fxsave #:fxrstor #:code-address #:call-pointer #:read-cr #:set-cr #:fninit #:compare-and-swap #:rdrand #:int3 #:build-date #:*build-date* #:lidt #:ltr
            #:efi-call #:wide #:define-efi-entry #:package-image
            #:signed< #:signed<= #:signed> #:signed>= #:sar #:sign-extend #:signed-truncate #:signed-rem))
@@ -407,6 +407,20 @@
                      (inst byte (ecase (first args) (0 #xC0) (3 #xD8) (4 #xE0))))
              (fninit (inst byte #xDB) (inst byte #xE3))
              (int3 (inst byte #xCC))
+             ((trap trap-errno)
+              (destructuring-bind (vector &rest values) args
+                (dolist (a (reverse values))
+                  (compile a)
+                  (spush rax-tn))
+                (loop :for r :in (list rax-tn rdi-tn rsi-tn rdx-tn r10-tn r8-tn r9-tn) :repeat (length values) :do (spop r))
+                (inst byte #xCD) (inst byte vector)
+                (when (eq (find-symbol (symbol-name op) '#:darterfly/low) 'trap-errno)
+                  (let ((done (sb-assem:gen-label)))
+                    (inst jmp :nc done)
+                    (inst neg rax-tn)
+                    (sb-assem::emit-label done)))))
+             (rdtscp (dolist (b '(#x0F #x01 #xF9)) (inst byte b))
+                     (inst mov :dword (reg :dword 0) (reg :dword 1)))
              (lidt (compile (first args))
                    (inst byte #x0F) (inst byte #x01) (inst byte #x18))
              (ltr (compile (first args))

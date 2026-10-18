@@ -195,7 +195,7 @@
 
 (asdf:defsystem #:darterfly/install
   :description "Generations"
-  :depends-on (#:uiop #:darterfly/fat #:darterfly/low #:darterfly/platform #:darterfly/kern #:darterfly/link #:darterfly/gpt #:darterfly/apfs #:darterfly/devices #:darterfly/vfs #:darterfly/power #:darterfly/bsd #:darterfly/journal #:darterfly/worlds (:require #:sb-bsd-sockets))
+  :depends-on (#:uiop #:darterfly/fat #:darterfly/low #:darterfly/platform #:darterfly/kern #:darterfly/libsa #:darterfly/link #:darterfly/gpt #:darterfly/apfs #:darterfly/devices #:darterfly/vfs #:darterfly/power #:darterfly/bsd #:darterfly/journal #:darterfly/worlds (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/install/"
   :components ((:file "install") (:file "disk") (:file "deploy")))
@@ -217,6 +217,13 @@
   :description "GUID partition tables"
   :pathname "src/gpt/"
   :components ((:file "gpt")))
+
+(asdf:defsystem #:darterfly/libsa
+  :description "libc for the runtime"
+  :depends-on (#:darterfly/low)
+  :serial t
+  :pathname "src/libsa/"
+  :components ((:file "syscall") (:file "misc")))
 
 (asdf:defsystem #:darterfly/platform
   :description "Serial console"
