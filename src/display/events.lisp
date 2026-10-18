@@ -36,7 +36,8 @@
 
 (defun check-sink ()
   (when *psr*
-    (destructuring-bind (errors nil status) (aux-read #x2006 3)
+    (destructuring-bind (errors debug status) (aux-read #x2006 3)
+      (declare (ignore debug))
       (when (plusp errors) (aux-write #x2006 errors))
       (when (or (= (logand status 7) 7) (logtest errors 7))
         (psr-failed :panel (list :status status :errors errors))))))
