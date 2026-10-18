@@ -124,7 +124,7 @@ have not been executed on Darterfly.
 | Facility | Observed implementation | What must be established next |
 |----------+-------------------------+--------------------------------|
 | Lisp compilation | SBCL, ASDF and source-generation machinery | Nyxt's full dependency graph builds locally |
-| C compilation | Embedded TCC; compile-c/run-c/compile-units | C ABI probes needed by the chosen runtime |
+| C compilation | Embedded seed and standalone TCC; local compiler rebuild with shared libsa | Broader C corpus, bootstrap-input regeneration and C++ compiler port |
 | Linking | Lisp link-kernel and static link-native; selected x86-64 relocations | Native tool linker, archives, COMDAT and required ELF features |
 | Isolated execution | Static ELF64 startup, protected segments, argv/env, exit/wait; raw and SBCL worlds | C++ startup/runtime qualification and resource limits |
 | Process launching | BSD spawn/exec of Lisp programs and isolated static ELF; descriptor actions, cwd, wait4/signals | Native child spawn/wait and isolated SBCL run-program work; broaden attributes and groups |
@@ -246,11 +246,17 @@ static TLS and public Low spawn. Guest tests rebuild this runtime locally.
 C++ startup, thread resource cleanup and concurrent blocking services,
 dynamic linkage and measured compiler requirements remain open.
 
-The next compiler proof should run the existing TCC as a standalone tool
-in a world using this sysroot, then compile/link a working child artifact.
-The current test still invokes embedded TCC from the system world. Follow
-with the selected LLVM/C++ qualification, not a second native libc.
-See [[file:SHARED-RUNTIME.org][the consolidation and immediate next gates]].
+[[file:NATIVE-TCC.org][Standalone TCC now runs in its own world and rebuilds itself]].
+The seed is built inside Darterfly with embedded TCC. Subsequent compiler
+C/assembly builds run through the standalone compiler; Low builds libsa
+and the Lisp linker produces executables. The rebuilt compiler also
+produces a working client. Source/configuration generation is still staged
+by the image build, so this is not complete bootstrap-input closure.
+
+Keep this local build loop passing while qualifying C++ runtime behavior,
+thread cleanup/concurrency and dynamic linkage for the selected LLVM
+configuration. The next foreign compiler gate is Clang/LLD and its runtime,
+not a second native libc.
 
 Define executable format, startup ABI, libc/sysroot, TLS, C++ ABI, library
 loading and child-process behavior. Use a native program world, with
@@ -358,7 +364,7 @@ Reviewed local revisions:
 
 The pinned Nyxt/CEF host reference now works; see HOST-REFERENCE.org.
 Not yet established: engine source revision, complete build graph,
-target C++ runtime, native compiler,
+target C++ runtime, native C++ compiler,
 full dynamic loader, engine harness, or memory/storage budget. This plan
 turns those into acceptance gates; it does not claim they already work.
 

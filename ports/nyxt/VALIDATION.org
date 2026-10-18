@@ -1,7 +1,63 @@
 #+title: Nyxt compatibility validation
 #+date: 2026-10-18
 
-* Shared libsa runtime: current consolidation
+* Standalone TCC: current compiler milestone
+
+Branch: codex/nyxt-compat. Parent: 9d99083. The pinned upstream tcc.c driver
+now runs unchanged in an isolated native world against the existing Low
+libsa. There is no additional native libc or allocator.
+
+| Check | Result |
+|-------+--------|
+| make check, including final stdio change | Passed, LOADED |
+| Standalone compiler guest build loop | 17 passed |
+| Large object and stdio error guest | Three passed |
+| Native BSD/shared-runtime guest regression | 43 passed |
+| Complete host suite during this increment | 1,339 passed; one existing onboarding failure |
+
+The compiler tests boot the actual Darterfly kernel and image under
+four-vCPU QEMU with disposable root disks. They are not Linux process
+proxies or physical-hardware qualification. All compiler stages and client
+programs are compiled, linked and executed in the booted OS.
+
+The embedded compiler builds the initial standalone TCC seed. That seed
+compiles upstream TCC, startup and compiler support objects; Low builds
+libsa and the Lisp linker produces the rebuilt executable. The rebuilt
+compiler compiles and runs a C client, then builds a third generation.
+The second and third compiler executables match byte-for-byte. This does
+not establish regeneration of the image-staged configuration inputs.
+
+Checks cover a live compiler world blocked on stdin, pipe preprocessing,
+relative paths/cwd, nonzero compiler diagnostics and stale-output removal,
+client allocation/file output/exit status, and native-process cleanup.
+A separate isolated Lisp world uses the public compile/link helpers to
+build and run another client; its filesystem artifact is verified outside
+that world. The first test attempt needed a harness correction: explicitly
+quit child SBCL and await a completion marker instead of its REPL prompt.
+
+The large-output test compiles a data section exceeding the 1 MiB world
+transfer limit, links it and checks both ends at runtime. Shared fwrite
+now completes successful short writes and reports stream errors. Read-only
+writes and multiplication overflow also pass. The 43 native BSD regression
+checks passed with this shared-runtime change. The complete host run
+preceded that final stdio correction; the final load/compiler check and
+actual-OS suites include it.
+
+The sole host failure remains the existing onboarding test calling the
+undefined DARTERFLY/INSTALL::FIRST-START-ENTRIES. It is not hidden or counted
+as a pass. No Nyxt/CEF execution or C++ self-hosting is claimed here.
+
+- [[file:/tmp/native-tcc-final.log][Standalone compiler: 17 checks]]
+- [[file:/tmp/native-tcc-large.log][Large object and stdio: three checks]]
+- [[file:/tmp/native-tcc-bsd-regression.log][Shared runtime: 43 checks]]
+- [[file:/tmp/native-tcc-check-final.log][Final compiler/load check]]
+- [[file:/tmp/native-tcc-host.log][Complete host suite and existing failure]]
+
+Guest transcripts are build/native-tcc-guest.log and
+build/native-tcc-large-guest.log. Commands, source provenance, bootstrap
+boundaries and next steps are in [[file:NATIVE-TCC.org][the standalone compiler guide]].
+
+* Shared libsa runtime: consolidation milestone
 
 Branch: codex/nyxt-compat. Parent: 742d6eb. This section supersedes the
 runtime descriptions in the historical milestones below. The temporary

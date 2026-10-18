@@ -1,6 +1,7 @@
 (defpackage #:darterfly/cc
   (:use #:cl)
-  (:export #:arguments #:compile-c #:run-c #:units #:compile-units))
+  (:export #:arguments #:compile-c #:run-c #:units #:compile-units
+           #:compile-native-c #:link-native-program #:build-native-tcc))
 (in-package #:darterfly/cc)
 
 (defun arguments (source &key includes defines (compat t) tcc-dir libsa-dir)

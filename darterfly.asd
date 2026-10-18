@@ -177,10 +177,11 @@
   :components ((:file "fat") (:file "vfs")))
 
 (asdf:defsystem #:darterfly/cc
-  :description "C through libtcc"
-  :depends-on (#:uiop)
+  :description "C through libtcc and isolated native TCC"
+  :depends-on (#:uiop #:darterfly/libsa #:darterfly/link (:require #:sb-posix))
+  :serial t
   :pathname "src/cc/"
-  :components ((:file "cc")))
+  :components ((:file "cc") (:file "native")))
 
 (asdf:defsystem #:darterfly/build
   :description "Bootstrap inputs and trees"
@@ -306,6 +307,6 @@
   :depends-on (#:darterfly #:fiveam (:require #:sb-posix) (:require #:sb-md5) (:require #:sb-bsd-sockets))
   :serial t
   :pathname "tests/"
-  :components ((:file "suite") (:file "local-socket") (:file "native") (:file "mach") (:file "server") (:file "init") (:file "boot") (:file "apfs") (:file "net") (:file "wifi") (:file "power") (:file "install") (:file "onboarding") (:static-file "socketpair-probe.c") (:static-file "low-harness.c") (:file "low"))
+  :components ((:file "suite") (:file "local-socket") (:file "native") (:file "native-tcc") (:file "mach") (:file "server") (:file "init") (:file "boot") (:file "apfs") (:file "net") (:file "wifi") (:file "power") (:file "install") (:file "onboarding") (:static-file "socketpair-probe.c") (:static-file "low-harness.c") (:file "low"))
   :perform (asdf:test-op (o c)
              (uiop:symbol-call :darterfly/test :run-them)))

@@ -79,3 +79,11 @@ test-native-bsd-guest:
 .PHONY: test-native-host
 test-native-host:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-bsd)) (uiop:quit 1))"'
+
+.PHONY: test-native-tcc-guest
+test-native-tcc-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::standalone-tcc-on-darterfly)) (uiop:quit 1))"'
+
+.PHONY: test-native-tcc-large-guest
+test-native-tcc-large-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::standalone-tcc-large-output-on-darterfly)) (uiop:quit 1))"'

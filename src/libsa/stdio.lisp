@@ -331,8 +331,22 @@
     (if size (truncate got size) 0)))
 
 (define-low fwrite (buf size count fp)
-  (let ((n (write (mem :u32 fp) buf (* size count))))
-    (if (or (signed< n 0) (= size 0)) 0 (truncate n size))))
+  (when (or (= size 0) (= count 0)) (result 0))
+  (let ((want (* size count)) (got 0) (n 0))
+    (when (/= (truncate want count) size)
+      (setf (mem :u32 (+ fp 8)) 1)
+      (setf (mem :u32 (__errno_location)) +einval+)
+      (result 0))
+    ;; Native-world writes can stop at the port transfer limit. stdio must
+    ;; consume successful short writes before reporting completed elements.
+    (while (< got want)
+      (setf n (write (mem :u32 fp) (+ buf got) (- want got)))
+      (when (signed<= n 0)
+        (setf (mem :u32 (+ fp 8)) 1)
+        (when (= n 0) (setf (mem :u32 (__errno_location)) +eio+))
+        (result (truncate got size)))
+      (incf got n))
+    count))
 
 (define-low fflush (fp) 0)
 

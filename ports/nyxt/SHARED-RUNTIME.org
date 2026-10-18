@@ -120,10 +120,10 @@ made runnable on Darterfly by this consolidation.
 
 * Next gate toward local compiler and browser builds
 
-1. Build a reproducible standalone tool against this single sysroot and
-   run it in a world. Prefer the existing TCC sources as the first compiler
-   client; prove it can compile and link a child artifact there. The
-   current guest compiler still runs through the system's embedded TCC.
+1. [[file:NATIVE-TCC.org][Standalone TCC now runs, compiles clients and rebuilds itself]].
+   Preserve that local build loop as a regression gate. Low builds libsa
+   and Lisp performs linking. Close source/configuration regeneration and
+   broaden the compiler corpus before claiming full bootstrap closure.
 2. Derive a concrete requirement list from the pinned LLVM configuration.
    Qualify allocation/error paths, thread cleanup and concurrent blocking
    services, mappings, files/directories, process calls and C++ startup.
