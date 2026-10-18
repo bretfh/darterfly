@@ -1,6 +1,6 @@
 (in-package #:darterfly/test)
 
-(def-suite net :in all)
+(def-suite net :in host)
 (in-suite net)
 
 (defclass captured-device () ((frames :initform nil :accessor frames)))

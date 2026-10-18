@@ -17,16 +17,19 @@
 (defun clock ()
   (multiple-value-bind (s m h day month year weekday) (decode-universal-time (get-universal-time))
     (declare (ignore s year))
-    (format nil "~a ~a ~d  ~d:~2,'0d ~a"
+    (format nil "~a ~a ~d  ~a"
             (nth weekday '("Mon" "Tue" "Wed" "Thu" "Fri" "Sat" "Sun"))
             (nth (1- month) '("Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul" "Aug" "Sep" "Oct" "Nov" "Dec"))
-            day (if (zerop (mod h 12)) 12 (mod h 12)) m (if (< h 12) "AM" "PM"))))
+            day (if (getf *desktop-preferences* :clock-24)
+                    (format nil "~2,'0d:~2,'0d" h m)
+                    (format nil "~d:~2,'0d ~a" (if (zerop (mod h 12)) 12 (mod h 12)) m (if (< h 12) "AM" "PM"))))))
 
 (bsd:define-program "Session" (argv envp)
+  (setf *desktop-preferences* (read-desktop-preferences))
   (dolist (label '("darterfly.files" "darterfly.menubar" "darterfly.dock"))
     (darterfly/init:launch label))
-  (when (equal (darterfly/devices:boot-arg "rd") "ram")
-    (ignore-errors (bsd:posix-spawn "/System/Applications/Install.app/Contents/Programs/Install" (list "Install") nil)))
+  (cond ((equal (darterfly/devices:boot-arg "rd") "ram") (launch-app "Install"))
+        ((setup-needed-p) (launch-app "Setup")))
   (bsd:resume-processes)
   (loop (bsd:pause)))
 
@@ -207,6 +210,14 @@
                                                                        (+ 8 (* row (floor i columns)))
                                                                        cell row)))))))
 
+(defclass desktop-app-view (kit:icon-view)
+  ((app :initarg :app :reader desktop-app)))
+
+(defmethod kit:mouse-down ((view desktop-app-view) x y)
+  (declare (ignore x y))
+  (when (>= kit:*click-count* 2) (launch-app (desktop-app view)))
+  t)
+
 (defclass disk-view (kit:icon-view) ())
 
 (defmethod kit:mouse-down ((view disk-view) x y)
@@ -218,18 +229,36 @@
   t)
 
 (bsd:define-program "Files" (argv envp)
-  (setf kit:*menus* (list (list "Files" (cons "About Files" nil))
+  (setf kit:*menus* (list (list "Files" (cons "About Files" nil)
+                            (cons "Set Up darterfly..." (lambda (sender) (declare (ignore sender)) (launch-app "Setup"))))
                           (list "File" (cons "New Window" nil)) (list "Edit" (cons "Copy" nil))
                           (list "View" (cons "as Icons" nil)) (list "Go" (cons "Computer" nil))
                           (list "Window" (cons "Minimize" nil)) (list "Help" (cons "darterfly Help" nil))))
   (multiple-value-bind (width height) (screen-size)
     (let ((desktop (kit:make-window :style :borderless :level :desktop :x 0 :y 0 :width width :height height
-                                    :background #(0.18 0.36 0.56 1.0))))
+                                    :background (desktop-color))))
       (kit:add-subview (kit:content-view desktop)
                        (make-instance 'disk-view :icon-path (icon-path "devices/drive-harddisk")
                                                  :label "darterfly HD" :label-color #(1.0 1.0 1.0)
                                                  :frame (vector (- width 112) 36 100 90)))
+      (when (equal (darterfly/devices:boot-arg "rd") "ram")
+        (kit:add-subview (kit:content-view desktop)
+                         (make-instance 'desktop-app-view :app "Install"
+                                        :icon-path (icon-path "mimetypes/application-x-executable")
+                                        :label "Install darterfly" :label-color #(1.0 1.0 1.0)
+                                        :frame (vector (- width 120) 144 116 90))))
       (kit:show desktop)
+      (bsd:bsdthread-create
+       (lambda ()
+         (let ((color (desktop-color)))
+           (loop (sleep 1)
+                 (unless (equalp color (desktop-color))
+                   (setf color (desktop-color))
+                   (kit:perform-on-main
+                    (lambda ()
+                      (setf (kit:background (kit:content-view desktop)) (desktop-color))
+                      (kit:needs-display (kit:content-view desktop))))))))
+       "desktop appearance")
       (kit:run))))
 
 (bsd:define-program "darterfly-gui" (argv envp)

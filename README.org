@@ -26,3 +26,11 @@ Icons and fonts are GNOME's Adwaita.
   make bare    # build the image and boot it to a REPL on the terminal
   make desktop # the desktop in a window, on build/darterfly-hd.img, which keeps your files
 #+end_src
+
+* Development roadmap and releases
+See [[file:ROADMAP.org][the roadmap]], [[file:TASKS.org][the task list]], and [[file:release/PLATFORMS.org][reference platforms]].
+=make baseline= builds an isolated, measured development baseline; =make release=
+runs the complete release gate. Both pin public Guix channels and retain evidence.
+See [[file:release/README.org][release/README.org]] for dirty-tree builds, test tiers, logs, and reproduction.
+
+The boot, live-session, installation and first-start UX map is in [[file:UX.org][UX.org]].

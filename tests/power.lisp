@@ -1,6 +1,6 @@
 (in-package #:darterfly/test)
 
-(def-suite power :in all)
+(def-suite power :in host)
 (in-suite power)
 
 (defmacro with-fake-backlight ((level reads saves) &body body)

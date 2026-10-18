@@ -1,0 +1,80 @@
+#+TITLE: Release baseline validation
+
+* Validated baseline
+Run: 2026-10-18 01:47:31 UTC (2026-10-17 in America/New_York).
+Command: python3 tools/release.py run --tier smoke --image --bench 5 --allow-dirty --timeout 3600
+Evidence: [[file:../build/releases/20261018T014731Z-486cd3aa9317/manifest.json][manifest]],
+[[file:../build/releases/20261018T014731Z-486cd3aa9317/stages.json][stage results]],
+[[file:../build/releases/20261018T014731Z-486cd3aa9317/metrics.json][metrics]],
+[[file:../build/releases/20261018T014731Z-486cd3aa9317/samples.json][raw samples]], and
+[[file:../build/releases/20261018T014731Z-486cd3aa9317/SHA256SUMS][checksums]].
+
+Base revision: 486cd3aa9317f61a6be905876d08748195a70254, with captured development edits.
+Source archive SHA-256: 3eb13af6befc0d9c404e40f81c872e0627102a3c0fcaf67de6057fb59d8e124e
+The source archive is authoritative for this run. This report was written after
+validation; a subsequent executable-mode normalization fix in the Python snapshot
+helper was covered by its unit regression test. No guest/runtime code changed.
+
+Passed: six release-tooling tests, warning check, fresh SBCL bootstrap, 1,180 host
+assertions, 63 guest smoke assertions, USB-image boot and embedded-identity check,
+and five complete samples for all required metrics. Image boot runs used snapshot
+writes. The bundle is a development baseline, not a qualified release: source was
+dirty, the full ordinary guest suite was not run, and recovery has open blockers.
+
+* Measurements
+These are QEMU/KVM results on the recorded Framework build host, not arraniz.
+The host also ran other development/validation work; use these as an initial
+measurement example, not a controlled performance-regression threshold. With
+five samples, nearest-rank p95 equals the largest observation. GUI observation
+includes compositor/transport/polling overhead and excludes physical scanout.
+
+| Metric | Samples | Median | p95 | Unit |
+|--------+---------+--------+-----+------|
+| boot-to-init-ms | 5 | 2639.988 | 2739.989 | ms |
+| console-roundtrip-ms | 5 | 8.000 | 8.000 | ms |
+| gui-key-to-draw-observed-ms | 5 | 44.000 | 83.999 | ms |
+| full-gc-ms | 5 | 15.331 | 18.882 | ms |
+| full-frame-ms | 5 | 24.455 | 24.758 | ms |
+| disk-sync-ms | 5 | 8.653 | 9.430 | ms |
+| disk-write-mb-s | 5 | 143.172 | 150.409 | MB/s |
+| tcp-receive-mib-s | 5 | 5.983 | 6.225 | MiB/s |
+| free-mb | 5 | 3876.000 | 3876.000 | MB |
+| heap-mb | 5 | 96.000 | 96.000 | MB |
+
+* Recovery gate: blocked
+The newly separated recovery suite ran 46 assertions: 42 passed and four failed
+across two tests. See [[file:../build/recovery-validation/tests.log][recovery output]] and
+[[file:../build/recovery-validation/consoles/][serial logs]]. Tests use disposable file-backed
+virtual disks, not the physical workstation. The recovery workspace came from
+an earlier captured baseline; its src/ files and Lisp tests are byte-identical
+to the final measured baseline. Target checks confirm the watchdog syscall is
+available and the heartbeat thread starts; the host-only guard does not skip it.
+
+- REL-001: a-damaged-world-is-not-saved has three failed assertions. The injected
+  pointer into an object's interior is reported as clean, save-generation accepts
+  it, and pending-generation is created. The verifier/save implementation was not
+  changed by the release tooling. Fix the verifier or underlying pointer invariant
+  without weakening the corruption/refusal test.
+- REL-002: erase-and-install-over-an-installed-system fails when the guest stops.
+  The serial log reports a missed system-world heartbeat followed by a watchdog
+  reset. Investigate thread restoration/startup and the reinstall path; retain
+  watchdog protection and require this test to finish without an unexpected reset.
+
+The full make release gate must remain failing until these are resolved. Physical
+qualification, an identified arraniz inventory, and a clean committed full-suite
+run are still required before promotion.
+
+* Reproduction and remaining limits
+The source archive, pinned channels, package closure, tool/firmware hashes, exact
+QEMU arguments, stage logs, and build workspace are retained in the bundle.
+See [[file:README.org][the release instructions]] for replay. A separate isolated recovery replay is
+recorded in [[file:../build/recovery-validation/isolated.log][isolated.log]]: 13 assertions, nine passed,
+four failed, reproducing both blockers outside the full recovery suite. The target
+watchdog syscall and heartbeat were present before that replay. Bundle checksums
+passed sha256sum --check --quiet SHA256SUMS.
+
+Two independent development builds produced matching boot.efi and kernel hashes;
+their source snapshots differed in tooling, so this is not a same-input full-image
+reproducibility proof. Disk/core images differed. The manifest deliberately leaves
+bit_identical_image_verified false. Remove nondeterminism and perform a controlled
+same-source double build before changing that claim.

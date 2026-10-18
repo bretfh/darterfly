@@ -93,7 +93,7 @@
   :depends-on (#:darterfly/layer #:darterfly/server #:darterfly/bsd #:darterfly/text #:darterfly/imageio #:darterfly/kit #:darterfly/edit #:darterfly/install #:darterfly/generation #:darterfly/devices #:darterfly/net #:darterfly/wifi #:darterfly/journal #:darterfly/worlds)
   :serial t
   :pathname "src/apps/"
-  :components ((:file "hello") (:file "terminal") (:file "listener") (:file "forcequit") (:file "editor") (:file "generations") (:file "session") (:file "fetch") (:file "install") (:file "ocicl")))
+  :components ((:file "hello") (:file "terminal") (:file "listener") (:file "forcequit") (:file "editor") (:file "generations") (:file "onboarding") (:file "session") (:file "fetch") (:file "install") (:file "ocicl")))
 
 (asdf:defsystem #:darterfly/devices
   :description "Devices: the registry, PCI and drivers"
@@ -286,6 +286,6 @@
   :depends-on (#:darterfly #:fiveam (:require #:sb-posix) (:require #:sb-md5) (:require #:sb-bsd-sockets))
   :serial t
   :pathname "tests/"
-  :components ((:file "suite") (:file "mach") (:file "server") (:file "init") (:file "boot") (:file "apfs") (:file "net") (:file "wifi") (:file "power") (:file "install") (:static-file "low-harness.c") (:file "low"))
+  :components ((:file "suite") (:file "mach") (:file "server") (:file "init") (:file "boot") (:file "apfs") (:file "net") (:file "wifi") (:file "power") (:file "install") (:file "onboarding") (:static-file "low-harness.c") (:file "low"))
   :perform (asdf:test-op (o c)
              (uiop:symbol-call :darterfly/test :run-them)))

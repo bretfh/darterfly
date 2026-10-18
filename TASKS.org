@@ -1,0 +1,105 @@
+#+TITLE: Darterfly task list
+
+Tasks are ordered by dependency and risk. Checkboxes describe delivered work;
+qualification requires evidence, not just an implementation. See [[file:ROADMAP.org][the roadmap]].
+
+* Milestone 1: release baseline
+- [X] Pin public Guix/nonguix channels separately from workstation-local channels.
+- [X] Capture source revision, dirty status, exact source archive, and source hash.
+- [X] Isolate source, build output, HOME, and compilation caches for every run.
+- [X] Record tool versions, resolved package manifest, firmware hashes, and host.
+- [X] Separate host, guest, recovery, and smoke test selection; preserve make test.
+- [X] Retain stage status/duration/output and per-console serial logs/command lines.
+- [X] Package version-identified artifacts with SHA-256 checksums.
+- [X] Boot-test the exact output image with snapshot writes and no embedded nREPL key.
+- [X] Collect repeated raw metrics and count/min/median/p95/max, retaining errors.
+- [X] Measure boot-to-init, console roundtrip, GUI key-to-draw observation, memory,
+  GC, rendering, storage sync, disk write throughput, and TCP receive throughput.
+- [X] Add automated checks for evidence generation and failed/timeout commands.
+- [X] Publish a platform/capability matrix and a physical qualification protocol.
+- [X] Validate the pinned pipeline end-to-end and record its evidence bundle
+  ([[file:release/VALIDATION.org][validation report]]).
+- [ ] Run the full guest and recovery release gate on a clean committed revision.
+- [ ] Query arraniz model/revision/firmware and attach dated hardware evidence.
+- [ ] Measure physical keyboard-to-screen latency (console roundtrip is separate).
+- [ ] Compare two independent full builds; remove remaining nondeterminism before
+  claiming bit-identical disk/core images.
+
+* Release blockers found by the baseline
+- [ ] REL-001: detect the injected interior-object pointer and refuse the damaged
+  save; all three failed assertions in a-damaged-world-is-not-saved must pass.
+- [ ] REL-002: complete erase-and-install-over-an-installed-system without losing
+  the system-world heartbeat and resetting. Keep watchdog protection enabled.
+Evidence and reproduction: [[file:release/VALIDATION.org][validation report]]. These block make release.
+
+* Current UX workstream
+See [[file:UX.org][the user journey map, implementation notes, and acceptance criteria]].
+- [X] Capture firmware -> loader -> kernel text -> desktop -> live welcome in QEMU.
+- [X] Verify the old fresh-installed boot and identify its missing setup handoff.
+- [X] Explain live mode and add a visible way to reopen Install after trying.
+- [X] Make disk erasure and the post-install shutdown/media-removal steps explicit.
+- [X] Implement resumable first-start appearance, clock, and desktop orientation.
+- [X] Add regression checks for persistent state, malformed settings, save failure,
+  keyboard controls, and a clean first-start state on fresh installation.
+- [X] Qualify the updated fresh install, deferred setup, completion and next cold boot in QEMU.
+- [ ] UX-001/002: continuous boot presentation and coordinated desktop readiness.
+- [ ] UX-003/004: disk picker/preflight and installer lifecycle.
+- [ ] UX-005/006/007: locale/input/timezone, networking, early accessibility.
+
+* Next implementation queue
+- [ ] Document trusted system components and authority granted to app worlds.
+- [ ] Bound world-service concurrency, message sizes, and resource consumption.
+- [ ] Add isolation, allocation-failure, and resource-exhaustion regression tests.
+- [ ] Expand filesystem and generation-update fault injection.
+- [ ] Secure nREPL/deployment transport and secret generation.
+- [ ] Inventory C/POSIX placeholders and select the first external port.
+- [ ] Profile frame rendering and interactive latency on arraniz.
+- [ ] Qualify edit -> build -> install -> reboot -> recover as one workstation flow.
+
+* Milestone 2: world boundaries
+- [ ] Default ordinary applications to isolated worlds.
+- [ ] Filesystem/network/device/debugging rights and revocation policy.
+- [ ] Memory/thread/port/FD/queue quotas and observable usage.
+- [ ] Bounded asynchronous service dispatch, cancellation, deadlines, and cleanup.
+- [ ] Pointer/length/overflow/lifetime audit with adversarial IPC cases.
+- [ ] W^X and a defined SBCL executable-code publication protocol.
+- [ ] SMP, OOM, server-death, and resource reclamation stress tests.
+
+* Milestone 3: data and update safety
+- [ ] Document fsync/rename/close/shutdown durability contracts.
+- [ ] Inject failures at every transaction/update/pruning stage.
+- [ ] Propagate storage and flush errors to callers.
+- [ ] Offline filesystem checker and recovery environment.
+- [ ] Tested backup and restore to a replacement disk.
+- [ ] Generation/settings/data migration and rollback compatibility.
+- [ ] Signed manifests, key rotation/revocation, and update authenticity tests.
+
+* Milestone 4: software platform
+- [ ] Publish API/ABI and POSIX compatibility matrix.
+- [ ] Replace fake-success runtime calls and test actual semantics.
+- [ ] ELF/process/descriptor/pipe/signal/PTY/poll/mapping behavior needed by ports.
+- [ ] Decide fork implementation and compatibility commitments.
+- [ ] Port and test shell, build tools, Git, HTTPS client, SQLite, terminal editor.
+- [ ] Clean package builder, dependency solver, signed repository, upgrade/remove.
+- [ ] Browser-engine dependency and maintenance feasibility study.
+
+* Milestone 5: hardware workstation
+- [ ] Reference-machine display/input/storage/network/hotplug qualification.
+- [ ] Wi-Fi reconnection, roaming requirements, and fault recovery.
+- [ ] Audio, thermal limits, battery runtime, and shutdown qualification.
+- [ ] Suspend/resume with device recovery and repeated-cycle tests.
+- [ ] TLS rejection tests, time correctness, cryptographic random-service contract.
+- [ ] Complete a documented week of daily use.
+
+* Milestone 6: desktop
+- [ ] Frame/input/launch budgets with percentile measurements.
+- [ ] Profile rendering/GC/locks; optimize measured bottlenecks.
+- [ ] Complete file/dialog/clipboard/drag/settings/notification/locking workflows.
+- [ ] Text shaping, international input, keyboard access, accessibility APIs.
+- [ ] Widget inspection, source navigation, live edits, and undo/recovery.
+
+* Milestone 7: ecosystem
+- [ ] Implement and maintain the selected browser strategy.
+- [ ] Expand hardware/media/printing/Bluetooth based on user demand.
+- [ ] SDK, examples, compatibility policy, releases, and security maintenance.
+- [ ] Contributor setup, subsystem maintainers, review and qualification rules.

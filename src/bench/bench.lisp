@@ -16,8 +16,10 @@
 (defmacro elapsed-us (&body body)
   `(let ((start (now-us))) ,@body (- (now-us) start)))
 
+(defvar *raw-samples* nil)
+
 (defun best-of (n thunk)
-  (loop repeat n minimize (funcall thunk)))
+  (if *raw-samples* (funcall thunk) (loop repeat n minimize (funcall thunk))))
 
 (defun fixnum-loop (n)
   (declare (fixnum n) (optimize speed))
@@ -78,6 +80,16 @@
                                   (darterfly/vfs:vfs-sync))
                       1000000.0))
       (ignore-errors (delete-file path)) (darterfly/vfs:vfs-sync))))
+
+(define-benchmark disk-sync-ms ("ms")
+  (let ((path "/Users/bench-sync.bin"))
+    (unwind-protect
+         (progn
+           (with-open-file (s path :direction :output :if-exists :supersede)
+             (write-string "durable benchmark sample" s))
+           (/ (elapsed-us (darterfly/vfs:vfs-sync)) 1000.0))
+      (ignore-errors (delete-file path))
+      (darterfly/vfs:vfs-sync))))
 
 (define-benchmark compile-ms ("ms")
   (let ((file "/usr/src/darterfly/src/apfs/write.lisp"))
@@ -145,8 +157,9 @@
           :idle-package-w (getf s :package-w)
           :idle-battery-ma (getf s :battery-ma))))
 
-(defun run (&key (only nil))
-  (append
+(defun run (&key (only nil) raw)
+  (let ((*raw-samples* raw))
+   (append
    (loop for (name unit lower thunk) in *benchmarks*
          when (or (null only) (member name only :test #'string-equal))
            collect (list (intern (symbol-name name) :keyword) (handler-case (funcall thunk) (error (e) (princ-to-string e))) unit lower))
@@ -158,4 +171,4 @@
            collect (list key value
                          (cond ((search "PERCENT" (symbol-name key)) "%") ((search "-W" (symbol-name key)) "W")
                                ((search "-MA" (symbol-name key)) "mA") (t "/s"))
-                         t)))))
+                         t))))))

@@ -1,6 +1,6 @@
 (in-package #:darterfly/test)
 
-(def-suite install :in all)
+(def-suite install :in host)
 (in-suite install)
 
 (defstruct reload-probe a b)

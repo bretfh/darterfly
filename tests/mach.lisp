@@ -1,6 +1,6 @@
 (in-package #:darterfly/test)
 
-(def-suite mach :in all)
+(def-suite mach :in host)
 (in-suite mach)
 
 (defmacro in-task ((&optional (name "test")) &body body)

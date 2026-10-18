@@ -1,0 +1,62 @@
+#+TITLE: Reference platforms and capability evidence
+
+* Evidence rules
+Implemented means code exists. Automated coverage means a named test exists.
+Verified means a dated passing report identifies the exact source/image and
+configuration. A QEMU result never establishes physical hardware support.
+
+Current dated results and release blockers: [[file:VALIDATION.org][validation report]].
+
+* qemu-kvm-x86_64 (automated reference)
+- Architecture: x86-64, QEMU q35, KVM, CPU host, four vCPUs, 4096 MiB RAM.
+- Firmware: OVMF code and fresh snapshot of variables from pinned Guix profile;
+  both file hashes and QEMU version are in each environment.json.
+- Storage: virtio block ESP/root; tests also exercise emulated NVMe.
+- Input: virtio keyboard/tablet; selected tests exercise xHCI USB HID.
+- Network: virtio-net with user networking; selected tests exercise USB ECM.
+- Display: UEFI GOP; headless QEMU with screenshot/monitor access.
+- Boot: guest tests vary flags (stored in serial logs); measurement uses init
+  with rd=disk2s1; release USB image uses rd=ram init.
+- CPU host is intentional: performance comparisons require the same host CPU,
+  host kernel, QEMU, firmware, vCPU count, and load conditions. VM measurements
+  do not predict physical power consumption or battery life.
+
+* arraniz (physical reference candidate)
+The owner confirmed that arraniz is the StarBook. The existing result from
+2026-10-16 identifies 10.42.0.194; a local network-neighbor entry corroborated
+that address during baseline setup. Model/revision/firmware remain unverified.
+The operating system's administration interface is IP/nREPL, not SSH.
+
+- Model / board revision: awaiting a read-only firmware-table query.
+- Firmware vendor / version / date: awaiting query.
+- CPU / RAM / PCI and USB device IDs: awaiting query.
+- Existing performance evidence: bench/results/arraniz/*.sexp. These historical
+  records lack a complete image identity, firmware inventory, and sample
+  distributions, so they do not qualify a new release.
+- Never upgrade, reboot, reconfigure, or erase this machine as part of collecting
+  read-only inventory. Destructive qualification uses an explicit test disk.
+
+* Capability matrix
+| Capability | Implementation | Automated coverage | Physical qualification |
+|------------+----------------+--------------------+------------------------|
+| UEFI/kernel/SBCL boot | Present | boot-efi-starts-the-kernel, sbcl-runs-on-darterfly | Pending identified report |
+| SMP and memory isolation | Present | smp-on-darterfly, two-worlds-have-their-own-memory | Pending |
+| APFS persistence | Present | apfs suite, apfs-writes-on-darterfly | Pending recovery protocol |
+| Generation fallback | Present | recovery tier | Pending |
+| TCP/IPv6/sockets | Present | network-on-darterfly, ip6-on-darterfly, sockets-on-darterfly | Pending |
+| Desktop/editor | Present | desktop-on-darterfly, editor-on-darterfly | Historical render benchmark only |
+| NVMe/xHCI/USB ECM | Present | guest boot tests | Pending exact device IDs |
+| AX210 Wi-Fi | Present | wifi host suite | Pending connection/reconnect report |
+| Battery/backlight | Present | power host suite | Pending exact machine report |
+| Suspend/resume/audio | Not qualified | No release coverage recorded | Pending |
+
+* Physical qualification report
+Record UTC date, operator, image/source hash, generation, model and board,
+firmware version/date, CPU/RAM, PCI/USB IDs, display mode, storage model,
+boot flags, network adapter, AC/battery state, and ambient/workload conditions.
+Omit serial numbers, MAC addresses, credentials, and unrelated personal data.
+
+For each capability record PASS/FAIL/NOT-TESTED, procedure, raw logs, and issue.
+Exercise cold boot, warm restart, install to a test disk, edit/build/save,
+network loss/reconnect, USB hotplug, shutdown, fallback, backup/restore, and
+long idle/load runs. Only mark supported capabilities after this report exists.

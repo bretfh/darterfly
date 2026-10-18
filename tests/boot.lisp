@@ -1,6 +1,6 @@
 (in-package #:darterfly/test)
 
-(def-suite boot :in all)
+(def-suite boot :in guest)
 (in-suite boot)
 
 (defun screen-until (predicate &optional (seconds 30))
@@ -28,6 +28,8 @@
            (is (search "MB usable" (image:expect c "video: 1280x800x32")))
            (is (image:expect c (format nil "~%halt"))))
       (image:finish c 5))))
+
+(in-suite recovery)
 
 (test boot-efi-falls-back-to-the-previous-generation
   (let ((esp (image:esp :boot-args "halt")))
@@ -77,6 +79,8 @@
                (is (search "(\"gen-1\" \"gen-2\")" (ask "(list (darterfly/install:current) (darterfly/install:failed))"))
                    "darterfly is back on gen-1 and knows gen-2 failed"))
           (image:finish c 5))))))
+
+(in-suite boot)
 
 (test the-kernel-owns-the-machine
   (let ((c (image:bare-console :boot-args "trap halt" :root nil)))
@@ -704,6 +708,8 @@
                    "nothing is left pending"))
           (image:finish c 5))))))
 
+(in-suite recovery)
+
 (test the-boot-menu-offers-a-way-out
   (let ((esp (merge-pathnames "esp-way-out.img" (darterfly-file "build/")))
         (image:*screen-size* '(1280 800)))
@@ -744,6 +750,8 @@
              (is (image:expect c "starting the previous generation" :timeout 30))
              (is (image:expect c "boot.efi: generation gen-1" :timeout 30) "p boots the generation before"))
         (image:finish c 5)))))
+
+(in-suite boot)
 
 (test what-was-running-keeps-running
   (let ((esp (merge-pathnames "esp-running-world.img" (darterfly-file "build/")))
@@ -1009,6 +1017,8 @@
                    "a font asked for after the save reads from an open file"))
           (image:finish c 5))))))
 
+(in-suite recovery)
+
 (test a-damaged-world-is-not-saved
   (let ((esp (merge-pathnames "esp-badworld.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists esp)
@@ -1031,6 +1041,8 @@
                (ask "(setf (sb-sys:sap-ref-word cl-user::*car* 0) cl-user::*word*)")
                (is (search "[0]" (ask "(format nil \"[~a]\" (darterfly/install:heap-errors))")) "once repaired it checks clean again"))
           (image:finish c 5))))))
+
+(in-suite boot)
 
 (test the-kernel-builds-the-same-every-time
   (let* ((objects (loop :for (name path) :in (darterfly/image::user-objects) :collect (cons name (image::octets path))))
@@ -1133,6 +1145,8 @@
                                               :ignore-error-status t :output nil :error-output nil)))
         "fsck.fat passes the ESP darterfly wrote")))
 
+(in-suite recovery)
+
 (test installing-makes-room-by-dropping-old-generations
   (let ((esp (merge-pathnames "esp-prune.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists esp)
@@ -1156,6 +1170,8 @@
                (image:send c "(sb-ext:exit)")
                (image:expect c "exit(0)" :timeout 60))
           (image:finish c 5))))))
+
+(in-suite boot)
 
 (test darterfly-builds-its-kernel-and-boots-it
   (let ((esp (merge-pathnames "esp-kernel.img" (darterfly-file "build/")))
@@ -2348,6 +2364,8 @@
                (is (search "(\"gen-1\" \"gen-2\")" (ask "(darterfly/install:generations)"))))
           (image:finish c 5))))))
 
+(in-suite recovery)
+
 (test erase-and-install-over-an-installed-system
   (let* ((stick (image:usb-image))
          (disk (merge-pathnames "reinstall-nvme.img" (darterfly-file "build/"))))
@@ -2382,6 +2400,8 @@
       (from-disk "(progn (dotimes (i 60) (with-open-file (s (format nil \"/Users/darterfly/churn~d\" i) :direction :output :if-exists :supersede) (write-line \"churn\" s)) (darterfly/vfs:vfs-sync)) :churned)")
       (from-stick)
       (is (search "NIL" (from-disk "(probe-file \"/Users/darterfly/churn0\")")) "the erased system is gone and the new one is mounted"))))
+
+(in-suite boot)
 
 (test deploy-updates-an-installed-system
   (let* ((stick (image:usb-image))
@@ -2471,10 +2491,10 @@
         (unwind-protect
              (progn
                (is (image:expect c "init: pid 1" :timeout 120))
-               (screen-until (lambda (s) (= #xffffffff (image:pixel s 480 236))) 60)
+               (screen-until (lambda (s) (= #xffffffff (image:pixel s 400 510))) 60)
                (sleep 2)
-               (click 654 236)
-               (click 654 236)
+               (click 800 513)
+               (click 800 513)
                (is (search "\"EFI PART\"" (ask "(loop :repeat 600 :until (equal \"EFI PART\" (map 'string #'code-char (darterfly/devices:media-read (darterfly/install:internal-disk) 512 8))) :do (sleep 0.5) :finally (return (map 'string #'code-char (darterfly/devices:media-read (darterfly/install:internal-disk) 512 8))))"))
                    "Install... then Erase and Install writes the disk")
                (sleep 20)

@@ -3,48 +3,73 @@
 (defun disk-description (disk)
   (format nil "~,1f GB NVMe disk" (/ (darterfly/devices:get-property disk "Size") 1d9)))
 
-(defun install-page (content lines buttons)
-  (kit:remove-subviews content)
-  (loop for line in lines for y from 24 by 26
-        do (kit:add-subview content (make-instance 'kit:text-field :string line :font-size 15 :frame (vector 24 y 470 24))))
-  (loop for (title action) in buttons for x from 24 by 170
-        do (kit:add-subview content (make-instance 'kit:button :title title :frame (vector x 130 156 32)
-                                                               :action (lambda (button) (declare (ignore button)) (funcall action)))))
-  (kit:needs-display content))
+(defun install-welcome (page)
+  (journey-layout page "LIVE SESSION" "Welcome to darterfly"
+                  '("Explore the desktop, or install darterfly on this computer."
+                    "Trying it does not install the system on your internal disk."
+                    "Files and settings in this live session are temporary.")
+                  :escape #'kit:terminate)
+  (journey-button page "Try darterfly" #'kit:terminate 24 246 :width 246)
+  (journey-button page "Install darterfly..." (lambda () (install-confirm page)) 294 246 :width 246)
+  (journey-label page "You can return using Install darterfly on the desktop." 24 203 13))
 
-(defun install-welcome (content)
-  (install-page content
-                '("Try this system as it is, or install it" "on this computer's disk.")
-                (list (list "Try" #'kit:terminate)
-                      (list "Install..." (lambda () (install-confirm content))))))
-
-(defun install-confirm (content)
+(defun install-confirm (page)
   (let ((disk (darterfly/install:internal-disk)))
     (if (null disk)
-        (install-page content '("No internal disk was found.") (list (list "Back" (lambda () (install-welcome content)))))
-        (install-page content
-                      (list "Install erases everything on the" (format nil "~a and puts this system on it." (disk-description disk)))
-                      (list (list "Back" (lambda () (install-welcome content)))
-                            (list "Erase and Install" (lambda () (install-run content))))))))
+        (progn
+          (journey-layout page "INSTALLATION" "No supported disk found"
+                          '("The installer currently supports internal NVMe disks."
+                            "You can keep trying darterfly without installing it.")
+                          :escape (lambda () (install-welcome page)))
+          (journey-button page "Back" (lambda () (install-welcome page)) 24 246))
+        (progn
+          (journey-layout page "INSTALLATION   /   CONFIRM DISK" "Erase this disk and install?"
+                          (list (format nil "Destination: ~a" (disk-description disk))
+                                "Everything on this disk will be erased."
+                                "Copy any files you want to keep before continuing."
+                                "After installation, we'll help you set up your desktop.")
+                          :escape (lambda () (install-welcome page)))
+          (journey-button page "Back" (lambda () (install-welcome page)) 24 246)
+          (journey-button page "Erase and Install" (lambda () (install-run page disk)) 372 246 :width 168)))))
 
-(defun install-run (content)
-  (install-page content '("Installing...") nil)
+(defun install-run (page disk)
+  (journey-layout page "INSTALLATION" "Installing darterfly"
+                  '("Preparing the installation. Keep this computer powered on."))
   (bsd:bsdthread-create
    (lambda ()
-     (flet ((show (lines &optional buttons)
-              (kit:perform-on-main (lambda () (install-page content lines buttons)))))
-       (handler-case
-           (progn
-             (darterfly/install:install-disk :progress (lambda (step) (show (list "Installing..." step))))
-             (show '("Installed." "Remove the USB stick and restart.") (list (list "Done" #'kit:terminate))))
-         (error (e)
-           (show (list "The install failed:" (princ-to-string e)) (list (list "Back" (lambda () (install-welcome content)))))))))
+     (handler-case
+         (progn
+           (darterfly/install:install-disk
+            :disk disk :progress
+            (lambda (step)
+              (kit:perform-on-main
+               (lambda ()
+                 (journey-layout page "INSTALLATION" "Installing darterfly"
+                                 (list step "Keep this computer powered on until installation finishes."))))))
+           (kit:perform-on-main
+            (lambda ()
+              (journey-layout page "INSTALLATION COMPLETE" "Ready for your first start"
+                              '("1. Shut down this computer."
+                                "2. Remove the installation USB drive."
+                                "3. Turn it on to set up your new desktop."))
+              (journey-button page "Keep Exploring" #'kit:terminate 24 246 :width 246)
+              (journey-button page "Shut Down" #'darterfly/power:shut-down 294 246 :width 246))))
+       (error (e)
+         (ignore-errors
+           (with-open-file (s "/tmp/Install-error.txt" :direction :output :if-exists :supersede)
+             (princ e s)))
+         (kit:perform-on-main
+          (lambda ()
+            (journey-layout page "INSTALLATION" "Installation couldn't finish"
+                            '("The destination disk may contain an incomplete installation."
+                              "Keep the installation USB drive connected."
+                              "Details are saved in /tmp/Install-error.txt."))
+            (journey-button page "Back" (lambda () (install-welcome page)) 24 246))))))
    "install"))
 
 (bsd:define-program "Install" (argv envp)
   (setf kit:*menus* (kit:standard-menus "Install"))
-  (let* ((screen (handler-case (third (layer:main-display-bounds)) (error () 1280)))
-         (window (kit:make-window :title "Install" :x (floor (- screen 540) 2) :y 50 :width 540 :height 230)))
-    (install-welcome (kit:content-view window))
+  (multiple-value-bind (window page) (journey-window "Install darterfly")
+    (install-welcome page)
     (kit:show window)
     (kit:run)))

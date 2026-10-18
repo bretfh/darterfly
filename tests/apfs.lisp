@@ -1,6 +1,6 @@
 (in-package #:darterfly/test)
 
-(def-suite apfs :in all)
+(def-suite apfs :in host)
 (in-suite apfs)
 
 (defun text (s) (sb-ext:string-to-octets s :external-format :utf-8))
@@ -170,6 +170,8 @@
     (is (not (apfs::fits-p records t t 16 16)))
     (is (= 3 (length nodes)))
     (is (= 112 (loop :for (nil level . node) :in nodes :when (zerop level) :sum (apfs::node-count (apfs::make-node node)))))))
+
+(in-suite recovery)
 
 (test a-full-container-says-no-space
   (let* ((image (apfs:newfs (merge-pathnames "full.img" (darterfly-file "build/")) :volume-name "full" :size (* 16 1048576)))

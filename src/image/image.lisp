@@ -71,6 +71,7 @@
     ("System/Applications/Editor.app/Contents/Programs/Editor" "Editor")
     ("System/Applications/Generations.app/Contents/Programs/Generations" "Generations")
     ("System/Applications/Fetch.app/Contents/Programs/Fetch" "Fetch")
+    ("System/Applications/Setup.app/Contents/Programs/Setup" "Setup")
     ("System/Applications/Install.app/Contents/Programs/Install" "Install")
     ("System/Applications/Utilities/Terminal.app/Contents/Programs/Terminal" "Terminal")
     ("System/Library/Services/Session.app/Contents/Programs/Session" "Session")
@@ -181,10 +182,22 @@
                                                                    "data" (darterfly/qmp:dict "button" "left"
                                                                                           "down" button)))))))))
 
-(defstruct (console (:constructor %console (process))) process (seen (make-string-output-stream)) (text (pending-text)))
+(defvar *console-log-directory* nil)
+(defvar *console-log-counter* 0)
+
+(defstruct (console (:constructor %console (process &optional log))) process log (started (get-internal-real-time)) (seen (make-string-output-stream)) (text (pending-text)))
 
 (defun console (&key args)
-  (%console (uiop:launch-program args :input :stream :output :stream :error-output :output)))
+  (let* ((path (when *console-log-directory*
+                 (merge-pathnames (format nil "console-~4,'0d.log" (incf *console-log-counter*))
+                                  (ensure-directories-exist *console-log-directory*))))
+         (log (and path (open path :direction :output :if-exists :error))))
+    (when path
+      (with-open-file (s (make-pathname :type "sexp" :defaults path) :direction :output :if-exists :error)
+        (with-standard-io-syntax (prin1 args s))))
+    (handler-case
+        (%console (uiop:launch-program args :input :stream :output :stream :error-output :output) log)
+      (error (e) (when log (close log)) (error e)))))
 
 (defun cpu-states ()
   (ignore-errors
@@ -212,6 +225,7 @@
          (longest (reduce #'max (if (listp text) text (list text)) :key #'length))
          (searched 0))
     (loop
+      (when (console-log console) (finish-output (console-log console)))
       (let ((pending (console-text console)))
         (multiple-value-bind (at found) (first-match text pending (max 0 (- searched longest -1)))
           (when at
@@ -227,6 +241,7 @@
                 :do (let ((c (read-char out nil)))
                       (unless c (error "console: closed, saw ~s" (console-text console)))
                       (unless (char= c #\Return)
+                        (when (console-log console) (write-char c (console-log console)))
                         (write-char c (console-seen console))
                         (vector-push-extend c (console-text console)))))
           (if (uiop:process-alive-p (console-process console))
@@ -253,7 +268,10 @@
           :do (sleep 0.05))
     (when (uiop:process-alive-p process)
       (uiop:terminate-process process :urgent t))
-    (uiop:wait-process process)))
+    (unwind-protect (uiop:wait-process process)
+      (when (console-log console)
+        (close (console-log console))
+        (setf (console-log console) nil)))))
 
 (defun monitor (command)
   (let ((socket (make-instance 'sb-bsd-sockets:local-socket :type :stream)))

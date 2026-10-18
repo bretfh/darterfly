@@ -1,0 +1,128 @@
+#+TITLE: Release baseline and reproduction
+
+* Commands
+Prerequisites: Linux x86-64, Python 3.11+, Git, Guix, sufficient disk space, and
+read/write access to /dev/kvm for guest work. Bootstrap builds SBCL from scratch;
+full self-hosting tests can take hours. Runs are serial within each workspace.
+
+#+begin_src sh
+make test-release-tools
+make test-host
+make baseline                 # host + selected guest smoke + image + 5 measurements
+make release                  # host + all guest + recovery + image + 5 measurements
+make test-guest
+make test-recovery
+#+end_src
+
+Release commands reject dirty source by default. During development:
+#+begin_src sh
+make baseline RELEASE_FLAGS=--allow-dirty
+python3 tools/release.py run --tier host --allow-dirty --current-guix
+python3 tools/release.py compare build/releases/BEFORE build/releases/AFTER
+#+end_src
+
+--current-guix explicitly uses the installed host channels and makes the bundle
+unqualified. It is useful for local diagnosis when pinned channel fetching is
+unavailable; it never silently replaces the pinned release path. --timeout sets
+a per-stage deadline (default four hours). Ctrl-C terminates the run's process
+group; failures and timeouts remain failed in the manifest.
+
+* What is captured
+Each build/releases/UTC-REVISION/ bundle contains:
+- manifest.json: source revision/hash, dirty state, epoch, host, requested gates,
+  final status, qualification flag, and artifact hashes/sizes.
+- source.tar and source.patch/status: exact included source, including explicitly
+  requested dirty/untracked nonignored files. Existing build products are excluded.
+- channels.scm: public Guix/nonguix lock; resolved-channels.scm records resolution.
+- guix-manifest.scm and environment.json: package closure manifest, tools, and
+  firmware file hashes. No workstation-local channels enter the pinned recipe.
+- stages.json: stage commands, exit codes, statuses, and elapsed times.
+- logs/: stage output, nested compiler output, individual console logs, and
+  matching .sexp QEMU argument lists. Logs may contain test fixture keys; never
+  use personal credentials in release tests.
+- image-identity.json: provenance embedded as /System/Library/Release/identity.json
+  in the guest and checked against the bundle during image smoke.
+- artifacts/: USB image, loader, kernel, and Lisp core when --image is requested.
+  The output image is boot-tested with snapshot writes and no nREPL key embedded.
+- samples.json and metrics.json: raw measurements and count/min/median/p95/max.
+  Missing measurements and error strings are retained, never converted to zero.
+- SHA256SUMS: SHA-256 of every evidence file, including manifest and artifacts.
+
+Fresh workspaces live under /tmp/df-release-* (short QEMU Unix-socket paths).
+They contain private HOME/cache directories and are retained on success/failure
+for investigation. Their exact paths are recorded. Remove a workspace only after
+inspecting its bundle; the tool never deletes an existing checkout or build tree.
+
+* Reproduce a failure
+Verify the evidence first with sha256sum -c SHA256SUMS in the bundle directory.
+Extract source.tar into an empty short-path directory. It contains the exact
+source files and normalized mtimes. The following reruns host checks without
+requiring a Git checkout; substitute an absolute bundle path. The original
+manifest is retained as input provenance, not presented as a new passed release.
+#+begin_src sh
+bundle=/absolute/path/to/evidence-bundle
+replay=$(mktemp -d /tmp/df-replay-XXXXXX)
+mkdir -p "$replay/source" "$replay/home" "$replay/evidence/logs" "$replay/evidence/artifacts"
+tar -xf "$bundle/source.tar" -C "$replay/source"
+cp "$bundle/manifest.json" "$bundle/channels.scm" "$replay/evidence/"
+cd "$replay/source"
+guix time-machine -C "$bundle/channels.scm" -- shell -m manifest.scm --pure --   env HOME="$replay/home" TZ=UTC LANG=C LC_ALL=C   python3 -B tools/release.py inside --bundle "$replay/evidence" --tier host
+#+end_src
+For guest reproduction use --tier smoke, guest, or recovery; the driver builds
+SBCL first. SOURCE_DATE_EPOCH is recorded in the input manifest and source mtimes
+are preserved by the archive; export it into the environment for exact replay of
+any external tools that consume it. Console command files identify VM/device
+differences; the original workspace is the quickest way to inspect a failed
+test's disk images. Never run recovery tests against real disks.
+
+For a new independent run from Git, check out manifest.json's revision, reproduce
+its dirty files from source.tar if necessary, export SOURCE_DATE_EPOCH from the
+manifest, and run the same public command. Keep the input source archive/hash
+with bug reports. Changes during capture cause rejection when detected.
+
+* Test tiers and promotion
+- host: Mach/services, VFS/APFS, network/Wi-Fi models, power, install checks, and
+  low-level calling convention checks. No QEMU boot or target-machine access.
+- smoke: host plus boot, isolation, SBCL, threads/SMP, persistence, desktop, network.
+- guest: all ordinary QEMU integration/self-hosting tests.
+- recovery: selected torn/full-storage, generation failure/fallback, boot menu,
+  damaged-save rejection, pruning, and reinstall tests. Uses disposable images.
+- physical: manual procedure in PLATFORMS.org; never inferred from guest tests.
+
+make test retains the all suite. make release is the required local promotion
+gate: clean source + pinned environment + host/guest/recovery + image smoke + at
+least five measurement samples. A development/smoke bundle cannot qualify. This
+repository does not configure a remote CI provider or branch protection; require
+this command in the chosen CI service before promoting releases.
+
+* Measurement interpretation
+Each release measurement boots a fresh VM, records launch-to-init wall time,
+settles for 20 seconds, and samples console roundtrip, existing OS benchmarks,
+and a 4 MiB TCP transfer from the host. TCP data is checked for corruption.
+Raw mode disables the old best-of-three selection. Existing loop benchmarks
+still report per-operation averages within one batch. p95 uses nearest rank;
+with five samples it is the maximum and is a starting baseline, not a confident
+long-tail estimate. Use larger --bench values for performance investigations.
+
+Disk-sync measures vfs-sync after a small write; full-frame measures a forced
+complete redraw. Console roundtrip is serial command/response latency, not
+keyboard-to-screen latency. Physical input-to-photon measurement is still needed.
+GUI key-to-draw observation injects a QMP key into Listener and waits for the
+transcript written by its draw method. It includes QMP/serial polling overhead
+and is an upper bound on observed application redraw latency, not display scanout
+or physical input-to-photon latency. It uses the reference 1280x800 layout.
+Network throughput includes the guest receive/validation path and QEMU networking.
+Do not compare different host/kernel/tool/firmware environments as regressions;
+compare flags mismatched recorded environments, and keeps artifact hash results
+separate from timing changes. No automatic performance budget is invented from
+one run. Establish budgets from repeated comparable runs and user-facing goals.
+
+* Reproducibility boundary
+Pinned dependencies, captured inputs, normalized source mtimes, UTC, deterministic
+source enumeration, private caches, and artifact hashes make the recipe traceable
+and repeatable. They do not prove identical full disk/core bytes: SBCL heap/build
+metadata, FAT IDs/timestamps, APFS/generated metadata, and embedded paths can
+still vary. bit_identical_image_verified stays false. Compare independent builds
+and resolve those sources before changing that claim. No deterministic secret is
+introduced to make an image hash match. A release image starts without remote
+administration credentials; provision those separately on the installed machine.

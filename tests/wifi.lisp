@@ -1,6 +1,6 @@
 (in-package #:darterfly/test)
 
-(def-suite wifi :in all)
+(def-suite wifi :in host)
 (in-suite wifi)
 
 (defun hex (string)

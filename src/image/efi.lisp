@@ -33,7 +33,7 @@
                  (> (file-write-date core) (max (newest (darterfly-sources))
                                                 (file-write-date (merge-pathnames "output/sbcl.core" (sbcl-tree))))))
       (run "sh" "-c"
-           (format nil "CL_SOURCE_REGISTRY=\"~a//:$GUIX_ENVIRONMENT/share/common-lisp//\" ASDF_OUTPUT_TRANSLATIONS=\"/:$HOME/.cache/common-lisp/darterfly-mt/\" ~a --non-interactive --no-userinit --load ~a ~a"
+           (format nil "CL_SOURCE_REGISTRY=\"~a//:$GUIX_ENVIRONMENT/share/common-lisp//\" ASDF_OUTPUT_TRANSLATIONS=\"/:$HOME/.cache/common-lisp/darterfly-mt/\" ~a --non-interactive --no-userinit --no-sysinit --load ~a ~a"
                    (string-right-trim "/" (source ""))
                    (uiop:native-namestring (merge-pathnames "run-sbcl.sh" (sbcl-tree)))
                    (source "src/image/darterfly-core.lisp")
@@ -161,8 +161,13 @@
         :do (uiop:run-program (list "zstd" "-d" "-f" "-q" "-o" (uiop:native-namestring plain) packed))
         :collect (list :file (concatenate 'string "Library/Firmware/" name) (octets plain))))
 
+(defun release-entries ()
+  (let ((identity (uiop:getenv "DARTERFLY_RELEASE_IDENTITY")))
+    (when identity
+      (list (list :file "System/Library/Release/identity.json" (octets identity))))))
+
 (defun root-entries ()
-  (let ((files (append (desktop-entries)
+  (let ((files (append (release-entries) (desktop-entries)
                        (firmware-entries)
                        (ocicl-entries)
                        (contribs)
@@ -252,10 +257,10 @@
         (entries nil))
     (labels ((relative (p) (enough-namestring p root))
              (walk (dir)
-               (dolist (sub (uiop:subdirectories dir))
+               (dolist (sub (sort (uiop:subdirectories dir) #'string< :key #'namestring))
                  (push (list :dir (string-right-trim "/" (relative sub))) entries)
                  (walk sub))
-               (dolist (f (uiop:directory-files dir))
+               (dolist (f (sort (uiop:directory-files dir) #'string< :key #'namestring))
                  (push (list :file (relative f)
                              (with-open-file (s f :element-type '(unsigned-byte 8))
                                (let ((v (make-array (file-length s) :element-type '(unsigned-byte 8))))
@@ -342,14 +347,14 @@
   (let ((entries (loop :for parent :in (parents (format nil "/~a" to)) :collect (list :dir parent))))
     (labels ((walk (dir at relative)
                (push (list :dir at) entries)
-               (dolist (file (uiop:directory-files dir))
+               (dolist (file (sort (uiop:directory-files dir) #'string< :key #'namestring))
                  (unless (or (member (concatenate 'string relative (file-namestring file)) skip :test #'string=)
                              (not (funcall keep file)))
                    (push (list :file (format nil "~a/~a" at (file-namestring file)) (octets file)
                                (if (logtest #o111 (sb-posix:stat-mode (sb-posix:stat (uiop:native-namestring file)))) #o755 #o644)
                                (file-time file))
                          entries)))
-               (dolist (sub (uiop:subdirectories dir))
+               (dolist (sub (sort (uiop:subdirectories dir) #'string< :key #'namestring))
                  (let ((name (car (last (pathname-directory sub)))))
                    (unless (or (member (concatenate 'string relative name) skip :test #'string=)
                                (sb-posix:s-islnk (sb-posix:stat-mode (sb-posix:lstat (string-right-trim "/" (uiop:native-namestring sub))))))

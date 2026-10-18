@@ -1,6 +1,6 @@
 (in-package #:darterfly/test)
 
-(def-suite server :in all)
+(def-suite server :in host)
 (in-suite server)
 
 (test events-carry-what-apps-read

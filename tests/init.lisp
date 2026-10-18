@@ -1,6 +1,6 @@
 (in-package #:darterfly/test)
 
-(def-suite init :in all)
+(def-suite init :in host)
 (in-suite init)
 
 (bsd:define-program "darterfly-test-echo" (argv envp)

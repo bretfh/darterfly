@@ -11,9 +11,12 @@
     (with-open-file (s (merge-pathnames "version.lisp-expr" tree) :direction :output :if-exists :supersede)
       (prin1 darterfly/build:*sbcl-version* s)
       (terpri s))
-    (with-open-file (log (build-path "sbcl-mt-build.log") :direction :output :if-exists :supersede)
-      (uiop:run-program (list "env" "CC=gcc" "sh" "make.sh" "--xc-host=sbcl --no-userinit --no-sysinit")
-                        :directory tree :output log :error-output log))
+    ;; Preserve diagnostics on failure; WITH-OPEN-FILE abort can delete this log.
+    (let ((log (open (build-path "sbcl-mt-build.log") :direction :output :if-exists :supersede)))
+      (unwind-protect
+           (uiop:run-program (list "env" "CC=gcc" "sh" "make.sh" "--xc-host=sbcl --no-userinit --no-sysinit")
+                             :directory tree :output log :error-output log)
+        (close log)))
     (unless (probe-file (merge-pathnames "output/sbcl.core" tree))
       (error "sbcl did not build; see ~a" (uiop:native-namestring (build-path "sbcl-mt-build.log"))))
     tree))

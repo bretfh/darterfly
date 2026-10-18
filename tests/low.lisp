@@ -26,7 +26,7 @@
 
 (in-package #:darterfly/test)
 
-(def-suite low :in all)
+(def-suite low :in host)
 (in-suite low)
 
 (test low-follows-the-c-calling-convention

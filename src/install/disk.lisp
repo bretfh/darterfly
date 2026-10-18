@@ -58,6 +58,18 @@
             (list :file "System/Library/RAMDisk/root.cpio" (payload "root.cpio"))
             (list :file "EFI/darterfly/boot.conf" (sb-ext:string-to-octets (boot-conf boot-args)))))))
 
+(defun first-start-entries (entries)
+  ;; Never carry a completed setup from the source system into a fresh install.
+  (let* ((pending "Library/Settings/setup-pending")
+         (preferences "Users/darterfly/Library/Preferences/desktop.sexp")
+         (root (remove-if (lambda (entry)
+                            (member (second entry) (list pending preferences (concatenate 'string preferences ".new"))
+                                    :test #'string=)) entries)))
+    (append root
+            (unless (find "Library/Settings" root :key #'second :test #'string=)
+              (list (list :dir "Library/Settings")))
+            (list (list :file pending (sb-ext:string-to-octets (format nil "1~%")))))))
+
 (defun install-disk (&key (disk (internal-disk)) (esp-size (* 1024 1048576)) (root-size (* 1024 1048576))
                           (progress (lambda (step) (declare (ignore step)))))
   (unless disk (error "install: no internal disk"))
@@ -72,7 +84,7 @@
     (when (< (* (- root-last root-first) 512) root-size) (error "install: the disk is too small"))
     (darterfly/vfs:vfs-sync)
     (funcall progress "Reading the system")
-    (let ((root (tree-entries "/" :skip *skipped*))
+    (let ((root (first-start-entries (tree-entries "/" :skip *skipped*)))
           (esp (esp-entries boot-args)))
       (flet ((at (offset) (lambda (at octets) (darterfly/devices:media-write disk (+ offset at) octets)))
              (from (offset) (lambda (at length) (darterfly/devices:media-read disk (+ offset at) length))))
