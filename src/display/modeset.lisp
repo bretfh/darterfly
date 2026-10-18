@@ -103,3 +103,161 @@
         (ignore-errors (transcoder-on))
         (ignore-errors (plane-on plane))
         (list :failed (princ-to-string e) :state (ignore-errors (display-state)))))))
+
+(defconstant +dssm+ #x51004)
+(defconstant +dpclka-cfgcr0+ #x164280)
+(defconstant +pp-status+ #xC7200)
+(defconstant +pp-control+ #xC7204)
+(defconstant +pp-on-delays+ #xC7208)
+(defconstant +pp-off-delays+ #xC720C)
+
+(defparameter *combo-pll-19.2*
+  '((162000 #x1A5 #x7000 4 2 0 0) (216000 #x1C2 #x0000 1 2 1 2) (270000 #x1A5 #x7000 2 2 0 0)
+    (324000 #x1A5 #x7000 4 1 0 0) (432000 #x1C2 #x0000 1 2 0 0) (540000 #x1A5 #x7000 2 1 0 0)
+    (648000 #x1FA #x2000 2 1 0 0) (810000 #x1A5 #x7000 1 1 0 0)))
+
+(defun dpll-enable-register (pll) (+ #x46010 (* 4 pll)))
+(defun dpll-cfgcr0 (pll) (+ #x164284 (* 8 pll)))
+(defun dpll-cfgcr1 (pll) (+ #x164288 (* 8 pll)))
+
+(defun reference-khz ()
+  (ecase (ldb (byte 3 29) (reg +dssm+)) (0 24000) (1 19200) (2 38400)))
+
+(defun combo-pll (rate)
+  (let ((ref (reference-khz))
+        (entry (or (rest (assoc rate *combo-pll-19.2*)) (error "no combo PLL setting for ~d kHz" rate))))
+    (unless (member ref '(19200 38400)) (error "no combo PLL table for a ~d kHz reference" ref))
+    (destructuring-bind (integer fraction pdiv kdiv qdiv-mode qdiv-ratio) entry
+      (list (logior (ash (if (= ref 38400) (round fraction 2) fraction) 10) integer)
+            (logior (ash qdiv-ratio 10) (ash qdiv-mode 9) (ash kdiv 6) (ash pdiv 2))))))
+
+(defun pair (low high) (logior (1- low) (ash (1- high) 16)))
+
+(defun timing-registers (mode)
+  (destructuring-bind (&key hactive hblank hfront hsync vactive vblank vfront vsync &allow-other-keys) mode
+    (let ((htotal (+ hactive hblank)) (vtotal (+ vactive vblank)))
+      (list (cons +transcoder-a+ (pair hactive htotal))
+            (cons (+ +transcoder-a+ #x4) (pair hactive htotal))
+            (cons (+ +transcoder-a+ #x8) (pair (+ hactive hfront) (+ hactive hfront hsync)))
+            (cons (+ +transcoder-a+ #xC) (pair vactive vtotal))
+            (cons (+ +transcoder-a+ #x10) (pair vactive vtotal))
+            (cons (+ +transcoder-a+ #x14) (pair (+ vactive vfront) (+ vactive vfront vsync)))
+            (cons (+ +transcoder-a+ #x1C) (pair vactive hactive))))))
+
+(defun m-n-registers (clock rate lanes bpp)
+  (list (cons (+ +transcoder-a+ #x30) (logior (ash 63 25) (floor (* clock bpp (ash 1 23)) (* rate lanes 8))))
+        (cons (+ +transcoder-a+ #x34) (ash 1 23))
+        (cons (+ +transcoder-a+ #x40) (floor (* clock (ash 1 19)) rate))
+        (cons (+ +transcoder-a+ #x44) (ash 1 19))))
+
+(defun func-register (lanes bpc)
+  (logior (ash 1 31) (ash 1 27) (ash 2 24) (ash (position bpc '(8 10 6 12)) 20) (ash 1 8) (ash (1- lanes) 1)))
+
+(defun panel-delays (vbt)
+  (let ((edp (getf vbt :edp))
+        (on (reg +pp-on-delays+)) (off (reg +pp-off-delays+)))
+    (flet ((most (v current) (max (or v 0) current)))
+      (list :on (logior (ash (most (getf edp :t1-t3) (ldb (byte 13 16) on)) 16) (most (getf edp :t8) (ldb (byte 13 0) on)))
+            :off (logior (ash (most (getf edp :t10) (ldb (byte 13 16) off)) 16) (most (getf edp :t9) (ldb (byte 13 0) off)))
+            :cycle (ceiling (+ (or (getf edp :t11-t12) 5000) 1000) 1000)))))
+
+(defun plan-display (&key mode (rate 270000) (lanes 2) (bpc 8) (pll 1))
+  (let* ((vbt (vbt-panel))
+         (mode (or mode (first (getf (decode-edid (read-edid)) :modes)))))
+    (list :mode mode :rate rate :lanes lanes :bpc bpc :pll pll
+          :pll-config (combo-pll rate)
+          :registers (append (timing-registers mode) (m-n-registers (getf mode :clock) rate lanes (* 3 bpc)))
+          :func (func-register lanes bpc)
+          :panel (panel-delays vbt))))
+
+(defun compare-plan (plan)
+  (let ((pll (getf plan :pll)))
+    (remove nil
+            (append
+             (loop for (offset . value) in (getf plan :registers)
+                   unless (= value (reg offset)) collect (list (format nil "~x" offset) :ours (format nil "~x" value) :hardware (format nil "~x" (reg offset))))
+             (loop for offset in (list (dpll-cfgcr0 pll) (dpll-cfgcr1 pll))
+                   for value in (getf plan :pll-config)
+                   unless (= value (reg offset)) collect (list (format nil "~x" offset) :ours (format nil "~x" value) :hardware (format nil "~x" (reg offset))))
+             (list (unless (= (getf plan :func) (reg +ddi-func-ctl-a+))
+                     (list :func :ours (format nil "~x" (getf plan :func)) :hardware (format nil "~x" (reg +ddi-func-ctl-a+)))))))))
+
+(defun panel-on-p () (logbitp 31 (reg +pp-status+)))
+(defun panel-idle-p () (zerop (ldb (byte 2 28) (reg +pp-status+))))
+
+(defun backlight (on)
+  (set-bits +pp-control+ (ash 1 2) on))
+
+(defun panel-power (on)
+  (if on
+      (set-bits +pp-control+ 3 t)
+      (setf (reg +pp-control+) (logandc2 (reg +pp-control+) (logior 1 2 4 8))))
+  (wait-until (if on "the panel to power up" "the panel to power down")
+              (lambda () (and (eq (panel-on-p) on) (panel-idle-p)))
+              :seconds 5))
+
+(defun pll-off (pll)
+  (let ((enable (dpll-enable-register pll)))
+    (set-bits enable (ash 1 31) nil)
+    (wait-until "the PLL to unlock" (lambda () (not (logbitp 30 (reg enable)))) :seconds 0.01)
+    (set-bits enable (ash 1 27) nil)
+    (wait-until "the PLL to power down" (lambda () (not (logbitp 26 (reg enable)))) :seconds 0.01)))
+
+(defun pll-on (pll config)
+  (let ((enable (dpll-enable-register pll)))
+    (set-bits enable (ash 1 27) t)
+    (wait-until "the PLL to power up" (lambda () (logbitp 26 (reg enable))) :seconds 0.01)
+    (setf (reg (dpll-cfgcr0 pll)) (first config)
+          (reg (dpll-cfgcr1 pll)) (second config))
+    (reg (dpll-cfgcr1 pll))
+    (set-bits enable (ash 1 31) t)
+    (wait-until "the PLL to lock" (lambda () (logbitp 30 (reg enable))) :seconds 0.01)))
+
+(defun ddi-clock (on pll)
+  (if on
+      (progn (setf (reg +dpclka-cfgcr0+) (logior (logandc2 (reg +dpclka-cfgcr0+) 3) pll))
+             (set-bits +dpclka-cfgcr0+ (ash 1 10) nil))
+      (set-bits +dpclka-cfgcr0+ (ash 1 10) t)))
+
+(defun output-off (pll)
+  (backlight nil)
+  (sleep (/ (max 1 (or (getf (getf (vbt-panel) :edp) :t9) 2000)) 10000))
+  (let ((plane (plane-off)))
+    (transcoder-off)
+    (ignore-errors (aux-write #x600 2))
+    (link-off)
+    (panel-power nil)
+    (ddi-clock nil pll)
+    (pll-off pll)
+    plane))
+
+(defun output-on (plan plane)
+  (let ((pll (getf plan :pll)) (panel (getf plan :panel)))
+    (pll-on pll (getf plan :pll-config))
+    (ddi-clock t pll)
+    (setf (reg +pp-on-delays+) (getf panel :on)
+          (reg +pp-off-delays+) (getf panel :off))
+    (setf (reg +pp-control+) (logior (logandc2 (reg +pp-control+) (ash #x1F 4)) (ash (getf panel :cycle) 4)))
+    (panel-power t)
+    (setf (reg +trans-clk-sel-a+) (ash 1 28))
+    (loop for (offset . value) in (getf plan :registers) do (setf (reg offset) value))
+    (setf (reg +ddi-func-ctl-a+) (logandc2 (getf plan :func) (ash 1 31)))
+    (train-link :rate (getf plan :rate) :lanes (getf plan :lanes))
+    (setf (reg +ddi-func-ctl-a+) (getf plan :func))
+    (transcoder-on)
+    (plane-on plane)
+    (sleep (/ (max 1 (ldb (byte 13 0) (getf panel :on))) 10000))
+    (backlight t)))
+
+(defun modeset (&optional (plan (plan-display)))
+  (let ((psr *psr*) (plane nil))
+    (when psr (disable-psr) (sleep 0.1))
+    (handler-case
+        (progn
+          (setf plane (output-off (getf plan :pll)))
+          (output-on plan plane)
+          (when psr (enable-psr))
+          (list :ok (compare-plan plan)))
+      (error (e)
+        (let ((again (ignore-errors (output-on plan (or plane (reg +plane-ctl-a+))) t)))
+          (list :failed (princ-to-string e) :recovered again))))))
