@@ -161,11 +161,11 @@
          (bsd-check "KILL-LOOP" (= 9 (bsd-wait pid))))
     (ignore-errors (darterfly/bsd:kill pid :sigkill))))
 
-;; Rebuild the real native I/O runtime with target TCC, then BSD-spawn it.
+;; Rebuild libsa with Low and the C client with target TCC, then spawn it.
 (bsd-check
  "REBUILD"
  (let* ((root "/usr/src/darterfly/")
-        (sources '("src/native/start.S" "src/native/io.c"
+        (sources '("src/libsa/crt0.S" "tests/native-call.S"
                    "tests/native-bsd-probe.c"))
         (objects
           (loop for source in sources for i from 0
@@ -177,7 +177,10 @@
                          (darterfly/run::read-octets out) out :user))))
    (with-open-file (s "/tmp/native-bsd-rebuilt" :direction :output
                       :element-type '(unsigned-byte 8))
-     (write-sequence (darterfly/link:link-native objects) s))
+     (write-sequence
+      (darterfly/link:link-native
+       (cons (darterfly/link:read-object (darterfly/libsa:libsa-object)
+                                        "libsa.o" :user) objects)) s))
    (bsd-mode "/tmp/native-bsd-rebuilt")
    t))
 (bsd-check
@@ -306,3 +309,42 @@
            (and (loop for proc being the hash-values of darterfly/bsd::*procs*
                       never (darterfly/bsd::proc-world-owner proc))
                 (zerop (hash-table-count darterfly/bsd::*native-processes*))))
+
+(bsd-check "RUNTIME" (= 0 (bsd-wait (bsd-start "runtime"))))
+(bsd-check "REBUILT-RUNTIME"
+           (= 0 (bsd-wait (bsd-start "runtime" nil "/tmp/native-bsd-rebuilt"))))
+(bsd-mode "/Users/darterfly/native-tls-probe")
+(let ((status (bsd-wait (bsd-start "tls" nil "/Users/darterfly/native-tls-probe"))))
+  (format t "~&[BSD-NATIVE TLS status ~d]~%" status)
+  (bsd-check "TLS-THREADS" (= status 0)))
+
+;; PT_TLS must describe a single bounded template inside a load segment.
+(let* ((file (darterfly/run::read-octets "/Users/darterfly/native-tls-probe"))
+       (ph (darterfly/link::u file 32 8))
+       (count (darterfly/link::u file 56 2))
+       (h (loop for i below count for at = (+ ph (* i 56))
+                when (= 7 (darterfly/link::u file at 4)) return at)))
+  (bsd-check
+   "TLS-VALIDATION"
+   (and h
+        (every
+         (lambda (mutation)
+           (let ((copy (copy-seq file)))
+             (apply #'darterfly/link::put copy mutation)
+             (with-open-file (s "/tmp/bad-tls" :direction :output
+                                 :element-type '(unsigned-byte 8)
+                                 :if-exists :supersede)
+               (write-sequence copy s))
+             (bsd-mode "/tmp/bad-tls")
+             (eq :enoexec
+                 (bsd-error-name (lambda () (bsd-start "tls" nil "/tmp/bad-tls"))))))
+         (list (list (+ h 8) -1 8) (list (+ h 16) #x1000 8)
+               (list (+ h 32) -1 8) (list (+ h 40) 0 8)
+               (list (+ h 48) 3 8) (list (+ h 48) (ash 1 21) 8)
+               (list ph 7 4))))))
+
+(dolist (alignment '(4 65536))
+  (let ((path (format nil "/Users/darterfly/native-tls-~d" alignment)))
+    (bsd-mode path)
+    (bsd-check (format nil "TLS-~d" alignment)
+               (= 0 (bsd-wait (bsd-start "tls" nil path))))))

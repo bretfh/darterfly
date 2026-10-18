@@ -126,9 +126,9 @@ have not been executed on Darterfly.
 | Lisp compilation | SBCL, ASDF and source-generation machinery | Nyxt's full dependency graph builds locally |
 | C compilation | Embedded TCC; compile-c/run-c/compile-units | C ABI probes needed by the chosen runtime |
 | Linking | Lisp link-kernel and static link-native; selected x86-64 relocations | Native tool linker, archives, COMDAT and required ELF features |
-| Isolated execution | Static ELF64 startup, protected segments, argv/env, exit/wait; raw and SBCL worlds | Native libc/TLS and resource limits |
+| Isolated execution | Static ELF64 startup, protected segments, argv/env, exit/wait; raw and SBCL worlds | C++ startup/runtime qualification and resource limits |
 | Process launching | BSD spawn/exec of Lisp programs and isolated static ELF; descriptor actions, cwd, wait4/signals | Native child spawn/wait and isolated SBCL run-program work; broaden attributes and groups |
-| C exec/spawn API | Native runtime has bounded posix_spawn/wait; Low public C stubs remain | Integrate Low public spawn; attributes/groups/exec and measured tool requirements |
+| C exec/spawn API | One Low libsa posix_spawn/wait path for native and Lisp worlds | Attributes/groups/exec and measured tool requirements |
 | Foreign libraries | dlopen only exposes built-in runtime symbols | Real loading/relocation/lifetime for unchanged cl-cef and dependencies |
 | Threads and memory | pthread and mmap/mprotect implementations | C++ runtime semantics, TLS destructors, mappings and failure behavior |
 | IPC/readiness | Stream pairs, RAMFS named sockets, poll | Descriptor transfer, event APIs and engine-specific semantics |
@@ -138,8 +138,9 @@ The raw world-spawn primitive starts machine code at an entry point.
 A separate static ELF64 loader and waitable world lifecycle are now
 implemented; see [[file:NATIVE-PROGRAMS.org][the native-program contract and guest tests]].
 [[file:BSD-NATIVE.org][BSD execve and posix-spawn now also launch native ELF]], with inherited
-descriptors, cwd, signals and wait4. [[file:CHILD-PROCESSES.org][Native and isolated-SBCL child spawn/wait now work]] with a locally rebuilt driver. Dynamic linkage,
-native TLS and fuller public libc process APIs remain missing. Count
+descriptors, cwd, signals and wait4. [[file:CHILD-PROCESSES.org][Native and isolated-SBCL child spawn/wait now work]] with a locally rebuilt driver. [[file:SHARED-RUNTIME.org][Native tools now reuse libsa, its allocator and static TLS]], with one public
+spawn/service path. Dynamic linkage and C++ runtime qualification remain
+missing. Count
 capabilities by behavior, not name.
 
 The existing linker is useful for Darterfly's own image, but its explicit
@@ -239,8 +240,17 @@ Partial implementation: [[file:NATIVE-PROGRAMS.org][static ELF startup and world
 booted-OS tests, including a target-rebuilt runtime doing redirected I/O.
 Native child spawning and isolated SBCL run-program now pass, including
 pipe redirection, fault waits and descendant cleanup on world teardown.
-The static utility behavior below is established; fuller libc/TLS,
-public Low spawn entry points and dynamic linkage remain open.
+The static utility behavior below is established. The duplicate native
+runtime has been removed: native tools reuse existing libsa, allocation,
+static TLS and public Low spawn. Guest tests rebuild this runtime locally.
+C++ startup, thread resource cleanup and concurrent blocking services,
+dynamic linkage and measured compiler requirements remain open.
+
+The next compiler proof should run the existing TCC as a standalone tool
+in a world using this sysroot, then compile/link a working child artifact.
+The current test still invokes embedded TCC from the system world. Follow
+with the selected LLVM/C++ qualification, not a second native libc.
+See [[file:SHARED-RUNTIME.org][the consolidation and immediate next gates]].
 
 Define executable format, startup ABI, libc/sysroot, TLS, C++ ABI, library
 loading and child-process behavior. Use a native program world, with
@@ -346,8 +356,9 @@ Reviewed local revisions:
 - cl-cef: 257c6421bb173cbe50d2b5a2a1066bace15347fc.
 - Guix Nyxt package source: 641fd65824036965e24ed803698977e74b3afd3e.
 
-Not yet established: a working pinned Nyxt/CEF host session, engine source
-revision, complete build graph, target C++ runtime, native compiler,
+The pinned Nyxt/CEF host reference now works; see HOST-REFERENCE.org.
+Not yet established: engine source revision, complete build graph,
+target C++ runtime, native compiler,
 full dynamic loader, engine harness, or memory/storage budget. This plan
 turns those into acceptance gates; it does not claim they already work.
 

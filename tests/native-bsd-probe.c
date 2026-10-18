@@ -4,6 +4,9 @@
 #include <poll.h>
 #include <spawn.h>
 #include <sys/wait.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <sys/stat.h>
 
 extern long native_call(unsigned long, const void *, unsigned long,
                         void *, unsigned long);
@@ -12,6 +15,49 @@ static int eq(const char *a, const char *b) {
     return *a == *b;
 }
 #define CHECK(x, n) do { if (!(x)) return n; } while (0)
+static int runtime_check(void) {
+    size_t i;
+    unsigned char *p = calloc(4096, 1);
+    FILE *f;
+    struct stat st;
+    char text[8];
+    CHECK(p, 160);
+    CHECK(malloc((size_t)-1) == 0 && errno == ENOMEM, 176);
+    CHECK(calloc((size_t)-1, 2) == 0 && errno == ENOMEM, 177);
+    for (i = 0; i < 4096; ++i) CHECK(p[i] == 0, 161);
+    p[4095] = 42;
+    p = realloc(p, 1048576);
+    CHECK(p && p[4095] == 42, 162);
+    p[1048575] = 19;
+    CHECK(p[1048575] == 19, 163);
+    free(p);
+    p = aligned_alloc(64, 128);
+    CHECK(p && ((unsigned long)p % 64) == 0, 164);
+    p[127] = 71;
+    p = realloc(p, 256);
+    CHECK(p && p[127] == 71, 172);
+    free(p);
+    { void *untouched = (void *)1;
+      CHECK(posix_memalign(&untouched, 24, 128) == EINVAL &&
+            untouched == (void *)1, 173); }
+    { posix_spawn_file_actions_t actions[16];
+      for (i = 0; i < 16; ++i)
+          CHECK(posix_spawn_file_actions_init(&actions[i]) == 0, 174);
+      for (i = 0; i < 16; ++i)
+          CHECK(posix_spawn_file_actions_destroy(&actions[i]) == 0, 175); }
+    CHECK(setenv("ADDED", "working", 1) == 0, 165);
+    CHECK(eq(getenv("ADDED"), "working"), 166);
+    CHECK(unsetenv("ADDED") == 0 && !getenv("ADDED"), 167);
+    f = fopen("/tmp/shared-runtime", "w");
+    CHECK(f && fwrite("libsa", 1, 5, f) == 5 && fclose(f) == 0, 168);
+    f = fopen("/tmp/shared-runtime", "r");
+    CHECK(f && fread(text, 1, 5, f) == 5 && fclose(f) == 0, 169);
+    text[5] = 0;
+    CHECK(eq(text, "libsa"), 170);
+    CHECK(stat("/tmp/shared-runtime", &st) == 0 && st.st_size == 5, 171);
+    return 0;
+}
+
 static int child_driver(char *path) {
     posix_spawn_file_actions_t a;
     posix_spawnattr_t attr;
@@ -90,6 +136,7 @@ int main(int argc, char **argv, char **envp) {
     int fd, copy, pipes[2];
     struct pollfd p;
     CHECK(argc >= 2 && envp == environ, 90);
+    if (eq(argv[1], "runtime")) return runtime_check();
     if (eq(argv[1], "children")) return child_driver(argv[0]);
     if (eq(argv[1], "child-check")) {
         int ids[2];
@@ -125,19 +172,19 @@ int main(int argc, char **argv, char **envp) {
         return 0;
     }
     if (eq(argv[1], "bad")) {
-        unsigned long q[5] = {0x3156534e4644UL, 999, 0, 0, 0};
-        long result, denied;
+        unsigned long q[10] = {1, 999, 0, 0, 0, 0, 0, 0, 0, 0};
+        long reply[3], denied;
         __asm__ volatile("int $0x82" : "=a"(denied)
                          : "0"(67L), "D"(0L), "S"(0L) : "memory", "cc");
         CHECK(denied == -EPERM, 75);
-        CHECK(native_call(1, q, 7, &result, 8) == 8 && result == -22, 70);
-        CHECK(native_call(1, q, 32, &result, 8) == 8 && result == -38, 71);
-        q[1] = 1; q[4] = ~0UL; /* pathname without a terminator */
-        CHECK(native_call(1, q, 40, &result, 8) == 8 && result == -22, 72);
-        q[1] = 3; q[3] = ~0UL;
-        CHECK(native_call(1, q, 32, &result, 8) == 8 && result == -22, 73);
-        q[1] = 7; q[2] = 0; q[3] = ~0UL;
-        CHECK(native_call(1, q, 32, &result, 8) == 8 && result == -9, 74);
+        CHECK(native_call(1, q, 7, reply, 24) == 24 && reply[0] == -22, 70);
+        CHECK(native_call(1, q, 72, reply, 24) == 24 && reply[0] == -38, 71);
+        q[1] = 1; q[2] = 0x1000; /* forged supervisor pathname pointer */
+        CHECK(native_call(1, q, 72, reply, 24) == 24 && reply[0] == -22, 72);
+        q[1] = 37; /* forged status pointer */
+        CHECK(native_call(1, q, 72, reply, 24) == 24 && reply[0] == -22, 73);
+        q[1] = 28; q[2] = 0; q[3] = ~0UL;
+        CHECK(native_call(1, q, 72, reply, 24) == 24 && reply[0] == -22, 74);
         return 0;
     }
     CHECK(eq(argv[1], "copy") && argc == 3 && eq(argv[2], "source"), 1);

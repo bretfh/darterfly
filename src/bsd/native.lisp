@@ -2,7 +2,6 @@
 
 ;; One receive right for all BSD native children. Kernel-supplied sender IDs,
 ;; never a PID in the request, select the owning BSD descriptor table.
-(defconstant +native-service-magic+ #x3156534e4644)
 (defconstant +native-io-limit+ 4096)
 (defvar *native-port* nil)
 (defvar *native-dispatcher* nil)
@@ -12,12 +11,6 @@
   (dotimes (i size)
     (setf (aref bytes (+ at i)) (ldb (byte 8 (* 8 i)) value)))
   bytes)
-
-(defun native-reply (result &optional (data #()))
-  (let ((out (make-array (+ 8 (length data)) :element-type '(unsigned-byte 8))))
-    (native-put out 0 result)
-    (replace out data :start1 8)
-    out))
 
 (defun native-reply-token (token reply)
   ;; A caller killed after delivery can abandon its token before we reply.
@@ -40,7 +33,7 @@
                                        (list (cons token message))))
                           (changed)
                           t)))))
-              (unless queued (native-reply-token token (native-reply -4)))))
+              (unless queued (native-reply-token token (reply-octets -4 '(0 0 0 0) #() '(0 0 0 0))))))
         (darterfly/worlds:world-error (e)
           (unless (member (darterfly/worlds::world-error-code e) '(4 110))
             (error e))))
@@ -69,10 +62,6 @@
   (unless (<= 0 fd 4095) (fail :ebadf))
   fd)
 
-(defun native-new-fd (fd)
-  (when (> fd 4095) (close fd) (fail :emfile))
-  fd)
-
 (defun native-path (bytes)
   (unless (and (<= 1 (length bytes) +native-io-limit+)
                (eql (position 0 bytes) (1- (length bytes))))
@@ -82,7 +71,7 @@
                                     :external-format :utf-8)
     (error () (fail :einval))))
 
-(defun native-spawn-request (data search)
+(defun native-spawn-request (data search &key (native-only t))
   ;; Counts followed by NUL strings, then typed action records. No pointers.
   (unless (and (<= 24 (length data) +native-io-limit+) (<= search 1))
     (fail :einval))
@@ -119,7 +108,7 @@
                        (5 (list :chdir (string-next)))
                        (t (fail :einval))))))))
         (unless (= at (length data)) (fail :einval))
-        (posix-spawn path argv envp :file-actions actions :native-only t
+        (posix-spawn path argv envp :file-actions actions :native-only native-only
                      :search-path (when (= search 1) search-path))))))
 
 (defun native-wait-status (status)
@@ -145,96 +134,6 @@
                  :continued (logbitp 3 options))
     (values child (native-wait-status status))))
 
-(defun native-service-request (message)
-  "Bounded, pointer-free service ABI for the initial single-threaded libc."
-  (handler-case
-      (progn
-        (when (or (proc-closing *proc*) (eq (proc-state *proc*) :zombie))
-          (fail :eintr))
-        (unless (and (<= 32 (length message) (+ 32 +native-io-limit+))
-                     (= (request-u64 message 0) +native-service-magic+))
-          (fail :einval))
-        (let* ((op (request-u64 message 8))
-               (a (request-u64 message 16)) (b (request-u64 message 24))
-               (data (subseq message 32)) (size (length data)))
-          (flet ((empty () (unless (zerop size) (fail :einval)))
-                 (word () (unless (= size 8) (fail :einval))
-                          (request-u64 data 0)))
-            (case op
-              (1 ; open: flags, mode, NUL-terminated pathname
-               (unless (and (<= b #o7777)
-                            (zerop (logandc2 a #o2207703))
-                            (/= (logand a 3) 3)) (fail :einval))
-               (let ((fd (native-new-fd
-                          (open (native-path data) (from-libsa-flags a) b))))
-                 (when (logtest a #o2000000)
-                   (setf (cdr (aref (proc-fds *proc*) fd)) t))
-                 (native-reply fd)))
-              (2 (empty) (native-reply (close (native-fd a))))
-              (3 (empty)
-                 (unless (<= b +native-io-limit+) (fail :einval))
-                 (fd-file (native-fd a))
-                 (let ((bytes (if (zerop b) #() (read a b))))
-                   (native-reply (length bytes) bytes)))
-              (4 (native-reply (write (native-fd a) data)))
-              (5 (let ((whence (word)))
-                   (unless (<= whence 2) (fail :einval))
-                   (native-reply (lseek (native-fd a) (signed b)
-                                        (nth whence '(:set :cur :end))))))
-              (6 (empty) (native-reply (native-new-fd (dup (native-fd a)))))
-              (7 (empty) (native-reply (dup2 (native-fd a) (native-fd b))))
-              (8 (let ((arg (word)) (file (fd-file (native-fd a))))
-                   (native-reply
-                    (case b
-                      (0 (native-new-fd (dup-from a (native-fd arg))))
-                      (1 (if (cdr (aref (proc-fds *proc*) a)) 1 0))
-                      (2 (setf (cdr (aref (proc-fds *proc*) a))
-                               (logbitp 0 arg)) 0)
-                      (3 (logior (file-access file)
-                                 (if (nonblocking-p file) #o4000 0)))
-                      (4 (setf (file-flags file)
-                               (if (logtest arg #o4000) +o-nonblock+ 0)) 0)
-                      (t (fail :einval))))))
-              (9 (empty)
-                 (unless (<= 1 a +native-io-limit+) (fail :erange))
-                 (let ((bytes (sb-ext:string-to-octets
-                               (getcwd) :external-format :utf-8
-                                        :null-terminate t)))
-                   (when (> (length bytes) a) (fail :erange))
-                   (native-reply 0 bytes)))
-              (10 (native-reply (chdir (native-path data))))
-              (11 (unless (and (<= a 256) (= size (* a 8))) (fail :einval))
-                  (let* ((entries
-                           (loop for at from 0 below size by 8
-                                 for fd = (request-u32 data at)
-                                 collect (list (if (logbitp 31 fd)
-                                                   (- fd (ash 1 32)) fd)
-                                               (+ (aref data (+ at 4))
-                                                  (ash (aref data (+ at 5)) 8)))))
-                         (events (poll-fds entries (signed b))))
-                    (loop for event in events for at from 6 by 8 do
-                      (native-put data at event 2))
-                    (native-reply (count-if #'plusp events) data)))
-              (12 (empty) (native-reply (getpid)))
-              (13 (empty) (native-reply (getppid)))
-              (14 (empty)
-                  (multiple-value-bind (rd wr) (pipe)
-                    (when (or (> rd 4095) (> wr 4095))
-                      (close rd) (close wr) (fail :emfile))
-                    (let ((out (make-array 8 :element-type '(unsigned-byte 8))))
-                      (native-put out 0 rd 4) (native-put out 4 wr 4)
-                      (native-reply 0 out))))
-              (15 (unless (zerop b) (fail :einval))
-                  (native-reply (native-spawn-request data a)))
-              (16 (empty)
-                  (multiple-value-bind (pid status) (native-wait (signed a) b)
-                    (let ((out (make-array 8 :element-type '(unsigned-byte 8))))
-                      (native-put out 0 (or status 0))
-                      (native-reply pid out))))
-              (t (fail :enosys))))))
-    (errno (e) (native-reply (- (vfs:errno-code (errno-name e)))))
-    (vfs:vfs-error (e) (native-reply (- (vfs:errno-code (vfs:vfs-errno e)))))))
-
 (defun run-native-program (image argv envp)
   (let ((proc *proc*) (world nil))
     (unwind-protect
@@ -259,7 +158,7 @@
                (when request
                  (native-reply-token
                   (car request)
-                  (with-bsd (native-service-request (cdr request))))))))
+                  (with-bsd (serve-request proc (cdr request) (car request))))))))
       (when world
         (sb-sys:without-interrupts
           (with-bsd
@@ -268,7 +167,7 @@
               (darterfly/worlds:stop world)
               (darterfly/worlds:wait-native world))
             (dolist (request (proc-native-requests proc))
-              (native-reply-token (car request) (native-reply -4)))
+              (native-reply-token (car request) (reply-octets -4 '(0 0 0 0) #() '(0 0 0 0))))
             (setf (proc-native-world proc) nil
                   (proc-native-requests proc) nil)))))))
 

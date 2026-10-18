@@ -15,7 +15,7 @@
     (setf (mem :u64 (+ tp 8)) self)
     tp))
 
-(define-global env-storage :u64 :count 64)
+(define-global env-storage :u64 :count 65)
 (define-global environ :u64 :export t)
 
 (define-low environment-init ()
@@ -72,13 +72,32 @@
 (define-global argv-storage :u64 :count 32)
 (define-global command-line :u8 :count 1024)
 
-(define-low tls-init ()
+(define-low tls-init-stack (bottom size)
   (let ((m (__libsa_main_thread)))
     (setf (mem :u64 m) (__libsa_tls_new m))
-    (setf (mem :u64 (+ m 40)) (- #x00007ff000000000 (shl 8 20)))
-    (setf (mem :u64 (+ m 48)) (shl 8 20))
+    (setf (mem :u64 (+ m 40)) bottom)
+    (setf (mem :u64 (+ m 48)) size)
     (__machdep 3 (mem :u64 m) 0)
     (setf (mem :u64 (+ m 8)) (__syscall 372 0 0 0 0 0 0))))
+
+(define-low tls-init ()
+  (tls-init-stack (- #x00007ff000000000 (shl 8 20)) (shl 8 20)))
+
+(define-global native-runtime :u64)
+
+(define-low __libsa_native_start (argc argv envp)
+  (setf native-runtime 1)
+  (tls-init-stack (- #x00007ff000000000 (shl 1 20)) (shl 1 20))
+  ;; Keep writable capacity for setenv; the loader supplies a tight vector.
+  (let ((i 0))
+    (while (and (< i 64) (mem :u64 (+ envp (* i 8))))
+      (setf (ref env-storage i) (mem :u64 (+ envp (* i 8))))
+      (incf i))
+    (setf (ref env-storage i) 0))
+  (setf environ (address env-storage))
+  (stdio-init)
+  (__libsa_vfs_register (code-address port-vfs))
+  (exit (main (the :u32 argc) argv environ)))
 
 (define-low _libsa_start (cmdline)
   (environment-init)

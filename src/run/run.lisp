@@ -165,18 +165,6 @@
           (multiple-value-bind (n token sender) (darterfly/worlds:receive-into port m :timeout 1)
             (unless (= sender world) (error "Unexpected world service sender"))
             (case (if (>= n 8) (u64-at m 0) 0)
-              (#x3156534e4644
-               (let ((request (subseq m 0 n)))
-                 (sb-thread:make-thread
-                  (lambda ()
-                    (darterfly/bsd::native-reply-token
-                     token
-                     (if proc
-                         (let ((darterfly/bsd:*proc* proc))
-                           (darterfly/bsd::with-bsd
-                             (darterfly/bsd::native-service-request request)))
-                         (darterfly/bsd::native-reply -38))))
-                  :name "world process call")))
               (1 (let ((request (subseq m 0 n)))
                    (sb-thread:make-thread
                     (lambda ()

@@ -12,7 +12,7 @@ service in the system world; each executable gets a separate native world.
 
 The guest exercises a three-level chain: isolated SBCL runs a native
 build driver, which launches and waits for native children. The driver
-and its runtime are compiled by TCC and linked inside Darterfly before
+is compiled by TCC, libsa by Low, and both linked inside Darterfly before
 that chain runs. This establishes the process structure needed by Lisp
 build drivers and compiler/linker pipelines. It does not yet execute
 Clang or a browser engine, or rebuild the compiler itself in isolation.
@@ -38,7 +38,7 @@ an executable and explicit startup state.
 isolated SBCL                 isolated native driver
   SBCL run-program              posix_spawn / posix_spawnp
        |                                  |
-  __libsa_spawn                    small native C runtime
+  __libsa_spawn                    shared Low libsa runtime
        |                                  |
        +--------- bounded spawn message --+
                           |
@@ -62,8 +62,9 @@ existing registered-program dispatch.
 
 * Native C interface
 
-Link [[file:../../src/native/start.S][start.S]] and [[file:../../src/native/io.c][io.c]] with the native program, using the
-headers in src/libsa/include. The following APIs are available:
+Link [[file:../../src/libsa/crt0.S][crt0.S]] and the existing libsa-object with the native program,
+using headers in src/libsa/include. See [[file:SHARED-RUNTIME.org][the shared runtime]].
+The following APIs are available:
 
 - posix_spawn and posix_spawnp; errors return errno numbers directly and
   leave the output PID untouched.
@@ -106,14 +107,11 @@ the convention in the target C headers, including stopped signals and
 0xffff for continuation. BSD's SIGEMT and SIGINFO have no target
 counterpart and are reported as SIGABRT.
 
-The initial runtime is still bounded and single-threaded. One request
-holds at most 4096 bytes of strings, counts and actions; each vector has
-at most 64 entries. There are eight simultaneously live file-action
-objects per native process. This uses a static pool until an allocator
-is available. Destroy action objects after use. Nonzero spawn attributes
-return ENOTSUP; process groups, signal-mask attributes and sessions still
-need implementation. There is no native fork, exec replacement or kill
-wrapper in this small runtime.
+Spawn requests remain bounded: at most 4096 bytes of strings, counts and
+actions, with at most 64 entries per vector. Action objects use libsa's
+allocator; the old eight-object static pool is gone. Destroy them after
+use. Nonzero spawn attributes return ENOTSUP. Process groups, signal-mask
+attributes, sessions and native exec replacement remain open.
 
 * Isolated Lisp interface
 
@@ -137,10 +135,9 @@ wrapper in this small runtime.
 :wait nil, process-status, process-wait and :input :stream are also
 exercised in the guest. The existing SBCL runtime calls __libsa_spawn;
 Low now serializes that request across the world boundary. SBCL and Nyxt
-sources are unchanged. The separate Low libsa posix_spawn/file-action
-stubs have not been replaced: CFFI code calling those symbols directly
-still needs integration. The new native C runtime implements its own
-public spawn subset; do not conflate those two runtime entry paths.
+sources are unchanged. The public Low posix_spawn/file-action stubs have
+now been replaced by the same implementation used by native tools. The
+SBCL adapter constructs file actions and calls that shared implementation.
 
 Only disk-backed Lisp worlds have a BSD process service. Archive-only
 run worlds still have their private file model and no child-spawn bridge.
@@ -154,8 +151,8 @@ contain strings and typed action records, never nested pointers into the
 supervisor. Wait verifies the descriptor layout before the legacy Lisp
 service can interpret its arguments. Malformed requests fail with errno.
 
-Native service opcode 15 carries search mode in argument A, zero in B,
-and this payload:
+Shared libsa operation 51 carries an inline buffer in argument A, its
+length in B and search mode in C. Its payload is:
 
 #+begin_example
 u64 argc, envc, action-count
@@ -179,11 +176,10 @@ flags, descriptor ranges, exact payload consumption and the executable
 are checked before publishing the child. File actions can have filesystem
 side effects even if a later action fails, as in the existing BSD spawn.
 
-Opcode 16 carries signed PID in A and wait options in B, with no payload.
-Its reply has the returned PID and a 64-bit status. Error replies contain
-only the negative target errno. The native runtime only stores a status
-when a child was actually reported. Isolated SBCL retains its existing
-marshalled waitpid request with strict validation and a four-byte output.
+The shared libsa waitpid operation is 37. It carries the signed PID and
+options, with a checked four-byte output slot or no status output. The
+reply leaves the caller's status untouched unless a child is reported.
+Native executables and isolated SBCL use this same request and service.
 
 Children and grandchildren of a disk-backed Lisp world retain their
 owning world-process record. Normal native-parent exit uses BSD orphan
@@ -216,10 +212,10 @@ It also rejects registered supervisor Lisp commands at the new boundary.
 See [[file:VALIDATION.org][the validation record]] for final counts and regression results.
 
 The next useful compiler proof is a real standalone tool executing here
-with its measured libc requirements. Work remains on allocation, stat
-and directory APIs, TLS/runtime initialization, threads, mappings, spawn
-attributes and cancellation APIs. Wire the same service into public
-libsa spawn before relying on unchanged native libraries through CFFI.
+with its measured libc requirements. The shared allocator,
+static TLS initialization and public Low spawn are now integrated. Qualify
+remaining C++ startup, thread cleanup/concurrency, mappings, spawn
+attributes and cancellation against the selected compiler.
 Then cross-seed the chosen C++ compiler/linker and prove their local
 rebuild, followed by the engine build and subprocess harness. The
 acceptance gates and dependency inventories remain in

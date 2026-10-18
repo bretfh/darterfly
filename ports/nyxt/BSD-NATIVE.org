@@ -66,7 +66,7 @@ system world                              isolated native world
 
 Lisp parent: posix-spawn ----------------> ELF startup, main(argc,argv,envp)
       |                                              |
-      | BSD PID                              small C I/O runtime
+      | BSD PID                              existing Low libsa runtime
       |                                              |
       |                                  bounded bytes over port right 1
       |                                              |
@@ -98,44 +98,18 @@ The public raw worlds:spawn-native API remains available. It returns a
 world ID and grants no BSD descriptor service by default. Use BSD spawn
 when the executable needs the process service described here.
 
-* Initial native runtime and wire contract
+* Shared runtime and wire contract
 
-[[file:../../src/native/start.S][Assembly startup]] and [[file:../../src/native/io.c][the C runtime]] are freestanding and build
-with both Clang and Darterfly's target TCC. Startup calls main and exits
-through Darterfly's trap ABI. The runtime provides a process-local errno;
-it is single-threaded and has no TLS, allocator or C++ initialization.
+Native programs now link [[file:../../src/libsa/crt0.S][crt0.S]] and the existing libsa-object,
+using headers in src/libsa/include. There is one libc, allocator and TLS
+implementation, with private state per world. The temporary C runtime
+and separate native I/O protocol have been removed.
 
-Requests have four little-endian 64-bit words: magic 0x3156534e4644,
-opcode, argument A and argument B. At most 4096 payload bytes follow.
-Replies have a signed 64-bit result followed by optional bytes. Negative
-results encode the target libc's errno values, not BSD's internal errno
-numbers. The implementation is [[file:../../src/bsd/native.lisp][the native BSD service]].
-
-| Opcode | Operation | A | B | Payload |
-|--------+-----------+---+---+---------|
-| 1 | open | flags | mode | NUL-terminated UTF-8 path |
-| 2 | close | fd | unused | none |
-| 3 | read | fd | count | none; reply carries bytes |
-| 4 | write | fd | unused | bytes |
-| 5 | lseek | fd | signed offset | 64-bit whence |
-| 6 | dup | fd | unused | none |
-| 7 | dup2 | fd | destination | none |
-| 8 | fcntl | fd | command | 64-bit integer argument |
-| 9 | getcwd | capacity | unused | none; reply carries NUL path |
-| 10 | chdir | unused | unused | NUL-terminated UTF-8 path |
-| 11 | poll | count | signed timeout | 8-byte pollfd records |
-| 12 | getpid | unused | unused | none |
-| 13 | getppid | unused | unused | none |
-| 14 | pipe | unused | unused | none; reply carries two 32-bit fds |
-| 15 | spawn | search mode | zero | packed arguments, environment and actions |
-| 16 | wait | signed PID | options | none; reply carries target wait status |
-
-Descriptors are limited to 0..4095; poll accepts at most 256 entries.
-Read and write can return short counts at the 4096-byte boundary. The
-initial fcntl subset is DUPFD, GETFD, SETFD, GETFL and SETFL, with
-nonblocking status and close-on-exec support. It is not full POSIX libc.
-Socket descriptors can be inherited and used for read/write/poll; this
-runtime does not yet expose socket creation or connection operations.
+See [[file:SHARED-RUNTIME.org][the runtime consolidation]] for startup, TLS validation, the common
+libsa service envelope, tests and remaining compiler requirements. Socket
+creation, stat, directory and other existing libsa APIs are now reached
+through that same service. Availability of an entry point is not a claim
+of complete POSIX behavior.
 
 * Evidence on the actual OS
 
@@ -152,7 +126,7 @@ diagnostics, shared offsets, descriptor flags, cwd/env, process identity,
 pipe/socket I/O, EOF, invalid executable/actions, malformed requests,
 fault status, stop/continue, cancellation and repeated spawn/reap.
 
-It then compiles the assembly startup, C runtime and probe using target
+It then compiles libsa with Low and the assembly/C probe with target
 TCC inside Darterfly, links them with link-native, and BSD-spawns the
 resulting ELF in a new world. That rebuilt executable reads redirected
 stdin and writes an artifact whose contents the parent verifies. The
@@ -172,11 +146,10 @@ cleanup. Current results are recorded in [[file:VALIDATION.org][VALIDATION.org]]
 
 1. [[file:CHILD-PROCESSES.org][Native and isolated-SBCL child spawn/wait now work]]. Grow the
    remaining process API against compiler requirements: attributes,
-   process groups, cancellation and public Low libsa entry points.
-   Native C posix_spawn and isolated SBCL run-program are tested; Low's
-   separate public C posix_spawn stub still reports ENOSYS.
-2. Grow a measured libc/sysroot contract: allocation, stat and directory
-   operations, clocks, mappings, TLS, threads and runtime initialization.
+   process groups and cancellation. Native C posix_spawn and isolated
+   SBCL run-program now use the same public Low implementation.
+2. Qualify the shared libc/sysroot against measured compiler needs:
+   allocation, files, clocks, mappings, TLS, threads and C++ startup.
    Qualify each requirement with the selected compiler's actual binary
    and runtime tests. Preserve graceful failure and add resource limits.
 3. Cross-seed the chosen C++ compiler, linker and runtime. Execute them

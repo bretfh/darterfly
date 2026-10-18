@@ -230,7 +230,7 @@
   :depends-on (#:darterfly/low)
   :serial t
   :pathname "src/libsa/"
-  :components ((:file "syscall") (:file "misc") (:file "string") (:file "stdlib") (:file "signal") (:file "pthread") (:file "time") (:file "unistd") (:file "vfs") (:file "start") (:file "run") (:file "math") (:file "strtod") (:file "stdio")))
+  :components ((:file "syscall") (:file "misc") (:file "string") (:file "stdlib") (:file "signal") (:file "pthread") (:file "time") (:file "unistd") (:file "vfs") (:file "start") (:file "spawn") (:file "run") (:file "math") (:file "strtod") (:file "stdio")))
 
 (asdf:defsystem #:darterfly/platform
   :description "Serial console"

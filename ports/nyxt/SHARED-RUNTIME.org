@@ -1,0 +1,152 @@
+#+title: One runtime for Darterfly native programs
+#+date: 2026-10-18
+#+startup: overview
+#+options: toc:2 num:nil
+
+* The decision
+
+Native executables use the existing Low libsa object: the same libc,
+allocator, pthread implementation and thread-local storage machinery used
+by SBCL. Each executable gets private runtime state in its own world.
+Shared implementation does not mean a shared heap between processes.
+
+The temporary native C runtime and its separate request dispatcher have
+been removed. There is no second allocator, errno implementation or TLS
+initializer for native programs. TLS here means thread-local storage;
+this change does not concern the network encryption protocol.
+
+#+begin_example
+system SBCL          isolated SBCL            native executable
+    |                      |                  crt0 -> libsa -> main
+    +----------- same Low libsa object ----------------+
+    |                      |                          |
+ direct callback           +---- same port-vfs -------+
+    |                                  |
+    +--------- BSD libsa service -------+
+                     |
+          Lisp processes, descriptors and VFS
+                     |
+       kernel worlds, mappings, threads and ports
+#+end_example
+
+The standalone startup is a small assembly entry plus a Low function.
+It initializes the existing main-thread/TLS structure, writable environment
+vector and stdio, then registers the existing port-vfs callback. Native
+standard descriptors use the BSD service so redirection and pipes work.
+The system image retains its existing console/startup behavior.
+
+* What is now common
+
+- malloc/calloc/realloc/free and aligned allocation use libsa's allocator.
+- errno and compiler-generated static TLS use libsa's per-thread storage.
+- pthread creation/join use the existing thread and kernel facilities.
+- libc file, socket and polling calls use the existing BSD service.
+- Public posix_spawn and SBCL's internal spawn hook share one bounded
+  serializer, action implementation and service operation.
+- Native and isolated-SBCL waitpid share status translation and authority
+  checks against the caller's own children.
+
+Action objects now use the existing allocator instead of a fixed native
+pool. Spawn still has explicit limits: 4096 packed bytes and at most 64
+arguments, environment entries and actions. Nonzero spawn attributes
+remain unsupported. These bounds must be revisited against real compiler
+invocations, including response-file behavior.
+
+The request envelope is the existing 72-byte libsa header: message kind,
+operation, four arguments, four lengths, four argument kinds and padding.
+Inline data follows. Replies contain a signed result, four output lengths
+and output bytes. Operation 51 carries packed spawn data, 52/53 supply
+process/parent identity, and 37 is waitpid. The old pointer-based operation
+36 is retired. The old native magic protocol is gone. Rebuild binaries
+that used the temporary runtime; its private wire ABI is not retained.
+
+The shared service validates operation-specific pointer layouts, string
+terminators and buffer lengths before constructing supervisor pointers.
+Bulk transfers use the existing kernel-checked world-copy token. The
+broker selects the process using the kernel's sender-world identity.
+Foreign spawn requests can launch native executables, not registered Lisp
+functions inside the supervisor.
+
+* ELF and TLS
+
+link-native now emits PT_TLS when required, using the same static TLS
+symbols and relocations as the OS linker. The loader accepts one bounded
+TLS template contained in a PT_LOAD segment. It validates offsets, sizes,
+alignment and containment before creating a world. libsa copies and zeros
+the template for each thread and installs FS through the existing trap.
+
+The relocation offset and runtime allocation agree on the minimum
+16-byte thread-pointer alignment. Over-aligned TLS starts at a matching
+file/virtual address alignment. Dynamic TLS and loading new TLS-bearing
+shared objects after startup are not implemented by this change.
+
+Testing also exposed an existing aligned-allocation bug: the returned
+mapping lacked the metadata expected by free. Aligned blocks now retain
+an ordinary allocator owner, so free and realloc use the same allocator
+path. Overflow and invalid-alignment cases fail without publishing a
+pointer. This repair applies to the system runtime as well as native tools.
+
+* Evidence and limits
+
+The actual-OS suite boots Darterfly in four-vCPU QEMU. It rebuilds libsa
+with Low, compiles the C driver/startup with target TCC, links a static
+executable with the Lisp linker, then runs it in its own world. That
+locally rebuilt driver also spawns and waits for native children when
+launched from an isolated SBCL world.
+
+Additional probes cover calloc/realloc, large allocations, aligned
+allocation/free/realloc, stdio/stat, environment mutation, more than eight
+live action objects, and compiler-generated initialized/zero TLS with
+4-, 64- and 65536-byte alignment. Two worker threads verify independent
+TLS and errno storage. Malformed TLS headers are rejected.
+
+The C TLS probes are compiled by host Clang and linked against the shared
+Low runtime; they do not prove that TCC compiles C thread-local syntax.
+The ordinary runtime/child driver and libsa are rebuilt inside Darterfly.
+See [[file:VALIDATION.org][the executed checks]] for results and logs.
+
+This is still a static Darterfly executable ABI, not Linux binary
+compatibility. C++ constructors, unwinding, dynamic linkage and C++
+thread-local destructors need qualification or implementation. Existing
+pthread join does not reclaim all thread allocations; world teardown
+reclaims the address space. Native BSD requests are serviced serially per
+process, so a blocking read waiting for another thread's write in that
+same process needs service concurrency work. The TLS tests do not claim
+that arbitrary multithreaded foreign workloads are already supported.
+
+Memory pressure, quotas, allocator failure before FS initialization and
+complete POSIX behavior remain open. Clang, CEF and Nyxt have not been
+made runnable on Darterfly by this consolidation.
+
+* Next gate toward local compiler and browser builds
+
+1. Build a reproducible standalone tool against this single sysroot and
+   run it in a world. Prefer the existing TCC sources as the first compiler
+   client; prove it can compile and link a child artifact there. The
+   current guest compiler still runs through the system's embedded TCC.
+2. Derive a concrete requirement list from the pinned LLVM configuration.
+   Qualify allocation/error paths, thread cleanup and concurrent blocking
+   services, mappings, files/directories, process calls and C++ startup.
+   Extend this runtime where measured behavior demands it.
+3. Cross-seed selected Clang/LLD and C++ runtime components, run them here,
+   then rebuild them here and use that output for another working build.
+   Audit the current 128 MiB executable/segment bound against the seed.
+4. Close the pinned generator/build-tool chain, then rebuild the engine,
+   bridge and Nyxt locally. Keep Nyxt's existing backend and confine OS
+   changes to justified platform adaptations. Dynamic library support is
+   still required for the existing foreign-library loading model.
+
+These are acceptance gates, not a claim that importing a compiler binary
+or compiling Nyxt's Lisp files alone completes browser self-hosting. The
+larger sequence remains in [[file:SELF-HOSTING.org][the self-hosting plan]].
+
+* Source anchors
+
+- [[file:../../src/libsa/crt0.S][Standalone assembly entry]]
+- [[file:../../src/libsa/start.lisp][Shared startup and TLS implementation]]
+- [[file:../../src/libsa/stdlib.lisp][Existing allocator and aligned-block repair]]
+- [[file:../../src/libsa/spawn.lisp][Unified public spawn and action implementation]]
+- [[file:../../src/libsa/run.lisp][Shared port transport]]
+- [[file:../../src/bsd/libsa.lisp][Shared service and request schema]]
+- [[file:../../src/bsd/native.lisp][Native process broker and lifecycle]]
+- [[file:../../tests/native.lisp][Host and actual-OS test entry points]]

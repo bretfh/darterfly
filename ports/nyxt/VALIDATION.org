@@ -1,6 +1,65 @@
 #+title: Nyxt compatibility validation
 #+date: 2026-10-18
 
+* Shared libsa runtime: current consolidation
+
+Branch: codex/nyxt-compat. Parent: 742d6eb. This section supersedes the
+runtime descriptions in the historical milestones below. The temporary
+C runtime and private native service dispatcher have been removed.
+
+| Check | Result |
+|-------+--------|
+| make check | Passed, LOADED |
+| Focused native host cases, included in complete host run | 40 passed |
+| Complete host suite | 1,339 passed; one pre-existing onboarding failure |
+| Expanded native BSD guest suite | 43 passed |
+| Raw native loader/lifecycle guest | 18 passed |
+| Socketpair/named socket/poll C ABI guest | Seven passed |
+| Isolated Lisp core/disk guest | Nine passed |
+| Isolated Lisp network guest | Three passed |
+| Process-exit guest | Three passed |
+| SBCL threading guest | Five passed |
+| APFS root/persistence and system run-program guest | 19 passed |
+
+All guest checks boot the actual Darterfly kernel and Lisp image under
+four-vCPU QEMU. They are not physical-hardware qualification.
+
+The native suite rebuilds the existing libsa object with Low and its
+assembly/C client with target TCC, links them inside Darterfly, and runs
+the result in a separate world. Existing descriptor, child-spawn/wait,
+isolated-SBCL driver and descendant-teardown checks pass through the
+common runtime and service path.
+
+New checks cover allocator overflow rejection, calloc/realloc, large and
+aligned allocations including free/realloc, stdio/stat, writable process
+environment and 16 simultaneously live action objects. Clang-built TLS
+probes verify initialized/zero storage, independent errno and TLS in two
+worker threads, and alignments of 4, 64 and 65536 bytes. Malformed PT_TLS
+metadata is rejected. These TLS clients are host compiled; the locally
+rebuilt driver does not establish TCC support for C thread-local syntax.
+
+The schema change initially returned EINVAL for a null poll array where
+EFAULT was required. The socket regression caught this, and the corrected
+shared service passes it. Host tests also reject oversized resolver output
+counts before any supervisor buffer can be written.
+
+The only full-host failure is the unchanged onboarding test
+FRESH-INSTALL-DOES-NOT-INHERIT-COMPLETED-SETUP, which calls the undefined
+DARTERFLY/INSTALL::FIRST-START-ENTRIES. The suite is not wholly green.
+The host assertion count is lower than the previous milestone because
+private-protocol tests were replaced with shared-service tests; native
+behavior remains exercised in the expanded actual-OS suite.
+
+- [[file:/tmp/consolidate-check-final.log][Compiler/load check]]
+- [[file:/tmp/consolidate-native-final.log][Expanded native guest run]]
+- [[file:/tmp/consolidate-regressions-final.log][Complete host suite and seven guest regressions]]
+
+The expanded guest transcript is also build/native-bsd-guest.log.
+The design and remaining limitations are in [[file:SHARED-RUNTIME.org][SHARED-RUNTIME.org]].
+No compiler/engine self-hosting claim follows from these runtime tests.
+
+* Historical milestone records
+
 * Named sockets and polling: current increment
 
 Branch: codex/nyxt-compat. Parent: 793bfc1. No Nyxt or cl-cef source changes.

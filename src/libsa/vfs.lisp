@@ -33,7 +33,7 @@
       (call-pointer vfs op a b c d)))
 
 (define-low console ((fd :u32))
-  (and (<= fd 2) (not (and (= fd 0) (the :u32 (__libsa_run_stdin))))))
+  (and (not native-runtime) (<= fd 2) (not (and (= fd 0) (the :u32 (__libsa_run_stdin))))))
 
 (define-low kfd-slot ((fd :u32)) (+ (address kfds) (* 24 (- fd +kernel-fd+))))
 
@@ -221,18 +221,25 @@
 (define-low pipe (fds) (ret (call 35 fds 0 0 0)))
 
 (define-low __libsa_spawn (program argv (in :u32) (out :u32) (err :u32) (search :u32) envp pwd)
-  (let ((args (malloc 64)) (r 0))
-    (setf (mem :u64 args) program)
-    (setf (mem :u64 (+ args 8)) argv)
-    (setf (mem :u64 (+ args 16)) (sign-extend :u32 in))
-    (setf (mem :u64 (+ args 24)) (sign-extend :u32 out))
-    (setf (mem :u64 (+ args 32)) (sign-extend :u32 err))
-    (setf (mem :u64 (+ args 40)) envp)
-    (setf (mem :u64 (+ args 48)) pwd)
-    (setf (mem :u64 (+ args 56)) search)
-    (setf r (ret (call 36 args 0 0 0)))
-    (free args)
-    r))
+  (let ((actions 0) (storage 0) (pid 0) (r 0))
+    (setf storage (malloc 16))
+    (unless storage (result (ret (- 0 +enomem+))))
+    (setf actions storage)
+    (setf r (posix_spawn_file_actions_init actions))
+    (unless r
+      (when (signed>= (sign-extend :u32 in) 0)
+        (setf r (posix_spawn_file_actions_adddup2 actions in 0)))
+      (when (and (= r 0) (signed>= (sign-extend :u32 out) 0))
+        (setf r (posix_spawn_file_actions_adddup2 actions out 1)))
+      (when (and (= r 0) (signed>= (sign-extend :u32 err) 0))
+        (setf r (posix_spawn_file_actions_adddup2 actions err 2)))
+      (unless r (setf r (posix_spawn_file_actions_addclosefrom_np actions 3)))
+      (when (and (= r 0) pwd) (setf r (posix_spawn_file_actions_addchdir_np actions pwd)))
+      (unless r
+        (setf r (spawn-public (address pid) program actions 0 argv envp search)))
+      (posix_spawn_file_actions_destroy actions))
+    (free storage)
+    (if r (ret (- 0 r)) pid)))
 
 (define-low socket ((domain :u32) (type :u32) (protocol :u32)) (ret (call 38 domain type protocol 0)))
 (define-low socketpair ((domain :u32) (type :u32) (protocol :u32) fds)

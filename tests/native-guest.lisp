@@ -53,7 +53,7 @@
     (ignore-errors (darterfly/worlds:stop world))
     (ignore-errors (darterfly/worlds:wait-native world :timeout 5))))
 
-;; Malformed file offsets, overflow, wrong architecture, dynamic/TLS images,
+;; Malformed file offsets, overflow, wrong architecture, dynamic images, invalid TLS,
 ;; executable stacks, W+X, overlapping pages and non-executable entry points.
 (let* ((file (darterfly/run::read-octets "/Users/darterfly/native-probe"))
        (ph (darterfly/link::u file 32 8))

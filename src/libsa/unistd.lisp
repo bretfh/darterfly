@@ -14,8 +14,8 @@
     (__syscall 1 code 0 0 0 0 0)
     (while 1)))
 
-(define-low getpid () 1)
-(define-low getppid () 0)
+(define-low getpid () (if native-runtime (ret (call 52 0 0 0 0)) 1))
+(define-low getppid () (if native-runtime (ret (call 53 0 0 0 0)) 0))
 (define-low getpgrp () 1)
 (define-low setpgid (a b) 0)
 (define-low setsid () 1)
@@ -92,21 +92,6 @@
 
 (define-low getpwuid ((u :u32)) (if (= u 0) (root-entry) 0))
 (define-low getpwnam (n) (if (= (the :u32 (strcmp n "root")) 0) (root-entry) 0))
-
-(define-low posix_spawn (p path f a argv envp) +enosys+)
-(define-low posix_spawnp (p path f a argv envp) (posix_spawn p path f a argv envp))
-(define-low posix_spawnattr_init (a) (memset a 0 264) 0)
-(define-low posix_spawnattr_destroy (a) 0)
-(define-low posix_spawnattr_setflags (a (f :u16)) (setf (mem :u16 a) f) 0)
-(define-low posix_spawnattr_setpgroup (a (p :u32)) (setf (mem :u32 (+ a 4)) p) 0)
-(define-low posix_spawnattr_setsigmask (a s) (memcpy (+ a 8) s 128) 0)
-(define-low posix_spawnattr_setsigdefault (a s) (memcpy (+ a 136) s 128) 0)
-(define-low posix_spawn_file_actions_init (f) (memset f 0 16) 0)
-(define-low posix_spawn_file_actions_destroy (f) 0)
-(define-low posix_spawn_file_actions_adddup2 (f a b) 0)
-(define-low posix_spawn_file_actions_addopen (f fd p o m) 0)
-(define-low posix_spawn_file_actions_addclose (f fd) 0)
-(define-low posix_spawn_file_actions_addclosefrom_np (f fd) 0)
 
 (define-global dl-failed :u64)
 (define-global runtime-handle :u64)

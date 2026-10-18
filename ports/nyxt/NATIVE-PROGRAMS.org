@@ -94,10 +94,14 @@ use int 0x82. This is Darterfly's ABI, not Linux's syscall ABI. An ELF file
 format match alone does not make an existing Linux executable compatible.
 The minimal auxiliary vector does not yet satisfy a general-purpose libc.
 
-The loader rejects PT_INTERP, PT_DYNAMIC, PT_TLS and executable-stack
-requests. PIE, dynamic relocations, shared-library loading and native TLS
-startup remain unimplemented. The test startup has no libc, constructors,
-thread initialization or C++ exception runtime.
+The loader rejects PT_INTERP, PT_DYNAMIC and executable-stack requests.
+It now accepts one validated PT_TLS template inside a load segment; the
+[[file:SHARED-RUNTIME.org][shared libsa runtime]] initializes static TLS for native threads. The
+raw test startup above deliberately has no libc. Ordinary native tools
+use libsa/crt0.S and the same libsa object as SBCL instead.
+
+PIE, dynamic relocations, shared-library loading, C++ startup and exception
+runtime support remain open. ELF acceptance is not C++ ABI qualification.
 
 * Implementation
 

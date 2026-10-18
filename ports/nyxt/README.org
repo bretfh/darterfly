@@ -139,8 +139,10 @@ compiles and links its executable inside Darterfly.
 
 [[file:BSD-NATIVE.org][BSD spawn and descriptor integration]] now connects those worlds to
 process IDs, wait4, signals, inherited descriptors and bounded native I/O.
-The guest rebuilds the runtime with target TCC and runs the resulting
-program with verified redirected I/O.
+The guest rebuilds the shared runtime with Low and its C client with
+target TCC, then runs the result with verified redirected I/O.
 
 [[file:CHILD-PROCESSES.org][Child spawning from native programs and isolated SBCL worlds]], including a locally rebuilt native driver launching children.
-Fuller libc/TLS, remaining process APIs and the C++ compiler port are next.
+[[file:SHARED-RUNTIME.org][Native tools now reuse the existing libsa, allocator and static TLS]].
+The duplicate C runtime is gone. C++ startup, thread cleanup/concurrent
+services, dynamic loading and the compiler port remain ahead.
