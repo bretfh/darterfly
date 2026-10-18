@@ -1,7 +1,7 @@
 (defpackage #:darterfly/worlds
   (:use #:cl)
   (:export #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages #:spawn-record #:receive-into #:copy-from #:copy-into
-           #:heartbeat #:*watchdog-limit* #:quiet-watchdog #:pause #:resume))
+           #:heartbeat #:*watchdog-limit* #:quiet-watchdog #:pause #:resume #:checkpoint #:restore))
 (in-package #:darterfly/worlds)
 
 (define-condition world-error (error)
@@ -82,6 +82,59 @@
 (defun pause (world) (machdep 53 world))
 
 (defun resume (world) (machdep 54 world))
+
+(defconstant +checkpoint-magic+ #x31504b4357464444)
+
+(defun u64-octets (n) (let ((v (make-array 8 :element-type '(unsigned-byte 8)))) (dotimes (i 8 v) (setf (aref v i) (ldb (byte 8 (* 8 i)) n)))))
+
+(defun checkpoint (world out)
+  (let ((describe (make-array (* 4 1048576) :element-type '(unsigned-byte 8)))
+        (pages (make-array 4096 :element-type '(unsigned-byte 64)))
+        (page (make-array 4096 :element-type '(unsigned-byte 8)))
+        (count 0)
+        (t0 (get-internal-real-time)))
+    (pause world)
+    (unwind-protect
+         (progn
+           (let ((n (with-octets (d describe) (machdep 55 world d (length describe)))))
+             (write-sequence (u64-octets +checkpoint-magic+) out)
+             (write-sequence (u64-octets n) out)
+             (write-sequence describe out :end n))
+           (let ((from 0))
+             (loop
+               (let ((n (with-octets (p pages) (machdep 56 world p (length pages) from))))
+                 (dotimes (i n)
+                   (let ((descriptor (aref pages i)))
+                     (with-octets (b page) (machdep 57 world (logand descriptor (lognot 4095)) b 4096))
+                     (write-sequence (u64-octets descriptor) out)
+                     (write-sequence page out)
+                     (incf count)))
+                 (setf from (aref pages (1- (length pages))))
+                 (when (< n (1- (length pages))) (return)))))
+           (write-sequence (u64-octets 0) out))
+      (resume world))
+    (list :pages count :paused-ms (round (* 1000 (- (get-internal-real-time) t0)) internal-time-units-per-second))))
+
+(defun read-u64 (in) (let ((v (make-array 8 :element-type '(unsigned-byte 8)))) (read-sequence v in) (loop :for i :below 8 :sum (ash (aref v i) (* 8 i)))))
+
+(defun restore (in base size port)
+  (unless (= (read-u64 in) +checkpoint-magic+) (error "not a world checkpoint"))
+  (let* ((n (read-u64 in))
+         (describe (make-array n :element-type '(unsigned-byte 8)))
+         (args (make-array 6 :element-type '(unsigned-byte 64)))
+         (out (make-array 1 :element-type '(unsigned-byte 64)))
+         (page (make-array 4096 :element-type '(unsigned-byte 8))))
+    (read-sequence describe in)
+    (with-octets (d describe)
+      (with-octets (o out)
+        (setf (aref args 0) d (aref args 1) n (aref args 2) base (aref args 3) size (aref args 4) port (aref args 5) o)
+        (let ((world (with-octets (a args) (machdep 58 a))))
+          (loop :for descriptor := (read-u64 in)
+                :until (zerop descriptor)
+                :do (read-sequence page in)
+                    (with-octets (b page) (machdep 59 world descriptor b)))
+          (machdep 60 world d n)
+          (values world (aref out 0)))))))
 
 (defun world-state (world)
   (let ((flags (machdep 46 world)))

@@ -454,4 +454,5 @@
   (when (logand (mem :u64 (+ (current-world) +w-flags+)) +paused+) (park))
   (unless (mem :u32 (+ (cpu-data) +c-pending-ast+)) (result 0))
   (setf (mem :u32 (+ (cpu-data) +c-pending-ast+)) 0)
-  (thread-block))
+  (thread-block)
+  (when (logand (mem :u64 (+ (current-world) +w-flags+)) +paused+) (park)))

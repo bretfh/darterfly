@@ -1,7 +1,7 @@
 (defpackage #:darterfly/run
   (:use #:cl)
   (:export #:run-core #:run-world #:start-world #:finish-world #:stop-world #:world-eval #:attach #:world-id #:world-name
-           #:new-world #:list-worlds #:find-world #:save-world #:restart-world #:collect #:tree-files #:in-run-p))
+           #:new-world #:list-worlds #:find-world #:save-world #:restart-world #:checkpoint-world #:restore-world #:collect #:tree-files #:in-run-p))
 (in-package #:darterfly/run)
 
 (defconstant +magic+ #x4e555248434e4946)
@@ -230,7 +230,7 @@
   (let ((at (or (position "--eval" argv :test #'string=) (position "--quit" argv :test #'string=) (length argv))))
     (append (subseq argv 0 at) (list "--eval" *attach-prelude*) (subseq argv at))))
 
-(defstruct (world (:constructor make-world)) id inward thread name core stopping restarts)
+(defstruct (world (:constructor make-world)) id inward thread name core stopping restarts command cwd disk base)
 
 (defvar *worlds* nil)
 (defvar *worlds-lock* (sb-thread:make-mutex :name "worlds"))
@@ -276,34 +276,85 @@
 (defun restart-world (name path &key (cwd "/"))
   (new-world name :core path :cwd cwd))
 
+(defvar *bases* nil)
+
+(defun free-base ()
+  (sb-thread:with-mutex (*worlds-lock*)
+    (loop :for slot :from 1 :below 16
+          :for base := (+ +world-base+ (ash slot 36))
+          :unless (member base *bases*)
+            :do (push base *bases*) (return base)
+          :finally (error "no room for another world"))))
+
+(defun take-base (base)
+  (sb-thread:with-mutex (*worlds-lock*)
+    (when (member base *bases*) (error "the world at ~x is still running; stop it first" base))
+    (push base *bases*)
+    base))
+
 (defun start-world (core argv &key files cwd stdin disk timeout attach name)
-  (let* ((parts (record-parts core (if attach (with-prelude argv) argv) files cwd stdin nil))
-         (base (+ +world-base+ (ash (mod (incf *world-runs*) 16) 36)))
-         (port (darterfly/worlds:make-port))
-         (proc (and disk (darterfly/bsd:make-world-proc (or cwd "/")))))
+  (let* ((argv (if attach (with-prelude argv) argv))
+         (parts (record-parts core argv files cwd stdin nil))
+         (base (free-base))
+         (port (darterfly/worlds:make-port)))
     (multiple-value-bind (offsets back-at size) (layout parts 0)
       (write-record base size parts offsets back-at 0 0 1 disk)
       (multiple-value-bind (id inward) (darterfly/worlds:spawn-record base size port)
-        (let ((world (make-world :id id :inward inward :name (or name (format nil "world ~d" id)) :core core)))
-          (sb-thread:with-mutex (*worlds-lock*) (push world *worlds*))
-          (setf (world-thread world)
-                (sb-thread:make-thread
-                  (lambda ()
-                    (unwind-protect
-                         (multiple-value-bind (code archive) (serve-world port id proc timeout)
-                           (cond ((null code) (list :exit :stopped :files 0))
-                                 (t (sb-sys:with-pinned-objects (archive)
-                                      (let ((address (sb-sys:sap-int (sb-sys:vector-sap archive))))
-                                        (if (zerop code)
-                                            (list :exit 0 :files (unpack address (length archive)))
-                                            (list :exit code :files 0 :rejected (count-entries address (length archive)))))))))
-                      (darterfly/worlds:stop id)
-                      (wait-gone id)
-                      (when proc (darterfly/bsd:end-world-proc proc))
-                      (libsa "munmap" sb-alien:int (sb-alien:unsigned base) (sb-alien:unsigned size))
-                      (sb-thread:with-mutex (*worlds-lock*) (setf *worlds* (remove world *worlds*)))))
-                  :name (format nil "world ~d" id)))
-          world)))))
+        (launch-world id inward port base size disk timeout
+                      :name name :core core :argv argv :cwd cwd)))))
+
+(defun launch-world (id inward port base size disk timeout &key name core argv cwd)
+  (let* ((proc (and disk (darterfly/bsd:make-world-proc (or cwd "/"))))
+         (world (make-world :id id :inward inward :name (or name (format nil "world ~d" id)) :core core
+                            :command argv :cwd cwd :disk disk :base base)))
+    (sb-thread:with-mutex (*worlds-lock*) (push world *worlds*))
+    (setf (world-thread world)
+          (sb-thread:make-thread
+           (lambda ()
+             (unwind-protect
+                  (multiple-value-bind (code archive) (serve-world port id proc timeout)
+                    (cond ((null code) (list :exit :stopped :files 0))
+                          (t (sb-sys:with-pinned-objects (archive)
+                               (let ((address (sb-sys:sap-int (sb-sys:vector-sap archive))))
+                                 (if (zerop code)
+                                     (list :exit 0 :files (unpack address (length archive)))
+                                     (list :exit code :files 0 :rejected (count-entries address (length archive)))))))))
+               (darterfly/worlds:stop id)
+               (wait-gone id)
+               (when proc (darterfly/bsd:end-world-proc proc))
+               (libsa "munmap" sb-alien:int (sb-alien:unsigned base) (sb-alien:unsigned size))
+               (sb-thread:with-mutex (*worlds-lock*)
+                 (setf *worlds* (remove world *worlds*) *bases* (remove base *bases*)))))
+           :name (format nil "world ~d" id)))
+    world))
+
+(defun checkpoint-world (world path)
+  (with-open-file (out path :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
+    (let ((meta (sb-ext:string-to-octets
+                 (with-standard-io-syntax
+                   (prin1-to-string (list :name (world-name world) :core (world-core world) :argv (world-command world)
+                                          :cwd (world-cwd world) :disk (world-disk world) :base (world-base world))))
+                 :external-format :utf-8)))
+      (write-sequence (darterfly/worlds::u64-octets (length meta)) out)
+      (write-sequence meta out)
+      (darterfly/worlds:checkpoint (world-id world) out))))
+
+(defun restore-world (path &key name)
+  (with-open-file (in path :element-type '(unsigned-byte 8))
+    (let* ((meta (let ((v (make-array (darterfly/worlds::read-u64 in) :element-type '(unsigned-byte 8))))
+                   (read-sequence v in)
+                   (with-standard-io-syntax (read-from-string (sb-ext:octets-to-string v :external-format :utf-8)))))
+           (base (getf meta :base))
+           (name (or name (getf meta :name))))
+      (when (find-world name) (error "a world named ~a is already running" name))
+      (take-base base)
+      (let ((parts (record-parts (getf meta :core) (getf meta :argv) nil (getf meta :cwd) nil nil))
+            (port (darterfly/worlds:make-port)))
+        (multiple-value-bind (offsets back-at size) (layout parts 0)
+          (write-record base size parts offsets back-at 0 0 1 (getf meta :disk))
+          (multiple-value-bind (id inward) (darterfly/worlds:restore in base size port)
+            (launch-world id inward port base size (getf meta :disk) nil
+                          :name name :core (getf meta :core) :argv (getf meta :argv) :cwd (getf meta :cwd))))))))
 
 (defun finish-world (world) (sb-thread:join-thread (world-thread world)))
 
