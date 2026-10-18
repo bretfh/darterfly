@@ -209,6 +209,7 @@
   (cpu-data-set-gs (cpu-datap 0))
   (funnel-lock)
   (setf |platform_boot_args| args)
+  (log-start)
   (serial-init)
   (kprintf "darterfly Kernel Version 0.1: %s; root:darterfly/RELEASE_X86_64
 " (build-date))

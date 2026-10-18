@@ -924,6 +924,31 @@
                  "a process that crashes leaves its error and backtrace behind"))
         (image:finish c 5)))))
 
+(test the-system-log-keeps-what-happened-across-boots
+  (let ((disk (merge-pathnames "system-log.img" (darterfly-file "build/"))))
+    (uiop:delete-file-if-exists disk)
+    (let ((c (image:bare-console :root disk)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 120)
+               (ask "(sb-thread:join-thread (sb-thread:make-thread (lambda () (error \"broken on purpose\")) :name \"breaker\") :default nil)")
+               (let ((tail (ask "(progn (sleep 3) (darterfly/log:tail 400))")))
+                 (is (search "darterfly Kernel Version" tail) "the kernel's own lines are in the log")
+                 (is (search "boot: generation" tail) "the boot says where it starts")
+                 (is (search "breaker: broken on purpose" tail) "a background error is in the log"))
+               (image:send c "(progn (sleep 2) (darterfly/power:flush-disks) (sb-ext:exit))")
+               (image:expect c "exit(0)" :timeout 60))
+          (image:finish c 5))))
+    (let ((c (image:bare-console :root disk)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 120)
+               (let ((seen (ask "(progn (sleep 3) (let ((text (uiop:read-file-string darterfly/log:*system-log*))) (list :boots (count-if (lambda (line) (eql 20 (search (concatenate (quote string) \"darterfly Kernel\" \" Version\") line))) (uiop:split-string text :separator '(#\\Newline))) :error (and (search \"breaker: broken on purpose\" text) t))))")))
+                 (is (search "(:BOOTS 2 :ERROR T)" seen) "the next boot finds the last one's log and adds its own: ~a" seen)))
+          (image:finish c 5))))))
+
 (test a-program-that-quits-ends-only-its-own-process
   (let ((c (image:bare-console :boot-args "init")))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
@@ -1104,7 +1129,7 @@
                    "fasls land in darterfly's home")
                (ask copy)
                (is (search ":EDITED" (ask edit)))
-               (ask "(darterfly-asdf)")
+               (ask "(darterfly/start::register-sources)")
                (is (search "(\"/Users/darterfly/src/darterfly/darterfly.asd\" \"edited inside darterfly\")" (ask reload)))
                (image:send c "(sb-ext:exit)")
                (image:expect c "exit(0)" :timeout 60))
@@ -1189,7 +1214,7 @@
                (image:expect c "* " :timeout 60)
                (ask copy)
                (is (search ":EDITED" (ask edit)))
-               (ask "(darterfly-asdf)")
+               (ask "(darterfly/start::register-sources)")
                (is (search "\"/Users/darterfly/src/darterfly/darterfly.asd\"" (ask reload)))
                (is (search "\"gen-2\"" (ask "(darterfly/install:install (darterfly/install:build-kernel) \"/Volumes/EFI/EFI/darterfly/gen-1/darterfly.core\")")))
                (image:send c "(sb-ext:exit)")

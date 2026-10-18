@@ -41,6 +41,9 @@
                         :output :string :error-output :string :ignore-error-status t)
     (concatenate 'string out err)))
 
+(defun device-log (host &key (lines 100) (nrepl-port 4011))
+  (device-eval host (format nil "(progn (write-string (darterfly/log:tail ~d)) (values))" lines) :timeout 60 :nrepl-port nrepl-port))
+
 (defparameter *receiver-sources* '("src/power/power.lisp" "src/install/deploy.lisp"))
 
 (defun receiver-code ()

@@ -14,6 +14,25 @@
 (define-global ring :u8 :count 4096 :alignment 64)
 (define-global head :u32 :alignment 4)
 (define-global tail :u32 :alignment 4)
+(define-global log-ring :u8 :count 262144 :alignment 64)
+(define-global log-head :u32 :alignment 4)
+(define-global log-epoch :u64)
+
+(define-low log-putc ((c :u8))
+  (setf (ref log-ring (logand (fetch-add (address log-head) 1) #x3FFFF)) c))
+
+(define-low log-start ()
+  (setf log-epoch (rdtsc)))
+
+(define-low log-started ()
+  log-epoch)
+
+(define-low log-read (from buffer count)
+  (let ((i 0))
+    (while (< i count)
+      (setf (mem :u8 (+ buffer i)) (ref log-ring (logand (+ from i) #x3FFFF)))
+      (incf i)))
+  log-head)
 
 (define-low serial-init ()
   (outb +ier+ #x00)
@@ -34,6 +53,7 @@
     (incf txtail))
   (when (= c 10) (serial-put-polled 13))
   (serial-put-polled c)
+  (log-putc c)
   (console-putc c))
 
 (define-low serial-tx-kick ()
@@ -58,6 +78,7 @@
           (incf txhead))
         (setf (ref tx (logand txhead #xFFFF)) c)
         (incf txhead)
+        (log-putc c)
         (console-putc c))))
 
 (define-low serial-enable-interrupts ()

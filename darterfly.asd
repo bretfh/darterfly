@@ -148,6 +148,20 @@
   :pathname "src/journal/"
   :components ((:file "journal")))
 
+(asdf:defsystem #:darterfly/log
+  :description "System log"
+  :depends-on (#:uiop)
+  :serial t
+  :pathname "src/log/"
+  :components ((:file "log")))
+
+(asdf:defsystem #:darterfly/start
+  :description "Boot"
+  :depends-on (#:uiop #:darterfly/log #:darterfly/vfs #:darterfly/bsd #:darterfly/apfs #:darterfly/run #:darterfly/install #:darterfly/devices #:darterfly/display #:darterfly/audio #:darterfly/generation #:darterfly/net #:darterfly/wifi #:darterfly/nrepl #:darterfly/kernel)
+  :serial t
+  :pathname "src/start/"
+  :components ((:file "start")))
+
 (asdf:defsystem #:darterfly/nrepl
   :description "Remote eval"
   :depends-on (#:darterfly/net #:darterfly/devices #:darterfly/bsd #:darterfly/journal)
@@ -306,7 +320,7 @@
 
 (asdf:defsystem #:darterfly
   :description "A live, hackable OS on SBCL"
-  :depends-on (#:darterfly/mach #:darterfly/server #:darterfly/layer #:darterfly/bsd #:darterfly/init #:darterfly/shell #:darterfly/io #:darterfly/text #:darterfly/edit #:darterfly/imageio #:darterfly/kit #:darterfly/stats #:darterfly/windowserver #:darterfly/bench #:darterfly/apps #:darterfly/devices #:darterfly/vfs #:darterfly/apfs #:darterfly/fat #:darterfly/install #:darterfly/net #:darterfly/nrepl #:darterfly/run #:darterfly/generation #:darterfly/kernel #:darterfly/image #:darterfly/crypto #:darterfly/wifi #:darterfly/journal #:darterfly/worlds #:darterfly/storage)
+  :depends-on (#:darterfly/mach #:darterfly/server #:darterfly/layer #:darterfly/bsd #:darterfly/init #:darterfly/shell #:darterfly/io #:darterfly/text #:darterfly/edit #:darterfly/imageio #:darterfly/kit #:darterfly/stats #:darterfly/windowserver #:darterfly/bench #:darterfly/apps #:darterfly/devices #:darterfly/vfs #:darterfly/apfs #:darterfly/fat #:darterfly/install #:darterfly/net #:darterfly/nrepl #:darterfly/run #:darterfly/generation #:darterfly/kernel #:darterfly/image #:darterfly/crypto #:darterfly/wifi #:darterfly/journal #:darterfly/worlds #:darterfly/storage #:darterfly/log #:darterfly/start)
   :in-order-to ((asdf:test-op (asdf:test-op #:darterfly/test))))
 
 (asdf:defsystem #:darterfly/test

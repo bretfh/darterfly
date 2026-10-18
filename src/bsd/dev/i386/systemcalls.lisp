@@ -232,6 +232,8 @@
       ((= n 65) (ok regs (if (< a |real_ncpus|) (read-cpu-msr a b) #xFFFFFFFFFFFFFFFF)))
       ((= n 66) (ok regs (request-sleep (logand a #xFFFF) (logand (shr a 16) #xFFFF) (logand (shr a 32) 7) b (logand (shr a 35) 1))))
       ((= n 68) (ok regs (changed-memory a b)))
+      ((= n 69) (ok regs (log-read a b (if b (reg regs +r-rdx+) 0))))
+      ((= n 70) (ok regs (log-started)))
       ((= n 67) (ok regs (if (logand b #x100) (progn (outb a (logand b #xFF)) 0) (inb a))))
       ((and (not (privileged)) (= n 6))
        (pair-out a (mem :u64 (+ (current-world) +w-image+)) (mem :u64 (+ (current-world) +w-image-size+)))
