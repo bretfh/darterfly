@@ -4,7 +4,7 @@
   #(nil :open :close :read :write :pread :pwrite :lseek :stat :lstat :fstat :readlink :symlink :mkdir :rmdir
     :unlink :rename :chdir :fchdir :getcwd :realpath :chmod :fchmod :chown :fchown :truncate :ftruncate :dup :dup2
     :fcntl :readdir :link :utimes :fsync :umask :pipe :spawn :waitpid
-    :socket :bind :listen :accept :connect :getsockname :getpeername :shutdown :recvfrom :sendto :resolve))
+    :socket :bind :listen :accept :connect :getsockname :getpeername :shutdown :recvfrom :sendto :resolve :socketpair))
 
 (defun c-string (address)
   (let* ((sap (sb-sys:int-sap address))
@@ -158,6 +158,21 @@
     (when (logtest type #o4000) (setf (file-flags (fd-file fd)) +o-nonblock+))
     fd))
 
+(defun libsa-socketpair (domain type protocol address)
+  (when (zerop address) (fail :efault))
+  ;; Linux constants match the foreign ABI used by libsa, not BSD F_SETFL.
+  (unless (zerop (logandc2 type (logior #xf #o4000 #o2000000)))
+    (fail :einval))
+  (syscall
+    (multiple-value-bind (a b) (new-socketpair (if (= domain 10) +af-inet6+ domain) (logand type #xf) protocol)
+      (let ((left (fd-alloc a 3)) (right (fd-alloc b 3)))
+        (dolist (fd (list left right))
+          (when (logtest type #o4000)
+            (setf (file-flags (fd-file fd)) +o-nonblock+))
+          (when (logtest type #o2000000)
+            (setf (cdr (aref (proc-fds *proc*) fd)) t)))
+        (put-fds left right address)))))
+
 (defun socket-addresses (fd)
   (let* ((s (fd-socket fd))
          (pcb (socket-pcb s)))
@@ -234,12 +249,14 @@
     (:ftruncate (vfs (vfs:vnop-truncate (fd-vnode a) b)) 0)
     (:dup (dup-from a 3))
     (:dup2 (if (< b 3) (fail :ebadf) (dup2 a b)))
-    (:fcntl (let ((file (fd-file a)))
+    (:fcntl (syscall (let ((file (fd-file a)))
               (case b
                 (0 (dup-from a (max c 3)))
+                (1 (if (cdr (aref (proc-fds *proc*) a)) 1 0))
+                (2 (setf (cdr (aref (proc-fds *proc*) a)) (logbitp 0 c)) 0)
                 (3 (logior (file-access file) (if (nonblocking-p file) #o4000 0)))
                 (4 (setf (file-flags file) (if (logtest c #o4000) +o-nonblock+ 0)) 0)
-                (t 0))))
+                (t 0)))))
     (:readdir (let ((entry (vfs (vfs:vfs-readdir (vfs-fd (vnode-file a)) b))))
                 (if entry (put-dirent (car entry) (cdr entry) c) 0)))
     (:link (fail :enotsup))
@@ -255,14 +272,18 @@
     (:listen (listen a b))
     (:accept (multiple-value-bind (fd ip port) (accept a) (put-sockaddr ip port b c) fd))
     (:connect (multiple-value-bind (ip port) (get-sockaddr b) (connect a ip port)))
-    (:getsockname (put-sockaddr 0 (or (socket-port (fd-socket a)) 0) b c))
-    (:getpeername (destructuring-bind (&optional ip port) (socket-addresses a)
+    (:getsockname (let ((s (fd-socket a)))
+                    (unless (internet-socket-p s) (fail :eopnotsupp))
+                    (put-sockaddr 0 (or (socket-port s) 0) b c)))
+    (:getpeername (unless (internet-socket-p (fd-socket a)) (fail :eopnotsupp))
+                  (destructuring-bind (&optional ip port) (socket-addresses a)
                     (unless ip (fail :enotconn))
                     (put-sockaddr ip port b c)))
-    (:shutdown (fd-socket a) 0)
+    (:shutdown (shutdown a b))
     (:recvfrom (libsa-recvfrom a b))
     (:sendto (libsa-sendto a b))
-    (:resolve (libsa-resolve (c-string a) b c d))))
+    (:resolve (libsa-resolve (c-string a) b c d))
+    (:socketpair (libsa-socketpair a b c d))))
 
 (defmacro as-libsa ((proc) &body body)
   `(sb-sys:without-interrupts

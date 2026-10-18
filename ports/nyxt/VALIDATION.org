@@ -1,0 +1,93 @@
+#+title: Nyxt compatibility: first IPC increment
+#+date: 2026-10-18
+
+* Scope
+
+Base commit: f11c970. These results concern anonymous local stream pairs,
+not a running Nyxt browser on Darterfly. No Nyxt/backend source was patched.
+
+| Check | Result |
+|-------+--------|
+| make check | Passed, LOADED |
+| Fresh make sbcl in this worktree | Passed |
+| Focused local-socket host suite | 61 assertions passed |
+| Complete host suite | 1,257 passed, one existing failure |
+| Guest C ABI test | Four assertions passed |
+| Same C probe compiled/run on Linux | Exit zero |
+| Guix Nyxt resolution and --version | Passed; existing store output |
+
+The guest test compiles its C source with target TCC and runs it both in
+world zero and in an isolated world using port-vfs. It exercises nonblock,
+close-on-exec flags, both directions, queued data before EOF, half-close,
+peer close, invalid-family behavior and untouched outputs on failure.
+Its final assertion verifies that the system remains responsive.
+
+The independent Linux run caught a distinction in the error contract:
+AF_INET is a supported family whose socketpair operation is unsupported,
+so the implementation now returns EOPNOTSUPP there; an unknown family
+returns EAFNOSUPPORT. This is covered by the host tests.
+
+The complete host suite's failure is the onboarding test
+FRESH-INSTALL-DOES-NOT-INHERIT-COMPLETED-SETUP. Its call to
+DARTERFLY/INSTALL::FIRST-START-ENTRIES refers to an undefined function.
+The unchanged parent was exported with git archive and its onboarding
+suite reproduced that same failure: 16 passes and one failure. The
+compatibility tests do not weaken or skip it.
+
+No full ordinary guest suite, recovery suite, or physical-hardware
+qualification was performed for this increment. Named Unix sockets,
+readiness, descriptor passing, complete socket options/address queries,
+dynamic libraries, native engine execution, and browser self-hosting
+remain open.
+
+* Reproduction
+
+From this worktree:
+
+#+begin_src sh
+make check
+make test-local-sockets
+make sbcl
+make test-local-sockets-guest
+#+end_src
+
+The complete host suite was run under the repository's Guix manifest
+with darterfly/test:run-them :host and a private ASDF output cache.
+The Linux reference used clang -Wall -Wextra -Werror on
+ tests/socketpair-probe.c, followed by execution of the resulting binary.
+
+* Existing packaged browser reference
+
+The following resolves the already-built package; it was not a fresh
+source rebuild during this session:
+
+#+begin_src sh
+guix build -L /home/bfh/dots/src \
+  -e '(begin (use-modules (dots packages nyxt)) nyxt)'
+#+end_src
+
+Output:
+=/gnu/store/rc5mjlkq7j7drlfh01f6kw5pky9s6q38-nyxt-4.0.0-pre-3=
+
+Running its wrapper with --version and no DISPLAY/WAYLAND_DISPLAY reports
+Nyxt version 4.0.0-pre-3 and exits zero. It also prints an already-terminated
+warning on shutdown. No page-rendering or interactive browser smoke test
+was performed, so this is only package/CLI baseline evidence.
+
+The direct store references confirm Electron 36.9.5, SBCL 2.6.4,
+OpenSSL 3.5.7, libfixposix 0.4.3, SQLite 3.39.3, Enchant 2.6.9,
+synchronous-socket 0.0.2, bindings 1.5.0, and file-uri-to-path 1.0.0,
+plus runtime libraries and the optional Slynk package. This inventory
+is not the full recursive Electron/Chromium dependency closure.
+
+* Session logs
+
+These temporary logs may be removed later; the checks above are rerunnable.
+
+- [[file:/tmp/darterfly-nyxt-check.log][Compiler check]]
+- [[file:/tmp/darterfly-nyxt-focused-final.log][Focused host suite]]
+- [[file:/tmp/darterfly-nyxt-host-final.log][Complete host suite]]
+- [[file:/tmp/darterfly-nyxt-parent.log][Unmodified parent onboarding reproduction]]
+- [[file:/tmp/darterfly-nyxt-guest-final.log][Guest test]]
+- [[file:/tmp/darterfly-nyxt-console2/console-0001.log][Earlier successful guest serial transcript]]
+- [[file:/tmp/darterfly-nyxt-host-version.log][Packaged Nyxt version command]]

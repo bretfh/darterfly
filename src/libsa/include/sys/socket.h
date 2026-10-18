@@ -16,6 +16,8 @@ struct linger { int l_onoff; int l_linger; };
 #define PF_UNIX 1
 #define PF_INET 2
 #define PF_INET6 10
+#define SOCK_NONBLOCK 00004000
+#define SOCK_CLOEXEC 02000000
 #define SOCK_STREAM 1
 #define SOCK_DGRAM 2
 #define SOCK_RAW 3
@@ -55,3 +57,6 @@ struct linger { int l_onoff; int l_linger; };
 #define SHUT_RD 0
 #define SHUT_WR 1
 #define SHUT_RDWR 2
+
+int socketpair(int domain, int type, int protocol, int sv[2]);
+int shutdown(int fd, int how);

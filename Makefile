@@ -59,3 +59,11 @@ test-recovery:
 
 test-release-tools:
 	python3 -m unittest discover -s tests -p 'test_release.py'
+
+# Focused browser-platform IPC checks; run `make sbcl` before the first guest run.
+.PHONY: test-local-sockets test-local-sockets-guest
+test-local-sockets:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::local-socket)) (uiop:quit 1))"'
+
+test-local-sockets-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::socketpair-c-abi-on-darterfly)) (uiop:quit 1))"'

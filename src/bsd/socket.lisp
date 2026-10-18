@@ -1,5 +1,6 @@
 (in-package #:darterfly/bsd)
 
+(defconstant +af-local+ 1)
 (defconstant +af-inet+ 2)
 (defconstant +af-inet6+ 30)
 (defconstant +sock-stream+ 1)
@@ -11,6 +12,9 @@
    (pcb :initform nil :accessor socket-pcb)
    (peer :initform nil :accessor socket-peer)
    (pending :initform nil :accessor socket-pending)))
+
+(defgeneric internet-socket-p (socket)
+  (:method ((socket socket)) t))
 
 (defmacro without-bsd (&body body)
   `(if (sb-thread:holding-mutex-p *bsd*)
@@ -50,6 +54,7 @@
   (declare (ignore address))
   (syscall
     (let ((s (fd-socket fd)))
+      (unless (internet-socket-p s) (fail :eopnotsupp))
       (when (socket-port s) (fail :einval))
       (setf (socket-port s) port)
       (when (= (socket-type s) +sock-dgram+)
@@ -60,6 +65,7 @@
   (declare (ignore backlog))
   (syscall
     (let ((s (fd-socket fd)))
+      (unless (internet-socket-p s) (fail :eopnotsupp))
       (unless (= (socket-type s) +sock-stream+) (fail :eopnotsupp))
       (unless (socket-port s) (fail :edestaddrreq))
       (setf (socket-pcb s) (darterfly/net:tcp-listen (socket-port s)))
@@ -68,6 +74,7 @@
 (defun accept (fd)
   (syscall
     (let ((s (fd-socket fd)))
+      (unless (internet-socket-p s) (fail :eopnotsupp))
       (unless (typep (socket-pcb s) 'darterfly/net:listener) (fail :einval))
       (let* ((c (net-wait s (lambda (timeout) (or (darterfly/net:tcp-accept (socket-pcb s) :timeout timeout) :again))))
              (new (make-instance 'socket :type +sock-stream+ :flags 2)))
@@ -78,6 +85,7 @@
 (defun connect (fd address port)
   (syscall
     (let ((s (fd-socket fd)))
+      (unless (internet-socket-p s) (fail :eopnotsupp))
       (if (= (socket-type s) +sock-stream+)
           (progn
             (when (socket-pcb s) (fail :eisconn))

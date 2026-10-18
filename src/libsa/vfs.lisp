@@ -235,6 +235,17 @@
     r))
 
 (define-low socket ((domain :u32) (type :u32) (protocol :u32)) (ret (call 38 domain type protocol 0)))
+(define-low socketpair ((domain :u32) (type :u32) (protocol :u32) fds)
+  (unless fds (result (ret (- 0 14))))
+  (let ((pair (malloc 8)) (r 0))
+    (unless pair (result (ret (- 0 +enomem+))))
+    (setf r (ret (call 49 domain type protocol pair)))
+    ;; Failed world calls may return an initialized output buffer. Never
+    ;; overwrite the caller's descriptor array unless both ends were made.
+    (when (= r 0) (memcpy fds pair 8))
+    (free pair)
+    r))
+
 (define-low bind ((fd :u32) addr (len :u32)) (ret (call 39 (sign-extend :u32 fd) addr len 0)))
 (define-low listen ((fd :u32) (backlog :u32)) (ret (call 40 (sign-extend :u32 fd) (sign-extend :u32 backlog) 0 0)))
 (define-low accept ((fd :u32) addr len) (ret (call 41 (sign-extend :u32 fd) addr len 0)))

@@ -10,7 +10,7 @@
    #:chdir #:getcwd #:+o-rdonly+ #:+o-wronly+ #:+o-rdwr+ #:+o-append+ #:+o-creat+ #:+o-trunc+
    #:chroot #:execve #:posix-spawn #:define-program #:reboot #:*reboot* #:with-stdio #:proc-comm #:bsdthread-create #:define-process-variable
    #:+o-excl+ #:+o-directory+ #:+s-ifmt+ #:+s-ifdir+ #:+s-ifreg+ #:+s-ififo+ #:+s-iflnk+
-   #:socket #:bind #:listen #:accept #:connect #:send #:recv #:sendto #:recvfrom #:+af-inet+ #:+af-inet6+ #:+sock-stream+ #:+sock-dgram+
+   #:socketpair #:shutdown #:+af-local+ #:socket #:bind #:listen #:accept #:connect #:send #:recv #:sendto #:recvfrom #:+af-inet+ #:+af-inet6+ #:+sock-stream+ #:+sock-dgram+
    #:wifexited #:wexitstatus #:wifsignaled #:wtermsig #:wifstopped #:wstopsig #:wifcontinued)
   (:shadow #:read #:write #:close #:open #:listen)
   (:local-nicknames (#:vfs #:darterfly/vfs)))

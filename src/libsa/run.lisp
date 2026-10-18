@@ -424,6 +424,8 @@
           ((or (= op 41) (= op 43) (= op 44))
            (setf (mem :u64 (+ kinds 8)) +arg-out+) (setf (mem :u64 (+ lens 8)) 28)
            (setf (mem :u64 (+ kinds 16)) +arg-out+) (setf (mem :u64 (+ lens 16)) 4))
+          ((= op 49)
+           (setf (mem :u64 (+ kinds 24)) +arg-out+) (setf (mem :u64 (+ lens 24)) 8))
           ((= op 48)
            (setf (mem :u64 kinds) +arg-string+)
            (setf (mem :u64 (+ kinds 8)) +arg-out+) (setf (mem :u64 (+ lens 8)) 128)
