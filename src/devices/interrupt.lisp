@@ -9,6 +9,14 @@
 
 (defvar *interrupts-lock* (sb-thread:make-mutex :name "interrupts"))
 (defvar *interrupted* (sb-thread:make-waitqueue :name "interrupts"))
+(defvar *vector-queues* (let ((v (make-array 64))) (dotimes (i 64 v) (setf (aref v i) (sb-thread:make-waitqueue :name "interrupt vector")))))
+
+(defun queue-for (vectors)
+  (if (null (rest vectors)) (aref *vector-queues* (- (first vectors) #x30)) *interrupted*))
+
+(defun wake-waiters (vector)
+  (sb-thread:condition-broadcast (aref *vector-queues* (- vector #x30)))
+  (sb-thread:condition-broadcast *interrupted*))
 (defvar *interrupt-counts* (make-array 64 :initial-element 0))
 (defvar *dispatchers* (make-hash-table))
 (defvar *seen* (make-hash-table :test 'eq :weakness :key :synchronized t))
@@ -24,14 +32,14 @@
 (defun note-interrupt (vector)
   (sb-thread:with-mutex (*interrupts-lock*)
     (incf (aref *interrupt-counts* (- vector #x30)))
-    (sb-thread:condition-broadcast *interrupted*)))
+    (wake-waiters vector)))
 
 (defun dispatch (vector)
   (loop
     (when (plusp (machdep 12 (ash 1 (- vector #x30)) 1000000))
       (sb-thread:with-mutex (*interrupts-lock*)
         (incf (aref *interrupt-counts* (- vector #x30)))
-        (sb-thread:condition-broadcast *interrupted*)))))
+        (wake-waiters vector)))))
 
 (defun ensure-dispatcher (vector)
   (unless (or (= vector +input-vector+) (gethash vector *dispatchers*))
@@ -55,7 +63,7 @@
               (return fired))
             (let ((left (and deadline (/ (- deadline (get-internal-real-time)) internal-time-units-per-second))))
               (when (and left (<= left 0)) (return nil))
-              (sb-thread:condition-wait *interrupted* *interrupts-lock* :timeout left)
+              (sb-thread:condition-wait (queue-for vectors) *interrupts-lock* :timeout left)
               (unless (sb-thread:holding-mutex-p *interrupts-lock*)
                 (sb-thread:grab-mutex *interrupts-lock*)))))))))
 
