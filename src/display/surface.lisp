@@ -37,7 +37,7 @@
   (or *flips-armed*
       (let ((vector (or *flip-vector* (setf *flip-vector* (devices:allocate-vector)))))
         (devices::enable-msi (graphics) vector)
-        (setf (reg +pipe-a-imr+) (logandc2 (reg +pipe-a-imr+) +flip-done+)
+        (setf (reg +pipe-a-imr+) (logandc2 #xFFFFFFFF +flip-done+)
               (reg +pipe-a-ier+) (logior (reg +pipe-a-ier+) +flip-done+)
               (reg +pipe-a-iir+) (reg +pipe-a-iir+)
               (reg +display-int-ctl+) (ash 1 31)
@@ -55,4 +55,5 @@
     (loop until (or (= (live-surface) offset) (> (get-internal-real-time) deadline))
           do (if vector
                  (progn (devices:wait-for-interrupt (list vector) 0.02) (acknowledge-flips))
-                 (sleep 0.0005)))))
+                 (sleep 0.0005)))
+    (when vector (acknowledge-flips))))
