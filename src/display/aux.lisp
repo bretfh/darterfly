@@ -4,8 +4,8 @@
 (defconstant +aux-data+ #x64014)
 
 (defun aux-transfer (request address bytes reply-size)
-  (let ((tx (append (list (logior (ash request 4) (ldb (byte 4 16) address)) (ldb (byte 8 8) address) (ldb (byte 8 0) address)
-                          (1- (if bytes (length bytes) reply-size)))
+  (let ((tx (append (list (logior (ash request 4) (ldb (byte 4 16) address)) (ldb (byte 8 8) address) (ldb (byte 8 0) address))
+                    (when (or bytes (plusp reply-size)) (list (1- (if bytes (length bytes) reply-size))))
                     bytes)))
     (loop while (logbitp 31 (reg +aux-ctl+)))
     (loop for i from 0 below (length tx) by 4
@@ -24,3 +24,15 @@
 
 (defun aux-read (address size) (aux-transfer 9 address nil size))
 (defun aux-write (address &rest bytes) (aux-transfer 8 address bytes 0))
+
+(defun i2c-read (device offset size)
+  (aux-transfer 4 device (list offset) 0)
+  (prog1 (loop for at from 0 below size by 16
+               append (aux-transfer 5 device nil (min 16 (- size at))))
+    (aux-transfer 1 device nil 0)))
+
+(defun read-edid ()
+  (let* ((base (i2c-read #x50 0 128))
+         (extensions (nth 126 base)))
+    (coerce (if (plusp extensions) (append base (i2c-read #x50 128 (* 128 extensions))) base)
+            '(vector (unsigned-byte 8)))))

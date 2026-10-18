@@ -1,0 +1,38 @@
+(in-package #:darterfly/display)
+
+(defconstant +transcoder-a+ #x60000)
+(defconstant +plane-1-a+ #x70180)
+
+(defun low-high (value) (values (1+ (ldb (byte 16 0) value)) (1+ (ldb (byte 16 16) value))))
+
+(defun transcoder-mode (base)
+  (multiple-value-bind (hactive htotal) (low-high (reg base))
+    (multiple-value-bind (hsync-start hsync-end) (low-high (reg (+ base 8)))
+      (multiple-value-bind (vactive vtotal) (low-high (reg (+ base #xC)))
+        (multiple-value-bind (vsync-start vsync-end) (low-high (reg (+ base #x14)))
+          (list :hactive hactive :hblank (- htotal hactive)
+                :hfront (- hsync-start hactive) :hsync (- hsync-end hsync-start)
+                :vactive vactive :vblank (- vtotal vactive)
+                :vfront (- vsync-start vactive) :vsync (- vsync-end vsync-start)))))))
+
+(defun link-state ()
+  (destructuring-bind (rate lanes) (aux-read #x100 2)
+    (list :rate (* rate 27000) :lanes (ldb (byte 5 0) lanes)
+          :data-m (ldb (byte 24 0) (reg (+ +transcoder-a+ #x30))) :data-n (reg (+ +transcoder-a+ #x34))
+          :link-m (reg (+ +transcoder-a+ #x40)) :link-n (reg (+ +transcoder-a+ #x44)))))
+
+(defun plane-state ()
+  (let ((ctl (reg +plane-1-a+)))
+    (list :enabled (logbitp 31 ctl) :format (ldb (byte 5 23) ctl)
+          :stride (* 64 (ldb (byte 11 0) (reg (+ +plane-1-a+ #x8))))
+          :size (multiple-value-list (low-high (reg (+ +plane-1-a+ #x10))))
+          :surface (reg (+ +plane-1-a+ #x1C)))))
+
+(defun display-state ()
+  (let ((func (reg +ddi-func-ctl-a+)))
+    (list :edp (edp-on-transcoder-a-p)
+          :bpc (nth (ldb (byte 3 20) func) '(8 10 6 12))
+          :mode (transcoder-mode +transcoder-a+)
+          :pipe-source (multiple-value-list (low-high (reg (+ +transcoder-a+ #x1C))))
+          :link (link-state)
+          :plane (plane-state))))

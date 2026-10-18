@@ -1,0 +1,42 @@
+(in-package #:darterfly/display)
+
+(defun edid-valid-p (e)
+  (and (>= (length e) 128)
+       (equalp (subseq e 0 8) #(0 255 255 255 255 255 255 0))
+       (zerop (mod (reduce #'+ (subseq e 0 128)) 256))))
+
+(defun edid-maker (e)
+  (let ((id (logior (ash (aref e 8) 8) (aref e 9))))
+    (coerce (loop for shift in '(10 5 0) collect (code-char (+ 64 (ldb (byte 5 shift) id)))) 'string)))
+
+(defun edid-text (e at)
+  (string-right-trim '(#\Newline #\Space) (map 'string #'code-char (subseq e (+ at 5) (+ at 18)))))
+
+(defun edid-timing (e at)
+  (let ((h-high (aref e (+ at 4))) (v-high (aref e (+ at 7))) (sync-high (aref e (+ at 11))))
+    (list :clock (* 10 (u16le e at))
+          :hactive (logior (aref e (+ at 2)) (ash (ldb (byte 4 4) h-high) 8))
+          :hblank (logior (aref e (+ at 3)) (ash (ldb (byte 4 0) h-high) 8))
+          :hfront (logior (aref e (+ at 8)) (ash (ldb (byte 2 6) sync-high) 8))
+          :hsync (logior (aref e (+ at 9)) (ash (ldb (byte 2 4) sync-high) 8))
+          :vactive (logior (aref e (+ at 5)) (ash (ldb (byte 4 4) v-high) 8))
+          :vblank (logior (aref e (+ at 6)) (ash (ldb (byte 4 0) v-high) 8))
+          :vfront (logior (ldb (byte 4 4) (aref e (+ at 10))) (ash (ldb (byte 2 2) sync-high) 4))
+          :vsync (logior (ldb (byte 4 0) (aref e (+ at 10))) (ash (ldb (byte 2 0) sync-high) 4))
+          :width-mm (logior (aref e (+ at 12)) (ash (ldb (byte 4 4) (aref e (+ at 14))) 8))
+          :height-mm (logior (aref e (+ at 13)) (ash (ldb (byte 4 0) (aref e (+ at 14))) 8)))))
+
+(defun decode-edid (e)
+  (unless (edid-valid-p e) (error "the panel's EDID is not valid"))
+  (let ((modes nil) (names nil))
+    (loop for at from 54 below 126 by 18
+          do (if (plusp (u16le e at))
+                 (push (edid-timing e at) modes)
+                 (when (member (aref e (+ at 3)) '(#xFC #xFE))
+                   (push (edid-text e at) names))))
+    (list :maker (edid-maker e) :product (u16le e 10)
+          :names (nreverse names) :modes (nreverse modes))))
+
+(defun refresh-hz (mode)
+  (/ (* 1000 (getf mode :clock))
+     (* (+ (getf mode :hactive) (getf mode :hblank)) (+ (getf mode :vactive) (getf mode :vblank)))))
