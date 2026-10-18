@@ -43,4 +43,6 @@
 (defun start-display ()
   (when (graphics)
     (awake (load-dmc))
-    (enable-psr)))
+    (enable-psr)
+    (release-unused-wells)
+    (allow-dc6)))

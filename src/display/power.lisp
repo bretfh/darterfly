@@ -36,8 +36,7 @@
 (defun registers-alive-p () (plusp (reg +dssm+)))
 
 (defun wake ()
-  (when (logtest (reg +dc-state-en+) 3)
-    (write-dc-state 0))
+  (write-dc-state 0)
   (wait-until "the display registers to come back" #'registers-alive-p :seconds 0.05))
 
 (defun dc-loop ()
@@ -54,7 +53,9 @@
 
 (defun call-awake (function)
   (sb-thread:with-recursive-lock (*power-lock*)
-    (when (= 1 (incf *awake*)) (wake)))
+    (when (= 1 (incf *awake*))
+      (handler-bind ((error (lambda (e) (declare (ignore e)) (decf *awake*))))
+        (wake))))
   (unwind-protect (funcall function)
     (sb-thread:with-recursive-lock (*power-lock*)
       (when (zerop (decf *awake*))
