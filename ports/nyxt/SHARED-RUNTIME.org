@@ -155,3 +155,18 @@ larger sequence remains in [[file:SELF-HOSTING.org][the self-hosting plan]].
 - [[file:../../src/bsd/libsa.lisp][Shared service and request schema]]
 - [[file:../../src/bsd/native.lisp][Native process broker and lifecycle]]
 - [[file:../../tests/native.lisp][Host and actual-OS test entry points]]
+
+* Compiler source builds and transient image memory
+
+The [[file:../llvm-tools/REBUILD.org][clang-tblgen source build]] uses the same shared runtime throughout.
+It also rebuilds the selected libc++, libc++abi and libunwind sources in
+native worlds, archives them locally, and links them with fresh Low libsa.
+This does not introduce a separate allocator, TLS or process service.
+
+Hundreds of native compiler launches exposed a supervisor allocation
+problem: repeated 50 MiB executable snapshots fragmented the 1 GiB Lisp
+heap. The loader now performs a full collection before snapshots of
+16 MiB or larger. Each launch still reads and validates the executable
+again; there is no stale image cache when a tool is replaced. Collection
+adds launch latency. Larger images, concurrent build load and general
+memory-pressure recovery still need separate qualification.

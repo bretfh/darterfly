@@ -71,30 +71,24 @@ headers generated in /tmp by the native tools, including its new attribute.
 Neither a failed generation nor a failed compile falls back to the host.
 The transcript is [[file:../../build/native-llvm-tools-guest.log][build/native-llvm-tools-guest.log]].
 
-* First complete local source rebuild
+* Local source rebuilding
 
-Start with clang-tblgen as the first closed LLVM-tool rebuild. Its seed is
-about 1.9 MiB, and it exercises LLVM Support and TableGen without bringing
-in the whole x86 code generator. Its source closure still includes those
-libraries and the selected C++ runtime, not only the Clang emitter files.
+The [[file:REBUILD.org][clang-tblgen rebuild guide]] supplies a source-only manifest and guest
+runner for all 248 selected translation units: Clang's generator, LLVM
+Support/TableGen/Demangle, the C++ runtime and startup assembly. Native
+Clang compiles them, llvm-ar creates their libraries, and LLD links them
+with fresh Low-generated libsa. Each tool runs in an isolated world.
 
-Derive a per-translation-unit build manifest from the pinned configuration.
-Keep target defines, include ordering, language options and exception/RTTI
-settings explicit. Translate paths into the guest source/sysroot layout;
-do not pass host include paths to the native frontend. Clang currently
-runs through -cc1, so driver options need deliberate frontend equivalents.
+The manifest retains explicit target configuration and maps every source
+and include path into the guest. Clang exposes upstream -cc1as for assembly
+and expands response files. No imported LLVM/runtime objects are inputs
+to the new generator link. Host-generated configuration headers and the
+Ninja build graph remain declared bootstrap inputs.
 
-An initial Lisp runner can consume that manifest, schedule generator jobs,
-compile objects, archive libraries with llvm-ar and link with native LLD.
-That is an execution milestone. Closing self-hosting also requires local
-regeneration of the manifest and configuration headers. Keep those two
-claims separate in the evidence.
-
-Acceptance for this first tool: rebuild every selected input from source,
-run the new clang-tblgen on the same declaration and malformed-input tests,
-and compare its generated output. Then use that rebuilt generator in a
-second compiler build. Preserve logs and input hashes so imported objects
-cannot silently survive into an alleged complete local rebuild.
+The persistent disposable build disk supports resuming completed jobs
+with an exact plan identity. Qualification runs the new generator, edits
+TD input, compiles and runs a client, and exercises the rebuilt C++ runtime.
+See [[file:../nyxt/VALIDATION.org][the validation record]] for results and remaining boundaries.
 
 * What this closes, and what remains
 
@@ -106,9 +100,9 @@ build chain. It does not establish a complete compiler source rebuild.
    Lisp build runner can execute compiler, archiver, linker and generator
    jobs; it must also account for configuration checks and generated
    inputs currently supplied by CMake, Ninja and Python.
-2. Compile all selected runtime and tool sources inside Darterfly. Start
-   with these smaller tools, then Clang and LLD. Regenerate all required
-   tables, not only the three families qualified here. Record peak memory,
+2. Extend the clang-tblgen source-build path to llvm-tblgen, llvm-ar, LLD
+   and Clang. Regenerate all required tables, not only the three families
+   qualified here. Record peak memory,
    disk space, elapsed time and failures on the larger translation units.
 3. Use the locally rebuilt tools for another source build and functional
    test stage. Record imported inputs and reproducibility separately.

@@ -103,3 +103,11 @@ test-native-lld-guest:
 .PHONY: test-native-llvm-tools-guest
 test-native-llvm-tools-guest:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-llvm-tools-on-darterfly)) (uiop:quit 1))"'
+
+.PHONY: test-native-tblgen-rebuild-guest
+test-native-tblgen-rebuild-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-tblgen-rebuild-on-darterfly)) (uiop:quit 1))"'
+
+.PHONY: export-native-tblgen-rebuild
+export-native-tblgen-rebuild:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --script tools/export-tblgen-rebuild.lisp'

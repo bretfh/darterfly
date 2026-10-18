@@ -18,7 +18,10 @@ leading candidate if Chromium is chosen. Its native -cc1 frontend now
 runs against shared libsa and compiles working C++ programs inside the OS.
 Native LLD also links and runs that output. Native llvm-ar and both
 TableGen tools now run on the same runtime. The complete compiler and
-build-tool chain is not yet self-hosted.
+build-tool chain is not yet self-hosted. The
+[[file:../llvm-tools/REBUILD.org][clang-tblgen source rebuild]] is the first selected tool closure: 248
+translation units, including LLVM libraries and the selected C++ runtime.
+Configuration regeneration remains a separate gate.
 
 CEF remains a candidate, not a settled engine choice. Its existing Nyxt
 backend reduces browser-integration work. That advantage must be weighed
@@ -122,8 +125,9 @@ its provenance rather than claiming it did not exist.
 * Current substrate and the actual gaps
 
 Initial audit: Darterfly ae6b4af on codex/nyxt-compat. Updated below for
-the native Clang guest milestone on this branch. Clang -cc1 compiles C++
-in a native world; Chromium has not been executed on Darterfly.
+the native tool source-build work on this branch. Clang -cc1 compiles C++
+and -cc1as assembles in native worlds. Chromium has not been executed on
+Darterfly.
 
 | Facility | Observed implementation | What must be established next |
 |----------+-------------------------+--------------------------------|
@@ -132,7 +136,7 @@ in a native world; Chromium has not been executed on Darterfly.
 | C++ compilation | Native Clang 19.1.7 -cc1; C++ client and upstream LLVM demangler compiled in guest | Full compiler/runtime source rebuild and configuration regeneration |
 | Linking | Native LLD handles tested archives, COMDAT, partial and final links; Lisp image linker remains | Larger compiler links, configuration regeneration and seed source rebuild |
 | Archives | Native llvm-ar and ranlib create, modify and index tested archives | Larger compiler archives and remaining object utilities |
-| Table generation | Native LLVM and Clang TableGen; attributes, declarations and x86 registers match reference | Complete table set and local generator source rebuild |
+| Table generation | Native LLVM/Clang TableGen; clang-tblgen source build with its selected library/runtime closure | Complete table set, other generator source builds and local configuration |
 | Isolated execution | Static ELF64 startup, protected segments, argv/env, exit/wait; raw and SBCL worlds | Selected LLVM C++ runtime passes; broader coverage and resource limits |
 | Process launching | BSD spawn/exec of Lisp programs and isolated static ELF; descriptor actions, cwd, wait4/signals | Native child spawn/wait and isolated SBCL run-program work; broaden attributes and groups |
 | C exec/spawn API | One Low libsa posix_spawn/wait path for native and Lisp worlds | Attributes/groups/exec and measured tool requirements |
@@ -296,9 +300,10 @@ separate caller; the locally linked program demangles and exits correctly.
 All 13 frontend guest assertions pass. The expanded runtime test passes
 17 assertions; see [[file:../clang/README.org][the native Clang guide and recorded scope]].
 
-The frontend and C++ runtime are still imported seed artifacts. Host LLD
-resolves archives/COMDAT while building that seed. This is native C++
-compilation evidence, not completion of R3's compiler source rebuild.
+This initial frontend qualification used imported compiler/runtime seeds.
+The subsequent clang-tblgen source build compiles the selected runtime
+sources locally. Clang itself remains an imported seed, so R3's complete
+compiler source-rebuild gate remains open.
 
 Using Guix as the seed builder, qualify the remaining runtime components
 and port the selected LLVM host interfaces. Run the resulting compiler
@@ -318,16 +323,22 @@ specific ABI/API/resource blockers and reconsider the architecture.
 [[file:../lld/README.org][Native ELF LLD now runs against shared libsa]]. It links guest-compiled
 C++ objects, extracts needed archive members, resolves COMDAT, performs
 relocatable links, and produces working executables. It also combines the
-individual imported runtime objects inside Darterfly. The runtime sources
-and LLD seed sources have not yet been fully compiled locally.
+individual imported runtime objects inside Darterfly. The later
+clang-tblgen build compiles those runtime sources locally; LLD's own
+source rebuild remains outstanding.
 
 [[file:../llvm-tools/README.org][Native llvm-ar and both TableGen tools now use the same shared runtime]].
 The guest generates LLVM attributes, Clang declarations and x86 register
 tables and compares them with the pinned host build. A local TD edit feeds
 native Clang, llvm-ar and LLD to produce a working executable. Archive
-replacement changes the running program. The seed tools themselves remain
-cross compiled; complete table and build/configuration regeneration remain
-part of the source-rebuild gate.
+replacement changes the running program.
+
+The [[file:../llvm-tools/REBUILD.org][clang-tblgen source-build path]] now selects all 248 required translation
+units, including Support, TableGen, Demangle and the C++ runtime. Native
+Clang/assembler, llvm-ar and LLD produce the new executable using shared
+libsa. Its tests generate tables, compile an edited-table client and run
+a runtime probe. Complete table generation, the other tools' source
+builds and local configuration/build-graph regeneration remain open.
 
 Bring the necessary build tools and generators onto Darterfly. Rebuild
 Clang/LLD and required runtimes from their pinned sources using the seed.

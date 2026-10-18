@@ -170,6 +170,19 @@ no-op unwind relocations. See [[file:../nyxt/VALIDATION.org][the executed valida
 - Source availability, target C++ compilation and generator execution
   must all be closed for a native runtime/compiler source rebuild.
 
+* Runtime sources in the generator rebuild
+
+The [[file:../llvm-tools/REBUILD.org][clang-tblgen source build]] includes all 52 sources selected by this
+runtime recipe, plus startup assembly. Native Clang compiles them in
+separate worlds; llvm-ar creates runtime.a, and native LLD uses it with
+fresh Low libsa. The generator and its C++ qualification probe link this
+locally built archive. No second allocator or TLS implementation is added.
+
+This source closure retains the same selected library coverage and the
+limitations above. Configured headers and the initial compiler seed still
+come from the bootstrap environment. See the [[file:../nyxt/VALIDATION.org][validation record]] for the
+actual-OS results and recorded inputs.
+
 * Next toward rebuilding the compiler
 
 The native frontend milestone is complete: Clang 19.1.7 compiles C++
@@ -179,11 +192,11 @@ The [[file:../clang/README.org][native compiler guide]] records the seed, runtim
 
 1. Preserve the runtime, standalone TCC and native Clang guest tests while
    qualifying larger upstream translation units and resource limits.
-2. Native LLD now passes archive/COMDAT, runtime partial-link and final
-   executable tests. Bring up archive/object utilities and TableGen,
-   then replace the remaining host-generated tables and seed inputs.
+2. Native LLD, llvm-ar and both TableGen tools now run on the shared
+   runtime. Replace the remaining host-generated tables and seed inputs.
 3. Close the native build-runner and configuration-generation chain.
-   Rebuild the runtime and compiler locally, then rebuild with that output.
+   Extend the selected runtime source build to the complete compiler,
+   then rebuild with that output.
 4. Continue through the pinned engine harness, engine source rebuild,
    existing cl-cef bridge and Nyxt development loop in the
    [[file:../nyxt/SELF-HOSTING.org][browser self-hosting plan]]. Nyxt and CEF have not been ported by this work.

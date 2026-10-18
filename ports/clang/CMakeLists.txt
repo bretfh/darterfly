@@ -9,6 +9,7 @@ set(LLVM_LINK_COMPONENTS ${LLVM_TARGETS_TO_BUILD} Analysis CodeGen Core IPO
     Option ScalarOpts Support TargetParser TransformUtils Vectorize)
 add_llvm_executable(darter-clang main.cpp
     ${LLVM_MAIN_SRC_DIR}/../clang/tools/driver/cc1_main.cpp
+    ${LLVM_MAIN_SRC_DIR}/../clang/tools/driver/cc1as_main.cpp
     DEPENDS intrinsics_gen ARMTargetParserTableGen AArch64TargetParserTableGen)
 target_link_libraries(darter-clang PRIVATE clangBasic clangCodeGen clangDriver
     clangFrontend clangFrontendTool clangSerialization)

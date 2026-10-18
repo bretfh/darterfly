@@ -5,9 +5,11 @@
 * Scope
 
 This port brings upstream LLVM/Clang 19.1.7 to the existing native-world
-ABI. The seed contains the x86 backend and Clang's unchanged =cc1_main=.
-A small entry point accepts =clang -cc1=. There is no compiler service on
-the host, and no Linux loader or second libc inside the executable.
+ABI. The seed contains the x86 backend and Clang's unchanged =cc1_main=
+and =cc1as_main=. A small entry point accepts =clang -cc1= and
+=clang -cc1as=, with upstream GNU response-file expansion.
+There is no compiler service on the host, and no Linux loader or second
+libc inside the executable.
 
 The seed is cross compiled. Its parser, semantic analysis, optimization
 passes and object writer subsequently execute in a Darterfly world.
@@ -132,6 +134,15 @@ handles extended section counts and symbol indices. A native-world
 startup fault also exposed an existing dladdr path that assumed a kernel
 ELF mapping. That path now reports missing symbols when no mapping exists,
 instead of dereferencing address zero.
+
+* First source-build workload
+
+The [[file:../llvm-tools/REBUILD.org][clang-tblgen source build]] exercises this compiler on 248 translation
+units, including LLVM libraries and the selected C++ runtime. Its guest
+runner invokes -cc1 directly with explicit target options and response
+files. Preprocessed assembly passes through -cc1as. This closes a selected
+generator's source compilation, while the frontend executable remains a
+cross-built seed until its own larger source-build gate passes.
 
 * The route to rebuilding LLVM and the browser
 

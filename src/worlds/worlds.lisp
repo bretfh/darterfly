@@ -236,13 +236,22 @@
 (defun read-native-image (path)
   "Read and validate an immutable executable snapshot before BSD exec commits."
   (let ((file (with-open-file (s path :element-type '(unsigned-byte 8))
-                (when (> (file-length s) (* 128 1024 1024))
-                  (error 'world-error :code 8))
-                (let ((v (make-array (file-length s)
-                                     :element-type '(unsigned-byte 8))))
-                  (unless (= (read-sequence v s) (length v))
-                    (error "Short executable read"))
-                  v))))
+                (let ((size (file-length s)))
+                  (when (> size (* 128 1024 1024))
+                    (error 'world-error :code 8))
+                  ;; Compiler-sized snapshots are transient, contiguous vectors.
+                  ;; Minor collections can promote them and exhaust a fragmented
+                  ;; 1 GiB supervisor heap after many otherwise reaped launches.
+                  ;; Reclaim older snapshots before the next large allocation;
+                  ;; still reread the file so executable replacement is visible.
+                  (when (>= size (* 16 1024 1024))
+                    (sb-ext:gc :full t))
+                  ;; Bound the allocation by the checked size even if the file
+                  ;; grows during collection. A truncated file fails the read.
+                  (let ((v (make-array size :element-type '(unsigned-byte 8))))
+                    (unless (= (read-sequence v s) size)
+                      (error "Short executable read"))
+                    v)))))
     (with-octets (f file) (machdep 67 f (length file)))
     file))
 

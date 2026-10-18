@@ -1,6 +1,119 @@
 #+title: Nyxt compatibility validation
 #+date: 2026-10-18
 
+* clang-tblgen source rebuild inside Darterfly, 2026-10-18
+
+Branch: codex/nyxt-compat. Parent: c227075. All 248 selected translation
+units were compiled inside the actual Darterfly kernel/image: the complete
+clang-tblgen target, LLVM Support/TableGen/Demangle, the selected 52-file
+C++ runtime and startup assembly. Native llvm-ar produced four archives;
+native LLD linked the generator with fresh Low-generated shared libsa.
+The upstream LLVM/runtime sources were unchanged.
+
+See [[file:../llvm-tools/REBUILD.org][the source bundle, guest runner and reproduction guide]].
+No imported LLVM or C++ runtime objects were inputs to the final link.
+The compiler, linker and archiver seeds remain imported, as do the three
+LLVM configuration headers, configured libc++ headers and the Ninja graph.
+This closes the selected tool's source compilation, not the full native
+configuration/compiler/browser dependency chain.
+
+| Check | Result |
+|-------+--------|
+| Complete source build and guest qualification | 18 / 18 |
+| Saved-disk requalification with final loader | 18 / 18 |
+| Existing native Clang guest | 13 / 13 |
+| Existing LLVM archive/TableGen guest | 23 / 23 |
+| Existing native LLD guest | 18 / 18 |
+| Existing BSD native process guest | 43 / 43 |
+| make check | Pass; LOADED |
+| Full host suite | 1352 / 1353; existing onboarding failure |
+
+The remaining host failure is the previously recorded undefined
+DARTERFLY/INSTALL::FIRST-START-ENTRIES in
+FRESH-INSTALL-DOES-NOT-INHERIT-COMPLETED-SETUP. It is not counted as a pass.
+
+The new Clang entry point supports upstream -cc1as and GNU response files.
+BLAKE3, unwinder and startup assembly were preprocessed and assembled
+inside native worlds. Every compiler, archiver, linker and generated
+program ran through the existing native process/shared-runtime path.
+
+The first pass reached source 96 before a large executable snapshot
+allocation exhausted the fragmented 1 GiB supervisor heap. The loader now
+performs a full collection before snapshots of at least 16 MiB, preserving
+the executable size bound and fresh file reads. The allocation uses the
+checked length even if the file grows during collection. The resumed pass
+reused 94 outputs that met its completion checks and compiled the remaining 154
+in 1637.5 seconds. All 248 outputs were compiled in Darterfly; no failed
+job was replaced by a host-built object. The repeated launches passed
+after the fix without increasing the supervisor heap.
+
+All 18 source-rebuild qualification checks passed. The new generator's
+Clang declarations, statements and attributes match the pinned host
+reference byte for byte. A local TD edit added DarterflyWorld; a client
+requiring that generated enum compiled, linked and returned 42. A separate
+two-file C++ probe linked the rebuilt runtime archive and passed streams,
+containers, allocation failure, RTTI, exceptions, guards, threaded TLS,
+key destructors, finalization and clocks. Its destructor artifact is TAGZ.
+Malformed input produced the required diagnostic; subsequent generation
+worked, and the native-process table was empty at completion.
+
+A final boot with the captured-length loader adjustment recovered all
+248 completed objects: zero source jobs needed recompilation. It recreated
+the archives, relinked, and passed all 18 qualification checks again. The
+guest explicitly synchronized the filesystem before reporting completion.
+Read-only export then reproduced the same executable and four archive
+hashes as the first successful build. This is repeatable archiving/linking
+of retained objects, not a second independent compiler source bootstrap.
+
+The prepared input hashes were verified before export. The guest manifest
+contains 248 unique output names, exactly covering the archive, direct
+object and startup inputs. Undeclared host paths and changed prepared
+inputs were also checked for rejection. Fresh-disk construction now
+checks all prepared source/header/tool hashes before staging.
+
+The test used four-vCPU, 4 GiB QEMU/KVM and a persistent disposable 2 GiB
+APFS build disk. Its host allocation after the run was 300 MiB; that is
+not a measurement of peak guest memory or required browser-build storage.
+There was no physical-hardware test or installation into the normal disk.
+LLVM Support emitted configuration warnings for missing futimes/futimens
+and malloc statistics; libc++ warned about ELAST. Those facilities were
+not added by this change.
+
+The stopped-disk export succeeded and preserved the original provenance.
+Exported tables and the destructor result were checked again on the host.
+The rebuilt executable is 2692248 bytes. Binary identity with the imported
+seed is not claimed; the comparisons above qualify generated outputs.
+
+Plan identity:
+#+begin_example
+ef58c84c8b5f1ab8ca5da6b43fcc69da081f3988dc65a25cbc403047923580c6
+#+end_example
+
+| Artifact | Bytes | SHA-256 |
+|----------+-------+---------|
+| clang-tblgen | 2692248 | c116c18f5c783badfe654035256b5ea43955871247cbe50dde26bd0d5c19720e |
+| libLLVMSupport.a | 4705826 | 5d9480ccd6f8d4190dc2035aff439c2d15d21b901d8b51acc8d0a5970f6f6097 |
+| libLLVMTableGen.a | 1063822 | fba3593c6135ec58ab3928ec5483654766f133a926590ab658f41df4f5dd416a |
+| libLLVMDemangle.a | 504414 | 0f9301cea5705f60521ae4205db7876772be1d668bee2c8bfa8868221e9b7cb6 |
+| runtime.a | 2216912 | 224b10c304c3b94fedac9685aba3e6b4448107541498fdda7c5c3521d1c15395 |
+
+Evidence:
+
+- [[file:../../build/native-tblgen-rebuild-source.log][Completed actual-OS source build and 18 checks]]
+- [[file:../../build/native-tblgen-rebuild-first-console.log][First source-build segment and allocation failure]]
+- [[file:../../build/tblgen-rebuild/native/][Exported guest executable, libraries, tables and provenance]]
+- [[file:../../build/native-tblgen-rebuild-guest.log][Final saved-disk qualification with all 248 objects retained]]
+- [[file:/tmp/tblgen-rebuild-export-final.log][Final read-only export results]]
+- [[file:/tmp/tblgen-rebuild-check-final.log][Compiler/load check]]
+- [[file:/tmp/tblgen-rebuild-host-final.log][Full host suite and existing onboarding failure]]
+
+Regression logs:
+
+- [[file:/tmp/tblgen-rebuild-native-clang.log][13 native Clang checks]]
+- [[file:/tmp/tblgen-rebuild-native-llvm-tools.log][23 native archive/TableGen checks]]
+- [[file:/tmp/tblgen-rebuild-native-lld.log][18 native LLD checks]]
+- [[file:/tmp/tblgen-rebuild-native-bsd.log][43 BSD native process checks]]
+
 * Native LLVM archive and TableGen tools, 2026-10-18
 
 Branch: codex/nyxt-compat. Parent: 87b603f. Upstream llvm-ar, llvm-tblgen
