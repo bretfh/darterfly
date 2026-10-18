@@ -132,7 +132,8 @@
       (declare (ignore tx))
       (command-ok w 0 #x8 (octets (le-u32 0) (le-u32 1) (le-u32 (getf bss :channel)) (if (> (getf bss :channel) 14) 0 1) 0 0 0
                                   (le-u32 0) (le-u32 0) (le-u32 0) (le-u32 0)))
-      (command-ok w 5 #x8 (octets (le-u32 0) (le-u32 (logior (ash rx 1) (ash 1 10) (ash 1 12))) (le-u32 0) (zeros 16) 0 0 0 0)))
+      (let ((chains (max 1 (logcount rx))))
+        (command-ok w 5 #x8 (octets (le-u32 0) (le-u32 (logior (ash rx 1) (ash chains 10) (ash chains 12))) (le-u32 0) (zeros 16) 0 0 0 0))))
     (command-ok w 0 #x28 (mac-context l :add nil))
     (let ((p (getf (command-ok w 0 #x2B (octets (le-u32 0) (le-u32 1) (le-u32 0) (le-u32 #xFFFFFFFF) (le-u32 #xFFFFFFFF) (le-u32 0) (le-u32 0))) :payload)))
       (unless (zerop (u32le p 0)) (error "the AX210 refused the binding: ~x" (u32le p 0))))
