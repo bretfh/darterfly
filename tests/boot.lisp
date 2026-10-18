@@ -1366,6 +1366,24 @@
                    "and the next run is back on the runtime darterfly booted"))
           (image:finish c 5))))))
 
+(test local-time-follows-the-zone-file
+  (let ((disk (merge-pathnames "local-time.img" (darterfly-file "build/"))))
+    (uiop:delete-file-if-exists disk)
+    (darterfly/image::root-disk disk (* 256 1048576)
+                            (append (darterfly/image::root-entries)
+                                    (list (list :file "etc/localtime"
+                                                (image::octets (concatenate 'string (uiop:getenv "GUIX_ENVIRONMENT")
+                                                                            "/share/zoneinfo/America/New_York"))))))
+    (let ((c (image:bare-console :root disk)))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 90)
+             (image:send c "(mapcar (lambda (u) (multiple-value-list (decode-universal-time u))) (list (encode-universal-time 0 0 12 1 7 2026 0) (encode-universal-time 0 0 12 15 1 2026 0) (encode-universal-time 0 0 12 1 7 2045 0)))")
+             (let ((r (image:expect c (format nil "~%* ") :timeout 60)))
+               (is (search "((0 0 8 1 7 2026 2 T 5) (0 0 7 15 1 2026 3 NIL 5) (0 0 8 1 7 2045 5 T 5))" r)
+                   "summer, winter and a year past the table read as New York time: ~a" r)))
+        (image:finish c 5)))))
+
 (test a-world-runs-a-core-beside-the-system
   (let ((disk (merge-pathnames "world-run.img" (darterfly-file "build/")))
         (stress "(progn (ensure-directories-exist \"/work/f/\") (dotimes (i 300) (with-open-file (o (format nil \"/work/f/~d.txt\" i) :direction :output) (print i o))) (with-open-file (o \"/work/count.txt\" :direction :output) (princ (length (directory \"/work/f/*.txt\")) o)))"))

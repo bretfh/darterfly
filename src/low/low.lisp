@@ -21,10 +21,12 @@
         (substitute #\_ #\- (string-downcase name))
         name)))
 
+(defun global-key (symbol) (cons (package-name (symbol-package symbol)) (c-name symbol)))
+
 (defmacro define-global (name type &key (count 1) (alignment 8) extern export)
-  `(let ((existing (gethash (c-name ',name) *globals*)))
+  `(let ((existing (gethash (global-key ',name) *globals*)))
      (unless (and ,extern existing (not (global-extern existing)))
-       (setf (gethash (c-name ',name) *globals*)
+       (setf (gethash (global-key ',name) *globals*)
              (make-global :name (c-name ',name) :type ',type :count ,count :alignment ,alignment
                           :extern ,extern :export ,export :package (package-name *package*))))))
 
@@ -64,7 +66,7 @@
 (defvar *build-date* "")
 (defvar *strings*)
 
-(defun global-of (symbol) (gethash (c-name symbol) *globals*))
+(defun global-of (symbol) (gethash (global-key symbol) *globals*))
 
 (defun local-of (symbol) (cdr (assoc symbol *locals*)))
 
