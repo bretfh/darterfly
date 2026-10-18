@@ -960,11 +960,11 @@
   (let ((c (image:bare-console :boot-args "init")))
     (flet ((ask (form &optional (timeout 600)) (image:send c form) (image:expect c (format nil "~%* ") :timeout timeout)))
       (unwind-protect
-           (progn
+           (block online
              (is (image:expect c "init: pid 1" :timeout 120))
              (unless (ignore-errors (sb-bsd-sockets:get-host-by-name "ghcr.io"))
                (skip "this host can't reach ghcr.io")
-               (return-from ocicl-installs-a-package-over-https))
+               (return-from online))
              (ask "(darterfly/net:start-network)")
              (ask "(ensure-directories-exist \"/Users/darterfly/project/\")")
              (is (search "[0]" (ask "(darterfly/bsd::with-bsd (darterfly/bsd:chdir \"/Users/darterfly/project\") (let* ((pid (darterfly/shell:spawn \"/usr/bin/ocicl\" \"install\" \"alexandria\")) (status (nth-value 1 (darterfly/bsd:wait4 pid)))) (format nil \"[~a]\" (if (darterfly/bsd:wifexited status) (darterfly/bsd:wexitstatus status) (list :signal (darterfly/bsd:wtermsig status))))))" 900))

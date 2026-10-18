@@ -7,12 +7,25 @@
 (defun put-record (w key value)
   (unless (nth-value 1 (gethash key (wvolume-records w)))
     (push key (gethash (key-id key) (wvolume-by-id w))))
-  (setf (gethash key (wvolume-records w)) value))
+  (let ((new (not (nth-value 1 (gethash key (wvolume-records w))))))
+    (setf (gethash key (wvolume-records w)) value)
+    (tree-touch (nx-fs-tree (wvolume-nx w)) key (if new :insert :update))))
 
 (defun drop-record (w key)
   (when (nth-value 1 (gethash key (wvolume-records w)))
     (remhash key (wvolume-records w))
-    (setf (gethash (key-id key) (wvolume-by-id w)) (delete key (gethash (key-id key) (wvolume-by-id w)) :test #'equalp))))
+    (setf (gethash (key-id key) (wvolume-by-id w)) (delete key (gethash (key-id key) (wvolume-by-id w)) :test #'equalp))
+    (tree-touch (nx-fs-tree (wvolume-nx w)) key :delete)))
+
+(defun put-extent (w key value)
+  (let ((new (not (nth-value 1 (gethash key (wvolume-extents w))))))
+    (setf (gethash key (wvolume-extents w)) value)
+    (tree-touch (nx-extent-tree (wvolume-nx w)) key (if new :insert :update))))
+
+(defun drop-extent (w key)
+  (when (nth-value 1 (gethash key (wvolume-extents w)))
+    (remhash key (wvolume-extents w))
+    (tree-touch (nx-extent-tree (wvolume-nx w)) key :delete)))
 
 (defun record-table (records)
   (let ((h (make-hash-table :test 'equalp)))
@@ -23,19 +36,20 @@
                           :children (make-hash-table))))
     (maphash (lambda (k v)
                (when (= (ash (u64 k 0) -60) +apfs-type-dir-rec+)
-                 (push (list (c-string k 12 (+ 12 (logand (u32 k 8) #x3ff))) (u64 v 0) k)
-                       (gethash (logand (u64 k 0) #x0fffffffffffffff) (wvolume-children w))))
+                 (let ((name (c-string k 12 (+ 12 (logand (u32 k 8) #x3ff)))))
+                   (setf (gethash (child-key w name) (child-table w (logand (u64 k 0) #x0fffffffffffffff)))
+                         (list name (u64 v 0) k))))
                (push k (gethash (key-id k) (wvolume-by-id w))))
              (wvolume-records w))
+    (setf (tree-table (nx-fs-tree nx)) (wvolume-records w)
+          (tree-table (nx-extent-tree nx)) (wvolume-extents w)
+          (nx-fs-records nx) nil (nx-extent-records nx) nil)
     w))
 
 (defun wvolume-sb (w) (nx-vol-sb (wvolume-nx w)))
 
 (defun wcommit (w)
   (let ((nx (wvolume-nx w)))
-    (setf (nx-fs-records nx) (loop for k being the hash-keys of (wvolume-records w) using (hash-value v) collect (cons k v))
-          (nx-extent-records nx) (sort (loop for k being the hash-keys of (wvolume-extents w) using (hash-value v) collect (cons k v))
-                                       #'< :key (lambda (r) (u64 (car r) 0))))
     (let ((freed (wvolume-pending-free w)))
       (setf (wvolume-pending-free w) nil)
       (commit nx :also-free freed))))
@@ -73,27 +87,34 @@
 (defun inode-dstream (w id)
   (third (find +ino-ext-type-dstream+ (parse-xfields (winode w id) 92) :key #'first)))
 
+(defun child-key (w name) (if (logtest (u64 (wvolume-sb w) 56) 1) (string-downcase name) name))
+
+(defun child-table (w parent)
+  (or (gethash parent (wvolume-children w))
+      (setf (gethash parent (wvolume-children w)) (make-hash-table :test 'equal))))
+
 (defun wlookup (w parent name)
-  (let ((ci (logtest (u64 (wvolume-sb w) 56) 1)))
-    (second (find name (gethash parent (wvolume-children w)) :key #'first
-                                                              :test (lambda (a b) (if ci (string-equal a b) (string= a b)))))))
+  (let ((table (gethash parent (wvolume-children w))))
+    (and table (second (gethash (child-key w name) table)))))
 
 (defun wentries (w parent)
-  (mapcar (lambda (e) (cons (first e) (second e))) (gethash parent (wvolume-children w))))
+  (let ((table (gethash parent (wvolume-children w))))
+    (and table (sort (loop for e being the hash-values of table collect (cons (first e) (second e))) #'string< :key #'car))))
 
 (defun counter (w offset delta) (put-u64 (wvolume-sb w) offset (+ (u64 (wvolume-sb w) offset) delta)))
 
 (defun add-drec (w parent name id type)
   (let ((r (drec-record parent name id (now-ns) type)))
     (put-record w (car r) (cdr r))
-    (push (list name id (car r)) (gethash parent (wvolume-children w)))
+    (setf (gethash (child-key w name) (child-table w parent)) (list name id (car r)))
     (update-inode w parent :nchildren (1+ (inode-field w parent 56 4)))))
 
 (defun drop-drec (w parent name)
-  (let ((e (find name (gethash parent (wvolume-children w)) :key #'first :test #'string-equal)))
+  (let* ((table (child-table w parent))
+         (e (gethash (child-key w name) table)))
     (when e
       (drop-record w (third e))
-      (setf (gethash parent (wvolume-children w)) (remove e (gethash parent (wvolume-children w))))
+      (remhash (child-key w name) table)
       (update-inode w parent :nchildren (1- (inode-field w parent 56 4))))))
 
 (defun wcreate (w parent name kind &key (mode #o644) target)
@@ -141,7 +162,7 @@
       (declare (ignore logical))
       (drop-record w key)
       (when (plusp physical)
-        (remhash (j-key physical 2) (wvolume-extents w))
+        (drop-extent w (j-key physical 2))
         (loop for b from physical below (+ physical (ceiling length +block-size+)) do (push b (wvolume-pending-free w)))))))
 
 (defun wset-content (w id content)
@@ -158,8 +179,7 @@
           (put-record w (j-key id 6) (le 1 4))
           (put-record w (octets (j-key id +apfs-type-file-extent+) (le 0 8))
                       (octets (le (* n +block-size+) 8) (le start 8) (le 0 8)))
-          (setf (gethash (j-key start 2) (wvolume-extents w))
-                (octets (le (logior n (ash 1 60)) 8) (le id 8) (le 1 4)))
+          (put-extent w (j-key start 2) (octets (le (logior n (ash 1 60)) 8) (le id 8) (le 1 4)))
           (update-inode w id :dstream (dstream-field (length content) n))))
     (length content)))
 
@@ -169,8 +189,7 @@
 (defun add-extent (w id logical blocks physical)
   (put-record w (octets (j-key id +apfs-type-file-extent+) (le logical 8))
               (octets (le (* blocks +block-size+) 8) (le physical 8) (le 0 8)))
-  (setf (gethash (j-key physical 2) (wvolume-extents w))
-        (octets (le (logior blocks (ash 1 60)) 8) (le id 8) (le 1 4))))
+  (put-extent w (j-key physical 2) (octets (le (logior blocks (ash 1 60)) 8) (le id 8) (le 1 4))))
 
 (defun remap (w id from to physical)
   (dolist (e (file-extents w id))
@@ -178,7 +197,7 @@
       (let ((end (+ logical length)))
         (when (and (< logical to) (> end from) (plusp phys))
           (drop-record w key)
-          (remhash (j-key phys 2) (wvolume-extents w))
+          (drop-extent w (j-key phys 2))
           (when (< logical from)
             (add-extent w id logical (floor (- from logical) +block-size+) phys))
           (when (> end to)

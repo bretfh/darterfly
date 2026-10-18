@@ -154,7 +154,7 @@
   :depends-on (#:uiop #:darterfly/devices #:darterfly/vfs)
   :serial t
   :pathname "src/apfs/"
-  :components ((:file "apfs") (:file "devices") (:file "newfs") (:file "transaction") (:file "write") (:file "vfs") (:file "root")))
+  :components ((:file "apfs") (:file "devices") (:file "newfs") (:file "tree") (:file "transaction") (:file "write") (:file "vfs") (:file "root")))
 
 (asdf:defsystem #:darterfly/fat
   :description "FAT32"
