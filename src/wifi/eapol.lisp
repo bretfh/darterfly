@@ -3,7 +3,7 @@
   (:import-from #:darterfly/crypto #:octets #:hmac-sha1 #:pbkdf2-sha1 #:prf-sha1 #:aes-unwrap #:random-octets)
   (:export #:passphrase-pmk #:+rsn-psk-ccmp+ #:make-supplicant #:supplicant-receive
            #:supplicant-ptk #:supplicant-tk #:supplicant-gtk #:supplicant-gtk-index #:supplicant-state
-           #:+eapol-ethertype+ #:network-status))
+           #:+eapol-ethertype+ #:network-status #:start-wifi))
 (in-package #:darterfly/wifi)
 
 (defconstant +eapol-ethertype+ #x888E)

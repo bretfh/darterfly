@@ -430,20 +430,18 @@
      :name "wifi switch")
     d))
 
+(defvar *starting* (sb-thread:make-mutex :name "wifi start"))
+
 (defun start-wifi ()
   (darterfly/net:start-network)
-  (unless (darterfly/net::interface-device darterfly/net:*interface*)
-    (multiple-value-bind (ssid pass) (wifi-settings)
-      (progn
+  (sb-thread:with-mutex (*starting*)
+    (when (and (probe-file *wifi-settings*)
+               (not (darterfly/net::interface-device darterfly/net:*interface*)))
+      (multiple-value-bind (ssid pass) (wifi-settings)
         (setf *link* nil)
         (bring-up)
         (darterfly/net::interface-attach
          (make-instance 'wireless-interface :link (join ssid pass) :mac (getf (card-nvm *card*) :mac)))))))
-
-(defun keep-wifi ()
-  (setf darterfly/bsd::*activities*
-        (cons (cons :wifi (lambda () (sb-thread:make-thread #'start-wifi :name "wifi start")))
-              (remove :wifi darterfly/bsd::*activities* :key #'car :test #'equal))))
 
 (defun wired-p (device)
   (and (typep device 'devices:ethernet-controller) (not (typep device 'wireless-interface))))
@@ -470,8 +468,7 @@
 (pushnew 'wifi-device-changed devices:*device-hooks*)
 
 (defun confirm-wifi ()
-  (setf *wifi-confirmed* t)
-  (keep-wifi))
+  (setf *wifi-confirmed* t))
 
 (defun network-status ()
   (let ((d (and darterfly/net:*interface* (darterfly/net::interface-device darterfly/net:*interface*))))
