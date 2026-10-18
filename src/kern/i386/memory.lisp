@@ -43,6 +43,8 @@
 (define-global current :u64)
 (define-global free-list :u64)
 (define-global free-count :u64)
+(define-global ram-start :u64 :count 256)
+(define-global ram-end :u64 :count 256)
 
 (defconstant +memory-map+ 1032)
 (defconstant +memory-map-size+ 1036)
@@ -61,6 +63,8 @@
         (when (and (or (= type 3) (= type 4) (= type 7)) (< start end))
           (setf (ref range-next nranges) start)
           (setf (ref range-end nranges) end)
+          (setf (ref ram-start nranges) start)
+          (setf (ref ram-end nranges) end)
           (incf free-count (truncate (- end start) +page-size+))
           (incf nranges)))
       (incf i))))

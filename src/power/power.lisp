@@ -53,7 +53,7 @@
 
 (defun s5-sleep-type () (sleep-type 5))
 
-(defun suspend ()
+(defun suspend (&key check)
   (let* ((fadt (darterfly/devices::acpi-table "FACP"))
          (length (and fadt (darterfly/devices::ml-phys-read-32 (+ fadt 4))))
          (control (and fadt (darterfly/devices::ml-phys-read-32 (+ fadt 64))))
@@ -66,9 +66,22 @@
     (flush-disks)
     (darterfly/devices::suspend-devices)
     (let ((enables (quiet-gpes fadt)))
-      (unwind-protect (darterfly/devices:machdep 66 (logior control (ash event 16) (ash type 32)) facs)
+      (unwind-protect (darterfly/devices:machdep 66 (logior control (ash event 16) (ash type 32) (if check (ash 1 35) 0)) facs)
         (restore-gpes fadt enables)
         (darterfly/devices::wake-devices)))))
+
+(defun changed-memory ()
+  (let ((buffer (make-array 4096 :element-type '(unsigned-byte 64))))
+    (sb-sys:with-pinned-objects (buffer)
+      (let* ((n (min 4096 (darterfly/devices:machdep 68 (sb-sys:sap-int (sb-sys:vector-sap buffer)) 4096)))
+             (chunks (sort (coerce (subseq buffer 0 n) 'list) #'<)))
+        (loop with runs = nil
+              for pa in chunks
+              do (if (and runs (= pa (cdr (first runs))))
+                     (setf (cdr (first runs)) (+ pa #x10000))
+                     (push (cons pa (+ pa #x10000)) runs))
+              finally (return (mapcar (lambda (r) (list (format nil "~x" (car r)) (format nil "~x" (cdr r)) (floor (- (cdr r) (car r)) 1024)))
+                                      (nreverse runs))))))))
 
 (defun gpe-block (fadt)
   (let ((port (darterfly/devices::ml-phys-read-32 (+ fadt 80)))
