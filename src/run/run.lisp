@@ -1,6 +1,7 @@
 (defpackage #:darterfly/run
   (:use #:cl)
-  (:export #:run-core #:run-world #:start-world #:finish-world #:stop-world #:world-eval #:attach #:world-id #:collect #:tree-files #:in-run-p))
+  (:export #:run-core #:run-world #:start-world #:finish-world #:stop-world #:world-eval #:attach #:world-id #:world-name
+           #:new-world #:list-worlds #:find-world #:save-world #:restart-world #:collect #:tree-files #:in-run-p))
 (in-package #:darterfly/run)
 
 (defconstant +magic+ #x4e555248434e4946)
@@ -199,28 +200,68 @@
             (when (minusp n) (return))
             (let* ((token (aref out 0))
                    (text (sb-ext:octets-to-string buf :end n :external-format :utf-8))
+                   (save (and (> (length text) 6) (string= \":save \" text :end2 6) (subseq text 6)))
                    (reply (sb-ext:string-to-octets
-                           (handler-case
-                               (let* ((values nil)
-                                      (printed (with-output-to-string (*standard-output*)
-                                                 (setf values (multiple-value-list (eval (read-from-string text)))))))
-                                 (format nil \"~a~{~s~^ ~}\" printed values))
-                             (error (e)
-                               (format nil \"error: ~a~%~a\" e
-                                       (with-output-to-string (s) (sb-debug:print-backtrace :stream s :count 15)))))
+                           (if save
+                               \"saving\"
+                               (handler-case
+                                   (let* ((values nil)
+                                          (printed (with-output-to-string (*standard-output*)
+                                                     (setf values (multiple-value-list (eval (read-from-string text)))))))
+                                     (format nil \"~a~{~s~^ ~}\" printed values))
+                                 (error (e)
+                                   (format nil \"error: ~a~%~a\" e
+                                           (with-output-to-string (s) (sb-debug:print-backtrace :stream s :count 15))))))
                            :external-format :utf-8)))
               (when (> (length reply) 60000) (setf reply (subseq reply 0 60000)))
               (sb-sys:with-pinned-objects (reply)
-                (funcall call 43 token (sb-sys:sap-int (sb-sys:vector-sap reply)) (length reply) 0 0)))))))
+                (funcall call 43 token (sb-sys:sap-int (sb-sys:vector-sap reply)) (length reply) 0 0))
+              (when save
+                (let ((me sb-thread:*current-thread*))
+                  (sb-thread:interrupt-thread (sb-thread:main-thread)
+                                              (lambda ()
+                                                (sb-thread:join-thread me :default nil)
+                                                (sb-ext:save-lisp-and-die save))))
+                (return)))))))
     :name \"attach\")")
 
 (defun with-prelude (argv)
   (let ((at (or (position "--eval" argv :test #'string=) (position "--quit" argv :test #'string=) (length argv))))
     (append (subseq argv 0 at) (list "--eval" *attach-prelude*) (subseq argv at))))
 
-(defstruct (world (:constructor make-world)) id inward thread)
+(defstruct (world (:constructor make-world)) id inward thread name core)
 
-(defun start-world (core argv &key files cwd stdin disk timeout attach)
+(defvar *worlds* nil)
+(defvar *worlds-lock* (sb-thread:make-mutex :name "worlds"))
+
+(defun list-worlds ()
+  (sb-thread:with-mutex (*worlds-lock*)
+    (loop :for w :in *worlds*
+          :collect (list :name (world-name w) :id (world-id w) :core (world-core w)
+                         :state (darterfly/worlds:world-state (world-id w))))))
+
+(defun find-world (name)
+  (sb-thread:with-mutex (*worlds-lock*)
+    (find name *worlds* :key #'world-name :test #'equal)))
+
+(defun world-argv (&rest evals)
+  (append (list "/System/Library/Kernels/kernel" "--core" "/System/Library/Kernels/darterfly.core"
+                "--no-sysinit" "--no-userinit" "--disable-debugger")
+          (loop :for e :in evals :append (list "--eval" e))))
+
+(defun new-world (name &key (core "/usr/lib/sbcl/sbcl.core") (cwd "/") (evals (list "(loop (sleep 60))")))
+  (when (find-world name) (error "a world named ~a is already running" name))
+  (start-world core (apply #'world-argv evals) :cwd cwd :disk t :attach t :name name))
+
+(defun save-world (world path)
+  (world-eval world (concatenate 'string ":save " path))
+  (finish-world world)
+  (and (probe-file path) path))
+
+(defun restart-world (name path &key (cwd "/"))
+  (new-world name :core path :cwd cwd))
+
+(defun start-world (core argv &key files cwd stdin disk timeout attach name)
   (let* ((parts (record-parts core (if attach (with-prelude argv) argv) files cwd stdin nil))
          (base (+ +world-base+ (ash (mod (incf *world-runs*) 16) 36)))
          (port (darterfly/worlds:make-port))
@@ -228,9 +269,10 @@
     (multiple-value-bind (offsets back-at size) (layout parts 0)
       (write-record base size parts offsets back-at 0 0 1 disk)
       (multiple-value-bind (id inward) (darterfly/worlds:spawn-record base size port)
-        (make-world
-         :id id :inward inward
-         :thread (sb-thread:make-thread
+        (let ((world (make-world :id id :inward inward :name (or name (format nil "world ~d" id)) :core core)))
+          (sb-thread:with-mutex (*worlds-lock*) (push world *worlds*))
+          (setf (world-thread world)
+                (sb-thread:make-thread
                   (lambda ()
                     (unwind-protect
                          (multiple-value-bind (code archive) (serve-world port id proc timeout)
@@ -243,8 +285,10 @@
                       (darterfly/worlds:stop id)
                       (wait-gone id)
                       (when proc (darterfly/bsd:end-world-proc proc))
-                      (libsa "munmap" sb-alien:int (sb-alien:unsigned base) (sb-alien:unsigned size))))
-                  :name (format nil "world ~d" id)))))))
+                      (libsa "munmap" sb-alien:int (sb-alien:unsigned base) (sb-alien:unsigned size))
+                      (sb-thread:with-mutex (*worlds-lock*) (setf *worlds* (remove world *worlds*)))))
+                  :name (format nil "world ~d" id)))
+          world)))))
 
 (defun finish-world (world) (sb-thread:join-thread (world-thread world)))
 

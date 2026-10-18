@@ -288,7 +288,7 @@
 
 (defun end-world-proc (proc)
   (with-bsd
-    (loop :for fd :below (length (proc-fds proc))
+    (loop :for fd :from 3 :below (length (proc-fds proc))
           :when (aref (proc-fds proc) fd)
             :do (release-fd proc fd))
     (remhash (proc-pid proc) *procs*)))

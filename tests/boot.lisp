@@ -1533,6 +1533,32 @@
                (is (search "[3]" (ask "(format nil \"[~a]\" (+ 1 2))"))))
           (image:finish c 5))))))
 
+(test worlds-are-named-saved-and-restarted
+  (let ((disk (merge-pathnames "world-save.img" (darterfly-file "build/"))))
+    (uiop:delete-file-if-exists disk)
+    (darterfly/image::root-disk disk (* 512 1048576)
+                            (append (darterfly/image::root-entries)
+                                    (list (list :file "usr/lib/sbcl/sbcl.core" (image::octets (darterfly-file "build/sbcl-mt/output/sbcl.core"))))))
+    (let ((c (image:bare-console :root disk)))
+      (flet ((ask (form &optional (timeout 120)) (image:send c form) (image:expect c (format nil "~%* ") :timeout timeout)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 90)
+               (ask "(progn (ensure-directories-exist \"/Users/darterfly/worlds/\") (defparameter *w* (darterfly/run:new-world \"notes\")))")
+               (is (search "\"3\"" (ask "(loop :repeat 100 :for r := (ignore-errors (darterfly/run:world-eval *w* \"(+ 1 2)\")) :until r :do (sleep 0.1) :finally (return r))")))
+               (is (search "(:NAME \"notes\"" (ask "(darterfly/run:list-worlds)")) "the world is listed by name")
+               (ask "(darterfly/run:world-eval (darterfly/run:find-world \"notes\") \"(progn (defvar *notes* (list :remember-me)) (defun note (x) (push x *notes*)) (note :and-this))\")")
+               (is (search "/Users/darterfly/worlds/notes.core" (ask "(darterfly/run:save-world *w* \"/Users/darterfly/worlds/notes.core\")" 300))
+                   "the world saves itself to a core on the disk")
+               (is (search "NIL" (ask "(darterfly/run:list-worlds)")) "and is gone from the list")
+               (ask "(defparameter *again* (darterfly/run:restart-world \"notes\" \"/Users/darterfly/worlds/notes.core\"))")
+               (is (search "(:AND-THIS :REMEMBER-ME)" (ask "(loop :repeat 200 :for r := (ignore-errors (darterfly/run:world-eval *again* \"*notes*\")) :until r :do (sleep 0.1) :finally (return r))"))
+                   "the restarted world has its state")
+               (is (search "(:SECOND :AND-THIS :REMEMBER-ME)" (ask "(darterfly/run:world-eval *again* \"(note :second)\")"))
+                   "and its functions")
+               (ask "(darterfly/run:stop-world *again*)"))
+          (image:finish c 5))))))
+
 (defvar *run-wait* 1800)
 
 (defun sbcl-run (disk core argv &key stdin script (files t))
