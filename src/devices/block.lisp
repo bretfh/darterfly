@@ -82,4 +82,13 @@
       (block-request b 4 0 0 nil 0)))
   t)
 
+(defmethod suspend ((b virtio-block-storage-device)) (sb-thread:grab-mutex (device-lock b)))
+
+(defmethod wake ((b virtio-block-storage-device))
+  (when (sb-thread:holding-mutex-p (device-lock b))
+    (unwind-protect
+         (progn (restart-transport (transport b))
+                (driver-ok (transport b)))
+      (sb-thread:release-mutex (device-lock b)))))
+
 (defmethod interrupt-vector ((b virtio-block-storage-device)) (virtqueue-vector (queue b)))

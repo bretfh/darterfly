@@ -96,6 +96,7 @@
 (defun wait-for-room (o n)
   (let ((c (output-controller o)))
     (loop
+      (unless (output-running-p o) (start-output o))
       (update-played o)
       (when (< (output-written o) (output-played o))
         (setf (output-written o) (+ (output-played o) +period-bytes+)))

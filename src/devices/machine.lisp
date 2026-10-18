@@ -5,7 +5,7 @@
    #:start-devices #:device-tree #:*registry-root*
    #:entry #:entry-name #:entry-location #:entry-parent #:entry-children
    #:get-property #:set-property #:find-entries
-   #:device #:start #:register-service #:*personalities*
+   #:device #:start #:register-service #:*personalities* #:suspend #:wake #:suspend-devices #:wake-devices
    #:pci-node #:config-read-8 #:config-read-16 #:config-read-32
    #:config-write-8 #:config-write-16 #:config-write-32 #:find-pci-capability
    #:map-device-memory-with-index #:memory-map #:map-virtual-address #:map-physical-address #:map-length

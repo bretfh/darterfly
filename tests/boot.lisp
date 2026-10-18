@@ -2425,7 +2425,7 @@
     (unwind-protect
          (progn
            (image:expect c "* " :timeout 90)
-           (image:send c "(progn (defvar *before* (get-universal-time)) (list :slept (darterfly/power:suspend)))")
+           (image:send c "(progn (darterfly/net:start-network) (defvar *before* (get-universal-time)) (list :slept (darterfly/power:suspend)))")
            (is (loop :repeat 60
                      :thereis (equal "suspended" (gethash "status" (image:qmp "query-status")))
                      :do (sleep 0.5))
@@ -2436,7 +2436,11 @@
                "it wakes and the suspend call returns")
            (image:send c "(list :alive (+ 1 2) :slept (>= (- (get-universal-time) *before*) 3))")
            (is (search "(:ALIVE 3 :SLEPT T)" (image:expect c (format nil "~%* ") :timeout 30))
-               "the Lisp carries on and the wall clock counted the sleep"))
+               "the Lisp carries on and the wall clock counted the sleep")
+           (image:send c "(length (darterfly/devices:read-blocks (first (darterfly/devices:find-entries 'darterfly/devices:virtio-block-storage-device)) 0 8))")
+           (is (search "4096" (image:expect c (format nil "~%* ") :timeout 30)) "the disk answers after waking")
+           (image:send c "(darterfly/net:ping \"10.0.2.2\")")
+           (is (not (search "NIL" (image:expect c (format nil "~%* ") :timeout 30))) "the network answers after waking"))
       (image:finish c 5))))
 
 (test sound-plays-and-sleeps

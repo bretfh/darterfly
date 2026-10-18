@@ -64,7 +64,9 @@
     (unless (and control (plusp control) event (plusp event) facs (plusp facs) type)
       (error "suspend: the firmware offers no S3"))
     (flush-disks)
-    (darterfly/devices:machdep 66 (logior control (ash event 16) (ash type 32)) facs)))
+    (darterfly/devices:suspend-devices)
+    (unwind-protect (darterfly/devices:machdep 66 (logior control (ash event 16) (ash type 32)) facs)
+      (darterfly/devices:wake-devices))))
 
 (defun shut-down ()
   (let* ((fadt (darterfly/devices::acpi-table "FACP"))

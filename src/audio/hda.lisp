@@ -83,6 +83,16 @@
   (setf (power-state (pci c)) 3)
   (setf (hda-suspended c) t))
 
+(defmethod devices:suspend ((c hda-controller))
+  (sb-thread:grab-mutex (hda-lock c))
+  (dolist (o (hda-outputs c)) (when (output-running-p o) (stop-output o)))
+  (unless (hda-suspended c) (suspend c)))
+
+(defmethod devices:wake ((c hda-controller))
+  (when (sb-thread:holding-mutex-p (hda-lock c))
+    (setf (hda-suspended c) t)
+    (sb-thread:release-mutex (hda-lock c))))
+
 (defmethod devices:start ((c hda-controller) (d devices:pci-node))
   (let ((address (devices::bar-address d 0)))
     (unless address (return-from devices:start nil))
