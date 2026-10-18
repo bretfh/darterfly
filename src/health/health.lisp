@@ -49,9 +49,10 @@
   (if (null (darterfly/display::graphics))
       (list :absent)
       (let ((on (darterfly/display::panel-on-p))
-            (plane (darterfly/display:awake (darterfly/display::plane-state))))
-        (list (if (and on (getf plane :enabled) (not darterfly/display::*psr-unreliable*)) :ok :fail)
-              :panel on :plane (getf plane :enabled)
+            (plane (darterfly/display:awake (darterfly/display::plane-state)))
+            (differences (darterfly/display::compare-plan (darterfly/display::plan-display))))
+        (list (if (and on (getf plane :enabled) (null differences) (not darterfly/display::*psr-unreliable*)) :ok :fail)
+              :panel on :plane (getf plane :enabled) :plan differences
               :psr darterfly/display::*psr* :psr-unreliable darterfly/display::*psr-unreliable*
               :psr-failures (length darterfly/display::*psr-failures*)
               :dc darterfly/display::*dc-target*))))
