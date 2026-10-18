@@ -29,11 +29,11 @@
                           :extern ,extern :export ,export :package (package-name *package*))))))
 
 (defmacro define-efi-entry (name args &body body)
-  `(setf (gethash (c-name ',name) *functions*)
+  `(setf (gethash (cons (package-name *package*) (c-name ',name)) *functions*)
          (make-low-function :name (c-name ',name) :args ',args :body ',body :package (package-name *package*) :abi :ms)))
 
 (defmacro define-low (name args &body body)
-  `(setf (gethash (c-name ',name) *functions*)
+  `(setf (gethash (cons (package-name *package*) (c-name ',name)) *functions*)
          (make-low-function :name (c-name ',name) :args ',args :body ',body :package (package-name *package*))))
 
 (defun width (type) (ecase type (:u8 1) (:u16 2) (:u32 4) (:u64 8)))
@@ -526,19 +526,23 @@
             :do (sb-assem::emit-label label)
                 (loop :for b :across octets :do (inst byte b))))))
 
+(defun low-function (name)
+  (or (loop :for f :being :the :hash-values :of *functions* :when (string= (low-function-name f) name) :return f)
+      (error "no low function ~a" name)))
+
 (defun package-object (package &key extra routines)
-  (let ((names (append (loop :for f :being :the :hash-values :of *functions*
-                             :when (string= (low-function-package f) package)
-                               :collect (low-function-name f))
-                       (copy-list extra))))
-    (object (append routines (mapcar (lambda (n) (function-routine (gethash n *functions*))) (sort names #'string<)))
+  (let ((functions (append (loop :for f :being :the :hash-values :of *functions*
+                                 :when (string= (low-function-package f) package)
+                                   :collect f)
+                           (mapcar #'low-function extra))))
+    (object (append routines (mapcar #'function-routine (sort functions #'string< :key #'low-function-name)))
             :bss (loop :for g :being :the :hash-values :of *globals*
                        :when (and (not (global-extern g)) (string= (global-package g) package))
                          :collect (list (global-name g) (* (width (global-type g)) (global-count g))
                                         (global-alignment g) (global-export g))))))
 
 (defun low-object (names)
-  (let ((functions (mapcar (lambda (n) (or (gethash (c-name n) *functions*) (error "no low function ~s" n))) names))
+  (let ((functions (mapcar (lambda (n) (or (gethash (cons (package-name (symbol-package n)) (c-name n)) *functions*) (error "no low function ~s" n))) names))
         (package (package-name (symbol-package (first names)))))
     (object (mapcar #'function-routine functions)
             :bss (loop :for g :being :the :hash-values :of *globals*
@@ -561,7 +565,7 @@
                            :when (string= (low-function-package f) package)
                              :collect (low-function-name f))
                      #'string<)))
-    (pe-image (mapcar (lambda (n) (function-routine (gethash n *functions*)))
+    (pe-image (mapcar (lambda (n) (function-routine (gethash (cons package n) *functions*)))
                       (cons entry (remove entry names :test #'string=)))
               :bss (loop :for g :being :the :hash-values :of *globals*
                          :when (and (not (global-extern g)) (string= (global-package g) package))

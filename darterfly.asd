@@ -223,7 +223,7 @@
   :depends-on (#:darterfly/low)
   :serial t
   :pathname "src/libsa/"
-  :components ((:file "syscall") (:file "misc")))
+  :components ((:file "syscall") (:file "misc") (:file "string")))
 
 (asdf:defsystem #:darterfly/platform
   :description "Serial console"
