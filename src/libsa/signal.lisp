@@ -10,7 +10,6 @@
 (defconstant +sa-resethand+ #x80000000)
 
 (define-global actions :u8 :count (* 65 152))
-(define-global stderr :u64 :extern t)
 
 (define-low action-of ((sig :u32)) (+ (address actions) (* sig +sigaction-size+)))
 

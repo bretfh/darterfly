@@ -1374,6 +1374,12 @@
          (strtod-test \"3.14159265358979323846\") (strtod-test \"1e-310\") (strtod-test \"-2.5E+300\")
          (strtod-test \"0.1\") (strtod-test \"123456789012345678901234567890\") (coerce (strtof-test \"0.1\") 'double-float))")
 
+(defparameter *printf-form*
+  "(let ((buf (sb-alien:make-alien sb-alien:char 256)))
+     (sb-alien:alien-funcall (sb-alien:extern-alien \"snprintf\" (function sb-alien:int (* sb-alien:char) sb-alien:unsigned-long sb-alien:c-string double double sb-alien:int sb-alien:c-string sb-alien:unsigned-int double sb-alien:int))
+                             buf 256 \"%.3f|%e|%5d|%-4s|%x|%08.2f|%+d|%%\" 3.14159d0 12345.678d0 42 \"ab\" 255 -3.14159d0 7)
+     (prog1 (sb-alien::c-string-to-string (sb-alien:alien-sap buf) :utf-8 'character) (sb-alien:free-alien buf)))")
+
 (defparameter *math-helpers*
   "(progn (defun log1p-test (x) (sb-kernel::%log1p x))
           (defun strtod-test (s) (sb-alien:alien-funcall (sb-alien:extern-alien \"strtod\" (function double sb-alien:c-string sb-alien:unsigned-long)) s 0))
@@ -1392,6 +1398,10 @@
                   (guest (let ((*read-default-float-format* 'double-float)) (read-from-string text)))
                   (host (progn (let ((*package* (find-package :cl-user))) (eval (read-from-string *math-helpers*)))
                                (eval (let ((*package* (find-package :cl-user))) (read-from-string *math-forms*))))))
+             (image:send c (format nil "(prin1 ~a)" *printf-form*))
+             (let* ((p (image:expect c (format nil "~%* ") :timeout 60))
+                    (host-text (eval (let ((*package* (find-package :cl-user))) (read-from-string *printf-form*)))))
+               (is (search (prin1-to-string host-text) p) "printf formats like the host's: ~a, the system said ~a" host-text p))
              (is (= (length host) (length guest)) "every value comes back: ~a" text)
              (loop :for g :in guest :for h :in host :for i :from 0
                    :do (is (<= (abs (- g h)) (* 1d-13 (max 1d0 (abs h))))

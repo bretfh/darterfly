@@ -36,8 +36,7 @@
       (when was (uiop:chdir was))
       (tcc "tcc_delete" sb-alien:void (sb-sys:system-area-pointer state)))))
 
-(defparameter *libsa-sources*
-  '("stdio.c"))
+(defparameter *libsa-sources* '())
 
 (defparameter *runtime-sources*
   '("alloc.c" "arena.c" "backtrace.c" "breakpoint.c" "coalesce.c" "coreparse.c" "dynbind.c" "funcall.c"

@@ -82,6 +82,7 @@
 
 (define-low _libsa_start (cmdline)
   (environment-init)
+  (stdio-init)
   (tls-init)
   (let ((argc 0) (rest 0) (tok 0))
     (when (__libsa_run_start (address argc) (address argv-storage) 32)

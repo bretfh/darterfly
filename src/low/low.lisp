@@ -3,7 +3,7 @@
   (:shadow #:compile)
   (:export #:define-low #:define-global #:low-object #:inb #:outb #:ref #:mem #:pause #:result #:while
            #:package-object #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:monitor #:sti-mwait #:outw #:address
-           #:rep-movsb #:rep-stosb #:&va #:va-next #:rdtsc #:rdtscp #:trap #:trap-errno #:exchange #:fetch-add #:fs-word #:absolute #:f+ #:f- #:f* #:f/ #:f< #:f<= #:f> #:f>= #:f= #:float-of #:float-truncate #:fsqrt #:mxcsr #:set-mxcsr #:x87 #:va-next-double #:returns #:return-address
+           #:rep-movsb #:rep-stosb #:&va #:va-next #:rdtsc #:rdtscp #:trap #:trap-errno #:exchange #:fetch-add #:fs-word #:absolute #:f+ #:f- #:f* #:f/ #:f< #:f<= #:f> #:f>= #:f= #:float-of #:float-truncate #:fsqrt #:mxcsr #:set-mxcsr #:x87 #:va-next-double #:returns #:floats #:return-address
            #:invlpg #:set-cr3 #:cpuid-edx #:cpuid #:cpu-data #:fxsave #:fxrstor #:code-address #:call-pointer #:read-cr #:set-cr #:fninit #:compare-and-swap #:rdrand #:int3 #:build-date #:*build-date* #:lidt #:ltr
            #:efi-call #:wide #:define-efi-entry #:package-image
            #:signed< #:signed<= #:signed> #:signed>= #:sar #:sign-extend #:signed-truncate #:signed-rem))
@@ -13,7 +13,7 @@
 (defvar *globals* (make-hash-table :test 'equal))
 
 (defstruct global name type count alignment extern export package)
-(defstruct low-function name args body package abi returns)
+(defstruct low-function name args body package abi returns floats)
 
 (defun c-name (symbol)
   (let ((name (symbol-name symbol)))
@@ -35,14 +35,17 @@
          (make-low-function :name (c-name ',name) :args ',args :body ',body :package (package-name *package*) :abi :ms)))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun declared-p (body)
+    (let ((form (first body))) (and (consp form) (eq (first form) 'declare))))
   (defun returns-of (body)
-    (let ((form (first body)))
-      (and (consp form) (eq (first form) 'declare) (second (assoc 'returns (rest form) :test #'string=))))))
+    (and (declared-p body) (second (assoc 'returns (rest (first body)) :test #'string=))))
+  (defun floats-of (body)
+    (and (declared-p body) (assoc 'floats (rest (first body)) :test #'string=) t)))
 
 (defmacro define-low (name args &body body)
   `(setf (gethash (cons (package-name *package*) (c-name ',name)) *functions*)
-         (make-low-function :name (c-name ',name) :args ',args :body ',(if (returns-of body) (rest body) body)
-                            :returns ',(returns-of body) :package (package-name *package*))))
+         (make-low-function :name (c-name ',name) :args ',args :body ',(if (declared-p body) (rest body) body)
+                            :returns ',(returns-of body) :floats ,(floats-of body) :package (package-name *package*))))
 
 (defun width (type) (ecase type (:u8 1) (:u16 2) (:u32 4) (:u64 8)))
 
@@ -595,7 +598,7 @@
          (*strings* nil)
          (*depth* 0)
          (*exit* (sb-assem:gen-label))
-         (floats (mentions-p "VA-NEXT-DOUBLE" (low-function-body f)))
+         (floats (or (low-function-floats f) (mentions-p "VA-NEXT-DOUBLE" (low-function-body f))))
          (save-area (if floats +float-save-area+ +save-area+)))
     (routine (low-function-name f)
       (inst push rbp-tn)
