@@ -225,3 +225,9 @@ fixtures. Then bring up a C++ compiler and its runtime, and prove a local
 compiler rebuild. Keep the existing TCC path working during that process.
 The CEF engine source-build recipe is a parallel prerequisite; the host
 browser milestone does not waive the requirement to rebuild it locally.
+
+* Headless engine boundary experiment
+
+See [[file:engine/README.org][the CEF CPU-pixel/input experiment and QEMU boundary results]].
+This complements the existing Nyxt/CEF host reference. It isolates engine
+rendering from Nyxt UI integration and records the musl/runtime decision.

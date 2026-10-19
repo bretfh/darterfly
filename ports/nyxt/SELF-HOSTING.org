@@ -29,11 +29,21 @@ against engine porting, native build dependencies, and ongoing updates.
 A working Guix CEF binary is a reference experiment, not this decision's
 acceptance criterion.
 
-This document supersedes the earlier engine-first sequence. Work has
-resumed with a [[file:HOST-REFERENCE.org][built and tested Nyxt/CEF host reference]].
-The native frontend has now passed its first guest compilation gate.
-The compiler source rebuild, engine source build and Darterfly engine
-harness remain outstanding. The host reference does not close those gates.
+The immediate target is a usable Nyxt browser running on Darterfly.
+The [[file:HOST-REFERENCE.org][Nyxt/CEF host reference]] establishes the upstream browser path.
+Toolchain expansion is justified only when it blocks that target; native
+source rebuilding remains the longer-term self-hosting requirement.
+The engine source build and Darterfly engine execution remain outstanding.
+
+* Latest measured engine gate
+
+The [[file:engine/README.org][headless CEF experiment]] now passes CPU painting, mouse input,
+JavaScript and shutdown on Guix. QEMU confirms the current Darterfly
+boundary: shared libsa runs a native probe, but dynamic loading and
+writable shared-file mappings are missing. The actual CEF artifacts are
+rejected cleanly. Compiler rebuild expansion is paused while the engine
+platform contract is evaluated. Musl is a reuse candidate for that
+runtime, not a substitute for the missing OS mechanisms.
 
 * Three different things we must be able to rebuild
 
