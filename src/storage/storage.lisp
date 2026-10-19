@@ -179,7 +179,7 @@
 (defun start-storage-world (node core &key (name "storage"))
   (let* ((world (darterfly/run:start-world core (darterfly/run::world-argv "(loop (sleep 60))") :cwd "/" :disk t :attach t :name name))
          (id (darterfly/run:world-id world)))
-    (loop :repeat 300 :until (ignore-errors (darterfly/run:world-eval world "t")) :do (sleep 0.1))
+    (darterfly/run:await-answer world)
     (destructuring-bind (&key ecam bus device function vector) (darterfly/drivers:grant-device id node)
       (multiple-value-bind (theirs ours) (darterfly/worlds:port-into id)
         (let ((root (eval-in world `(op :serve ,ecam ,bus ,device ,function ,vector))))

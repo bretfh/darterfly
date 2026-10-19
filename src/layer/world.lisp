@@ -23,13 +23,13 @@
     (or *window-service*
         (setf *window-service* (darterfly/run:look-up "windowserver")))))
 
-(defun remote-request (body)
-  (decode (darterfly/worlds:call (window-service) (encode body) :timeout nil)))
+(defun remote-request (body &key (timeout 30))
+  (decode (darterfly/worlds:call (window-service) (encode body) :timeout timeout)))
 
 (defun pump-events (context)
   (let ((events (context-events context)))
     (loop
-      (let ((event (handler-case (remote-request (list :next-event :context (context-id context) :timeout 1000))
+      (let ((event (handler-case (remote-request (list :next-event :context (context-id context) :timeout 1000) :timeout 5)
                      (error () (sleep 1) nil))))
         (when event
           (handler-case (darterfly/mach:mach-msg-send (darterfly/mach:make-message :remote-port events :body event))

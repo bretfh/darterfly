@@ -2,7 +2,7 @@
   (:use #:cl)
   (:export #:run-core #:run-world #:start-world #:finish-world #:stop-world #:world-eval #:attach #:world-id #:world-name
            #:new-world #:list-worlds #:find-world #:save-world #:restart-world #:checkpoint-world #:restore-world #:restore-worlds #:*worlds-dir* #:collect #:tree-files #:in-run-p #:in-world-p #:no-room #:no-answer #:memory-use #:*system-reserve-mb* #:*answer-within*
-           #:offer-service #:look-up))
+           #:offer-service #:look-up #:await-answer #:*start-within*))
 (in-package #:darterfly/run)
 
 (defconstant +magic+ #x4e555248434e4946)
@@ -518,6 +518,18 @@
                                  :external-format :utf-8)
       (darterfly/worlds:no-reply ()
         (error 'no-answer :world (world-id world) :seconds timeout)))))
+
+(defparameter *start-within* 30)
+
+(defun await-answer (world &key (within *start-within*))
+  (let ((deadline (+ (get-internal-real-time) (* within internal-time-units-per-second))))
+    (loop
+      (let ((left (/ (- deadline (get-internal-real-time)) internal-time-units-per-second)))
+        (when (<= left 0)
+          (error 'no-answer :world (world-id world) :seconds within))
+        (when (ignore-errors (world-eval world "t" :timeout (min left 2)))
+          (return t))
+        (sleep 0.1)))))
 
 (defun attach (world &key (input *standard-input*) (output *standard-output*))
   (loop

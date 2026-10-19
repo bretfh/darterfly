@@ -212,7 +212,7 @@
 
 (defun attach-network-world (world node)
   (let ((id (run:world-id world)))
-    (loop :repeat 300 :until (ignore-errors (run:world-eval world "t")) :do (sleep 0.1))
+    (run:await-answer world)
     (let ((granted (grant-device id node)))
       (multiple-value-bind (theirs ours) (worlds:port-into id)
         (let* ((mac (eval-in world (list* 'serve-network theirs granted)))

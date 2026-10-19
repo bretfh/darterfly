@@ -1992,6 +1992,35 @@
                (is (search "VIRTIO-NETWORK T FAILED" fallen) "and the first world drives the controller itself: ~a" fallen)))
         (image:finish c 5)))))
 
+(test a-world-that-does-not-answer-is-given-up-on-in-time
+  (let ((disk (merge-pathnames "world-deadline.img" (darterfly-file "build/"))))
+    (uiop:delete-file-if-exists disk)
+    (darterfly/image::root-disk disk (* 256 1048576)
+                                (append (darterfly/image::root-entries)
+                                        (list (list :file "usr/lib/sbcl/sbcl.core" (image::octets (darterfly-file "build/sbcl-mt/output/sbcl.core"))))))
+    (let ((c (image:bare-console :boot-args "init" :root disk)))
+      (labels ((ask (form &optional (timeout 120))
+                 (image:send c form)
+                 (image:expect c (format nil "~%* ") :timeout timeout))
+               (answer (form &optional (timeout 120))
+                 (image:send c (format nil "(format t \"~~&[[R ~~a]]~~%\" (substitute #\\_ #\\Newline (princ-to-string ~a)))" form))
+                 (image:expect c "[[R " :timeout timeout)
+                 (prog1 (image:expect c "]]" :timeout 10)
+                   (image:expect c (format nil "~%* ") :timeout 30))))
+        (unwind-protect
+             (progn
+               (image:expect c "init: pid 1" :timeout 120)
+               (ask "(defparameter *mute* (darterfly/run:new-world \"mute\"))" 120)
+               (ask "(darterfly/run:await-answer *mute*)" 120)
+               (ask "(darterfly/worlds:pause (darterfly/run:world-id *mute*))")
+               (let ((given-up (answer "(let ((start (get-internal-real-time))) (handler-case (progn (darterfly/run:await-answer *mute* :within 3) :answered) (darterfly/run:no-answer (e) (list (princ-to-string e) (round (- (get-internal-real-time) start) internal-time-units-per-second)))))")))
+                 (is (search "didn't answer in 3 s 3" given-up) "waiting for a world that can't answer ends at its deadline with no-answer: ~a" given-up))
+               (ask "(progn (darterfly/worlds:resume (darterfly/run:world-id *mute*)) (darterfly/run:stop-world *mute*) t)" 60)
+               (ask "(darterfly/init:submit (list :label \"refused\" :world t :keep-alive nil :run-at-load t :after-start (lambda (w) (declare (ignore w)) (error \"refused on purpose\"))))")
+               (let ((left (answer "(loop :repeat 120 :for j := (find \"refused\" (darterfly/init:jobs) :key (lambda (j) (getf j :label)) :test (function equal)) :until (eq (getf j :state) :stopped) :do (sleep 0.5) :finally (return (list (getf j :state) (count-if (lambda (w) (search \"refused\" (getf w :name))) (darterfly/run:list-worlds)))))")))
+                 (is (search "STOPPED 0" left) "a job whose start fails leaves no world running: ~a" left)))
+          (image:finish c 5))))))
+
 (test a-world-uses-the-network
   (let ((disk (merge-pathnames "world-net.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists disk)
