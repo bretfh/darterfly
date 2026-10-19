@@ -48,16 +48,16 @@
 (defun serve-requests (port handle &key (name "requests"))
   (sb-thread:make-thread
    (lambda ()
-     (let ((buffer (make-array 65536 :element-type '(unsigned-byte 8))))
+     (let ((buffer (make-array 65536 :element-type '(unsigned-byte 8)))
+           (slots (worlds:dispatcher)))
        (loop
          (multiple-value-bind (n token)
              (handler-case (worlds:receive-into port buffer)
                (worlds:world-error () (values nil nil)))
            (when n
              (let ((request (subseq buffer 0 n)))
-               (sb-thread:make-thread
-                (lambda () (worlds:reply token (funcall handle request token)))
-                :name name)))))))
+               (worlds:dispatch slots name
+                                (lambda () (worlds:reply token (funcall handle request token))))))))))
    :name name))
 
 (defun u64 (v at) (loop :for i :below 8 :sum (ash (aref v (+ at i)) (* 8 i))))

@@ -165,21 +165,22 @@
 
 (defun serve-service (world proc name port)
   (destructuring-bind (serve gone) (gethash name *services*)
-    (let ((buffer (make-array 65536 :element-type '(unsigned-byte 8))))
+    (let ((buffer (make-array 65536 :element-type '(unsigned-byte 8)))
+          (slots (darterfly/worlds:dispatcher)))
       (unwind-protect
            (loop
              (handler-case
                  (multiple-value-bind (n token sender) (darterfly/worlds:receive-into port buffer :timeout 1)
                    (when (= sender world)
                      (let ((request (subseq buffer 0 n)))
-                       (sb-thread:make-thread
+                       (darterfly/worlds:dispatch
+                        slots name
                         (lambda ()
                           (darterfly/worlds:reply token
                                                   (handler-case (funcall serve world proc request token)
                                                     (error (e)
                                                       (format *error-output* "~&~a for world ~d: ~a~%" name world e)
-                                                      #()))))
-                        :name name))))
+                                                      #()))))))))
                (darterfly/worlds:world-error ()
                  (when (member (darterfly/worlds:world-state world) '(:stopped :gone))
                    (return)))))
@@ -206,19 +207,20 @@
 (defun serve-world (port world proc timeout)
   (let ((end (and timeout (+ (get-internal-real-time) (* timeout internal-time-units-per-second))))
         (code nil) (archive nil) (at 0)
-        (m (make-array 65536 :element-type '(unsigned-byte 8))))
+        (m (make-array 65536 :element-type '(unsigned-byte 8)))
+        (slots (darterfly/worlds:dispatcher)))
     (loop
       (handler-case
           (multiple-value-bind (n token sender) (darterfly/worlds:receive-into port m :timeout 1)
             (unless (= sender world) (error "Unexpected world service sender"))
             (case (if (>= n 8) (u64-at m 0) 0)
               (1 (let ((request (subseq m 0 n)))
-                   (sb-thread:make-thread
+                   (darterfly/worlds:dispatch
+                    slots "world call"
                     (lambda ()
                       (darterfly/worlds:reply token (if proc
                                                         (darterfly/bsd:serve-request proc request token)
-                                                        (make-array 24 :element-type '(unsigned-byte 8) :initial-element 255))))
-                    :name "world call")))
+                                                        (make-array 24 :element-type '(unsigned-byte 8) :initial-element 255)))))))
               (2 (setf code (u64-at m 8)
                        archive (make-array (u64-at m 16) :element-type '(unsigned-byte 8))
                        at 0)

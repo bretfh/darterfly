@@ -1867,6 +1867,35 @@
                (is (search "hog stopped: removed" (image:transcript c)) "and not restarted"))
           (image:finish c 5))))))
 
+(test a-flood-of-requests-from-a-world-runs-a-few-at-a-time
+  (let ((c (image:bare-console :boot-args "init")))
+    (labels ((ask (form &optional (timeout 120))
+               (image:send c form)
+               (image:expect c (format nil "~%* ") :timeout timeout))
+             (answer (form &optional (timeout 120))
+               (image:send c (format nil "(format t \"~~&[[R ~~a]]~~%\" (substitute #\\_ #\\Newline (princ-to-string ~a)))" form))
+               (image:expect c "[[R " :timeout timeout)
+               (prog1 (image:expect c "]]" :timeout 10)
+                 (image:expect c (format nil "~%* ") :timeout 30))))
+      (unwind-protect
+           (progn
+             (image:expect c "init: pid 1" :timeout 120)
+             (ask "(progn (darterfly/install::esp) (sleep 10) t)")
+             (ask "(setf darterfly/worlds:*requests-at-once* 4)")
+             (ask "(defparameter *busy* (list 0 0))")
+             (ask "(defparameter *busy-lock* (sb-thread:make-mutex))")
+             (ask "(darterfly/run:offer-service \"slow\" (lambda (world proc request token) (declare (ignore world proc request token)) (sb-thread:with-mutex (*busy-lock*) (incf (first *busy*)) (setf (second *busy*) (max (second *busy*) (first *busy*)))) (sleep 0.3) (sb-thread:with-mutex (*busy-lock*) (decf (first *busy*))) #(1)))")
+             (ask "(defparameter *flood* (darterfly/run:new-world \"flood\" :core \"/Volumes/EFI/EFI/darterfly/gen-1/darterfly.core\" :memory 512))" 300)
+             (ask "(darterfly/run:await-answer *flood* :within 120)" 180)
+             (let ((answered (answer (format nil "(darterfly/run:world-eval *flood* ~s :timeout 120)"
+                                             "(let ((port (darterfly/run:look-up \"slow\"))) (count 1 (mapcar (function sb-thread:join-thread) (loop :repeat 20 :collect (sb-thread:make-thread (lambda () (length (darterfly/worlds:call port (make-array 8 :element-type '(unsigned-byte 8)) :timeout 60))))))))")
+                                     180)))
+               (is (search "20" answered) "every one of 20 calls at once is answered: ~a" answered))
+             (let ((peak (answer "(second *busy*)")))
+               (is (search "4" peak) "but no more than four run at a time: ~a" peak))
+             (ask "(progn (darterfly/run:stop-world *flood*) t)" 60))
+        (image:finish c 5)))))
+
 (test an-app-in-its-own-world-opens-a-window-and-dying-takes-it-away
   (let ((c (image:bare-console :boot-args "init"))
         (image:*screen-size* '(1280 800)))

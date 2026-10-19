@@ -1,6 +1,6 @@
 (defpackage #:darterfly/worlds
   (:use #:cl)
-  (:export #:spawn-native #:spawn-native-image #:read-native-image #:wait-native #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages #:spawn-record #:receive-into #:copy-from #:copy-into
+  (:export #:spawn-native #:spawn-native-image #:read-native-image #:wait-native #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages #:spawn-record #:receive-into #:dispatcher #:dispatch #:*requests-at-once* #:copy-from #:copy-into
            #:heartbeat #:*watchdog-limit* #:quiet-watchdog #:pause #:resume #:checkpoint #:restore #:grant-memory #:grant-vectors #:port-into #:grant-rights #:*rights* #:worlds #:inspect-world #:peek #:no-reply #:when-silent #:port-give))
 (in-package #:darterfly/worlds)
 
@@ -94,6 +94,22 @@
       (with-octets (os out)
         (let ((n (machdep 42 port bs (length buffer) os (round (* timeout 1000000)))))
           (values n (aref out 0) (aref out 2)))))))
+
+(defparameter *requests-at-once* 64)
+
+(defun dispatcher (&optional (limit *requests-at-once*))
+  (sb-thread:make-semaphore :count limit))
+
+(defun dispatch (slots name work)
+  (sb-thread:wait-on-semaphore slots)
+  (handler-case
+      (sb-thread:make-thread (lambda ()
+                               (unwind-protect (funcall work)
+                                 (sb-thread:signal-semaphore slots)))
+                             :name name)
+    (error (e)
+      (sb-thread:signal-semaphore slots)
+      (error e))))
 
 (defun copy-from (token there here size) (machdep 49 token there size here))
 
