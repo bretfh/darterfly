@@ -2032,6 +2032,31 @@
                  (is (search "STOPPED 0" left) "a job whose start fails leaves no world running: ~a" left)))
           (image:finish c 5))))))
 
+(test a-disk-that-fails-to-flush-stops-a-shutdown
+  (let ((c (image:bare-console)))
+    (labels ((ask (form &optional (timeout 120))
+               (image:send c form)
+               (image:expect c (format nil "~%* ") :timeout timeout))
+             (answer (form &optional (timeout 120))
+               (image:send c (format nil "(format t \"~~&[[R ~~a]]~~%\" (substitute #\\_ #\\Newline (princ-to-string ~a)))" form))
+               (image:expect c "[[R " :timeout timeout)
+               (prog1 (image:expect c "]]" :timeout 10)
+                 (image:expect c (format nil "~%* ") :timeout 30))))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 90)
+             (ask "(progn (darterfly/devices:start-devices) t)" 120)
+             (ask "(defclass cl-user::dead-disk (darterfly/devices:block-device) ())")
+             (ask "(defmethod darterfly/devices::flush-blocks ((d cl-user::dead-disk)) (error \"the disk stopped answering\"))")
+             (ask "(progn (defparameter cl-user::*dead* (make-instance 'darterfly/devices:media :name \"dead\" :device (make-instance 'cl-user::dead-disk :name \"dead disk\") :base 0)) (darterfly/devices:set-property cl-user::*dead* \"Whole\" t) (darterfly/devices::attach cl-user::*dead* darterfly/devices:*registry-root*) t)")
+             (let ((flushed (answer "(handler-case (progn (darterfly/power:flush-disks) :flushed) (darterfly/power:flush-failed (e) (princ-to-string e)))")))
+               (is (search "stopped answering" flushed) "a failed flush is reported, not swallowed: ~a" flushed))
+             (let ((refused (answer "(handler-case (progn (darterfly/power:shut-down) :off) (error (e) (princ-to-string e)))")))
+               (is (search "flushing the disks failed" refused) "a shutdown after a failed flush refuses instead of powering off: ~a" refused))
+             (is (search "[3]" (answer "(format nil \"[~a]\" (+ 1 2))")) "and the machine is still here")
+             (ask "(darterfly/devices::detach cl-user::*dead*)"))
+        (image:finish c 5)))))
+
 (test a-world-uses-the-network
   (let ((disk (merge-pathnames "world-net.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists disk)

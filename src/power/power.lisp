@@ -1,15 +1,26 @@
 (defpackage #:darterfly/power
   (:use #:cl)
-  (:export #:flush-disks #:restart #:shut-down #:suspend #:restart-soon #:save-system #:*save-system*
+  (:export #:flush-disks #:flush-failed #:restart #:shut-down #:suspend #:restart-soon #:save-system #:*save-system*
            #:note-activity #:dim-when-idle #:*dim-after* #:*dim-to*)
   (:shadow #:restart))
 (in-package #:darterfly/power)
 
+(define-condition flush-failed (error)
+  ((failures :initarg :failures :reader flush-failures))
+  (:report (lambda (c s)
+             (format s "flushing the disks failed: ~{~a~^; ~}" (flush-failures c)))))
+
 (defun flush-disks ()
-  (darterfly/vfs:vfs-sync)
-  (dolist (m (darterfly/devices:find-entries 'darterfly/devices:media))
-    (when (darterfly/devices:get-property m "Whole")
-      (ignore-errors (darterfly/devices:media-flush m)))))
+  (let ((failures nil))
+    (handler-case (darterfly/vfs:vfs-sync)
+      (error (e) (push (format nil "sync: ~a" e) failures)))
+    (dolist (m (darterfly/devices:find-entries 'darterfly/devices:media))
+      (when (darterfly/devices:get-property m "Whole")
+        (handler-case (darterfly/devices:media-flush m)
+          (error (e) (push (format nil "~a: ~a" (darterfly/devices:entry-name m) e) failures)))))
+    (when failures
+      (error 'flush-failed :failures (nreverse failures)))
+    t))
 
 (defvar *save-system* nil)
 
