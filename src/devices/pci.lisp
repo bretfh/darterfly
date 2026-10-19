@@ -158,10 +158,18 @@
 
 (defun pci-location (d) (format nil "~x:~x.~x" (pci-bus d) (pci-device d) (pci-function d)))
 
-(defun reserved-p (d)
+(defvar *reservations* nil)
+
+(defun pci-class (d) (ash (config-read-32 d 8) -8))
+
+(defun reserved-by-boot-p (d)
   (let ((reserve (boot-arg "reserve")))
     (and (stringp reserve)
          (member (pci-location d) (uiop:split-string reserve :separator ",") :test #'string-equal))))
+
+(defun reserved-p (d)
+  (or (reserved-by-boot-p d)
+      (some (lambda (reserves) (funcall reserves d)) *reservations*)))
 
 (defvar *bsd-units* 0)
 (defvar *interface-units* 0)

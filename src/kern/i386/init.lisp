@@ -209,6 +209,7 @@
   (cpu-data-set-gs (cpu-datap 0))
   (funnel-lock)
   (setf |platform_boot_args| args)
+  (log-start)
   (serial-init)
   (kprintf "darterfly Kernel Version 0.1: %s; root:darterfly/RELEASE_X86_64
 " (build-date))
@@ -235,7 +236,15 @@
   (kprintf "mp_desc: gdt, idt and ktss loaded
 ")
   (vm-page-bootstrap args)
-  (pmap-bootstrap args)
+  (let ((kept (mem :u64 (+ args +keep-start+)))
+        (kept-size (mem :u64 (+ args +keep-size+))))
+    (pmap-bootstrap args)
+    (when (and kept (the :u32 (log-keep (+ kept +physmap-base+) kept-size)))
+      (if (the :u32 (log-previous-found))
+          (kprintf "log: kept at 0x%lx; the last boot left %lu bytes unread
+" kept (log-previous-read 0 0))
+          (kprintf "log: kept at 0x%lx; nothing kept from the last boot
+" kept))))
   (console-init)
   (kalloc-init)
   (kprintf "vm: %lu MB free

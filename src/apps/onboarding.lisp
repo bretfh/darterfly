@@ -50,7 +50,7 @@
 
 (defun launch-app (name)
   (let ((path (format nil "/System/Applications/~a.app/Contents/Programs/~a" name name)))
-    (bsd:posix-spawn path (list name) nil)))
+    (open-application path)))
 
 ;; The same layout and keyboard behavior serve live welcome, installation and setup.
 (defclass journey-page (kit:view)

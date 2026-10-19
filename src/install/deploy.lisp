@@ -57,9 +57,11 @@
                             (incf kept))))))
       (sb-bsd-sockets:socket-close socket))
     (flush-disks)
-    (setf *written* (loop for path in written
-                          when (uiop:string-suffix-p path ".lisp")
-                            collect (concatenate 'string "/" path)))
+    (setf *written* (union *written*
+                           (loop for path in written
+                                 when (uiop:string-suffix-p path ".lisp")
+                                   collect (concatenate 'string "/" path))
+                           :test #'string=))
     (list :written (length written) :unchanged kept)))
 
 
@@ -90,6 +92,33 @@
                         (if (stringp (first slots)) (rest slots) slots))))
       (append (and (consp include) (struct-slot-names (second include))) own))))
 
+(defun kernel-constant-p (name)
+  (eq (symbol-package name) (find-package "DARTERFLY/KERN")))
+
+(defun take-kernel-constant (condition)
+  (when (and (typep condition 'sb-ext:defconstant-uneql)
+             (kernel-constant-p (cell-error-name condition)))
+    (continue condition)))
+
+(defun only-read-p (symbol)
+  (not (or (boundp symbol)
+           (fboundp symbol)
+           (symbol-plist symbol)
+           (find-class symbol nil))))
+
+(defun take-exported-symbol (condition)
+  (when (and (typep condition 'sb-ext:name-conflict)
+             (eq (sb-ext:name-conflict-function condition) 'export)
+             (let ((incoming (let ((datum (sb-ext:name-conflict-datum condition)))
+                               (if (listp datum) datum (list datum)))))
+               (every (lambda (symbol)
+                        (or (member symbol incoming)
+                            (only-read-p symbol)))
+                      (sb-ext:name-conflict-symbols condition))))
+    (let ((take (find 'sb-impl::take-new (compute-restarts condition) :key #'restart-name)))
+      (when take
+        (invoke-restart take)))))
+
 (defun form-hazard (form)
   (when (consp form)
     (case (first form)
@@ -107,7 +136,8 @@
            (format nil "~s is a struct in the running world; a class can't take its name live" (second form)))))
       (defconstant
        (let ((name (second form)) (value (third form)))
-         (when (and (symbolp name) (boundp name) (constantp name) (constantp value))
+         (when (and (symbolp name) (boundp name) (constantp name) (constantp value)
+                    (not (kernel-constant-p name)))
            (let ((new (ignore-errors (eval value))))
              (unless (equalp new (symbol-value name))
                (format nil "the constant ~s changes from ~s to ~s" name (symbol-value name) new)))))))))
@@ -147,12 +177,15 @@
       (return-from reload-systems (list :refused hazards))))
   (let ((t0 (get-internal-real-time))
         (problems nil))
-    (handler-bind ((warning (lambda (w)
+    (handler-bind ((error #'take-kernel-constant)
+                   (sb-ext:name-conflict #'take-exported-symbol)
+                   (warning (lambda (w)
                               (unless (typep w 'style-warning) (push (princ-to-string w) problems))
                               (muffle-warning w))))
       (unwind-protect
            (progn (setf darterfly/bsd::*reloading* t)
-                  (asdf:load-system :darterfly))
+                  (asdf:load-system :darterfly)
+                  (setf *written* nil))
         (setf darterfly/bsd::*reloaded* (get-internal-real-time)
               darterfly/bsd::*reloading* nil)))
     (list :seconds (/ (round (- (get-internal-real-time) t0) 100000) 10.0) :warnings (reverse problems))))

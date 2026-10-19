@@ -11,10 +11,10 @@
         r)))
 
 (define-low __machdep5 (n a b c d e)
-  (trap #x82 n a b c d e))
+  (trap-errno #x82 n a b c d e))
 
 (define-low __machdep (n a b)
-  (trap #x82 n a b 0 0 0))
+  (trap-errno #x82 n a b 0 0 0))
 
 (defun libsa-object ()
   ;; Generate the provider from the same Low definitions being linked. DSOs

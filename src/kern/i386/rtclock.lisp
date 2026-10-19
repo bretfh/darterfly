@@ -59,7 +59,10 @@
 " (truncate (ref commpage 0) 1000000) (ref commpage 2)))
 
 (define-low panic (format &va ap)
-  (kprintf "panic(cpu 0 caller 0x%lx): " (return-address))
+  (kprintf "
+panic(cpu 0 caller 0x%lx): " (return-address))
   (vkprintf format ap)
   (when (the :u32 (|platform_parse_boot_arg| "halt")) (|platform_halt|))
-  (while 1 (cli) (hlt)))
+  (kprintf "panic: restarting the machine
+")
+  (machine-reset))

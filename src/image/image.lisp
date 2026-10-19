@@ -2,7 +2,7 @@
   (:use #:cl)
   (:export #:write-cpio #:*build*
    #:console #:expect #:send #:transcript #:finish #:screendump #:pixel #:monitor #:pointer #:qmp #:send-keys
-   #:boot-efi #:kernel-file #:esp #:bare-console #:bare-boot #:send-char #:*screen-size* #:update-root #:desktop #:copy-in #:build-sbcl #:*c-compiler* #:build-tcc #:*input-devices* #:*network-device* #:*extra-qemu* #:usb-image #:deploy #:push-generation #:bench))
+   #:boot-efi #:kernel-file #:esp #:bare-console #:bare-boot #:send-char #:*screen-size* #:update-root #:desktop #:copy-in #:build-sbcl #:*c-compiler* #:build-tcc #:*input-devices* #:*network-device* #:*extra-qemu* #:usb-image #:deploy #:push-generation #:bench #:device-log #:hw))
 (in-package #:darterfly/image)
 
 (defvar *build* (asdf:system-relative-pathname :darterfly "build/"))
@@ -138,7 +138,7 @@
 (defun key-name (char)
   (case char
     (#\( "9") (#\) "0") (#\+ "equal") (#\* "8") (#\" "apostrophe") (#\Space "spc")
-    (#\Newline "ret") (#\- "minus") (#\= "equal") (#\. "dot") (#\/ "slash")
+    (#\Newline "ret") (#\Escape "esc") (#\- "minus") (#\= "equal") (#\. "dot") (#\/ "slash")
     (#\: "semicolon") (#\; "semicolon") (#\' "apostrophe") (#\, "comma") (#\< "comma") (#\> "dot")
     (#\[ "bracket_left") (#\] "bracket_right") (#\{ "bracket_left") (#\} "bracket_right")
     (#\\ "backslash") (#\| "backslash") (#\` "grave_accent") (#\~ "grave_accent")

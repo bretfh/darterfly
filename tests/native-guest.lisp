@@ -137,10 +137,10 @@
     (darterfly/worlds::with-octets (s stack)
       (flet ((cycle ()
                (let ((w (darterfly/worlds::machdep
-                         69 f (length file) s (length stack))))
+                         80 f (length file) s (length stack))))
                  (eql (ash 37 8)
                       (darterfly/worlds:wait-native w :timeout 5)))))
-        (dotimes (i 10) (cycle))
+        (dotimes (i 140) (cycle))
         (let* ((before (darterfly/worlds:free-pages))
                (ok (loop repeat 140 always (cycle)))
                (lost (- before (darterfly/worlds:free-pages))))

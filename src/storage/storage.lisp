@@ -1,6 +1,6 @@
 (defpackage #:darterfly/storage
   (:use #:cl)
-  (:export #:serve-disk #:op #:serve-port #:remote-vnode #:mount-remote #:sync-remote #:start-storage-world))
+  (:export #:serve-disk #:op #:serve-port #:remote-vnode #:mount-remote #:sync-remote #:start-storage-world #:mount-system-files))
 (in-package #:darterfly/storage)
 
 (defvar *volume* nil)
@@ -9,17 +9,8 @@
 
 (defun describe-vnode (v) (list (darterfly/vfs:vnode-id v) (darterfly/vfs:vnode-type v)))
 
-(defun attach-controller (ecam bus device function vector)
-  (setf darterfly/devices::*free-vectors* (list vector)
-        darterfly/devices:*registry-root* (make-instance 'darterfly/devices:entry :name "Root"))
-  (let* ((bridge (make-instance 'darterfly/devices::acpi-pci :ecam ecam))
-         (node (make-instance 'darterfly/devices:pci-node :bridge bridge :bus bus :device device :function function)))
-    (darterfly/devices::attach node darterfly/devices:*registry-root*)
-    (darterfly/devices::describe-pci-device node)
-    (darterfly/devices:register-service node)))
-
 (defun serve-disk (ecam bus device function vector)
-  (attach-controller ecam bus device function vector)
+  (darterfly/drivers:attach-controller ecam bus device function vector)
   (let ((media (first (darterfly/devices:find-entries 'darterfly/apfs::apfs-volume-media))))
     (unless media (error "no APFS volume on the granted disk"))
     (setf *volume* (darterfly/apfs::make-wvolume
@@ -53,24 +44,24 @@
 
 (defun errno-of (code) (or (car (rassoc code darterfly/vfs::+errno+)) :eio))
 
-(defun handle (request token)
+(defun handle (request token &key (vnode-of #'vnode-of) (handle-of #'darterfly/vfs:vnode-id) (cross #'identity))
   (let* ((op (aref +ops+ (u64 request 0)))
-         (v (vnode-of (u64 request 8)))
+         (v (funcall vnode-of (u64 request 8)))
          (a (u64 request 16)) (b (u64 request 24)) (c (u64 request 32))
          (n1 (u64 request 40)) (n2 (u64 request 48))
          (name1 (sb-ext:octets-to-string request :start 56 :end (+ 56 n1) :external-format :utf-8))
          (name2 (sb-ext:octets-to-string request :start (+ 56 n1) :end (+ 56 n1 n2) :external-format :utf-8)))
-    (flet ((node (x) (if x (octets 0 (darterfly/vfs:vnode-id x) (type-code (darterfly/vfs:vnode-type x))) (octets (- (ash 1 64) 2)))))
+    (flet ((node (x) (if x (octets 0 (funcall handle-of x) (type-code (darterfly/vfs:vnode-type x))) (octets (- (ash 1 64) 2)))))
       (handler-case
           (darterfly/vfs::with-vfs
             (ecase op
-              (:lookup (node (darterfly/vfs:vnop-lookup v name1)))
+              (:lookup (node (let ((x (darterfly/vfs:vnop-lookup v name1))) (and x (funcall cross x)))))
               (:readdir (let* ((entries (nthcdr a (darterfly/vfs:vnop-readdir v)))
                                (out (octets 0 0)) (n 0))
                           (loop :for (name . x) :in entries
                                 :for bytes := (utf8 name)
                                 :while (< (+ (length out) 24 (length bytes)) 60000)
-                                :do (setf out (octets out (darterfly/vfs:vnode-id x) (type-code (darterfly/vfs:vnode-type x)) (length bytes) bytes))
+                                :do (setf out (octets out (funcall handle-of x) (type-code (darterfly/vfs:vnode-type x)) (length bytes) bytes))
                                     (incf n))
                           (replace out (octets n) :start1 0)
                           out))
@@ -89,9 +80,9 @@
               (:create (node (darterfly/vfs:vnop-create v name1 a)))
               (:mkdir (node (darterfly/vfs:vnop-mkdir v name1 a)))
               (:symlink (node (darterfly/vfs:vnop-symlink v name1 name2)))
-              (:remove (darterfly/vfs:vnop-remove v name1 (vnode-of a)) (octets 0))
-              (:rmdir (darterfly/vfs:vnop-rmdir v name1 (vnode-of a)) (octets 0))
-              (:rename (darterfly/vfs:vnop-rename v name1 (vnode-of a) (vnode-of b) name2) (octets 0))
+              (:remove (darterfly/vfs:vnop-remove v name1 (funcall vnode-of a)) (octets 0))
+              (:rmdir (darterfly/vfs:vnop-rmdir v name1 (funcall vnode-of a)) (octets 0))
+              (:rename (darterfly/vfs:vnop-rename v name1 (funcall vnode-of a) (funcall vnode-of b) name2) (octets 0))
               (:setattr (darterfly/vfs:vnop-setattr v :mode (and (/= a 0) a) :uid (and (/= b (1- (ash 1 64))) b) :gid (and (/= c (1- (ash 1 64))) c))
                         (octets 0))
               (:truncate (darterfly/vfs:vnop-truncate v a) (octets 0))
@@ -187,17 +178,56 @@
 
 (defun start-storage-world (node core &key (name "storage"))
   (let* ((world (darterfly/run:start-world core (darterfly/run::world-argv "(loop (sleep 60))") :cwd "/" :disk t :attach t :name name))
-         (id (darterfly/run:world-id world))
-         (bridge (darterfly/devices::device-bridge node))
-         (ecam (darterfly/devices::bridge-ecam bridge))
-         (bus (darterfly/devices::pci-bus node)) (device (darterfly/devices::pci-device node)) (function (darterfly/devices::pci-function node))
-         (vector (darterfly/devices:allocate-vector)))
+         (id (darterfly/run:world-id world)))
     (loop :repeat 300 :until (ignore-errors (darterfly/run:world-eval world "t")) :do (sleep 0.1))
-    (darterfly/worlds:grant-memory id (+ ecam (ash bus 20)) (ash 1 20) :reserve)
-    (darterfly/worlds:grant-memory id (+ ecam (ash bus 20) (ash device 15) (ash function 12)) 4096)
-    (darterfly/worlds:grant-memory id (darterfly/devices::bar-address node 0) (darterfly/devices::bar-length node 0))
-    (darterfly/worlds:grant-vectors id vector)
-    (multiple-value-bind (theirs ours) (darterfly/worlds:port-into id)
-      (let ((root (eval-in world `(op :serve ,ecam ,bus ,device ,function ,vector))))
-        (eval-in world `(serve-port ,theirs))
-        (values world (list :port ours :id (first root)))))))
+    (destructuring-bind (&key ecam bus device function vector) (darterfly/drivers:grant-device id node)
+      (multiple-value-bind (theirs ours) (darterfly/worlds:port-into id)
+        (let ((root (eval-in world `(op :serve ,ecam ,bus ,device ,function ,vector))))
+          (eval-in world `(serve-port ,theirs))
+          (values world (list :port ours :id (first root))))))))
+
+(defclass exported ()
+  ((vnodes :initform (make-array 16 :adjustable t :fill-pointer 1) :reader exported-vnodes)
+   (handles :initform (make-hash-table :test 'eq) :reader exported-handles)
+   (lock :initform (sb-thread:make-mutex :name "exported files") :reader exported-lock)))
+
+(defun handle-of (exported vnode)
+  (sb-thread:with-mutex ((exported-lock exported))
+    (or (gethash vnode (exported-handles exported))
+        (setf (gethash vnode (exported-handles exported))
+              (vector-push-extend vnode (exported-vnodes exported))))))
+
+(defun exported-vnode (exported handle)
+  (sb-thread:with-mutex ((exported-lock exported))
+    (if (< 0 handle (fill-pointer (exported-vnodes exported)))
+        (aref (exported-vnodes exported) handle)
+        (darterfly/vfs:fail :ebadf))))
+
+(defvar *exports* (make-hash-table))
+(defvar *exports-lock* (sb-thread:make-mutex :name "exports"))
+
+(defun exported-to (world)
+  (sb-thread:with-mutex (*exports-lock*)
+    (or (gethash world *exports*)
+        (let ((exported (make-instance 'exported)))
+          (handle-of exported (darterfly/vfs:namei "/"))
+          (setf (gethash world *exports*) exported)))))
+
+(defun serve-files (world proc request token)
+  (declare (ignore proc))
+  (let ((exported (exported-to world)))
+    (handle request token
+            :vnode-of (lambda (handle) (exported-vnode exported handle))
+            :handle-of (lambda (vnode) (handle-of exported vnode))
+            :cross #'darterfly/vfs::cross)))
+
+(defun forget-exports (world)
+  (sb-thread:with-mutex (*exports-lock*)
+    (remhash world *exports*)))
+
+(darterfly/run:offer-service "files" #'serve-files :gone #'forget-exports)
+
+(defun mount-system-files ()
+  (darterfly/vfs:vfs-mount (make-instance 'remote-vnode :world 0 :port (darterfly/run:look-up "files") :id 1 :type :vdir) "/")
+  (darterfly/vfs:vfs-mount (darterfly/vfs::make-devfs) "/dev")
+  (darterfly/vfs:vfs-mount (darterfly/vfs::make-procfs) "/proc"))

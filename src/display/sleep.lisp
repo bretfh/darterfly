@@ -33,6 +33,11 @@
 (defvar *sleeping* nil)
 (defvar *wake-differences* nil)
 
+(pushnew 'forget-sleep sb-ext:*save-hooks*)
+
+(defun forget-sleep ()
+  (setf *saved* nil *saved-plan* nil *saved-psr* nil *sleeping* nil))
+
 (defun saved (offset) (cdr (assoc offset *saved*)))
 
 (defun put-back (offsets)

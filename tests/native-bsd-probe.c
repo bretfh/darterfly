@@ -174,15 +174,14 @@ int main(int argc, char **argv, char **envp) {
     if (eq(argv[1], "bad")) {
         unsigned long q[10] = {1, 999, 0, 0, 0, 0, 0, 0, 0, 0};
         long reply[3], denied;
-        /* Native services use negative errno; hardware services use carry.
-         * Neither family is callable directly by an isolated native world. */
-        for (long op = 65; op <= 73; ++op) {
-            unsigned char carry;
-            __asm__ volatile("int $0x82; setc %1"
-                             : "=a"(denied), "=qm"(carry)
-                             : "0"(op), "D"(0L), "S"(0L) : "memory", "cc");
-            CHECK(op < 69 ? (denied == EPERM && carry)
-                          : (denied == -EPERM && !carry), 75);
+        /* Hardware and supervisor-native calls require explicit rights. */
+        const long restricted[] = {65, 66, 67, 68, 80, 81, 82, 83, 85};
+        for (unsigned i = 0; i < sizeof restricted / sizeof restricted[0]; ++i) {
+            __asm__ volatile("int $0x82; jnc 1f; neg %%rax; 1:"
+                             : "=a"(denied)
+                             : "0"(restricted[i]), "D"(0L), "S"(0L)
+                             : "memory", "cc");
+            CHECK(denied == -EPERM, 75);
         }
         CHECK(native_call(1, q, 7, reply, 24) == 24 && reply[0] == -22, 70);
         CHECK(native_call(1, q, 72, reply, 24) == 24 && reply[0] == -38, 71);

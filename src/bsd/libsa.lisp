@@ -281,7 +281,7 @@
       (fail :einval))
     (let ((source (vfs::promote-shared-data node)))
       (handler-case
-          (darterfly/worlds::machdep 72 token dst
+          (darterfly/worlds::machdep 83 token dst
             (+ (sb-sys:sap-int source) offset) (* 4096 (ceiling len 4096))
             (logior prot (if (= access 2) 0 #x100)))
         (darterfly/worlds:world-error (e)

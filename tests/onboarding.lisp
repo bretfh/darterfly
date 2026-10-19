@@ -38,17 +38,22 @@
     (is (not (getf darterfly/apps::*desktop-preferences* :complete)))))
 
 (test fresh-install-does-not-inherit-completed-setup
-  (let* ((prefs "Users/darterfly/Library/Preferences/desktop.sexp")
-         (root (darterfly/install::first-start-entries
-                (list (list :dir "Library") (list :dir "Library/Settings")
-                      (list :file "Library/Settings/setup-pending" #(9))
-                      (list :file prefs #(1)) (list :file (concatenate 'string prefs ".new") #(2))
-                      (list :file "Users/darterfly/document" #(3))))))
-    (is (= 1 (count "Library/Settings/setup-pending" root :key #'second :test #'string=)))
-    (is (= 1 (count "Library/Settings" root :key #'second :test #'string=)))
-    (is (not (find prefs root :key #'second :test #'string=)))
-    (is (not (find (concatenate 'string prefs ".new") root :key #'second :test #'string=)))
-    (is (not (null (find "Users/darterfly/document" root :key #'second :test #'string=))))))
+  (let ((darterfly/vfs:*root* nil)
+        (darterfly/vfs:*mounts* nil)
+        (prefs "Users/darterfly/Library/Preferences/desktop.sexp"))
+    (darterfly/vfs:vfs-mount (darterfly/vfs:make-ram-node :vdir #o755) "/")
+    (dolist (dir '("/src" "/src/Library" "/src/Library/Settings" "/src/Users" "/src/Users/darterfly"
+                   "/src/Users/darterfly/Library" "/src/Users/darterfly/Library/Preferences" "/dst"))
+      (darterfly/vfs:vfs-mkdir dir #o755))
+    (dolist (file (list "Library/Settings/setup-pending" prefs (concatenate 'string prefs ".new") "Users/darterfly/document"))
+      (put-file (concatenate 'string "/src/" file) "x"))
+    (darterfly/install::copy-system "/src" "/dst")
+    (flet ((there (rel) (and (darterfly/vfs::lookup-or-nil (concatenate 'string "/dst/" rel)) t)))
+      (is (not (there "Library/Settings/setup-pending")) "the setup marker is written by the installer, not copied")
+      (is (there "Library/Settings"))
+      (is (not (there prefs)) "the installing desktop's finished setup stays behind")
+      (is (not (there (concatenate 'string prefs ".new"))))
+      (is (there "Users/darterfly/document") "the user's own files come along"))))
 
 (test journey-keyboard-actions
   (let ((page (make-instance 'darterfly/apps::journey-page)) (chosen nil))

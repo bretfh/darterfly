@@ -23,6 +23,32 @@
   (is (search "a struct can't take its name" (first (hazards-of "(defstruct reload-class x)"))))
   (is (search "changes from 3 to 4" (first (hazards-of "(defconstant +reload-constant+ 4)")))))
 
+(test a-kernel-layout-constant-goes-through-a-deploy
+  (let ((name (intern "+DEPLOY-PROBE+" "DARTERFLY/KERN")))
+    (unless (boundp name) (eval `(defconstant ,name 1)))
+    (is (null (darterfly/install::form-hazard `(defconstant ,name 2))) "the new kernel comes with it, so it isn't a hazard")
+    (handler-bind ((error #'darterfly/install::take-kernel-constant))
+      (eval `(defconstant ,name 2)))
+    (is (= 2 (symbol-value name)) "and the reload takes the new value")
+    (eval `(handler-bind ((error #'darterfly/install::take-kernel-constant)) (defconstant ,name 1)))))
+
+(test a-symbol-a-deploy-only-read-gives-way-to-a-new-export
+  (let ((from (or (find-package "DEPLOY-PROBE-FROM") (make-package "DEPLOY-PROBE-FROM" :use '(:cl))))
+        (to (or (find-package "DEPLOY-PROBE-TO") (make-package "DEPLOY-PROBE-TO" :use '(:cl)))))
+    (use-package from to)
+    (intern "READ-ONLY" to)
+    (let ((used (intern "USED" to)))
+      (setf (symbol-function used) (lambda () t)))
+    (handler-bind ((sb-ext:name-conflict #'darterfly/install::take-exported-symbol))
+      (export (intern "READ-ONLY" from) from))
+    (is (eq (find-symbol "READ-ONLY" to) (find-symbol "READ-ONLY" from)) "a symbol the hazard check only read gives way")
+    (is (eq :refused (handler-case (handler-bind ((sb-ext:name-conflict #'darterfly/install::take-exported-symbol))
+                                     (export (intern "USED" from) from))
+                       (sb-ext:name-conflict () :refused)))
+        "one with a definition is left for a person")
+    (delete-package to)
+    (delete-package from)))
+
 (test forms-typed-since-the-last-save-are-kept-and-replayable
   (let ((darterfly/journal:*journal* (namestring (merge-pathnames "forms" (scratch)))))
     (uiop:delete-file-if-exists darterfly/journal:*journal*)

@@ -389,4 +389,6 @@
 (pushnew 'forget-interface sb-ext:*save-hooks*)
 
 (defun forget-interface ()
-  (setf *interface* nil *tcp-timer* nil))
+  (clrhash *connections*)
+  (clrhash *listeners*)
+  (setf *interface* nil *tcp-timer* nil *acks-due* nil))

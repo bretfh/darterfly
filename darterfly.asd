@@ -9,7 +9,7 @@
   :depends-on (#:darterfly/mach #:darterfly/net #:darterfly/vfs #:darterfly/worlds)
   :serial t
   :pathname "src/bsd/"
-  :components ((:file "errno") (:file "proc") (:file "file") (:file "socket") (:file "vfs") (:file "local-socket") (:file "ancillary") (:file "poll") (:file "stdio") (:file "exec") (:file "libsa") (:file "native")))
+  :components ((:file "errno") (:file "proc") (:file "file") (:file "socket") (:file "vfs") (:file "local-socket") (:file "ancillary") (:file "poll") (:file "stdio") (:file "stopped") (:file "exec") (:file "libsa") (:file "native")))
 
 (asdf:defsystem #:darterfly/init
   :description "init and service"
@@ -93,7 +93,7 @@
   :depends-on (#:darterfly/layer #:darterfly/server #:darterfly/bsd #:darterfly/text #:darterfly/imageio #:darterfly/kit #:darterfly/edit #:darterfly/install #:darterfly/generation #:darterfly/devices #:darterfly/net #:darterfly/wifi #:darterfly/display #:darterfly/audio #:darterfly/journal #:darterfly/worlds #:darterfly/storage)
   :serial t
   :pathname "src/apps/"
-  :components ((:file "hello") (:file "terminal") (:file "listener") (:file "forcequit") (:file "editor") (:file "generations") (:file "onboarding") (:file "session") (:file "fetch") (:file "install") (:file "ocicl")))
+  :components ((:file "hello") (:file "open") (:file "terminal") (:file "listener") (:file "forcequit") (:file "editor") (:file "generations") (:file "onboarding") (:file "session") (:file "fetch") (:file "install") (:file "ocicl")))
 
 (asdf:defsystem #:darterfly/devices
   :description "Devices: the registry, PCI and drivers"
@@ -129,9 +129,15 @@
   :pathname "src/display/"
   :components ((:file "dmc") (:file "power") (:file "aux") (:file "vbt") (:file "edid") (:file "psr") (:file "state") (:file "modeset") (:file "surface") (:file "events") (:file "sleep")))
 
+(asdf:defsystem #:darterfly/drivers
+  :description "Devices driven in their own world"
+  :depends-on (#:darterfly/devices #:darterfly/worlds #:darterfly/run #:darterfly/init #:darterfly/net)
+  :pathname "src/drivers/"
+  :components ((:file "drivers")))
+
 (asdf:defsystem #:darterfly/storage
   :description "Disks served by a world"
-  :depends-on (#:darterfly/vfs #:darterfly/apfs #:darterfly/devices #:darterfly/worlds #:darterfly/run)
+  :depends-on (#:darterfly/vfs #:darterfly/apfs #:darterfly/devices #:darterfly/worlds #:darterfly/run #:darterfly/drivers)
   :pathname "src/storage/"
   :components ((:file "storage")))
 
@@ -147,6 +153,27 @@
   :serial t
   :pathname "src/journal/"
   :components ((:file "journal")))
+
+(asdf:defsystem #:darterfly/log
+  :description "System log"
+  :depends-on (#:uiop)
+  :serial t
+  :pathname "src/log/"
+  :components ((:file "log")))
+
+(asdf:defsystem #:darterfly/health
+  :description "Health checks"
+  :depends-on (#:darterfly/log #:darterfly/bsd #:darterfly/net #:darterfly/wifi #:darterfly/display #:darterfly/devices #:darterfly/audio)
+  :serial t
+  :pathname "src/health/"
+  :components ((:file "health")))
+
+(asdf:defsystem #:darterfly/start
+  :description "Boot"
+  :depends-on (#:uiop #:darterfly/log #:darterfly/vfs #:darterfly/bsd #:darterfly/apfs #:darterfly/run #:darterfly/install #:darterfly/devices #:darterfly/display #:darterfly/audio #:darterfly/generation #:darterfly/net #:darterfly/wifi #:darterfly/nrepl #:darterfly/kernel #:darterfly/health #:darterfly/storage #:darterfly/drivers)
+  :serial t
+  :pathname "src/start/"
+  :components ((:file "start")))
 
 (asdf:defsystem #:darterfly/nrepl
   :description "Remote eval"
@@ -283,7 +310,7 @@
   :depends-on (#:uiop #:darterfly/qmp #:darterfly/io #:darterfly/apfs #:darterfly/fat #:darterfly/gpt #:darterfly/install #:darterfly/cc #:darterfly/build #:darterfly/platform #:darterfly/kern #:darterfly/low #:darterfly/boot #:darterfly/link (:require #:sb-bsd-sockets))
   :serial t
   :pathname "src/image/"
-  :components ((:file "image") (:file "tcc") (:file "runtime") (:file "efi") (:file "deploy") (:file "bench")))
+  :components ((:file "image") (:file "tcc") (:file "runtime") (:file "efi") (:file "deploy") (:file "bench") (:file "hw")))
 
 (asdf:defsystem #:darterfly/server
   :description "The window server"
@@ -293,10 +320,10 @@
 
 (asdf:defsystem #:darterfly/layer
   :description "Layers and their commits"
-  :depends-on (#:darterfly/mach #:darterfly/bsd #:darterfly/init #:darterfly/server)
+  :depends-on (#:darterfly/mach #:darterfly/bsd #:darterfly/init #:darterfly/server #:darterfly/run #:darterfly/worlds)
   :serial t
   :pathname "src/layer/"
-  :components ((:file "client")))
+  :components ((:file "client") (:file "world")))
 
 (asdf:defsystem #:darterfly/qmp
   :description "QEMU's machine protocol"
@@ -307,7 +334,7 @@
 
 (asdf:defsystem #:darterfly
   :description "A live, hackable OS on SBCL"
-  :depends-on (#:darterfly/mach #:darterfly/server #:darterfly/layer #:darterfly/bsd #:darterfly/init #:darterfly/shell #:darterfly/io #:darterfly/text #:darterfly/edit #:darterfly/imageio #:darterfly/kit #:darterfly/stats #:darterfly/windowserver #:darterfly/bench #:darterfly/apps #:darterfly/devices #:darterfly/vfs #:darterfly/apfs #:darterfly/fat #:darterfly/install #:darterfly/net #:darterfly/nrepl #:darterfly/run #:darterfly/generation #:darterfly/kernel #:darterfly/image #:darterfly/crypto #:darterfly/wifi #:darterfly/journal #:darterfly/worlds #:darterfly/storage)
+  :depends-on (#:darterfly/mach #:darterfly/server #:darterfly/layer #:darterfly/bsd #:darterfly/init #:darterfly/shell #:darterfly/io #:darterfly/text #:darterfly/edit #:darterfly/imageio #:darterfly/kit #:darterfly/stats #:darterfly/windowserver #:darterfly/bench #:darterfly/apps #:darterfly/devices #:darterfly/vfs #:darterfly/apfs #:darterfly/fat #:darterfly/install #:darterfly/net #:darterfly/nrepl #:darterfly/run #:darterfly/generation #:darterfly/kernel #:darterfly/image #:darterfly/crypto #:darterfly/wifi #:darterfly/journal #:darterfly/worlds #:darterfly/storage #:darterfly/log #:darterfly/start #:darterfly/health #:darterfly/drivers)
   :in-order-to ((asdf:test-op (asdf:test-op #:darterfly/test))))
 
 (asdf:defsystem #:darterfly/test

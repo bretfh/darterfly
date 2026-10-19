@@ -119,6 +119,10 @@
                   (t (error e)))))))
         (fail (if denied :eacces :enoent)))))
 
+(defun run-program (name &optional (argv (list name)) envp)
+  (let ((program (or (gethash name *programs*) (fail :enoent))))
+    (fork (lambda () (exec-program name argv envp program)))))
+
 (defun posix-spawn (name argv envp &key file-actions search-path native-only native-signals cloexec-default)
   (let ((program nil) (resolved name))
     (fork (lambda () (exec-program resolved argv envp program))
@@ -223,6 +227,10 @@
     (ignore-errors
      (format *error-output* "~&~a: ~a~%" (sb-thread:thread-name sb-thread:*current-thread*) condition)
      (sb-debug:print-backtrace :stream *error-output* :count 15))
+    (let ((held (system-locks-held)))
+      (if held
+          (format *error-output* "~&not stopped, it holds ~{~a~^, ~}~%" held)
+          (stop-here condition)))
     (abort)))
 
 (sb-ext:without-package-locks
