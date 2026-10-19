@@ -227,7 +227,7 @@
   (let ((world (run:start-world core (run::world-argv "(loop (sleep 60))") :cwd "/" :disk t :attach t :name name)))
     (values world (attach-network-world world node))))
 
-(defparameter *in-own-world* (list (cons #x020000 'attach-network-world)))
+(defvar *in-own-world* (list (cons #x020000 'attach-network-world)))
 
 (defparameter *driver-memory* 256)
 
