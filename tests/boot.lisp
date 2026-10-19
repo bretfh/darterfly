@@ -672,6 +672,13 @@
                 (return seen)))
             (sleep 1)))
 
+(defun close-first-boot-app (c name)
+  (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
+    (let ((owner (format nil "(let ((p (find ~s (darterfly/bsd:procs) :key (function darterfly/bsd::proc-comm) :test (function equal)))) (and p (let ((w (darterfly/windowserver::key-window))) (and w (eql (darterfly/bsd:proc-pid p) (ignore-errors (darterfly/windowserver::pid (darterfly/windowserver::context-client (darterfly/windowserver::window-context w))))))) :key))" name)))
+      (when (search ":KEY" (ask (format nil "(loop :repeat 900 :until ~a :do (sleep 0.1) :finally (return ~a))" owner owner)))
+        (image:send-keys (string #\Escape))
+        (ask (format nil "(loop :repeat 300 :while (find ~s (darterfly/bsd:procs) :key (function darterfly/bsd::proc-comm) :test (function equal)) :do (sleep 0.1) :finally (return :closed))" name))))))
+
 (defun settled (c)
   (image:send c ":sync")
   (image:expect c ":SYNC" :timeout 120)
@@ -2474,6 +2481,7 @@
                  "nrepl starts at boot from the key in the boot args")
              (let ((screen (screen-until (lambda (s) (= #xff2e5c8f (image:pixel s 5 300))) 60)))
                (is (= #xff2e5c8f (image:pixel screen 5 300)) "the desktop is on the screen ~x" (image:pixel screen 5 300)))
+             (is (search ":CLOSED" (close-first-boot-app c "Install")) "the stick opens the installer")
              (ask "(darterfly/bsd:posix-spawn \"/System/Applications/Utilities/Terminal.app/Contents/Programs/Terminal\" (list \"Terminal\") nil)")
              (let ((screen (screen-until (lambda (s) (= #xffffffff (image:pixel s 500 300))) 30)))
                (is (= #xffffffff (image:pixel screen 500 300)) "the terminal opens ~x" (image:pixel screen 500 300)))
@@ -2882,6 +2890,7 @@
              (progn
                (is (image:expect c "init: pid 1" :timeout 120))
                (ask "(progn (loop :repeat 100 :until darterfly/nrepl::*thread* :do (sleep 0.1)) :ready)")
+               (is (search ":CLOSED" (close-first-boot-app c "Setup")) "a fresh install opens setup")
                (ask "(with-open-file (s \"/Users/darterfly/kept\" :direction :output :if-exists :supersede) (write-line \"kept\" s))")
                (ask "(darterfly/shell:spawn \"/System/Applications/Listener.app/Contents/Programs/Listener\")")
                (screen-until (lambda (s) (= #xffffffff (image:pixel s 500 300))))

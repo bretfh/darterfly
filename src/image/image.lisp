@@ -138,7 +138,7 @@
 (defun key-name (char)
   (case char
     (#\( "9") (#\) "0") (#\+ "equal") (#\* "8") (#\" "apostrophe") (#\Space "spc")
-    (#\Newline "ret") (#\- "minus") (#\= "equal") (#\. "dot") (#\/ "slash")
+    (#\Newline "ret") (#\Escape "esc") (#\- "minus") (#\= "equal") (#\. "dot") (#\/ "slash")
     (#\: "semicolon") (#\; "semicolon") (#\' "apostrophe") (#\, "comma") (#\< "comma") (#\> "dot")
     (#\[ "bracket_left") (#\] "bracket_right") (#\{ "bracket_left") (#\} "bracket_right")
     (#\\ "backslash") (#\| "backslash") (#\` "grave_accent") (#\~ "grave_accent")
