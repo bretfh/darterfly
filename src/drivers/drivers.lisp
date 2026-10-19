@@ -128,9 +128,17 @@
                (octets length))))
           (t (octets 0)))))
 
+(defparameter *appear-within* 30)
+
+(defun appeared (class)
+  (loop :repeat (* 10 *appear-within*)
+        :for found := (first (devices:find-entries class))
+        :when found :return found
+        :do (sleep 0.1)))
+
 (defun serve-network (port &key ecam bus device function vector)
   (attach-controller ecam bus device function vector)
-  (setf *nic* (or (first (devices:find-entries 'devices:ethernet-controller))
+  (setf *nic* (or (appeared 'devices:ethernet-controller)
                   (error "no network controller on the granted device")))
   (serve-requests port #'handle-network :name "network")
   (coerce (devices:network-mac *nic*) 'list))

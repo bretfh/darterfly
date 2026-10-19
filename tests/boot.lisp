@@ -1909,9 +1909,8 @@
                  (is (equal before left) "and removing the job takes its windows: ~a" left))))
         (image:finish c 5)))))
 
-(test the-network-driver-runs-in-its-own-world
-  (let ((image::*network-device* "virtio-net-pci,netdev=net0,romfile=,addr=0xa"))
-    (let ((c (image:bare-console :boot-args "reserve=0:a.0")))
+(defun network-world-check (location)
+  (let ((c (image:bare-console :boot-args (format nil "reserve=~a" location))))
       (labels ((ask (form &optional (timeout 120))
                  (image:send c form)
                  (image:expect c (format nil "~%* ") :timeout timeout))
@@ -1925,7 +1924,7 @@
         (unwind-protect
              (progn
                (image:expect c "* " :timeout 90)
-               (ask "(progn (darterfly/devices:start-devices) (darterfly/install::esp) (defparameter *node* (find-if (lambda (d) (string-equal (darterfly/devices::pci-location d) \"0:a.0\")) (darterfly/devices:find-entries 'darterfly/devices:pci-node))) (darterfly/net:start-network) t)" 120)
+               (ask (format nil "(progn (darterfly/devices:start-devices) (darterfly/install::esp) (defparameter *node* (find-if (lambda (d) (string-equal (darterfly/devices::pci-location d) ~s)) (darterfly/devices:find-entries 'darterfly/devices:pci-node))) (darterfly/net:start-network) t)" location) 120)
                (is (search "NIL" (answer "(darterfly/devices:entry-children *node*)")) "the system leaves the network controller to a driver world")
                (ask "(defparameter *driver* (darterfly/drivers:start-network-world *node* \"/Volumes/EFI/EFI/darterfly/gen-1/darterfly.core\"))" 300)
                (let ((first (reaches)))
@@ -1937,7 +1936,16 @@
                (ask "(defparameter *driver* (darterfly/drivers:start-network-world *node* \"/Volumes/EFI/EFI/darterfly/gen-1/darterfly.core\"))" 300)
                (let ((again (reaches)))
                  (is (and (search "RTT " again) (not (search "RTT NIL" again))) "a new driver world brings the network back: ~a" again)))
-          (image:finish c 5))))))
+          (image:finish c 5)))))
+
+(test the-network-driver-runs-in-its-own-world
+  (let ((image::*network-device* "virtio-net-pci,netdev=net0,romfile=,addr=0xa"))
+    (network-world-check "0:a.0")))
+
+(test the-usb-network-runs-in-its-own-world
+  (let ((image:*input-devices* '("qemu-xhci,id=xhci,addr=0xb" "virtio-keyboard-pci" "virtio-tablet-pci"))
+        (image:*network-device* "usb-net,netdev=net0,bus=xhci.0"))
+    (network-world-check "0:b.0")))
 
 (test a-world-uses-the-network
   (let ((disk (merge-pathnames "world-net.img" (darterfly-file "build/"))))
