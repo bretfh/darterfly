@@ -488,8 +488,9 @@
           ((<= now (+ at (* 2 limit)))
            0)
           ((= w (world-0))
-           (setf (mem :u64 (+ w +w-beat-limit+)) 0)
-           (want-world-0-restart "still silent"))
+           (kprintf "watchdog: world 0 is still silent; restarting the machine
+")
+           (machine-reset))
           (t
            (kprintf "watchdog: world %lu is still silent; stopping it
 " id)
