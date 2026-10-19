@@ -1,0 +1,796 @@
+[2J[01;01H[=3h[2J[01;01H[2J[01;01H[=3h[2J[01;01H[2J[01;01H[=3h[2J[01;01HBdsDxe: loading Boot0001 "UEFI Non-Block Boot Device" from PciRoot(0x0)/Pci(0x2,0x0)
+BdsDxe: starting Boot0001 "UEFI Non-Block Boot Device" from PciRoot(0x0)/Pci(0x2,0x0)
+
+darterfly boot.efi
+boot.efi: ramdisk= 484 bytes
+darterfly: p previous generation, s safe start
+boot.efi: generation gen-1
+boot.efi: Core 55909656 bytes
+boot.efi: kernel 0x7e11f000 size 6094848 entry 0xffffffff80002e10
+boot.efi: video 1280x800 at 0x80000000
+boot.efi: rsdp 0x7fb7e014
+boot.efi: boot-args "rd=disk2s1 init -- --dynamic-space-size 2048 --core /System/Library/Kernels/darterfly.core"
+darterfly Kernel Version 0.1: 2026-10-19 22:49:36 UTC; root:darterfly/RELEASE_X86_64
+boot_args: Revision 1 Version 2 efiMode 64
+boot-args: rd=disk2s1 init -- --dynamic-space-size 2048 --core /System/Library/Kernels/darterfly.core
+kernel: 0x7e11f000 size 6094848 kslide 0x0
+memory: 134 ranges, 8186 MB usable
+video: 1280x800x32 at 0x80000000
+mp_desc: gdt, idt and ktss loaded
+pmap: physmap 512 GB at 0xffff800000000000 with 1 GB pages, kernel at 0xffffffff80000000 from 0x7e11f000
+log: kept at 0x100000000; nothing kept from the last boot
+vm: 8122 MB free
+rtclock: tsc 2995 MHz, epoch 1792450691
+lapic: timer 625413 counts per tick at 100 Hz, com1 on vector 0x24
+mp: 4 cpus, slave boot code at 0x1000
+load_init_program: sbcl
+This is SBCL 2.6.4.darterfly, an implementation of ANSI Common Lisp.
+More information about SBCL is available at <http://www.sbcl.org/>.
+
+SBCL is free software, provided as is, with absolutely no warranty.
+It is mostly in the public domain; some portions are provided under
+BSD-style licenses.  See the CREDITS and COPYING files in the
+distribution for more information.
+boot: generation gen-1
+load_init_program: /sbin/init pid 1
+* init: pid 1, bootstrap port #x103
+init: 6 jobs, 4 services, 0 unavailable
+init: driver 0:6.0 starting
+This is SBCL 2.6.4.darterfly, an implementation of ANSI Common Lisp.
+More information about SBCL is available at <http://www.sbcl.org/>.
+
+SBCL is free software, provided as is, with absolutely no warranty.
+It is mostly in the public domain; some portions are provided under
+BSD-style licenses.  See the CREDITS and COPYING files in the
+distribution for more information.
+init: driver 0:6.0 running
+:APP-TEST-READY
+* 
+[NYXT APP TEST TRUST STORE PASS]
+NIL
+* init: Nyxt starting
+init: Nyxt running
+This is SBCL 2.6.4.darterfly, an implementation of ANSI Common Lisp.
+More information about SBCL is available at <http://www.sbcl.org/>.
+
+SBCL is free software, provided as is, with absolutely no warranty.
+It is mostly in the public domain; some portions are provided under
+BSD-style licenses.  See the CREDITS and COPYING files in the
+distribution for more information.
+WARNING: redefining IRONCLAD:BLOCK-LENGTH in DEFGENERIC
+WARNING:
+   redefining ORG.SHIRAKUMO.PRECISE-TIME::%PRECISE-TIME-UNITS-PER-SECOND in DEFUN
+WARNING:
+   redefining ORG.SHIRAKUMO.PRECISE-TIME::%MONOTONIC-TIME-UNITS-PER-SECOND in DEFUN
+WARNING: redefining ORG.SHIRAKUMO.PRECISE-TIME:GET-PRECISE-TIME in DEFUN
+WARNING: redefining ORG.SHIRAKUMO.PRECISE-TIME:GET-MONOTONIC-TIME in DEFUN
+WARNING: redefining PURE-TLS:CONSTANT-TIME-EQUAL in DEFUN
+WARNING: redefining PURE-TLS::KNOWN-EXTENSION-P in DEFUN
+WARNING: redefining PURE-TLS::PARSE-ECDSA-SIGNATURE in DEFUN
+WARNING: redefining PURE-TLS::MAKE-ECDSA-PUBLIC-KEY in DEFUN
+[NYXT SHARED SYSTEM] atomics 1.0.0 /usr/src/ocicl/systems/atomics-20250813-bf0e261/atomics.asd
+[NYXT SHARED SYSTEM] babel NIL /usr/src/ocicl/systems/babel-20250905-4eaf3f2/babel.asd
+[NYXT SHARED SYSTEM] bordeaux-threads 0.9.4 /usr/src/ocicl/systems/bordeaux-threads-0.9.4/bordeaux-threads.asd
+[NYXT SHARED SYSTEM] cffi NIL /usr/src/ocicl/systems/cffi-20250822-dad3520/cffi.asd
+[NYXT SHARED SYSTEM] cl-base64 3.1 /usr/src/ocicl/systems/cl-base64-20240503-80496b7/cl-base64.asd
+[NYXT SHARED SYSTEM] cl-cancel 0.1.0 /usr/src/ocicl/systems/cl-cancel-20260206-bec34fb/cl-cancel.asd
+[NYXT SHARED SYSTEM] global-vars 1.0.0 /usr/src/ocicl/systems/global-vars-20240503-c749f32/global-vars.asd
+[NYXT SHARED SYSTEM] idna NIL /usr/src/ocicl/systems/idna-20240503-bf789e6/idna.asd
+[NYXT SHARED SYSTEM] ironclad NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/aead/eax NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/aead/etm NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/aead/gcm NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/aeads NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/aes NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/arcfour NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/aria NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/blowfish NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/camellia NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/cast5 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/chacha NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/des NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/idea NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/kalyna NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/keystream NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/kuznyechik NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/misty1 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/rc2 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/rc5 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/rc6 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/salsa20 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/seed NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/serpent NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/sm4 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/sosemanuk NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/square NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/tea NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/threefish NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/twofish NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/xchacha NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/xor NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/xsalsa20 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/xtea NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/ciphers NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/core NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/adler32 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/blake2 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/blake2s NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/crc24 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/crc32 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/groestl NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/jh NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/kupyna NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/md2 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/md4 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/md5 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/ripemd-128 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/ripemd-160 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/sha1 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/sha256 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/sha3 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/sha512 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/skein NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/sm3 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/streebog NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/tiger NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/tree-hash NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/whirlpool NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digests NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/kdf/argon2 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/kdf/bcrypt NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/kdf/hmac NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/kdf/password-hash NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/kdf/pkcs5 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/kdf/scrypt NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/kdfs NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/blake2-mac NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/blake2s-mac NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/cmac NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/gmac NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/hmac NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/poly1305 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/siphash NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/skein-mac NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/macs NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/prng/fortuna NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/prngs NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/curve25519 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/curve448 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/dsa NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/ed25519 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/ed448 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/elgamal NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/rsa NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/secp256k1 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/secp256r1 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/secp384r1 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/secp521r1 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-keys NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] precise-time 1.0.0 /usr/src/ocicl/systems/precise-time-20250813-e0bf77d/precise-time.asd
+[NYXT SHARED SYSTEM] pure-tls 1.10.0 /usr/src/ocicl/systems/pure-tls-20260207-8138c76/pure-tls.asd
+[NYXT SHARED SYSTEM] pure-tls/cl+ssl-compat 1.10.0 /usr/src/ocicl/systems/pure-tls-20260207-8138c76/pure-tls.asd
+[NYXT SHARED SYSTEM] split-sequence 2.0.1 /usr/src/ocicl/systems/split-sequence-2.0.1/split-sequence.asd
+[NYXT SHARED SYSTEM] trivial-garbage NIL /usr/src/ocicl/systems/trivial-garbage-20240503-3474f64/trivial-garbage.asd
+[NYXT SHARED SYSTEM] usocket 0.8.8 /usr/src/ocicl/systems/usocket-0.8.8/usocket.asd
+[NYXT OCICL TLS READY]
+[NYXT INSTALLED TOOLCHAIN READY]
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "cffi-toolchain"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                        "cffi") wasn't done yet!
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "cffi-grovel"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                     "cffi") wasn't done yet!
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "iolib/syscalls"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                        "cffi") wasn't done yet!
+WARNING: No definition for POLLRDNORM
+WARNING: No definition for POLLRDBAND
+WARNING: No definition for POLLWRNORM
+WARNING: No definition for POLLWRBAND
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "iolib/multiplex"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                         "cffi") wasn't done yet!
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "iolib/streams"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                       "cffi") wasn't done yet!
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "iolib/sockets"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                       "cffi") wasn't done yet!
+WARNING: System definition file #P"/usr/src/nyxt/_build/cl-ppcre/cl-ppcre.asd" contains definition for system "cl-ppcre-test". Please only define "cl-ppcre" and secondary systems with a name starting with "cl-ppcre/" (e.g. "cl-ppcre/test") in that file.
+WARNING: System definition file #P"/usr/src/nyxt/_build/cl-ppcre/cl-ppcre-unicode.asd" contains definition for system "cl-ppcre-unicode-test". Please only define "cl-ppcre-unicode" and secondary systems with a name starting with "cl-ppcre-unicode/" (e.g. "cl-ppcre-unicode/test") in that file.
+WARNING: System definition file #P"/usr/src/nyxt/_build/s-xml/s-xml.asd" contains definition for system "s-xml.test". Please only define "s-xml" and secondary systems with a name starting with "s-xml/" (e.g. "s-xml/test") in that file.
+WARNING: System definition file #P"/usr/src/nyxt/_build/s-xml/s-xml.asd" contains definition for system "s-xml.examples". Please only define "s-xml" and secondary systems with a name starting with "s-xml/" (e.g. "s-xml/test") in that file.
+WARNING: The CL-Containers system would enjoy having asdf-system-connections around. See
+http://www.cliki.net/asdf-system-connections for details and download
+instructions.
+;;; Computing Hangul syllable names <INFO> [18:58:55] nyxt user-files.lisp (top level form read-file :around nyxt-profile nyxt-file) -
+  Loading #P"/Users/darterfly/.local/share/nyxt/history/default.lisp".
+
+WARNING: redefining S-SERIALIZATION::SERIALIZE-SEXP-INTERNAL in DEFGENERIC
+WARNING: redefining CL-PREVALENCE:GET-ID in DEFGENERIC
+WARNING: redefining CL-PREVALENCE:GET-NAME in DEFGENERIC
+WARNING: redefining (COMMON-LISP:SETF CL-PREVALENCE:GET-NAME) in DEFGENERIC
+WARNING: redefining CL-PREVALENCE:GET-SIZE in DEFGENERIC
+WARNING: redefining CL-PREVALENCE:GET-MIME-TYPE in DEFGENERIC
+WARNING: redefining (COMMON-LISP:SETF CL-PREVALENCE:GET-MIME-TYPE) in DEFGENERIC
+WARNING: redefining CL-PREVALENCE:GET-KEYWORDS in DEFGENERIC
+WARNING: redefining (COMMON-LISP:SETF CL-PREVALENCE:GET-KEYWORDS) in DEFGENERIC
+WARNING:
+   The new FTYPE proclamation for CLSS:MATCH-SELECTOR
+     (FUNCTION (LIST (OR PLUMP-DOM:NODE VECTOR LIST) KEYWORD)
+      (VALUES (AND (VECTOR PLUMP-DOM:NODE) (NOT SIMPLE-ARRAY))))
+   does not match the old FTYPE proclamation
+     (FUNCTION (LIST (OR LIST PLUMP-DOM:NODE VECTOR) &OPTIONAL KEYWORD)
+      (VALUES (AND (VECTOR PLUMP-DOM:NODE) (NOT SIMPLE-ARRAY)) &REST T))
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "static-vectors"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                        "cffi") wasn't done yet!
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "enchant"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                 "cffi") wasn't done yet!
+[NYXT OPTIONAL ENCHANT UNAVAILABLE] Unable to load any of the alternatives:
+   ((:DEFAULT "libenchant-2") (:DEFAULT "libenchant"))
+WARNING:
+   redefining CONSUME-ITEM (#<BUILT-IN-CLASS COMMON-LISP:SYMBOL>
+                            #<SB-PCL:SYSTEM-CLASS COMMON-LISP:T>) in DEFMETHOD
+WARNING: redefining LOG4CL-IMPL:APPENDER-ADDED in DEFGENERIC
+WARNING: redefining LOG4CL-IMPL:APPENDER-REMOVED in DEFGENERIC
+WARNING: redefining LOG4CL-IMPL::PROPERTY-ALIST in DEFGENERIC
+WARNING: redefining SERAPEUM:RUN-HOOK in DEFGENERIC
+WARNING: redefining JSON::READ-JSON-TOKEN in DEFUN
+WARNING: redefining JSON::PEEK-JSON-TOKEN in DEFUN
+WARNING:
+   redefining ENCODE-TO-STRING (#<SB-PCL:SYSTEM-CLASS COMMON-LISP:T>) in DEFMETHOD
+STYLE-WARNING:
+   The new FTYPE proclamation for FSET::VECTOR-SET-BINARY-SEARCH-LO
+     (FUNCTION (SIMPLE-VECTOR T) FIXNUM)
+   does not match the derived return type
+     (FUNCTION (SIMPLE-VECTOR T)
+      (VALUES (INTEGER -4611686018427387904 4611686018427387904) &OPTIONAL))
+STYLE-WARNING:
+   The new FTYPE proclamation for FSET::WB-BAG-TREE-TOTAL-COUNT
+     (FUNCTION (FSET::WB-BAG-TREE) INTEGER)
+   does not match the derived return type
+     (FUNCTION ((OR LIST FSET::WB-BAG-TREE-NODE)) *)
+STYLE-WARNING:
+   Generic function FSET:ITERATOR clobbers an earlier FTYPE proclamation
+   (FUNCTION (T &KEY &ALLOW-OTHER-KEYS) (VALUES FUNCTION &REST T)) for the same
+   name with (FUNCTION (T &KEY &ALLOW-OTHER-KEYS) *).
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "sqlite"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                "cffi") wasn't done yet!
+WARNING:
+   bare references to struct types are deprecated. Please use (:POINTER
+                                                               (:STRUCT
+                                                                SQLITE3)) or (:STRUCT
+                                                                              SQLITE3) instead.
+WARNING:
+   bare references to struct types are deprecated. Please use (:POINTER
+                                                               (:STRUCT
+                                                                SQLITE3-STMT)) or (:STRUCT
+                                                                                   SQLITE3-STMT) instead.
+ <INFO> [18:58:55] nyxt user-files.lisp (top level form read-file :around nyxt-profile nyxt-file) -
+  Loading #P"/Users/darterfly/.local/share/nyxt/history/default.lisp".
+[NYXT APPLICATION READY]
+T
+* [NYXT NORMAL APP WORLD PASS]
+NIL
+* [NYXT APP SINGLE INSTANCE PASS]
+NIL
+* [NYXT EVAL] #<NYXT::HOOK-PROMPT-BUFFER {120C386A5B}>
+"#<NYXT::HOOK-PROMPT-BUFFER {120C386A5B}>"
+*  <INFO> [18:58:58] nyxt user-files.lisp (top level form read-file :around nyxt-profile nyxt-file) -
+  Loading #P"/Users/darterfly/.local/share/nyxt/bookmarks.lisp".
+[NYXT EVAL] NIL
+"NIL"
+* [NYXT EVAL] NIL
+"NIL"
+* [NYXT EVAL] NIL
+"NIL"
+* [NYXT EVAL] #<SB-THREAD:THREAD tid=171616 "browser qualification" RUNNING {1203D56C33}>
+T
+* [NYXT BROWSER NORMAL STARTUP PASS]
+[NYXT BROWSER HTTPS PAGE PASS]
+[NYXT BROWSER NATIVE FRAME PASS]
+[NYXT BROWSER JAVASCRIPT PASS]
+[NYXT BROWSER TRUSTED CALLBACK REQUEST FINISHED PASS]
+[NYXT BROWSER TRUSTED LISP CALLBACK PASS]
+[NYXT BROWSER WEB CALLBACK REQUEST FINISHED PASS]
+[NYXT BROWSER WEB CALLBACK DENIED PASS]
+[NYXT BROWSER INPUT READY]
+T
+* [NYXT BROWSER POINTER AND KEYBOARD PASS]
+[NYXT BROWSER TRUSTED INPUT PASS]
+[NYXT BROWSER PROMPT REQUEST]
+T
+* [NYXT BROWSER URL PROMPT PASS]
+[NYXT BROWSER PROMPT READY]
+T
+* [NYXT BROWSER PROMPT TEXT PASS]
+[NYXT BROWSER NAVIGATE READY]
+T
+* [NYXT BROWSER COMMAND NAVIGATION PASS]
+[NYXT BROWSER LATE PROMPT UPDATE PASS]
+[NYXT BROWSER SCREENSHOT READY]
+T
+* [NYXT BROWSER QUALIFICATION PASS]
+T
+* [NYXT ENGINE WAIT 0]
+init: Nyxt stopped: not kept alive
+[NYXT APP CLEANUP PASS]
+NIL
+* T
+* init: Nyxt starting
+init: Nyxt running
+This is SBCL 2.6.4.darterfly, an implementation of ANSI Common Lisp.
+More information about SBCL is available at <http://www.sbcl.org/>.
+
+SBCL is free software, provided as is, with absolutely no warranty.
+It is mostly in the public domain; some portions are provided under
+BSD-style licenses.  See the CREDITS and COPYING files in the
+distribution for more information.
+confirm: gen-1 is good
+WARNING: redefining IRONCLAD:BLOCK-LENGTH in DEFGENERIC
+WARNING:
+   redefining ORG.SHIRAKUMO.PRECISE-TIME::%PRECISE-TIME-UNITS-PER-SECOND in DEFUN
+WARNING:
+   redefining ORG.SHIRAKUMO.PRECISE-TIME::%MONOTONIC-TIME-UNITS-PER-SECOND in DEFUN
+WARNING: redefining ORG.SHIRAKUMO.PRECISE-TIME:GET-PRECISE-TIME in DEFUN
+WARNING: redefining ORG.SHIRAKUMO.PRECISE-TIME:GET-MONOTONIC-TIME in DEFUN
+WARNING: redefining PURE-TLS:CONSTANT-TIME-EQUAL in DEFUN
+WARNING: redefining PURE-TLS::KNOWN-EXTENSION-P in DEFUN
+WARNING: redefining PURE-TLS::PARSE-ECDSA-SIGNATURE in DEFUN
+WARNING: redefining PURE-TLS::MAKE-ECDSA-PUBLIC-KEY in DEFUN
+[NYXT SHARED SYSTEM] atomics 1.0.0 /usr/src/ocicl/systems/atomics-20250813-bf0e261/atomics.asd
+[NYXT SHARED SYSTEM] babel NIL /usr/src/ocicl/systems/babel-20250905-4eaf3f2/babel.asd
+[NYXT SHARED SYSTEM] bordeaux-threads 0.9.4 /usr/src/ocicl/systems/bordeaux-threads-0.9.4/bordeaux-threads.asd
+[NYXT SHARED SYSTEM] cffi NIL /usr/src/ocicl/systems/cffi-20250822-dad3520/cffi.asd
+[NYXT SHARED SYSTEM] cl-base64 3.1 /usr/src/ocicl/systems/cl-base64-20240503-80496b7/cl-base64.asd
+[NYXT SHARED SYSTEM] cl-cancel 0.1.0 /usr/src/ocicl/systems/cl-cancel-20260206-bec34fb/cl-cancel.asd
+[NYXT SHARED SYSTEM] global-vars 1.0.0 /usr/src/ocicl/systems/global-vars-20240503-c749f32/global-vars.asd
+[NYXT SHARED SYSTEM] idna NIL /usr/src/ocicl/systems/idna-20240503-bf789e6/idna.asd
+[NYXT SHARED SYSTEM] ironclad NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/aead/eax NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/aead/etm NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/aead/gcm NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/aeads NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/aes NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/arcfour NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/aria NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/blowfish NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/camellia NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/cast5 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/chacha NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/des NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/idea NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/kalyna NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/keystream NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/kuznyechik NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/misty1 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/rc2 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/rc5 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/rc6 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/salsa20 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/seed NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/serpent NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/sm4 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/sosemanuk NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/square NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/tea NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/threefish NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/twofish NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/xchacha NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/xor NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/xsalsa20 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/xtea NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/ciphers NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/core NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/adler32 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/blake2 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/blake2s NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/crc24 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/crc32 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/groestl NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/jh NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/kupyna NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/md2 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/md4 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/md5 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/ripemd-128 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/ripemd-160 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/sha1 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/sha256 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/sha3 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/sha512 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/skein NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/sm3 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/streebog NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/tiger NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/tree-hash NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/whirlpool NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digests NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/kdf/argon2 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/kdf/bcrypt NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/kdf/hmac NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/kdf/password-hash NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/kdf/pkcs5 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/kdf/scrypt NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/kdfs NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/blake2-mac NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/blake2s-mac NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/cmac NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/gmac NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/hmac NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/poly1305 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/siphash NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/skein-mac NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/macs NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/prng/fortuna NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/prngs NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/curve25519 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/curve448 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/dsa NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/ed25519 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/ed448 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/elgamal NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/rsa NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/secp256k1 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/secp256r1 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/secp384r1 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/secp521r1 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-keys NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] precise-time 1.0.0 /usr/src/ocicl/systems/precise-time-20250813-e0bf77d/precise-time.asd
+[NYXT SHARED SYSTEM] pure-tls 1.10.0 /usr/src/ocicl/systems/pure-tls-20260207-8138c76/pure-tls.asd
+[NYXT SHARED SYSTEM] pure-tls/cl+ssl-compat 1.10.0 /usr/src/ocicl/systems/pure-tls-20260207-8138c76/pure-tls.asd
+[NYXT SHARED SYSTEM] split-sequence 2.0.1 /usr/src/ocicl/systems/split-sequence-2.0.1/split-sequence.asd
+[NYXT SHARED SYSTEM] trivial-garbage NIL /usr/src/ocicl/systems/trivial-garbage-20240503-3474f64/trivial-garbage.asd
+[NYXT SHARED SYSTEM] usocket 0.8.8 /usr/src/ocicl/systems/usocket-0.8.8/usocket.asd
+[NYXT OCICL TLS READY]
+[NYXT INSTALLED TOOLCHAIN READY]
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "cffi-toolchain"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                        "cffi") wasn't done yet!
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "cffi-grovel"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                     "cffi") wasn't done yet!
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "iolib/syscalls"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                        "cffi") wasn't done yet!
+WARNING: No definition for POLLRDNORM
+WARNING: No definition for POLLRDBAND
+WARNING: No definition for POLLWRNORM
+WARNING: No definition for POLLWRBAND
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "iolib/multiplex"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                         "cffi") wasn't done yet!
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "iolib/streams"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                       "cffi") wasn't done yet!
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "iolib/sockets"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                       "cffi") wasn't done yet!
+WARNING: System definition file #P"/usr/src/nyxt/_build/cl-ppcre/cl-ppcre.asd" contains definition for system "cl-ppcre-test". Please only define "cl-ppcre" and secondary systems with a name starting with "cl-ppcre/" (e.g. "cl-ppcre/test") in that file.
+WARNING: System definition file #P"/usr/src/nyxt/_build/cl-ppcre/cl-ppcre-unicode.asd" contains definition for system "cl-ppcre-unicode-test". Please only define "cl-ppcre-unicode" and secondary systems with a name starting with "cl-ppcre-unicode/" (e.g. "cl-ppcre-unicode/test") in that file.
+WARNING: System definition file #P"/usr/src/nyxt/_build/s-xml/s-xml.asd" contains definition for system "s-xml.test". Please only define "s-xml" and secondary systems with a name starting with "s-xml/" (e.g. "s-xml/test") in that file.
+WARNING: System definition file #P"/usr/src/nyxt/_build/s-xml/s-xml.asd" contains definition for system "s-xml.examples". Please only define "s-xml" and secondary systems with a name starting with "s-xml/" (e.g. "s-xml/test") in that file.
+WARNING: The CL-Containers system would enjoy having asdf-system-connections around. See
+http://www.cliki.net/asdf-system-connections for details and download
+instructions.
+;;; Computing Hangul syllable names <INFO> [19:00:07] nyxt user-files.lisp (top level form read-file :around nyxt-profile nyxt-file) -
+  Loading #P"/Users/darterfly/.local/share/nyxt/history/default.lisp".
+
+WARNING: redefining S-SERIALIZATION::SERIALIZE-SEXP-INTERNAL in DEFGENERIC
+WARNING: redefining CL-PREVALENCE:GET-ID in DEFGENERIC
+WARNING: redefining CL-PREVALENCE:GET-NAME in DEFGENERIC
+WARNING: redefining (COMMON-LISP:SETF CL-PREVALENCE:GET-NAME) in DEFGENERIC
+WARNING: redefining CL-PREVALENCE:GET-SIZE in DEFGENERIC
+WARNING: redefining CL-PREVALENCE:GET-MIME-TYPE in DEFGENERIC
+WARNING: redefining (COMMON-LISP:SETF CL-PREVALENCE:GET-MIME-TYPE) in DEFGENERIC
+WARNING: redefining CL-PREVALENCE:GET-KEYWORDS in DEFGENERIC
+WARNING: redefining (COMMON-LISP:SETF CL-PREVALENCE:GET-KEYWORDS) in DEFGENERIC
+WARNING:
+   The new FTYPE proclamation for CLSS:MATCH-SELECTOR
+     (FUNCTION (LIST (OR PLUMP-DOM:NODE VECTOR LIST) KEYWORD)
+      (VALUES (AND (VECTOR PLUMP-DOM:NODE) (NOT SIMPLE-ARRAY))))
+   does not match the old FTYPE proclamation
+     (FUNCTION (LIST (OR LIST PLUMP-DOM:NODE VECTOR) &OPTIONAL KEYWORD)
+      (VALUES (AND (VECTOR PLUMP-DOM:NODE) (NOT SIMPLE-ARRAY)) &REST T))
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "static-vectors"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                        "cffi") wasn't done yet!
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "enchant"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                 "cffi") wasn't done yet!
+[NYXT OPTIONAL ENCHANT UNAVAILABLE] Unable to load any of the alternatives:
+   ((:DEFAULT "libenchant-2") (:DEFAULT "libenchant"))
+WARNING:
+   redefining CONSUME-ITEM (#<BUILT-IN-CLASS COMMON-LISP:SYMBOL>
+                            #<SB-PCL:SYSTEM-CLASS COMMON-LISP:T>) in DEFMETHOD
+WARNING: redefining LOG4CL-IMPL:APPENDER-ADDED in DEFGENERIC
+WARNING: redefining LOG4CL-IMPL:APPENDER-REMOVED in DEFGENERIC
+WARNING: redefining LOG4CL-IMPL::PROPERTY-ALIST in DEFGENERIC
+WARNING: redefining SERAPEUM:RUN-HOOK in DEFGENERIC
+WARNING: redefining JSON::READ-JSON-TOKEN in DEFUN
+WARNING: redefining JSON::PEEK-JSON-TOKEN in DEFUN
+WARNING:
+   redefining ENCODE-TO-STRING (#<SB-PCL:SYSTEM-CLASS COMMON-LISP:T>) in DEFMETHOD
+STYLE-WARNING:
+   The new FTYPE proclamation for FSET::VECTOR-SET-BINARY-SEARCH-LO
+     (FUNCTION (SIMPLE-VECTOR T) FIXNUM)
+   does not match the derived return type
+     (FUNCTION (SIMPLE-VECTOR T)
+      (VALUES (INTEGER -4611686018427387904 4611686018427387904) &OPTIONAL))
+STYLE-WARNING:
+   The new FTYPE proclamation for FSET::WB-BAG-TREE-TOTAL-COUNT
+     (FUNCTION (FSET::WB-BAG-TREE) INTEGER)
+   does not match the derived return type
+     (FUNCTION ((OR LIST FSET::WB-BAG-TREE-NODE)) *)
+STYLE-WARNING:
+   Generic function FSET:ITERATOR clobbers an earlier FTYPE proclamation
+   (FUNCTION (T &KEY &ALLOW-OTHER-KEYS) (VALUES FUNCTION &REST T)) for the same
+   name with (FUNCTION (T &KEY &ALLOW-OTHER-KEYS) *).
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "sqlite"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                "cffi") wasn't done yet!
+WARNING:
+   bare references to struct types are deprecated. Please use (:POINTER
+                                                               (:STRUCT
+                                                                SQLITE3)) or (:STRUCT
+                                                                              SQLITE3) instead.
+WARNING:
+   bare references to struct types are deprecated. Please use (:POINTER
+                                                               (:STRUCT
+                                                                SQLITE3-STMT)) or (:STRUCT
+                                                                                   SQLITE3-STMT) instead.
+ <INFO> [19:00:07] nyxt user-files.lisp (top level form read-file :around nyxt-profile nyxt-file) -
+  Loading #P"/Users/darterfly/.local/share/nyxt/history/default.lisp".
+[NYXT APPLICATION READY]
+T
+* [NYXT APP RELAUNCH PASS]
+NIL
+* [NYXT ENGINE WAIT 0]
+init: Nyxt stopped: not kept alive
+[NYXT APP QUIT PASS]
+NIL
+* WARNING: redefining IRONCLAD:BLOCK-LENGTH in DEFGENERIC
+WARNING:
+   redefining ORG.SHIRAKUMO.PRECISE-TIME::%PRECISE-TIME-UNITS-PER-SECOND in DEFUN
+WARNING:
+   redefining ORG.SHIRAKUMO.PRECISE-TIME::%MONOTONIC-TIME-UNITS-PER-SECOND in DEFUN
+WARNING: redefining ORG.SHIRAKUMO.PRECISE-TIME:GET-PRECISE-TIME in DEFUN
+WARNING: redefining ORG.SHIRAKUMO.PRECISE-TIME:GET-MONOTONIC-TIME in DEFUN
+WARNING: redefining PURE-TLS:CONSTANT-TIME-EQUAL in DEFUN
+WARNING: redefining PURE-TLS::KNOWN-EXTENSION-P in DEFUN
+WARNING: redefining PURE-TLS::PARSE-ECDSA-SIGNATURE in DEFUN
+WARNING: redefining PURE-TLS::MAKE-ECDSA-PUBLIC-KEY in DEFUN
+[NYXT SHARED SYSTEM] atomics 1.0.0 /usr/src/ocicl/systems/atomics-20250813-bf0e261/atomics.asd
+[NYXT SHARED SYSTEM] babel NIL /usr/src/ocicl/systems/babel-20250905-4eaf3f2/babel.asd
+[NYXT SHARED SYSTEM] bordeaux-threads 0.9.4 /usr/src/ocicl/systems/bordeaux-threads-0.9.4/bordeaux-threads.asd
+[NYXT SHARED SYSTEM] cffi NIL /usr/src/ocicl/systems/cffi-20250822-dad3520/cffi.asd
+[NYXT SHARED SYSTEM] cl-base64 3.1 /usr/src/ocicl/systems/cl-base64-20240503-80496b7/cl-base64.asd
+[NYXT SHARED SYSTEM] cl-cancel 0.1.0 /usr/src/ocicl/systems/cl-cancel-20260206-bec34fb/cl-cancel.asd
+[NYXT SHARED SYSTEM] global-vars 1.0.0 /usr/src/ocicl/systems/global-vars-20240503-c749f32/global-vars.asd
+[NYXT SHARED SYSTEM] idna NIL /usr/src/ocicl/systems/idna-20240503-bf789e6/idna.asd
+[NYXT SHARED SYSTEM] ironclad NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/aead/eax NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/aead/etm NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/aead/gcm NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/aeads NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/aes NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/arcfour NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/aria NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/blowfish NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/camellia NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/cast5 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/chacha NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/des NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/idea NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/kalyna NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/keystream NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/kuznyechik NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/misty1 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/rc2 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/rc5 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/rc6 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/salsa20 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/seed NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/serpent NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/sm4 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/sosemanuk NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/square NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/tea NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/threefish NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/twofish NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/xchacha NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/xor NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/xsalsa20 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/cipher/xtea NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/ciphers NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/core NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/adler32 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/blake2 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/blake2s NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/crc24 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/crc32 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/groestl NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/jh NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/kupyna NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/md2 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/md4 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/md5 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/ripemd-128 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/ripemd-160 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/sha1 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/sha256 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/sha3 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/sha512 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/skein NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/sm3 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/streebog NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/tiger NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/tree-hash NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digest/whirlpool NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/digests NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/kdf/argon2 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/kdf/bcrypt NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/kdf/hmac NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/kdf/password-hash NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/kdf/pkcs5 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/kdf/scrypt NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/kdfs NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/blake2-mac NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/blake2s-mac NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/cmac NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/gmac NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/hmac NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/poly1305 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/siphash NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/mac/skein-mac NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/macs NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/prng/fortuna NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/prngs NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/curve25519 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/curve448 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/dsa NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/ed25519 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/ed448 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/elgamal NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/rsa NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/secp256k1 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/secp256r1 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/secp384r1 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-key/secp521r1 NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] ironclad/public-keys NIL /usr/src/ocicl/systems/ironclad-20240503-6da010f/ironclad.asd
+[NYXT SHARED SYSTEM] precise-time 1.0.0 /usr/src/ocicl/systems/precise-time-20250813-e0bf77d/precise-time.asd
+[NYXT SHARED SYSTEM] pure-tls 1.10.0 /usr/src/ocicl/systems/pure-tls-20260207-8138c76/pure-tls.asd
+[NYXT SHARED SYSTEM] pure-tls/cl+ssl-compat 1.10.0 /usr/src/ocicl/systems/pure-tls-20260207-8138c76/pure-tls.asd
+[NYXT SHARED SYSTEM] split-sequence 2.0.1 /usr/src/ocicl/systems/split-sequence-2.0.1/split-sequence.asd
+[NYXT SHARED SYSTEM] trivial-garbage NIL /usr/src/ocicl/systems/trivial-garbage-20240503-3474f64/trivial-garbage.asd
+[NYXT SHARED SYSTEM] usocket 0.8.8 /usr/src/ocicl/systems/usocket-0.8.8/usocket.asd
+[NYXT OCICL TLS READY]
+[NYXT INSTALLED TOOLCHAIN READY]
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "cffi-toolchain"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                        "cffi") wasn't done yet!
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "cffi-grovel"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                     "cffi") wasn't done yet!
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "iolib/syscalls"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                        "cffi") wasn't done yet!
+WARNING: No definition for POLLRDNORM
+WARNING: No definition for POLLRDBAND
+WARNING: No definition for POLLWRNORM
+WARNING: No definition for POLLWRBAND
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "iolib/multiplex"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                         "cffi") wasn't done yet!
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "iolib/streams"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                       "cffi") wasn't done yet!
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "iolib/sockets"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                       "cffi") wasn't done yet!
+WARNING: System definition file #P"/usr/src/nyxt/_build/cl-ppcre/cl-ppcre.asd" contains definition for system "cl-ppcre-test". Please only define "cl-ppcre" and secondary systems with a name starting with "cl-ppcre/" (e.g. "cl-ppcre/test") in that file.
+WARNING: System definition file #P"/usr/src/nyxt/_build/cl-ppcre/cl-ppcre-unicode.asd" contains definition for system "cl-ppcre-unicode-test". Please only define "cl-ppcre-unicode" and secondary systems with a name starting with "cl-ppcre-unicode/" (e.g. "cl-ppcre-unicode/test") in that file.
+WARNING: System definition file #P"/usr/src/nyxt/_build/s-xml/s-xml.asd" contains definition for system "s-xml.test". Please only define "s-xml" and secondary systems with a name starting with "s-xml/" (e.g. "s-xml/test") in that file.
+WARNING: System definition file #P"/usr/src/nyxt/_build/s-xml/s-xml.asd" contains definition for system "s-xml.examples". Please only define "s-xml" and secondary systems with a name starting with "s-xml/" (e.g. "s-xml/test") in that file.
+WARNING: The CL-Containers system would enjoy having asdf-system-connections around. See
+http://www.cliki.net/asdf-system-connections for details and download
+instructions.
+;;; Computing Hangul syllable names
+WARNING: redefining S-SERIALIZATION::SERIALIZE-SEXP-INTERNAL in DEFGENERIC
+WARNING: redefining CL-PREVALENCE:GET-ID in DEFGENERIC
+WARNING: redefining CL-PREVALENCE:GET-NAME in DEFGENERIC
+WARNING: redefining (COMMON-LISP:SETF CL-PREVALENCE:GET-NAME) in DEFGENERIC
+WARNING: redefining CL-PREVALENCE:GET-SIZE in DEFGENERIC
+WARNING: redefining CL-PREVALENCE:GET-MIME-TYPE in DEFGENERIC
+WARNING: redefining (COMMON-LISP:SETF CL-PREVALENCE:GET-MIME-TYPE) in DEFGENERIC
+WARNING: redefining CL-PREVALENCE:GET-KEYWORDS in DEFGENERIC
+WARNING: redefining (COMMON-LISP:SETF CL-PREVALENCE:GET-KEYWORDS) in DEFGENERIC
+WARNING:
+   The new FTYPE proclamation for CLSS:MATCH-SELECTOR
+     (FUNCTION (LIST (OR PLUMP-DOM:NODE VECTOR LIST) KEYWORD)
+      (VALUES (AND (VECTOR PLUMP-DOM:NODE) (NOT SIMPLE-ARRAY))))
+   does not match the old FTYPE proclamation
+     (FUNCTION (LIST (OR LIST PLUMP-DOM:NODE VECTOR) &OPTIONAL KEYWORD)
+      (VALUES (AND (VECTOR PLUMP-DOM:NODE) (NOT SIMPLE-ARRAY)) &REST T))
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "static-vectors"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                        "cffi") wasn't done yet!
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "enchant"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                 "cffi") wasn't done yet!
+[NYXT OPTIONAL ENCHANT UNAVAILABLE] Unable to load any of the alternatives:
+   ((:DEFAULT "libenchant-2") (:DEFAULT "libenchant"))
+WARNING:
+   redefining CONSUME-ITEM (#<BUILT-IN-CLASS COMMON-LISP:SYMBOL>
+                            #<SB-PCL:SYSTEM-CLASS COMMON-LISP:T>) in DEFMETHOD
+WARNING: redefining LOG4CL-IMPL:APPENDER-ADDED in DEFGENERIC
+WARNING: redefining LOG4CL-IMPL:APPENDER-REMOVED in DEFGENERIC
+WARNING: redefining LOG4CL-IMPL::PROPERTY-ALIST in DEFGENERIC
+WARNING: redefining SERAPEUM:RUN-HOOK in DEFGENERIC
+WARNING: redefining JSON::READ-JSON-TOKEN in DEFUN
+WARNING: redefining JSON::PEEK-JSON-TOKEN in DEFUN
+WARNING:
+   redefining ENCODE-TO-STRING (#<SB-PCL:SYSTEM-CLASS COMMON-LISP:T>) in DEFMETHOD
+STYLE-WARNING:
+   The new FTYPE proclamation for FSET::VECTOR-SET-BINARY-SEARCH-LO
+     (FUNCTION (SIMPLE-VECTOR T) FIXNUM)
+   does not match the derived return type
+     (FUNCTION (SIMPLE-VECTOR T)
+      (VALUES (INTEGER -4611686018427387904 4611686018427387904) &OPTIONAL))
+STYLE-WARNING:
+   The new FTYPE proclamation for FSET::WB-BAG-TREE-TOTAL-COUNT
+     (FUNCTION (FSET::WB-BAG-TREE) INTEGER)
+   does not match the derived return type
+     (FUNCTION ((OR LIST FSET::WB-BAG-TREE-NODE)) *)
+STYLE-WARNING:
+   Generic function FSET:ITERATOR clobbers an earlier FTYPE proclamation
+   (FUNCTION (T &KEY &ALLOW-OTHER-KEYS) (VALUES FUNCTION &REST T)) for the same
+   name with (FUNCTION (T &KEY &ALLOW-OTHER-KEYS) *).
+WARNING:
+   Computing just-done stamp in plan NIL for action (ASDF/LISP-ACTION:PREPARE-OP
+                                                     "sqlite"), but dependency (ASDF/LISP-ACTION:LOAD-OP
+                                                                                "cffi") wasn't done yet!
+WARNING:
+   bare references to struct types are deprecated. Please use (:POINTER
+                                                               (:STRUCT
+                                                                SQLITE3)) or (:STRUCT
+                                                                              SQLITE3) instead.
+WARNING:
+   bare references to struct types are deprecated. Please use (:POINTER
+                                                               (:STRUCT
+                                                                SQLITE3-STMT)) or (:STRUCT
+                                                                                   SQLITE3-STMT) instead.
+ <INFO> [19:00:07] nyxt user-files.lisp (top level form read-file :around nyxt-profile nyxt-file) -
+  Loading #P"/Users/darterfly/.local/share/nyxt/history/default.lisp".
+[NYXT APPLICATION READY]
+NIL
+* 

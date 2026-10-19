@@ -1,0 +1,42 @@
+This is SBCL 2.6.4, an implementation of ANSI Common Lisp.
+More information about SBCL is available at <http://www.sbcl.org/>.
+
+SBCL is free software, provided as is, with absolutely no warranty.
+It is mostly in the public domain; some portions are provided under
+BSD-style licenses.  See the CREDITS and COPYING files in the
+distribution for more information.
+WARNING: redefining ZPB-TTF::LOCATION in DEFGENERIC
+
+Running test suite SERVER
+ Running test EVENTS-CARRY-WHAT-APPS-READ .........
+ Did 9 checks.
+    Pass: 9 (100%)
+    Skip: 0 ( 0%)
+    Fail: 0 ( 0%)
+
+
+Running test suite NATIVE-BSD
+ Running test UNIFIED-SERVICES-REJECT-FORGED-POINTERS .......................
+ Running test SHARED-SERVICES-KEEP-NULL-POLL-AND-BOUND-RESOLVER-OUTPUT ..
+ Running test FAILED-SPAWN-ACTIONS-UNWIND-FDS-AND-CHILD-RECORDS .....
+ Running test NATIVE-WAIT-STATUS-MATCHES-THE-C-HEADERS .....
+ Running test SPAWN-REQUESTS-ARE-BOUNDED ...
+ Running test CHILD-WAITS-ONLY-REAP-THE-CALLERS-CHILDREN ......
+ Running test WORLD-WAIT-REJECTS-FORGED-POINTER-LAYOUTS ...
+ Running test SHARED-FILE-REQUEST-REJECTS-UNTRUSTED-LAYOUTS ........
+ Running test EXITING-INIT-AND-DEAD-INIT-DO-NOT-STRAND-CHILDREN ....................
+ Did 75 checks.
+    Pass: 75 (100%)
+    Skip: 0 ( 0%)
+    Fail: 0 ( 0%)
+
+
+Running test suite INIT
+ Running test INIT-RUNS-JOBS init: darterfly.test.again restarting: exit 3; again in 1 s
+.init: darterfly.test.again restarting: exit 3; again in 1 s
+..
+ Did 3 checks.
+    Pass: 3 (100%)
+    Skip: 0 ( 0%)
+    Fail: 0 ( 0%)
+

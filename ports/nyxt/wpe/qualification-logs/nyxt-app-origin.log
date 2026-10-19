@@ -1,0 +1,4 @@
+TLS-SESSION 18766 resumed=False
+ORIGIN 18766 "GET /browser HTTP/1.1" 200 -
+TLS-SESSION 18766 resumed=True
+ORIGIN 18766 "GET /browser?navigation=2 HTTP/1.1" 200 -
