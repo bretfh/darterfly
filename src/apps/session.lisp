@@ -161,8 +161,7 @@
             (let ((x (first (darterfly/server:event-window-location event))))
               (let ((index (floor (- x gap) (+ tile gap))))
                 (when (< -1 index (length *dock-items*))
-                  (bsd:posix-spawn (second (nth index *dock-items*))
-                                   (list (second (nth index *dock-items*))) nil))))))))))
+                  (ignore-errors (open-application (second (nth index *dock-items*)))))))))))))
 
 (defun file-icon (path)
   (let ((mode (getf (ignore-errors (bsd:stat path)) :mode 0)))
@@ -189,7 +188,7 @@
         (when (uiop:string-suffix-p (path view) ".app")
           (let ((program (format nil "~a/Contents/Programs/~a" (path view)
                                  (subseq (pathname-name (path view)) 0))))
-            (ignore-errors (bsd:posix-spawn program (list program) nil))))))
+            (ignore-errors (open-application program))))))
   t)
 
 (defun browse (window path)

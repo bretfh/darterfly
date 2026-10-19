@@ -82,8 +82,10 @@
         (system-boot))))
 
 (defun world-boot ()
+  (setf sb-ext:*invoke-debugger-hook* 'darterfly/bsd::report-and-unwind)
   (setf sb-sys::*sbcl-homedir-pathname* (sb-impl::%sbcl-homedir-pathname))
   (attempt "files" #'darterfly/storage:mount-system-files)
+  (attempt "console" #'darterfly/bsd::console-fds)
   (register-sources))
 
 (defun system-boot ()

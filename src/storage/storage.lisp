@@ -244,4 +244,6 @@
 (darterfly/run:offer-service "files" #'serve-files :gone #'forget-exports)
 
 (defun mount-system-files ()
-  (darterfly/vfs:vfs-mount (make-instance 'remote-vnode :world 0 :port (darterfly/run:look-up "files") :id 1 :type :vdir) "/"))
+  (darterfly/vfs:vfs-mount (make-instance 'remote-vnode :world 0 :port (darterfly/run:look-up "files") :id 1 :type :vdir) "/")
+  (darterfly/vfs:vfs-mount (darterfly/vfs::make-devfs) "/dev")
+  (darterfly/vfs:vfs-mount (darterfly/vfs::make-procfs) "/proc"))

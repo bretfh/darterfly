@@ -32,15 +32,20 @@
       (let ((event (handler-case (remote-request (list :next-event :context (context-id context) :timeout 1000))
                      (error () (sleep 1) nil))))
         (when event
-          (darterfly/mach:mach-msg-send (darterfly/mach:make-message :remote-port events :body event)))))))
+          (handler-case (darterfly/mach:mach-msg-send (darterfly/mach:make-message :remote-port events :body event))
+            (darterfly/mach:kern-return ()
+              (return))))))))
 
 (defun remote-context-create ()
   (let ((events (darterfly/mach:mach-port-allocate darterfly/mach:*task* :receive))
         (id (getf (remote-request (list :context-create)) :context-id)))
     (darterfly/mach:mach-port-set-attributes darterfly/mach:*task* events :limits-info 1024)
     (darterfly/mach:mach-port-insert-right darterfly/mach:*task* events events :make-send)
-    (let ((context (make-instance 'context :id id :port nil :events events)))
-      (sb-thread:make-thread (lambda () (pump-events context))
+    (let ((context (make-instance 'context :id id :port nil :events events))
+          (task darterfly/mach:*task*))
+      (sb-thread:make-thread (lambda ()
+                               (let ((darterfly/mach:*task* task))
+                                 (pump-events context)))
                              :name (format nil "events ~d" id))
       context)))
 
