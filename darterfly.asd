@@ -314,10 +314,10 @@
 
 (asdf:defsystem #:darterfly/layer
   :description "Layers and their commits"
-  :depends-on (#:darterfly/mach #:darterfly/bsd #:darterfly/init #:darterfly/server)
+  :depends-on (#:darterfly/mach #:darterfly/bsd #:darterfly/init #:darterfly/server #:darterfly/run #:darterfly/worlds)
   :serial t
   :pathname "src/layer/"
-  :components ((:file "client")))
+  :components ((:file "client") (:file "world")))
 
 (asdf:defsystem #:darterfly/qmp
   :description "QEMU's machine protocol"

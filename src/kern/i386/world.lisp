@@ -935,6 +935,15 @@
   (let ((va (window-io-in (current-world) pa)))
     (if va va (- 0 +eperm+))))
 
+(define-low port-give ((id :u64) (name :u64))
+  (let ((w (world-by-id id))
+        (p (name-port (current-world) name 1)))
+    (cond ((or (not w) (not p))
+           (- 0 +einval+))
+          (t
+           (let ((given (name-add w p 0)))
+             (if given given (- 0 +enomem+)))))))
+
 (define-low port-into ((id :u64) out)
   (let ((w (world-by-id id)))
     (when (or (not w) (physmap-world-p w)) (result (- 0 +einval+)))

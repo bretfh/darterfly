@@ -1,7 +1,7 @@
 (defpackage #:darterfly/worlds
   (:use #:cl)
   (:export #:spawn-native #:spawn-native-image #:read-native-image #:wait-native #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages #:spawn-record #:receive-into #:copy-from #:copy-into
-           #:heartbeat #:*watchdog-limit* #:quiet-watchdog #:pause #:resume #:checkpoint #:restore #:grant-memory #:grant-vectors #:port-into #:grant-rights #:*rights* #:worlds #:inspect-world #:peek #:no-reply #:when-silent))
+           #:heartbeat #:*watchdog-limit* #:quiet-watchdog #:pause #:resume #:checkpoint #:restore #:grant-memory #:grant-vectors #:port-into #:grant-rights #:*rights* #:worlds #:inspect-world #:peek #:no-reply #:when-silent #:port-give))
 (in-package #:darterfly/worlds)
 
 (define-condition world-error (error)
@@ -131,6 +131,8 @@
 
 (defun grant-vectors (world &rest vectors)
   (machdep 63 world (reduce #'logior vectors :key (lambda (v) (ash 1 (- v #x30))) :initial-value 0)))
+
+(defun port-give (world port) (machdep 84 world port))
 
 (defun port-into (world)
   (let ((out (make-array 2 :element-type '(unsigned-byte 64))))

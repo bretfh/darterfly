@@ -1843,6 +1843,38 @@
                (is (search "hog stopped: removed" (image:transcript c)) "and not restarted"))
           (image:finish c 5))))))
 
+(test an-app-in-its-own-world-opens-a-window-and-dying-takes-it-away
+  (let ((c (image:bare-console :boot-args "init"))
+        (image:*screen-size* '(1280 800)))
+    (labels ((ask (form &optional (timeout 120))
+               (image:send c form)
+               (image:expect c (format nil "~%* ") :timeout timeout))
+             (counts (text)
+               (let ((at (position #\[ text :from-end t)))
+                 (list (parse-integer text :start (1+ at) :junk-allowed t)
+                       (parse-integer text :start (1+ (position #\Space text :start at)) :junk-allowed t))))
+             (until (test)
+               (counts (ask (format nil "(loop :repeat 120 :until ~a :do (sleep 0.5) :finally (progn (sleep 3) (return (format nil \"[~~a ~~a]\" (length darterfly/windowserver::*windows*) (length darterfly/windowserver::*clients*)))))"
+                                    test)))))
+      (unwind-protect
+           (progn
+             (image:expect c "init: pid 1" :timeout 120)
+             (ask "(progn (darterfly/install::esp) (sleep 10) t)")
+             (let ((before (until "t")))
+               (ask "(defparameter *app* (darterfly/run:new-world \"Hello\" :core \"/Volumes/EFI/EFI/darterfly/gen-1/darterfly.core\" :memory 512))" 300)
+               (ask "(loop :repeat 300 :until (ignore-errors (darterfly/run:world-eval *app* \"t\")) :do (sleep 0.1))" 120)
+               (ask "(darterfly/run:world-eval *app* \"(darterfly/bsd:run-program \\\"Hello\\\")\")")
+               (let ((opened (until (format nil "(> (length darterfly/windowserver::*windows*) ~d)" (first before)))))
+                 (is (> (first opened) (first before))
+                     "an app running in its own world gets its windows from the window server: ~a after ~a" opened before)
+                 (ask "(progn (darterfly/run:stop-world *app*) t)" 60)
+                 (let ((left (until (format nil "(= (length darterfly/windowserver::*clients*) ~d)" (second before)))))
+                   (is (equal before left) "when its world ends, its windows and its connection go with it: ~a" left))
+                 (ask "(progn (darterfly/shell:spawn \"/Applications/Hello.app/Contents/Programs/Hello\") t)")
+                 (let ((again (until (format nil "(= (length darterfly/windowserver::*windows*) ~d)" (first opened)))))
+                   (is (equal opened again) "and the same app started in the first world opens the same windows: ~a" again)))))
+        (image:finish c 5)))))
+
 (test a-world-uses-the-network
   (let ((disk (merge-pathnames "world-net.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists disk)

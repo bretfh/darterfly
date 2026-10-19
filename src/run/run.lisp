@@ -1,7 +1,8 @@
 (defpackage #:darterfly/run
   (:use #:cl)
   (:export #:run-core #:run-world #:start-world #:finish-world #:stop-world #:world-eval #:attach #:world-id #:world-name
-           #:new-world #:list-worlds #:find-world #:save-world #:restart-world #:checkpoint-world #:restore-world #:restore-worlds #:*worlds-dir* #:collect #:tree-files #:in-run-p #:in-world-p #:no-room #:no-answer #:memory-use #:*system-reserve-mb* #:*answer-within*))
+           #:new-world #:list-worlds #:find-world #:save-world #:restart-world #:checkpoint-world #:restore-world #:restore-worlds #:*worlds-dir* #:collect #:tree-files #:in-run-p #:in-world-p #:no-room #:no-answer #:memory-use #:*system-reserve-mb* #:*answer-within*
+           #:offer-service #:look-up))
 (in-package #:darterfly/run)
 
 (defconstant +magic+ #x4e555248434e4946)
@@ -156,6 +157,52 @@
 (defun wait-gone (world)
   (loop :repeat 200 :until (eq (darterfly/worlds:world-state world) :gone) :do (sleep 0.05)))
 
+(defvar *services* (make-hash-table :test 'equal))
+
+(defun offer-service (name serve &key gone)
+  (setf (gethash name *services*) (list serve gone))
+  name)
+
+(defun serve-service (world proc name port)
+  (destructuring-bind (serve gone) (gethash name *services*)
+    (let ((buffer (make-array 65536 :element-type '(unsigned-byte 8))))
+      (unwind-protect
+           (loop
+             (handler-case
+                 (multiple-value-bind (n token sender) (darterfly/worlds:receive-into port buffer :timeout 1)
+                   (when (= sender world)
+                     (let ((request (subseq buffer 0 n)))
+                       (sb-thread:make-thread
+                        (lambda ()
+                          (darterfly/worlds:reply token
+                                                  (handler-case (funcall serve world proc request token)
+                                                    (error (e)
+                                                      (format *error-output* "~&~a for world ~d: ~a~%" name world e)
+                                                      #()))))
+                        :name name))))
+               (darterfly/worlds:world-error ()
+                 (when (member (darterfly/worlds:world-state world) '(:stopped :gone))
+                   (return)))))
+        (when gone
+          (funcall gone world))))))
+
+(defun offer-to (world proc name)
+  (if (gethash name *services*)
+      (let ((port (darterfly/worlds:make-port)))
+        (sb-thread:make-thread (lambda () (serve-service world proc name port))
+                               :name (format nil "~a for world ~d" name world))
+        (darterfly/worlds:port-give world port))
+      0))
+
+(defun look-up (name)
+  (let* ((request (concatenate '(simple-array (unsigned-byte 8) (*))
+                               (darterfly/worlds::u64-octets 4)
+                               (sb-ext:string-to-octets name :external-format :utf-8)))
+         (port (u64-at (darterfly/worlds:call 1 request) 0)))
+    (when (zerop port)
+      (error "no service ~a" name))
+    port))
+
 (defun serve-world (port world proc timeout)
   (let ((end (and timeout (+ (get-internal-real-time) (* timeout internal-time-units-per-second))))
         (code nil) (archive nil) (at 0)
@@ -180,6 +227,9 @@
                    (replace archive m :start1 at :start2 8 :end2 n)
                    (incf at (- n 8)))
                  (darterfly/worlds:reply token #(0)))
+              (4 (darterfly/worlds:reply token
+                                         (darterfly/worlds::u64-octets
+                                          (offer-to world proc (sb-ext:octets-to-string m :start 8 :end n :external-format :utf-8)))))
               (t (darterfly/worlds:reply token #(0))))
             (when (and archive (>= at (length archive)))
               (return (values code archive))))

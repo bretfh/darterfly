@@ -119,6 +119,10 @@
                   (t (error e)))))))
         (fail (if denied :eacces :enoent)))))
 
+(defun run-program (name &optional (argv (list name)) envp)
+  (let ((program (or (gethash name *programs*) (fail :enoent))))
+    (fork (lambda () (exec-program name argv envp program)))))
+
 (defun posix-spawn (name argv envp &key file-actions search-path native-only)
   (let ((program nil) (resolved name))
     (fork (lambda () (exec-program resolved argv envp program))

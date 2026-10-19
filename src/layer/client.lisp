@@ -58,6 +58,11 @@
         :finally (error "renderserver is not there")))
 
 (defun context-create ()
+  (if (darterfly/run:in-world-p)
+      (remote-context-create)
+      (local-context-create)))
+
+(defun local-context-create ()
   (let ((server (render-server))
         (reply (darterfly/mach:mach-reply-port))
         (events (darterfly/mach:mach-port-allocate darterfly/mach:*task* :receive)))
@@ -78,13 +83,20 @@
 (defun tree (layer)
   (cons layer (mapcan #'tree (copy-list (layer-sublayers layer)))))
 
+(defun tree-objects (root)
+  (loop :for layer :in (tree root)
+        :collect (cons (layer-id layer) (layer-object layer))))
+
+(defun send-commit (port root layers)
+  (darterfly/mach:mach-msg-send
+   (darterfly/mach:make-message :remote-port port
+                                :body (list :commit :root root :layers layers))))
+
 (defun commit (context)
   (let ((root (context-layer context)))
-    (darterfly/mach:mach-msg-send
-     (darterfly/mach:make-message :remote-port (context-port context)
-                              :body (list :commit :root (layer-id root)
-                                                  :layers (loop :for layer :in (tree root)
-                                                                :collect (cons (layer-id layer) (layer-object layer))))))))
+    (if (darterfly/run:in-world-p)
+        (remote-commit context (layer-id root) (tree-objects root))
+        (send-commit (context-port context) (layer-id root) (tree-objects root)))))
 
 (defclass connection ()
   ((window-server :initform nil :accessor connection-window-server)
@@ -99,6 +111,11 @@
               (darterfly/init:bootstrap-look-up "windowserver")))))
 
 (defun request (body &key reply)
+  (if (darterfly/run:in-world-p)
+      (remote-request body)
+      (local-request body :reply reply)))
+
+(defun local-request (body &key reply)
   (let ((port (and reply (darterfly/mach:mach-reply-port))))
     (darterfly/mach:mach-msg-send (darterfly/mach:make-message :remote-port (window-server) :local-port port :body body))
     (when port
@@ -115,6 +132,13 @@
   '((:desktop . -2147483623) (:normal . 0) (:dock . 20) (:main-menu . 24) (:status . 25) (:pop-up-menu . 101)))
 
 (defun window-create (context x y width height &key (level :normal) (order :above))
+  (if (darterfly/run:in-world-p)
+      (getf (remote-request (list :create-window :context (context-id context) :x x :y y :width width :height height
+                                                 :level level :order order))
+            :window)
+      (local-window-create context x y width height level order)))
+
+(defun local-window-create (context x y width height level order)
   (let ((window (getf (request (list :create-window :width width :height height) :reply t) :window)))
     (request (list :set-window-context window (context-id context)))
     (transaction-commit (list (list :shape window width height)
