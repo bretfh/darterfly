@@ -65,3 +65,67 @@ test-recovery:
 
 test-release-tools:
 	python3 -m unittest discover -s tests -p 'test_release.py'
+
+# Focused browser-platform IPC checks; run `make sbcl` before the first guest run.
+.PHONY: test-local-sockets test-local-sockets-guest
+test-local-sockets:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::local-socket)) (uiop:quit 1))"'
+
+test-local-sockets-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::socketpair-c-abi-on-darterfly)) (uiop:quit 1))"'
+
+.PHONY: test-native-guest
+test-native-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-executables-on-darterfly)) (uiop:quit 1))"'
+
+.PHONY: test-native-bsd-guest
+test-native-bsd-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-bsd-spawn-on-darterfly)) (uiop:quit 1))"'
+
+.PHONY: test-native-host
+test-native-host:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-bsd)) (uiop:quit 1))"'
+
+.PHONY: test-native-tcc-guest
+test-native-tcc-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::standalone-tcc-on-darterfly)) (uiop:quit 1))"'
+
+.PHONY: test-native-tcc-large-guest
+test-native-tcc-large-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::standalone-tcc-large-output-on-darterfly)) (uiop:quit 1))"'
+
+.PHONY: test-native-cxx-guest
+test-native-cxx-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-cxx-runtime-on-darterfly)) (uiop:quit 1))"'
+
+.PHONY: test-native-clang-guest
+test-native-clang-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-clang-on-darterfly)) (uiop:quit 1))"'
+
+.PHONY: test-native-lld-guest
+test-native-lld-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-lld-on-darterfly)) (uiop:quit 1))"'
+
+.PHONY: test-native-llvm-tools-guest
+test-native-llvm-tools-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-llvm-tools-on-darterfly)) (uiop:quit 1))"'
+
+.PHONY: test-native-tblgen-rebuild-guest
+test-native-tblgen-rebuild-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-tblgen-rebuild-on-darterfly)) (uiop:quit 1))"'
+
+.PHONY: export-native-tblgen-rebuild
+export-native-tblgen-rebuild:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --script tools/export-tblgen-rebuild.lisp'
+
+.PHONY: test-native-ipc-guest
+test-native-ipc-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-ipc-on-darterfly)) (uiop:quit 1))"'
+
+.PHONY: test-native-dl-guest
+test-native-dl-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-dynamic-loading-on-darterfly)) (uiop:quit 1))"'
+
+.PHONY: test-engine-boundary-guest
+test-engine-boundary-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --load ports/nyxt/engine/run-guest.lisp'

@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 int *__errno_location(void);
 #define errno (*__errno_location())
 #define EPERM 1
@@ -125,3 +128,7 @@ int *__errno_location(void);
 #define EDQUOT 122
 #define ENOMEDIUM 123
 #define EMEDIUMTYPE 124
+
+#ifdef __cplusplus
+}
+#endif

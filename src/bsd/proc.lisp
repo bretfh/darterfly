@@ -29,7 +29,12 @@
    (comm :initform "kernel" :accessor proc-comm)
    (path :initform nil :accessor proc-path)
    (threads :initform nil :accessor proc-threads)
-   (bindings :initform nil :accessor proc-bindings)))
+   (bindings :initform nil :accessor proc-bindings)
+   (closing :initform nil :accessor proc-closing)
+   (world-owner :initform nil :accessor proc-world-owner)
+   (native-world :initform nil :accessor proc-native-world)
+   (native-result :initform nil :accessor proc-native-result)
+   (native-requests :initform nil :accessor proc-native-requests)))
 
 (defmethod print-object ((proc proc) stream)
   (print-unreadable-object (proc stream :type t)
@@ -86,13 +91,18 @@
     handled))
 
 (defun stop (proc signo)
+  (when (proc-native-world proc)
+    (darterfly/worlds:pause (proc-native-world proc)))
   (setf (proc-state proc) :stop
         (proc-report proc) (w-stopcode signo))
   (post (proc-parent proc) (signo :sigchld))
   (changed)
   (loop :while (and (eq (proc-state proc) :stop)
                     (not (logtest (proc-pending proc) (sigmask 9))))
-        :do (sb-thread:condition-wait *changed* *bsd*)))
+        :do (sb-thread:condition-wait *changed* *bsd*))
+  (when (and (proc-native-world proc) (not (proc-native-result proc))
+             (not (logtest (proc-pending proc) (sigmask 9))))
+    (darterfly/worlds:resume (proc-native-world proc))))
 
 (defun post (proc signo)
   (when (and proc (not (eq (proc-state proc) :zombie)))
@@ -114,9 +124,18 @@
           (setf (proc-pending proc) (logior (proc-pending proc) (sigmask signo)))))
       (changed)
       (let ((thread (proc-thread proc)))
-        (when (and thread (zerop (in-syscall proc)) (not (eq proc *proc*))
+        (when (and thread (or (proc-native-world proc)
+                              (zerop (in-syscall proc)))
+                   (not (eq proc *proc*))
                    (plusp (deliverable proc)) (sb-thread:thread-alive-p thread))
-          (sb-thread:interrupt-thread thread (lambda () (with-bsd (deliver proc)))))))))
+          (sb-thread:interrupt-thread
+           thread
+           (lambda ()
+             (with-bsd
+               ;; Wake native blocking foreign calls, but do not unwind a
+               ;; descriptor mutation midway. SYSCALL or its caller delivers
+               ;; the signal once that operation has returned.
+               (when (zerop (in-syscall proc)) (deliver proc))))))))))
 
 (defmacro syscall (&body body)
   `(with-bsd
@@ -128,6 +147,8 @@
 
 (defun sleep-until (predicate)
   (loop
+    (when (or (eq (proc-state *proc*) :zombie)
+              (proc-native-result *proc*)) (fail :eintr))
     (let ((value (funcall predicate)))
       (when value (return value)))
     (when (and (plusp (deliverable *proc*)) (deliver *proc*))
@@ -163,26 +184,45 @@
                  (finish-output *error-output*))
   (throw *proc* (w-exitcode 0 (signo :sigabrt))))
 
-(defun fork (fn)
+(defun fork (fn &key prepare)
   (with-bsd
+    (when (or (proc-closing *proc*) (eq (proc-state *proc*) :zombie)
+              (and (proc-world-owner *proc*)
+                   (proc-closing (proc-world-owner *proc*))))
+      (fail :eintr))
     (let* ((parent *proc*)
            (child (make-instance 'proc :pid (next-pid) :parent parent
-                                       :task (darterfly/mach:task-create (proc-task parent)))))
-      (setf (gethash (proc-pid child) *procs*) child)
-      (push child (proc-children parent))
-      (loop :for slot :across (proc-fds parent)
-            :do (when slot (incf (file-refs (car slot))))
-                (vector-push-extend (and slot (cons (car slot) (cdr slot))) (proc-fds child)))
-      (replace (proc-actions child) (proc-actions parent))
-      (setf (proc-mask child) (proc-mask parent)
-            (proc-cwd child) (proc-cwd parent)
-            (proc-root child) (proc-root parent)
-            (proc-comm child) (proc-comm parent)
-            (proc-bindings child) (proc-bindings parent))
-      (setf (proc-thread child)
-            (sb-thread:make-thread (lambda () (proc-main child fn))
-                                   :name (format nil "pid ~d" (proc-pid child))))
-      (proc-pid child))))
+                                       :task (darterfly/mach:task-create
+                                              (proc-task parent))))
+           (started nil))
+      (unwind-protect
+           (progn
+             (loop for slot across (proc-fds parent) do
+               (when slot (incf (file-refs (car slot))))
+               (vector-push-extend (and slot (cons (car slot) (cdr slot)))
+                                   (proc-fds child)))
+             (replace (proc-actions child) (proc-actions parent))
+             (setf (proc-world-owner child) (proc-world-owner parent)
+                   (proc-mask child) (proc-mask parent)
+                   (proc-cwd child) (proc-cwd parent)
+                   (proc-root child) (proc-root parent)
+                   (proc-comm child) (proc-comm parent)
+                   (proc-bindings child) (proc-bindings parent))
+             (when prepare (let ((*proc* child)) (funcall prepare)))
+             (setf (gethash (proc-pid child) *procs*) child)
+             (push child (proc-children parent))
+             (setf (proc-thread child)
+                   (sb-thread:make-thread (lambda () (proc-main child fn))
+                                          :name (format nil "pid ~d"
+                                                        (proc-pid child))))
+             (setf started t)
+             (proc-pid child))
+        (unless started
+          (loop for fd below (length (proc-fds child))
+                when (aref (proc-fds child) fd) do (release-fd child fd))
+          (remhash (proc-pid child) *procs*)
+          (setf (proc-children parent) (remove child (proc-children parent)))
+          (darterfly/mach:task-terminate (proc-task child)))))))
 
 (defun exit (code)
   (throw *proc* (w-exitcode (logand code 255) 0)))

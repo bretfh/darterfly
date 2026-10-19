@@ -1,0 +1,164 @@
+#+title: Native tools as BSD processes
+#+date: 2026-10-18
+#+startup: overview
+#+options: toc:2 num:nil
+
+* What works
+
+BSD posix-spawn and execve now recognize static ELF executables as well
+as registered Lisp programs. Each native executable runs in its own
+world, with a BSD process record, inherited file descriptions, a working
+directory, arguments and environment. The parent uses ordinary BSD PIDs,
+wait4 and kill. Native faults become child termination, not Lisp errors
+in the parent.
+
+The ELF restrictions and resource-isolation limits remain those in
+[[file:NATIVE-PROGRAMS.org][the native executable contract]]. This is an executable and I/O
+substrate for build tools. It does not yet run Clang, CEF or Nyxt.
+Neither Nyxt nor cl-cef has been changed for this work.
+
+* Launching a tool
+
+This example runs in a BSD process in the system world's Lisp image.
+The executable must have permission bits marking it executable. ARGV
+includes argv[0]; the environment is an explicit list of strings.
+
+#+begin_src lisp
+(let ((pid
+        (darterfly/bsd:posix-spawn
+         "/tmp/tool" '("tool" "input.c") '("LANG=C")
+         :file-actions
+         `((:chdir "/tmp/build")
+           (:open 0 "input.c" ,darterfly/bsd:+o-rdonly+)
+           (:open 1 "artifact"
+            ,(logior darterfly/bsd:+o-wronly+
+                     darterfly/bsd:+o-creat+
+                     darterfly/bsd:+o-trunc+))
+           (:dup2 1 2)
+           (:closefrom 3)))))
+  (multiple-value-bind (child status) (darterfly/bsd:wait4 pid)
+    (values child status)))
+#+end_src
+
+The status is a BSD wait status, not an unshifted exit code. Use the
+existing wifexited/wexitstatus and wifsignaled/wtermsig predicates.
+wait4 supports nonblocking waits and stop/continue reports. Signals with
+fatal default actions terminate the native world; stop and continue
+pause and resume it. Native signal-handler installation is not provided.
+
+File actions execute in order against the child's copied descriptor
+slots. Open file descriptions remain shared, including their offsets.
+Closing a child descriptor does not close its parent's slot. Close-on-exec
+is a per-slot property. Spawn's dup2 action clears it even when source and
+destination are identical. CLOEXEC slots close when the executable starts.
+
+Program validation and file actions complete before the child thread is
+published. Bad ELF or a bad descriptor action fails synchronously and
+releases inherited descriptor references. Filesystem effects of earlier
+file actions are not rolled back. The executable bytes are snapshotted;
+the kernel validates them again when loading the world. A later world
+allocation failure still occurs during child execution.
+
+* How the boundary works
+
+#+begin_example
+system world                              isolated native world
+
+Lisp parent: posix-spawn ----------------> ELF startup, main(argc,argv,envp)
+      |                                              |
+      | BSD PID                              existing Low libsa runtime
+      |                                              |
+      |                                  bounded bytes over port right 1
+      |                                              |
+      +-- child process / descriptor table <---------+
+      |       ^
+      |       | kernel supplies sender world ID
+      |   one shared port broker
+      |       |
+      |   child's Lisp service thread
+      |       +-- VFS, pipes, sockets, console, poll
+      |
+      +-- wait4 <------- exit / fault / signal; close descriptors, reap
+#+end_example
+
+The broker routes requests using the sender identity supplied by the
+kernel. A request cannot select another process by naming its PID.
+Requests contain bytes and integers, never addresses for the supervisor
+to dereference. The child's own Lisp process thread performs BSD calls,
+so existing descriptor ownership and signal machinery apply.
+
+A single broker port serves all children, avoiding a new permanent port
+name for every spawn. Each process has at most 16 queued requests. The
+broker checks termination at ten-millisecond intervals. Death wakes
+blocked descriptor services; normal process cleanup closes descriptors
+and abandons pending calls safely. Kill is tested during pipe reads,
+polling, a console read, and a native busy loop.
+
+The public raw worlds:spawn-native API remains available. It returns a
+world ID and grants no BSD descriptor service by default. Use BSD spawn
+when the executable needs the process service described here.
+
+* Shared runtime and wire contract
+
+Native programs now link [[file:../../src/libsa/crt0.S][crt0.S]] and the existing libsa-object,
+using headers in src/libsa/include. There is one libc, allocator and TLS
+implementation, with private state per world. The temporary C runtime
+and separate native I/O protocol have been removed.
+
+See [[file:SHARED-RUNTIME.org][the runtime consolidation]] for startup, TLS validation, the common
+libsa service envelope, tests and remaining compiler requirements. Socket
+creation, stat, directory and other existing libsa APIs are now reached
+through that same service. Availability of an entry point is not a claim
+of complete POSIX behavior.
+
+* Evidence on the actual OS
+
+#+begin_src sh
+make sbcl                     # once, for a fresh checkout
+make check
+make test-native-host
+make test-native-bsd-guest
+#+end_src
+
+The guest test boots the actual kernel and Lisp image under four-vCPU
+QEMU, with a disposable root disk. It verifies redirected input/output,
+diagnostics, shared offsets, descriptor flags, cwd/env, process identity,
+pipe/socket I/O, EOF, invalid executable/actions, malformed requests,
+fault status, stop/continue, cancellation and repeated spawn/reap.
+
+It then compiles libsa with Low and the assembly/C probe with target
+TCC inside Darterfly, links them with link-native, and BSD-spawns the
+resulting ELF in a new world. That rebuilt executable reads redirected
+stdin and writes an artifact whose contents the parent verifies. The
+compiler itself still runs in the system world.
+
+An additional check launches that rebuilt executable through SBCL's
+existing run-program, with redirected stdin/stdout and a collected exit
+code. This establishes the system-world Lisp build-driver path through
+libsa and BSD spawn as well as direct BSD calls.
+
+The guest transcript is build/native-bsd-guest.log; full boot logs are
+under the test's temporary native-bsd-console directory. The focused
+host tests check service bounds, descriptor sharing and failed-spawn
+cleanup. Current results are recorded in [[file:VALIDATION.org][VALIDATION.org]].
+
+* What must follow for compiler and browser builds
+
+1. [[file:CHILD-PROCESSES.org][Native and isolated-SBCL child spawn/wait now work]]. Grow the
+   remaining process API against compiler requirements: attributes,
+   process groups and cancellation. Native C posix_spawn and isolated
+   SBCL run-program now use the same public Low implementation.
+2. Qualify the shared libc/sysroot against measured compiler needs:
+   allocation, files, clocks, mappings, TLS, threads and C++ startup.
+   Qualify each requirement with the selected compiler's actual binary
+   and runtime tests. Preserve graceful failure and add resource limits.
+3. Cross-seed the chosen C++ compiler, linker and runtime. Execute them
+   here, then rebuild them here and use that result to build another tool.
+   The imported seed is a bootstrap stage, not the final build workflow.
+4. Close the build-tool and generator dependencies recorded in the Guix
+   inventories, then prove a local engine build and subprocess harness.
+   Attach Nyxt's existing backend through narrow platform adapters once
+   the engine can execute, draw and survive subprocess failure.
+
+The detailed gates remain in [[file:SELF-HOSTING.org][SELF-HOSTING.org]]. This milestone supplies
+real descriptor-backed isolated execution; it does not close those gates.

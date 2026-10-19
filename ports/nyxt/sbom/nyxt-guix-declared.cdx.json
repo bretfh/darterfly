@@ -1,0 +1,5176 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "metadata": {
+    "timestamp": "2026-10-18T17:25:56Z",
+    "tools": {
+      "components": [
+        {
+          "type": "operating-system",
+          "name": "guix"
+        },
+        {
+          "type": "application",
+          "name": "guix-graph"
+        }
+      ]
+    }
+  },
+  "components": [
+
+    {
+      "type": "application",
+      "name": "nyxt",
+      "version": "4.0.0-pre-3"
+    },
+    {
+      "type": "application",
+      "name": "sbcl",
+      "version": "2.6.4"
+    },
+    {
+      "type": "application",
+      "name": "clisp",
+      "version": "2.49-92"
+    },
+    {
+      "type": "application",
+      "name": "clisp-tests-locales",
+      "version": "2.41"
+    },
+    {
+      "type": "application",
+      "name": "glibc",
+      "version": "2.41"
+    },
+    {
+      "type": "application",
+      "name": "texinfo",
+      "version": "6.8"
+    },
+    {
+      "type": "application",
+      "name": "perl",
+      "version": "5.36.0"
+    },
+    {
+      "type": "application",
+      "name": "ncurses",
+      "version": "6.2.20210619"
+    },
+    {
+      "type": "application",
+      "name": "pkg-config",
+      "version": "0.29.2"
+    },
+    {
+      "type": "application",
+      "name": "glibc-utf8-locales",
+      "version": "2.41"
+    },
+    {
+      "type": "application",
+      "name": "glibc",
+      "version": "2.41"
+    },
+    {
+      "type": "application",
+      "name": "bison-boot0",
+      "version": "3.8.2"
+    },
+    {
+      "type": "application",
+      "name": "perl-boot0",
+      "version": "5.36.0"
+    },
+    {
+      "type": "application",
+      "name": "bzip2-boot0",
+      "version": "1.0.8"
+    },
+    {
+      "type": "application",
+      "name": "diffutils-boot0",
+      "version": "3.12"
+    },
+    {
+      "type": "application",
+      "name": "make-boot0",
+      "version": "4.4.1"
+    },
+    {
+      "type": "application",
+      "name": "bash-mesboot",
+      "version": "5.2.37"
+    },
+    {
+      "type": "application",
+      "name": "gcc-mesboot-wrapper",
+      "version": "4.9.4"
+    },
+    {
+      "type": "application",
+      "name": "gash-boot",
+      "version": "0.3.1"
+    },
+    {
+      "type": "application",
+      "name": "bootar",
+      "version": "1b"
+    },
+    {
+      "type": "application",
+      "name": "guile-bootstrap",
+      "version": "2.0"
+    },
+    {
+      "type": "application",
+      "name": "gash-utils-boot",
+      "version": "0.2.0"
+    },
+    {
+      "type": "application",
+      "name": "glibc-mesboot",
+      "version": "2.16.0"
+    },
+    {
+      "type": "application",
+      "name": "glibc-headers-mesboot",
+      "version": "2.16.0"
+    },
+    {
+      "type": "application",
+      "name": "mesboot-headers",
+      "version": "0.25.1"
+    },
+    {
+      "type": "application",
+      "name": "linux-libre-headers-bootstrap",
+      "version": "0"
+    },
+    {
+      "type": "application",
+      "name": "gzip-mesboot",
+      "version": "1.2.4"
+    },
+    {
+      "type": "application",
+      "name": "tcc-boot0",
+      "version": "0.9.26-1149-g46a75d0c"
+    },
+    {
+      "type": "application",
+      "name": "mes-boot",
+      "version": "0.25.1"
+    },
+    {
+      "type": "application",
+      "name": "stage0-posix",
+      "version": "1.6.0"
+    },
+    {
+      "type": "application",
+      "name": "patch-mesboot",
+      "version": "2.5.9"
+    },
+    {
+      "type": "application",
+      "name": "make-mesboot0",
+      "version": "3.80"
+    },
+    {
+      "type": "application",
+      "name": "tcc-boot",
+      "version": "0.9.27"
+    },
+    {
+      "type": "application",
+      "name": "binutils-mesboot",
+      "version": "2.20.1a"
+    },
+    {
+      "type": "application",
+      "name": "gcc-mesboot1",
+      "version": "4.6.4"
+    },
+    {
+      "type": "application",
+      "name": "binutils-mesboot1",
+      "version": "2.20.1a"
+    },
+    {
+      "type": "application",
+      "name": "gcc-mesboot0",
+      "version": "2.95.3"
+    },
+    {
+      "type": "application",
+      "name": "glibc-mesboot0",
+      "version": "2.2.5"
+    },
+    {
+      "type": "application",
+      "name": "binutils-mesboot0",
+      "version": "2.20.1a"
+    },
+    {
+      "type": "application",
+      "name": "gcc-core-mesboot0",
+      "version": "2.95.3"
+    },
+    {
+      "type": "application",
+      "name": "make-mesboot",
+      "version": "3.82"
+    },
+    {
+      "type": "application",
+      "name": "gawk-mesboot",
+      "version": "3.1.8"
+    },
+    {
+      "type": "application",
+      "name": "gcc-mesboot",
+      "version": "4.9.4"
+    },
+    {
+      "type": "application",
+      "name": "gcc-mesboot1-wrapper",
+      "version": "4.6.4"
+    },
+    {
+      "type": "application",
+      "name": "coreutils-mesboot",
+      "version": "9.1"
+    },
+    {
+      "type": "application",
+      "name": "sed-mesboot",
+      "version": "4.8"
+    },
+    {
+      "type": "application",
+      "name": "grep-mesboot",
+      "version": "3.11"
+    },
+    {
+      "type": "application",
+      "name": "tar-mesboot",
+      "version": "1.35"
+    },
+    {
+      "type": "application",
+      "name": "xz-mesboot",
+      "version": "5.4.5"
+    },
+    {
+      "type": "application",
+      "name": "coreutils-boot0",
+      "version": "9.1"
+    },
+    {
+      "type": "application",
+      "name": "gawk-boot0",
+      "version": "5.3.0"
+    },
+    {
+      "type": "application",
+      "name": "patch-boot0",
+      "version": "2.7.6"
+    },
+    {
+      "type": "application",
+      "name": "sed-boot0",
+      "version": "4.9"
+    },
+    {
+      "type": "application",
+      "name": "tar-boot0",
+      "version": "1.35"
+    },
+    {
+      "type": "application",
+      "name": "findutils-boot0",
+      "version": "4.10.0"
+    },
+    {
+      "type": "application",
+      "name": "file-boot0",
+      "version": "5.46"
+    },
+    {
+      "type": "application",
+      "name": "m4-boot0",
+      "version": "1.4.19"
+    },
+    {
+      "type": "application",
+      "name": "texinfo",
+      "version": "6.8"
+    },
+    {
+      "type": "application",
+      "name": "python-boot0",
+      "version": "3.5.9"
+    },
+    {
+      "type": "application",
+      "name": "expat",
+      "version": "2.7.1"
+    },
+    {
+      "type": "application",
+      "name": "gettext-boot0",
+      "version": "0.19.8.1"
+    },
+    {
+      "type": "application",
+      "name": "gcc-cross-boot0",
+      "version": "14.3.0"
+    },
+    {
+      "type": "application",
+      "name": "binutils-cross-boot0",
+      "version": "2.44"
+    },
+    {
+      "type": "application",
+      "name": "libstdc++-boot0",
+      "version": "4.9.4"
+    },
+    {
+      "type": "application",
+      "name": "ld-wrapper-boot0",
+      "version": "0"
+    },
+    {
+      "type": "application",
+      "name": "bash-static",
+      "version": "5.2.37"
+    },
+    {
+      "type": "application",
+      "name": "gcc-cross-boot0-wrapped",
+      "version": "14.3.0"
+    },
+    {
+      "type": "application",
+      "name": "glibc-intermediate",
+      "version": "2.41"
+    },
+    {
+      "type": "application",
+      "name": "linux-libre-headers",
+      "version": "6.12.17"
+    },
+    {
+      "type": "application",
+      "name": "flex",
+      "version": "2.6.4"
+    },
+    {
+      "type": "application",
+      "name": "gzip",
+      "version": "1.14"
+    },
+    {
+      "type": "application",
+      "name": "bash-minimal",
+      "version": "5.2.37"
+    },
+    {
+      "type": "application",
+      "name": "gcc",
+      "version": "14.3.0"
+    },
+    {
+      "type": "application",
+      "name": "ld-wrapper-boot3",
+      "version": "0"
+    },
+    {
+      "type": "application",
+      "name": "binutils",
+      "version": "2.44"
+    },
+    {
+      "type": "application",
+      "name": "libstdc++",
+      "version": "14.3.0"
+    },
+    {
+      "type": "application",
+      "name": "gcc-cross-boot0-wrapped",
+      "version": "14.3.0"
+    },
+    {
+      "type": "application",
+      "name": "zlib",
+      "version": "1.3.1"
+    },
+    {
+      "type": "application",
+      "name": "bison",
+      "version": "3.8.2"
+    },
+    {
+      "type": "application",
+      "name": "m4",
+      "version": "1.4.19"
+    },
+    {
+      "type": "application",
+      "name": "flex",
+      "version": "2.6.4"
+    },
+    {
+      "type": "application",
+      "name": "help2man",
+      "version": "1.49.2"
+    },
+    {
+      "type": "application",
+      "name": "gettext-minimal",
+      "version": "0.23.1"
+    },
+    {
+      "type": "application",
+      "name": "libunistring",
+      "version": "1.3"
+    },
+    {
+      "type": "application",
+      "name": "libxml2",
+      "version": "2.14.6"
+    },
+    {
+      "type": "application",
+      "name": "python-minimal",
+      "version": "3.12.12"
+    },
+    {
+      "type": "application",
+      "name": "tzdata",
+      "version": "2025a"
+    },
+    {
+      "type": "application",
+      "name": "unzip",
+      "version": "6.0"
+    },
+    {
+      "type": "application",
+      "name": "bzip2",
+      "version": "1.0.8"
+    },
+    {
+      "type": "application",
+      "name": "zip",
+      "version": "3.0"
+    },
+    {
+      "type": "application",
+      "name": "expat",
+      "version": "2.7.1"
+    },
+    {
+      "type": "application",
+      "name": "libffi",
+      "version": "3.4.6"
+    },
+    {
+      "type": "application",
+      "name": "openssl",
+      "version": "3.5.5"
+    },
+    {
+      "type": "application",
+      "name": "zlib",
+      "version": "1.3.1"
+    },
+    {
+      "type": "application",
+      "name": "xz",
+      "version": "5.4.5"
+    },
+    {
+      "type": "application",
+      "name": "perl-gettext",
+      "version": "1.07"
+    },
+    {
+      "type": "application",
+      "name": "bison",
+      "version": "3.8.2"
+    },
+    {
+      "type": "application",
+      "name": "bash-static",
+      "version": "5.2.37"
+    },
+    {
+      "type": "application",
+      "name": "linux-libre-headers",
+      "version": "6.12.17"
+    },
+    {
+      "type": "application",
+      "name": "gzip",
+      "version": "1.14"
+    },
+    {
+      "type": "application",
+      "name": "cl-asdf",
+      "version": "3.3.7"
+    },
+    {
+      "type": "application",
+      "name": "patch",
+      "version": "2.7.6"
+    },
+    {
+      "type": "application",
+      "name": "ed",
+      "version": "1.21"
+    },
+    {
+      "type": "application",
+      "name": "lzip",
+      "version": "1.25"
+    },
+    {
+      "type": "application",
+      "name": "coreutils",
+      "version": "9.1"
+    },
+    {
+      "type": "application",
+      "name": "acl",
+      "version": "2.3.1"
+    },
+    {
+      "type": "application",
+      "name": "attr",
+      "version": "2.5.1"
+    },
+    {
+      "type": "application",
+      "name": "gmp",
+      "version": "6.3.0"
+    },
+    {
+      "type": "application",
+      "name": "libcap",
+      "version": "2.64"
+    },
+    {
+      "type": "application",
+      "name": "libffcall",
+      "version": "2.5"
+    },
+    {
+      "type": "application",
+      "name": "readline",
+      "version": "8.2.13"
+    },
+    {
+      "type": "application",
+      "name": "libsigsegv",
+      "version": "2.14"
+    },
+    {
+      "type": "application",
+      "name": "inetutils",
+      "version": "2.7"
+    },
+    {
+      "type": "application",
+      "name": "net-tools",
+      "version": "1.60-0.479bb4a"
+    },
+    {
+      "type": "application",
+      "name": "shadow",
+      "version": "4.19.0"
+    },
+    {
+      "type": "application",
+      "name": "linux-pam",
+      "version": "1.5.2"
+    },
+    {
+      "type": "application",
+      "name": "libxcrypt",
+      "version": "4.4.38"
+    },
+    {
+      "type": "application",
+      "name": "texlive-local-tree",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-scripts",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-scheme-basic",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-collection-basic",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-amsfonts",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-cm",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-metafont",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-kpathsea",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "gawk",
+      "version": "5.3.0"
+    },
+    {
+      "type": "application",
+      "name": "bash",
+      "version": "5.2.37"
+    },
+    {
+      "type": "application",
+      "name": "sed",
+      "version": "4.9"
+    },
+    {
+      "type": "application",
+      "name": "texlive-libkpathsea",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-modes",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-mfware-bin",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "fontconfig-minimal",
+      "version": "2.16.0"
+    },
+    {
+      "type": "application",
+      "name": "autoconf",
+      "version": "2.71"
+    },
+    {
+      "type": "application",
+      "name": "bash-minimal",
+      "version": "5.2.37"
+    },
+    {
+      "type": "application",
+      "name": "automake",
+      "version": "1.17"
+    },
+    {
+      "type": "application",
+      "name": "autoconf-wrapper",
+      "version": "2.69"
+    },
+    {
+      "type": "application",
+      "name": "guile",
+      "version": "3.0.9"
+    },
+    {
+      "type": "application",
+      "name": "libgc",
+      "version": "8.2.8"
+    },
+    {
+      "type": "application",
+      "name": "autoconf",
+      "version": "2.69"
+    },
+    {
+      "type": "application",
+      "name": "gperf",
+      "version": "3.3"
+    },
+    {
+      "type": "application",
+      "name": "libtool",
+      "version": "2.4.7"
+    },
+    {
+      "type": "application",
+      "name": "libltdl",
+      "version": "2.4.7"
+    },
+    {
+      "type": "application",
+      "name": "font-dejavu",
+      "version": "2.37"
+    },
+    {
+      "type": "application",
+      "name": "freetype",
+      "version": "2.13.3"
+    },
+    {
+      "type": "application",
+      "name": "libpng",
+      "version": "1.6.39"
+    },
+    {
+      "type": "application",
+      "name": "util-linux",
+      "version": "2.40.4"
+    },
+    {
+      "type": "application",
+      "name": "net-base",
+      "version": "5.3"
+    },
+    {
+      "type": "application",
+      "name": "tar",
+      "version": "1.35"
+    },
+    {
+      "type": "application",
+      "name": "file",
+      "version": "5.46"
+    },
+    {
+      "type": "application",
+      "name": "sqlite",
+      "version": "3.39.3"
+    },
+    {
+      "type": "application",
+      "name": "harfbuzz",
+      "version": "11.4.4"
+    },
+    {
+      "type": "application",
+      "name": "glib",
+      "version": "2.86.0"
+    },
+    {
+      "type": "application",
+      "name": "gobject-introspection",
+      "version": "1.86.0"
+    },
+    {
+      "type": "application",
+      "name": "glib",
+      "version": "2.86.0"
+    },
+    {
+      "type": "application",
+      "name": "dbus",
+      "version": "1.16.2"
+    },
+    {
+      "type": "application",
+      "name": "docbook-xml",
+      "version": "4.4"
+    },
+    {
+      "type": "application",
+      "name": "libxslt",
+      "version": "1.1.43"
+    },
+    {
+      "type": "application",
+      "name": "libgcrypt",
+      "version": "1.11.0"
+    },
+    {
+      "type": "application",
+      "name": "libgpg-error",
+      "version": "1.51"
+    },
+    {
+      "type": "application",
+      "name": "python-minimal-wrapper",
+      "version": "3.12.12"
+    },
+    {
+      "type": "application",
+      "name": "docbook-xsl",
+      "version": "1.79.2-0.fe16c90"
+    },
+    {
+      "type": "application",
+      "name": "perl-xml-xpath",
+      "version": "1.48"
+    },
+    {
+      "type": "application",
+      "name": "perl-path-tiny",
+      "version": "0.118"
+    },
+    {
+      "type": "application",
+      "name": "perl-unicode-utf8",
+      "version": "0.62"
+    },
+    {
+      "type": "application",
+      "name": "perl-test-fatal",
+      "version": "0.016"
+    },
+    {
+      "type": "application",
+      "name": "perl-try-tiny",
+      "version": "0.31"
+    },
+    {
+      "type": "application",
+      "name": "perl-test-leaktrace",
+      "version": "0.16"
+    },
+    {
+      "type": "application",
+      "name": "perl-variable-magic",
+      "version": "0.62"
+    },
+    {
+      "type": "application",
+      "name": "perl-test-pod",
+      "version": "1.52"
+    },
+    {
+      "type": "application",
+      "name": "perl-module-build",
+      "version": "0.4231"
+    },
+    {
+      "type": "application",
+      "name": "perl-cpan-meta",
+      "version": "2.150010"
+    },
+    {
+      "type": "application",
+      "name": "perl-cpan-meta-requirements",
+      "version": "2.140"
+    },
+    {
+      "type": "application",
+      "name": "perl-cpan-meta-yaml",
+      "version": "0.018"
+    },
+    {
+      "type": "application",
+      "name": "perl-parse-cpan-meta",
+      "version": "2.150010"
+    },
+    {
+      "type": "application",
+      "name": "perl-xml-parser",
+      "version": "2.46"
+    },
+    {
+      "type": "application",
+      "name": "doxygen",
+      "version": "1.14.0"
+    },
+    {
+      "type": "application",
+      "name": "python",
+      "version": "3.12.12"
+    },
+    {
+      "type": "application",
+      "name": "gdbm",
+      "version": "1.25"
+    },
+    {
+      "type": "application",
+      "name": "tcl",
+      "version": "8.6.12"
+    },
+    {
+      "type": "application",
+      "name": "tk",
+      "version": "8.6.12"
+    },
+    {
+      "type": "application",
+      "name": "libxft",
+      "version": "2.3.8"
+    },
+    {
+      "type": "application",
+      "name": "libx11",
+      "version": "1.8.12"
+    },
+    {
+      "type": "application",
+      "name": "xtrans",
+      "version": "1.5.2"
+    },
+    {
+      "type": "application",
+      "name": "xorgproto",
+      "version": "2024.1"
+    },
+    {
+      "type": "application",
+      "name": "util-macros",
+      "version": "1.20.2"
+    },
+    {
+      "type": "application",
+      "name": "libxcb",
+      "version": "1.17.0"
+    },
+    {
+      "type": "application",
+      "name": "xcb-proto",
+      "version": "1.17.0"
+    },
+    {
+      "type": "application",
+      "name": "check",
+      "version": "0.15.2"
+    },
+    {
+      "type": "application",
+      "name": "libxau",
+      "version": "1.0.12"
+    },
+    {
+      "type": "application",
+      "name": "libxdmcp",
+      "version": "1.1.5"
+    },
+    {
+      "type": "application",
+      "name": "libxrender",
+      "version": "0.9.12"
+    },
+    {
+      "type": "application",
+      "name": "libxext",
+      "version": "1.3.6"
+    },
+    {
+      "type": "application",
+      "name": "which",
+      "version": "2.21"
+    },
+    {
+      "type": "application",
+      "name": "xmlto",
+      "version": "0.0.28"
+    },
+    {
+      "type": "application",
+      "name": "yelp-tools",
+      "version": "42.1"
+    },
+    {
+      "type": "application",
+      "name": "python-lxml-for-texlive",
+      "version": "6.0.1"
+    },
+    {
+      "type": "application",
+      "name": "python-wrapper",
+      "version": "3.12.12"
+    },
+    {
+      "type": "application",
+      "name": "python-setuptools-bootstrap",
+      "version": "80.9.0"
+    },
+    {
+      "type": "application",
+      "name": "yelp-xsl",
+      "version": "42.4"
+    },
+    {
+      "type": "application",
+      "name": "mallard-ducktype",
+      "version": "1.0.2"
+    },
+    {
+      "type": "application",
+      "name": "itstool",
+      "version": "2.0.7"
+    },
+    {
+      "type": "application",
+      "name": "pcre2",
+      "version": "10.42"
+    },
+    {
+      "type": "application",
+      "name": "gobject-introspection",
+      "version": "1.86.0"
+    },
+    {
+      "type": "application",
+      "name": "python-setuptools",
+      "version": "80.9.0"
+    },
+    {
+      "type": "application",
+      "name": "python-autocommand",
+      "version": "2.2.2"
+    },
+    {
+      "type": "application",
+      "name": "python-pytest-bootstrap",
+      "version": "9.0.2"
+    },
+    {
+      "type": "application",
+      "name": "python-setuptools-scm-bootstrap",
+      "version": "8.3.1"
+    },
+    {
+      "type": "application",
+      "name": "python-packaging-bootstrap",
+      "version": "25.0"
+    },
+    {
+      "type": "application",
+      "name": "python-flit-core",
+      "version": "3.12.0"
+    },
+    {
+      "type": "application",
+      "name": "python-tomli",
+      "version": "2.2.1"
+    },
+    {
+      "type": "application",
+      "name": "python-flit-core-bootstrap",
+      "version": "3.12.0"
+    },
+    {
+      "type": "application",
+      "name": "python-toml",
+      "version": "0.10.2"
+    },
+    {
+      "type": "application",
+      "name": "python-iniconfig",
+      "version": "2.1.0"
+    },
+    {
+      "type": "application",
+      "name": "python-hatch-vcs-bootstrap",
+      "version": "0.5.0"
+    },
+    {
+      "type": "application",
+      "name": "python-hatchling-bootstrap",
+      "version": "1.27.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pathspec",
+      "version": "1.0.4"
+    },
+    {
+      "type": "application",
+      "name": "python-pluggy",
+      "version": "1.6.0"
+    },
+    {
+      "type": "application",
+      "name": "python-setuptools-scm",
+      "version": "8.3.1"
+    },
+    {
+      "type": "application",
+      "name": "python-trove-classifiers",
+      "version": "2025.5.9.12"
+    },
+    {
+      "type": "application",
+      "name": "python-pygments-bootstrap",
+      "version": "2.19.2"
+    },
+    {
+      "type": "application",
+      "name": "python-hatchling",
+      "version": "1.27.0"
+    },
+    {
+      "type": "application",
+      "name": "python-backports-tarfile",
+      "version": "1.2.0"
+    },
+    {
+      "type": "application",
+      "name": "python-filelock-bootstrap",
+      "version": "3.16.1"
+    },
+    {
+      "type": "application",
+      "name": "python-inflect",
+      "version": "7.5.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pygments",
+      "version": "2.19.2"
+    },
+    {
+      "type": "application",
+      "name": "python-more-itertools",
+      "version": "10.6.0"
+    },
+    {
+      "type": "application",
+      "name": "python-typeguard",
+      "version": "4.4.4"
+    },
+    {
+      "type": "application",
+      "name": "python-typing-extensions",
+      "version": "4.15.0"
+    },
+    {
+      "type": "application",
+      "name": "python-jaraco-collections",
+      "version": "5.2.1"
+    },
+    {
+      "type": "application",
+      "name": "python-jaraco-text",
+      "version": "4.0.0"
+    },
+    {
+      "type": "application",
+      "name": "python-jaraco-context",
+      "version": "6.0.1"
+    },
+    {
+      "type": "application",
+      "name": "python-jaraco-functools",
+      "version": "4.2.1"
+    },
+    {
+      "type": "application",
+      "name": "python-jaraco-classes",
+      "version": "3.4.0"
+    },
+    {
+      "type": "application",
+      "name": "python-jaraco-envs-bootstrap",
+      "version": "2.6.0"
+    },
+    {
+      "type": "application",
+      "name": "python-path",
+      "version": "17.1.0"
+    },
+    {
+      "type": "application",
+      "name": "python-virtualenv-bootstrap",
+      "version": "20.29.1"
+    },
+    {
+      "type": "application",
+      "name": "python-distlib",
+      "version": "0.3.7"
+    },
+    {
+      "type": "application",
+      "name": "python-platformdirs-bootstrap",
+      "version": "4.3.6"
+    },
+    {
+      "type": "application",
+      "name": "python-hatch-vcs",
+      "version": "0.5.0"
+    },
+    {
+      "type": "application",
+      "name": "python-jaraco-path",
+      "version": "3.7.2"
+    },
+    {
+      "type": "application",
+      "name": "python-jaraco-test",
+      "version": "5.5.1"
+    },
+    {
+      "type": "application",
+      "name": "python-packaging",
+      "version": "25.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pretend",
+      "version": "1.0.9"
+    },
+    {
+      "type": "application",
+      "name": "python-pyparsing",
+      "version": "3.2.3"
+    },
+    {
+      "type": "application",
+      "name": "python-six",
+      "version": "1.17.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pip",
+      "version": "25.1.1"
+    },
+    {
+      "type": "application",
+      "name": "python-pypa-build",
+      "version": "1.3.0"
+    },
+    {
+      "type": "application",
+      "name": "python-colorama",
+      "version": "0.4.6"
+    },
+    {
+      "type": "application",
+      "name": "python-pyproject-hooks",
+      "version": "1.2.0"
+    },
+    {
+      "type": "application",
+      "name": "python-testpath",
+      "version": "0.6.0"
+    },
+    {
+      "type": "application",
+      "name": "python-wheel",
+      "version": "0.46.1"
+    },
+    {
+      "type": "application",
+      "name": "cairo",
+      "version": "1.18.4"
+    },
+    {
+      "type": "application",
+      "name": "ghostscript",
+      "version": "9.56.1"
+    },
+    {
+      "type": "application",
+      "name": "font-ghostscript",
+      "version": "8.11"
+    },
+    {
+      "type": "application",
+      "name": "jbig2dec",
+      "version": "0.19"
+    },
+    {
+      "type": "application",
+      "name": "libjpeg-turbo",
+      "version": "2.1.4"
+    },
+    {
+      "type": "application",
+      "name": "nasm",
+      "version": "2.15.05"
+    },
+    {
+      "type": "application",
+      "name": "libpaper",
+      "version": "2.0.0"
+    },
+    {
+      "type": "application",
+      "name": "libtiff",
+      "version": "4.4.0"
+    },
+    {
+      "type": "application",
+      "name": "libspectre",
+      "version": "0.2.10"
+    },
+    {
+      "type": "application",
+      "name": "libdrm",
+      "version": "2.4.131"
+    },
+    {
+      "type": "application",
+      "name": "libpciaccess",
+      "version": "0.18.1"
+    },
+    {
+      "type": "application",
+      "name": "pciutils",
+      "version": "3.13.0"
+    },
+    {
+      "type": "application",
+      "name": "hwdata",
+      "version": "0.392"
+    },
+    {
+      "type": "application",
+      "name": "kmod",
+      "version": "29"
+    },
+    {
+      "type": "application",
+      "name": "zstd",
+      "version": "1.5.6"
+    },
+    {
+      "type": "application",
+      "name": "poppler",
+      "version": "22.09.0"
+    },
+    {
+      "type": "application",
+      "name": "lcms",
+      "version": "2.13.1"
+    },
+    {
+      "type": "application",
+      "name": "nss",
+      "version": "3.101.4"
+    },
+    {
+      "type": "application",
+      "name": "libfaketime",
+      "version": "0.9.10"
+    },
+    {
+      "type": "application",
+      "name": "coreutils-minimal",
+      "version": "9.1"
+    },
+    {
+      "type": "application",
+      "name": "nspr",
+      "version": "4.36"
+    },
+    {
+      "type": "application",
+      "name": "openjpeg",
+      "version": "2.5.0"
+    },
+    {
+      "type": "application",
+      "name": "openjpeg-data",
+      "version": "2021.09.26"
+    },
+    {
+      "type": "application",
+      "name": "poppler-data",
+      "version": "0.4.11"
+    },
+    {
+      "type": "application",
+      "name": "cairo",
+      "version": "1.18.4"
+    },
+    {
+      "type": "application",
+      "name": "pixman",
+      "version": "0.46.4"
+    },
+    {
+      "type": "application",
+      "name": "graphite2",
+      "version": "1.3.13"
+    },
+    {
+      "type": "application",
+      "name": "python-fonttools-minimal",
+      "version": "4.59.2"
+    },
+    {
+      "type": "application",
+      "name": "icu4c",
+      "version": "73.1"
+    },
+    {
+      "type": "application",
+      "name": "libxt",
+      "version": "1.3.1"
+    },
+    {
+      "type": "application",
+      "name": "libice",
+      "version": "1.1.2"
+    },
+    {
+      "type": "application",
+      "name": "libsm",
+      "version": "1.2.5"
+    },
+    {
+      "type": "application",
+      "name": "zziplib",
+      "version": "0.13.78"
+    },
+    {
+      "type": "application",
+      "name": "texlive-bibtex",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-bibtex-bin",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-bin",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-colorprofiles",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-dvipdfmx",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-dvipdfmx-bin",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-extractbb",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-glyphlist",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-dvips",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-dvips-bin",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-ec",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-enctex",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-etex",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-etex-pkg",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-graphics-def",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-hyphen-complete",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "ruby",
+      "version": "3.3.9"
+    },
+    {
+      "type": "application",
+      "name": "libyaml",
+      "version": "0.2.5"
+    },
+    {
+      "type": "application",
+      "name": "openssl",
+      "version": "1.1.1w"
+    },
+    {
+      "type": "application",
+      "name": "ruby-hydra-minimal",
+      "version": "0.0-0.5abfa37"
+    },
+    {
+      "type": "application",
+      "name": "texlive-tex",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-hyphen-base",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-knuth-lib",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-plain",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-hyphenex",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-ifplatform",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-iftex",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-knuth-local",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-lua-alt-getopt",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-luahbtex",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-luatex",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-tex-ini-files",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-unicode-data",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-makeindex",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-makeindex-bin",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-mflogo",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-mfware",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-pdftex",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-xdvi",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-xdvi-bin",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "libxaw",
+      "version": "1.0.16"
+    },
+    {
+      "type": "application",
+      "name": "libxmu",
+      "version": "1.2.1"
+    },
+    {
+      "type": "application",
+      "name": "libxpm",
+      "version": "3.5.17"
+    },
+    {
+      "type": "application",
+      "name": "texlive-collection-latex",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-ae",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-amscls",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-amsmath",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-atbegshi",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-latex",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-atveryend",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-auxhook",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-babel",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-babel-english",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-babelbib",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-bigintcalc",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-bitset",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-bookmark",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-carlisle",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-colortbl",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-epstopdf-pkg",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-epstopdf",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-etexcmds",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-etoolbox",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-fancyhdr",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-firstaid",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-fix2col",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-geometry",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-graphics",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-graphics-cfg",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-gettitlestring",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-grfext",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-hopatch",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-hycolor",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-hypcap",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-hyperref",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-infwarerr",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-intcalc",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-kvdefinekeys",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-kvoptions",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-kvsetkeys",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-letltxmacro",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-ltxcmds",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-pdfescape",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-pdftexcmds",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-refcount",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-rerunfilecheck",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-uniquecounter",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-stringenc",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-url",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-zapfding",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-l3backend",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-l3kernel",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-lua-uni-algos",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-l3packages",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-latex-bin",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-latex-fonts",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-latexconfig",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-lm",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-luaotfload",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-lualibs",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-latex-lab",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-ltxmisc",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-mfnfss",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-mptopdf",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-natbib",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-oberdiek",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-grffile",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-pagesel",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-pslatex",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-psnfss",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-symbol",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-pspicture",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-tools",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-texinfo",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "mpfr",
+      "version": "4.2.2"
+    },
+    {
+      "type": "application",
+      "name": "node",
+      "version": "22.14.0"
+    },
+    {
+      "type": "application",
+      "name": "c-ares",
+      "version": "1.34.4"
+    },
+    {
+      "type": "application",
+      "name": "brotli",
+      "version": "1.1.0"
+    },
+    {
+      "type": "application",
+      "name": "icu4c",
+      "version": "76.1"
+    },
+    {
+      "type": "application",
+      "name": "libuv",
+      "version": "1.49.2"
+    },
+    {
+      "type": "application",
+      "name": "nghttp2",
+      "version": "1.58.0"
+    },
+    {
+      "type": "application",
+      "name": "cunit",
+      "version": "2.1-3"
+    },
+    {
+      "type": "application",
+      "name": "jemalloc",
+      "version": "5.3.0"
+    },
+    {
+      "type": "application",
+      "name": "c-ares",
+      "version": "1.34.4"
+    },
+    {
+      "type": "application",
+      "name": "jansson",
+      "version": "2.14"
+    },
+    {
+      "type": "application",
+      "name": "libev",
+      "version": "4.33"
+    },
+    {
+      "type": "application",
+      "name": "openssl",
+      "version": "3.0.19"
+    },
+    {
+      "type": "application",
+      "name": "procps",
+      "version": "4.0.3"
+    },
+    {
+      "type": "application",
+      "name": "llhttp",
+      "version": "9.2.1"
+    },
+    {
+      "type": "application",
+      "name": "esbuild",
+      "version": "0.24.0"
+    },
+    {
+      "type": "application",
+      "name": "go-golang-org-x-sys",
+      "version": "0.25.0"
+    },
+    {
+      "type": "application",
+      "name": "node",
+      "version": "10.24.1"
+    },
+    {
+      "type": "application",
+      "name": "c-ares",
+      "version": "1.18.1"
+    },
+    {
+      "type": "application",
+      "name": "http-parser",
+      "version": "2.9.4-1.ec8b5ee"
+    },
+    {
+      "type": "application",
+      "name": "libuv",
+      "version": "1.42.0"
+    },
+    {
+      "type": "application",
+      "name": "gcc",
+      "version": "11.5.0"
+    },
+    {
+      "type": "application",
+      "name": "isl",
+      "version": "0.24"
+    },
+    {
+      "type": "application",
+      "name": "libstdc++-headers",
+      "version": "11.5.0"
+    },
+    {
+      "type": "application",
+      "name": "libstdc++",
+      "version": "11.5.0"
+    },
+    {
+      "type": "application",
+      "name": "mpc",
+      "version": "1.3.1"
+    },
+    {
+      "type": "application",
+      "name": "elfutils",
+      "version": "0.192"
+    },
+    {
+      "type": "application",
+      "name": "python2",
+      "version": "2.7.18"
+    },
+    {
+      "type": "application",
+      "name": "node-semver",
+      "version": "7.2.1"
+    },
+    {
+      "type": "application",
+      "name": "node-llparse",
+      "version": "7.1.0"
+    },
+    {
+      "type": "application",
+      "name": "node-debug",
+      "version": "4.3.0"
+    },
+    {
+      "type": "application",
+      "name": "node-ms",
+      "version": "2.1.2"
+    },
+    {
+      "type": "application",
+      "name": "node-llparse-frontend",
+      "version": "3.0.0"
+    },
+    {
+      "type": "application",
+      "name": "node-llparse-builder",
+      "version": "1.5.2"
+    },
+    {
+      "type": "application",
+      "name": "node-binary-search",
+      "version": "1.3.6"
+    },
+    {
+      "type": "application",
+      "name": "ngtcp2",
+      "version": "1.15.1"
+    },
+    {
+      "type": "application",
+      "name": "gnutls",
+      "version": "3.8.9"
+    },
+    {
+      "type": "application",
+      "name": "iproute2",
+      "version": "6.4.0"
+    },
+    {
+      "type": "application",
+      "name": "bdb",
+      "version": "6.2.32"
+    },
+    {
+      "type": "application",
+      "name": "automake",
+      "version": "1.16.5"
+    },
+    {
+      "type": "application",
+      "name": "iptables",
+      "version": "1.8.11"
+    },
+    {
+      "type": "application",
+      "name": "libmnl",
+      "version": "1.0.5"
+    },
+    {
+      "type": "application",
+      "name": "libnftnl",
+      "version": "1.2.8"
+    },
+    {
+      "type": "application",
+      "name": "socat",
+      "version": "1.7.4.4"
+    },
+    {
+      "type": "application",
+      "name": "datefudge",
+      "version": "1.27"
+    },
+    {
+      "type": "application",
+      "name": "libtasn1",
+      "version": "4.21.0"
+    },
+    {
+      "type": "application",
+      "name": "libidn2",
+      "version": "2.3.7"
+    },
+    {
+      "type": "application",
+      "name": "p11-kit",
+      "version": "0.25.5"
+    },
+    {
+      "type": "application",
+      "name": "nss-certs",
+      "version": "3.101.4"
+    },
+    {
+      "type": "application",
+      "name": "certdata2pem",
+      "version": "0.0.0"
+    },
+    {
+      "type": "application",
+      "name": "nettle",
+      "version": "3.10.2"
+    },
+    {
+      "type": "application",
+      "name": "nghttp3",
+      "version": "1.11.0"
+    },
+    {
+      "type": "application",
+      "name": "electron",
+      "version": "36.9.5"
+    },
+    {
+      "type": "application",
+      "name": "ffmpeg",
+      "version": "8.1.1"
+    },
+    {
+      "type": "application",
+      "name": "bc",
+      "version": "1.08.2"
+    },
+    {
+      "type": "application",
+      "name": "speex",
+      "version": "1.2.1"
+    },
+    {
+      "type": "application",
+      "name": "libogg",
+      "version": "1.3.6"
+    },
+    {
+      "type": "application",
+      "name": "speexdsp",
+      "version": "1.2.1"
+    },
+    {
+      "type": "application",
+      "name": "vulkan-headers",
+      "version": "1.4.335.0"
+    },
+    {
+      "type": "application",
+      "name": "vulkan-loader",
+      "version": "1.4.335.0"
+    },
+    {
+      "type": "application",
+      "name": "googletest",
+      "version": "1.17.0"
+    },
+    {
+      "type": "application",
+      "name": "libxrandr",
+      "version": "1.5.4"
+    },
+    {
+      "type": "application",
+      "name": "wayland",
+      "version": "1.24.0"
+    },
+    {
+      "type": "application",
+      "name": "docbook-xml",
+      "version": "4.2"
+    },
+    {
+      "type": "application",
+      "name": "docbook-xml",
+      "version": "4.5"
+    },
+    {
+      "type": "application",
+      "name": "graphviz",
+      "version": "7.0.1"
+    },
+    {
+      "type": "application",
+      "name": "swig",
+      "version": "4.0.2"
+    },
+    {
+      "type": "application",
+      "name": "boost",
+      "version": "1.89.0"
+    },
+    {
+      "type": "application",
+      "name": "tcsh",
+      "version": "6.24.15"
+    },
+    {
+      "type": "application",
+      "name": "pcre",
+      "version": "8.45"
+    },
+    {
+      "type": "application",
+      "name": "guile",
+      "version": "3.0.9"
+    },
+    {
+      "type": "application",
+      "name": "gts",
+      "version": "0.7.6"
+    },
+    {
+      "type": "application",
+      "name": "gd",
+      "version": "2.3.3"
+    },
+    {
+      "type": "application",
+      "name": "pango",
+      "version": "1.56.4"
+    },
+    {
+      "type": "application",
+      "name": "fribidi",
+      "version": "1.0.12"
+    },
+    {
+      "type": "application",
+      "name": "libthai",
+      "version": "0.1.29"
+    },
+    {
+      "type": "application",
+      "name": "libdatrie",
+      "version": "0.2.13"
+    },
+    {
+      "type": "application",
+      "name": "vulkan-headers",
+      "version": "1.4.335.0"
+    },
+    {
+      "type": "application",
+      "name": "rav1e",
+      "version": "0.7.1"
+    },
+    {
+      "type": "application",
+      "name": "rust-cargo-c",
+      "version": "0.10.20+cargo-0.94.0"
+    },
+    {
+      "type": "application",
+      "name": "curl",
+      "version": "8.6.0"
+    },
+    {
+      "type": "application",
+      "name": "libidn",
+      "version": "1.43"
+    },
+    {
+      "type": "application",
+      "name": "libpsl",
+      "version": "0.21.5"
+    },
+    {
+      "type": "application",
+      "name": "mit-krb5",
+      "version": "1.21"
+    },
+    {
+      "type": "application",
+      "name": "libgit2",
+      "version": "1.9.2"
+    },
+    {
+      "type": "application",
+      "name": "libssh2",
+      "version": "1.11.1"
+    },
+    {
+      "type": "application",
+      "name": "dav1d",
+      "version": "1.5.1"
+    },
+    {
+      "type": "application",
+      "name": "frei0r-plugins",
+      "version": "1.7.0"
+    },
+    {
+      "type": "application",
+      "name": "gavl",
+      "version": "1.4.0"
+    },
+    {
+      "type": "application",
+      "name": "gcc",
+      "version": "13.3.0"
+    },
+    {
+      "type": "application",
+      "name": "libstdc++-headers",
+      "version": "13.3.0"
+    },
+    {
+      "type": "application",
+      "name": "libstdc++",
+      "version": "13.3.0"
+    },
+    {
+      "type": "application",
+      "name": "opus",
+      "version": "1.6.1"
+    },
+    {
+      "type": "application",
+      "name": "ladspa",
+      "version": "1.13"
+    },
+    {
+      "type": "application",
+      "name": "lame",
+      "version": "3.100"
+    },
+    {
+      "type": "application",
+      "name": "libaom",
+      "version": "3.8.0"
+    },
+    {
+      "type": "application",
+      "name": "libass",
+      "version": "0.15.1"
+    },
+    {
+      "type": "application",
+      "name": "libbluray",
+      "version": "1.3.4"
+    },
+    {
+      "type": "application",
+      "name": "libaacs",
+      "version": "0.11.0"
+    },
+    {
+      "type": "application",
+      "name": "libbdplus",
+      "version": "0.2.0"
+    },
+    {
+      "type": "application",
+      "name": "libcaca",
+      "version": "0.99.beta19"
+    },
+    {
+      "type": "application",
+      "name": "freeglut",
+      "version": "3.4.0"
+    },
+    {
+      "type": "application",
+      "name": "libxi",
+      "version": "1.8.2"
+    },
+    {
+      "type": "application",
+      "name": "libxfixes",
+      "version": "6.0.1"
+    },
+    {
+      "type": "application",
+      "name": "libxxf86vm",
+      "version": "1.1.6"
+    },
+    {
+      "type": "application",
+      "name": "glu",
+      "version": "9.0.2"
+    },
+    {
+      "type": "application",
+      "name": "mesa",
+      "version": "26.0.2"
+    },
+    {
+      "type": "application",
+      "name": "clang",
+      "version": "18.1.8"
+    },
+    {
+      "type": "application",
+      "name": "gcc",
+      "version": "14.3.0"
+    },
+    {
+      "type": "application",
+      "name": "libstdc++-headers",
+      "version": "14.3.0"
+    },
+    {
+      "type": "application",
+      "name": "libstdc++",
+      "version": "14.3.0"
+    },
+    {
+      "type": "application",
+      "name": "llvm",
+      "version": "18.1.8"
+    },
+    {
+      "type": "application",
+      "name": "clang-runtime",
+      "version": "18.1.8"
+    },
+    {
+      "type": "application",
+      "name": "glslang",
+      "version": "1.4.335.0"
+    },
+    {
+      "type": "application",
+      "name": "spirv-tools",
+      "version": "1.4.335.0"
+    },
+    {
+      "type": "application",
+      "name": "spirv-headers",
+      "version": "1.4.335.0"
+    },
+    {
+      "type": "application",
+      "name": "libclc",
+      "version": "18.1.8"
+    },
+    {
+      "type": "application",
+      "name": "spirv-llvm-translator",
+      "version": "18.1.10"
+    },
+    {
+      "type": "application",
+      "name": "python-lit",
+      "version": "18.1.8"
+    },
+    {
+      "type": "application",
+      "name": "llvm",
+      "version": "13.0.1"
+    },
+    {
+      "type": "application",
+      "name": "python-mako",
+      "version": "1.3.10"
+    },
+    {
+      "type": "application",
+      "name": "python-pytest",
+      "version": "9.0.2"
+    },
+    {
+      "type": "application",
+      "name": "python-attrs-bootstrap",
+      "version": "25.3.0"
+    },
+    {
+      "type": "application",
+      "name": "python-hatch-fancy-pypi-readme",
+      "version": "25.1.0"
+    },
+    {
+      "type": "application",
+      "name": "python-hypothesis",
+      "version": "6.150.2"
+    },
+    {
+      "type": "application",
+      "name": "python-sortedcontainers",
+      "version": "2.4.0"
+    },
+    {
+      "type": "application",
+      "name": "python-xmlschema",
+      "version": "4.1.0"
+    },
+    {
+      "type": "application",
+      "name": "python-lxml",
+      "version": "6.0.2"
+    },
+    {
+      "type": "application",
+      "name": "python-elementpath",
+      "version": "5.0.4"
+    },
+    {
+      "type": "application",
+      "name": "python-xmlschema",
+      "version": "4.1.0"
+    },
+    {
+      "type": "application",
+      "name": "python-markupsafe",
+      "version": "3.0.3"
+    },
+    {
+      "type": "application",
+      "name": "python-ply",
+      "version": "3.11"
+    },
+    {
+      "type": "application",
+      "name": "python-pyyaml",
+      "version": "6.0.2"
+    },
+    {
+      "type": "application",
+      "name": "python-cython",
+      "version": "3.1.7"
+    },
+    {
+      "type": "application",
+      "name": "rust",
+      "version": "1.93.0"
+    },
+    {
+      "type": "application",
+      "name": "gdb",
+      "version": "17.1"
+    },
+    {
+      "type": "application",
+      "name": "dejagnu",
+      "version": "1.6.3"
+    },
+    {
+      "type": "application",
+      "name": "expect",
+      "version": "5.45.4"
+    },
+    {
+      "type": "application",
+      "name": "source-highlight",
+      "version": "3.1.9"
+    },
+    {
+      "type": "application",
+      "name": "boost",
+      "version": "1.83.0"
+    },
+    {
+      "type": "application",
+      "name": "git-minimal",
+      "version": "2.50.0"
+    },
+    {
+      "type": "application",
+      "name": "rust",
+      "version": "1.92.0"
+    },
+    {
+      "type": "application",
+      "name": "rust",
+      "version": "1.91.0"
+    },
+    {
+      "type": "application",
+      "name": "rust",
+      "version": "1.90.0"
+    },
+    {
+      "type": "application",
+      "name": "rust",
+      "version": "1.89.0"
+    },
+    {
+      "type": "application",
+      "name": "rust",
+      "version": "1.88.0"
+    },
+    {
+      "type": "application",
+      "name": "rust",
+      "version": "1.87.0"
+    },
+    {
+      "type": "application",
+      "name": "rust",
+      "version": "1.86.0"
+    },
+    {
+      "type": "application",
+      "name": "rust",
+      "version": "1.85.1"
+    },
+    {
+      "type": "application",
+      "name": "rust",
+      "version": "1.84.1"
+    },
+    {
+      "type": "application",
+      "name": "rust",
+      "version": "1.83.0"
+    },
+    {
+      "type": "application",
+      "name": "rust",
+      "version": "1.82.0"
+    },
+    {
+      "type": "application",
+      "name": "rust",
+      "version": "1.81.0"
+    },
+    {
+      "type": "application",
+      "name": "rust",
+      "version": "1.80.1"
+    },
+    {
+      "type": "application",
+      "name": "rust",
+      "version": "1.79.0"
+    },
+    {
+      "type": "application",
+      "name": "rust",
+      "version": "1.78.0"
+    },
+    {
+      "type": "application",
+      "name": "rust",
+      "version": "1.77.1"
+    },
+    {
+      "type": "application",
+      "name": "rust",
+      "version": "1.76.0"
+    },
+    {
+      "type": "application",
+      "name": "rust",
+      "version": "1.75.0"
+    },
+    {
+      "type": "application",
+      "name": "rust",
+      "version": "1.74.0"
+    },
+    {
+      "type": "application",
+      "name": "llvm",
+      "version": "17.0.6"
+    },
+    {
+      "type": "application",
+      "name": "llvm",
+      "version": "19.1.7"
+    },
+    {
+      "type": "application",
+      "name": "llvm",
+      "version": "21.1.8"
+    },
+    {
+      "type": "application",
+      "name": "rust-bindgen-cli",
+      "version": "0.71.1"
+    },
+    {
+      "type": "application",
+      "name": "rust-cbindgen",
+      "version": "0.29.2"
+    },
+    {
+      "type": "application",
+      "name": "libva-without-mesa",
+      "version": "2.22.0"
+    },
+    {
+      "type": "application",
+      "name": "config",
+      "version": "0.0.0-1.c8ddc84"
+    },
+    {
+      "type": "application",
+      "name": "libxvmc",
+      "version": "1.0.14"
+    },
+    {
+      "type": "application",
+      "name": "libxv",
+      "version": "1.0.13"
+    },
+    {
+      "type": "application",
+      "name": "llvm-for-mesa",
+      "version": "18.1.8"
+    },
+    {
+      "type": "application",
+      "name": "wayland-protocols",
+      "version": "1.47"
+    },
+    {
+      "type": "application",
+      "name": "libvdpau",
+      "version": "1.5"
+    },
+    {
+      "type": "application",
+      "name": "libxdamage",
+      "version": "1.1.6"
+    },
+    {
+      "type": "application",
+      "name": "libxshmfence",
+      "version": "1.3.3"
+    },
+    {
+      "type": "application",
+      "name": "ftgl",
+      "version": "2.4.0"
+    },
+    {
+      "type": "application",
+      "name": "imlib2",
+      "version": "1.10.0"
+    },
+    {
+      "type": "application",
+      "name": "giflib",
+      "version": "5.2.1"
+    },
+    {
+      "type": "application",
+      "name": "libid3tag",
+      "version": "0.15.1b"
+    },
+    {
+      "type": "application",
+      "name": "libwebp",
+      "version": "1.3.2"
+    },
+    {
+      "type": "application",
+      "name": "libcdio-paranoia",
+      "version": "10.2+2.0.1"
+    },
+    {
+      "type": "application",
+      "name": "libcdio",
+      "version": "2.1.0"
+    },
+    {
+      "type": "application",
+      "name": "libcddb",
+      "version": "1.3.2"
+    },
+    {
+      "type": "application",
+      "name": "libgme",
+      "version": "0.6.5"
+    },
+    {
+      "type": "application",
+      "name": "libplacebo",
+      "version": "7.351.0"
+    },
+    {
+      "type": "application",
+      "name": "glad",
+      "version": "2.0.8"
+    },
+    {
+      "type": "application",
+      "name": "xvfb-run",
+      "version": "21.1.7-1"
+    },
+    {
+      "type": "application",
+      "name": "xterm",
+      "version": "397"
+    },
+    {
+      "type": "application",
+      "name": "luit",
+      "version": "1.1.1"
+    },
+    {
+      "type": "application",
+      "name": "libfontenc",
+      "version": "1.1.8"
+    },
+    {
+      "type": "application",
+      "name": "libxcursor",
+      "version": "1.2.3"
+    },
+    {
+      "type": "application",
+      "name": "xauth",
+      "version": "1.1.3"
+    },
+    {
+      "type": "application",
+      "name": "xorg-server",
+      "version": "21.1.15"
+    },
+    {
+      "type": "application",
+      "name": "eudev",
+      "version": "3.2.14"
+    },
+    {
+      "type": "application",
+      "name": "libdmx",
+      "version": "1.1.5"
+    },
+    {
+      "type": "application",
+      "name": "libepoxy",
+      "version": "1.5.10"
+    },
+    {
+      "type": "application",
+      "name": "libxfont",
+      "version": "2.0.7"
+    },
+    {
+      "type": "application",
+      "name": "libxkbfile",
+      "version": "1.1.3"
+    },
+    {
+      "type": "application",
+      "name": "kbproto",
+      "version": "1.0.7"
+    },
+    {
+      "type": "application",
+      "name": "libxres",
+      "version": "1.2.2"
+    },
+    {
+      "type": "application",
+      "name": "xkbcomp",
+      "version": "1.4.7"
+    },
+    {
+      "type": "application",
+      "name": "xkeyboard-config",
+      "version": "2.44"
+    },
+    {
+      "type": "application",
+      "name": "xkbcomp-intermediate",
+      "version": "1.4.7"
+    },
+    {
+      "type": "application",
+      "name": "xcb-util",
+      "version": "0.4.1"
+    },
+    {
+      "type": "application",
+      "name": "xcb-util-image",
+      "version": "0.4.1"
+    },
+    {
+      "type": "application",
+      "name": "xcb-util-keysyms",
+      "version": "0.4.1"
+    },
+    {
+      "type": "application",
+      "name": "xcb-util-renderutil",
+      "version": "0.3.10"
+    },
+    {
+      "type": "application",
+      "name": "xcb-util-wm",
+      "version": "0.4.2"
+    },
+    {
+      "type": "application",
+      "name": "libxcvt",
+      "version": "0.1.3"
+    },
+    {
+      "type": "application",
+      "name": "python-jinja2",
+      "version": "3.1.2"
+    },
+    {
+      "type": "application",
+      "name": "shaderc",
+      "version": "2025.5"
+    },
+    {
+      "type": "application",
+      "name": "libtheora",
+      "version": "1.1.1"
+    },
+    {
+      "type": "application",
+      "name": "libvorbis",
+      "version": "1.3.7"
+    },
+    {
+      "type": "application",
+      "name": "libva",
+      "version": "2.22.0"
+    },
+    {
+      "type": "application",
+      "name": "libvpx",
+      "version": "1.16.0"
+    },
+    {
+      "type": "application",
+      "name": "yasm",
+      "version": "1.3.0"
+    },
+    {
+      "type": "application",
+      "name": "libx264",
+      "version": "165-0.0480cb0"
+    },
+    {
+      "type": "application",
+      "name": "openal",
+      "version": "1.23.1"
+    },
+    {
+      "type": "application",
+      "name": "alsa-lib",
+      "version": "1.2.16"
+    },
+    {
+      "type": "application",
+      "name": "autoconf",
+      "version": "2.72"
+    },
+    {
+      "type": "application",
+      "name": "alsa-ucm-conf",
+      "version": "1.2.15.3"
+    },
+    {
+      "type": "application",
+      "name": "alsa-topology-conf",
+      "version": "1.2.5.1"
+    },
+    {
+      "type": "application",
+      "name": "pulseaudio",
+      "version": "16.1"
+    },
+    {
+      "type": "application",
+      "name": "bluez",
+      "version": "5.79"
+    },
+    {
+      "type": "application",
+      "name": "python-docutils",
+      "version": "0.21.2"
+    },
+    {
+      "type": "application",
+      "name": "libical",
+      "version": "3.0.17"
+    },
+    {
+      "type": "application",
+      "name": "docbook-xml",
+      "version": "4.3"
+    },
+    {
+      "type": "application",
+      "name": "gtk-doc",
+      "version": "1.34.0"
+    },
+    {
+      "type": "application",
+      "name": "dblatex",
+      "version": "0.3.12"
+    },
+    {
+      "type": "application",
+      "name": "docbook-mathml",
+      "version": "1.0"
+    },
+    {
+      "type": "application",
+      "name": "docbook-xml",
+      "version": "4.1.2"
+    },
+    {
+      "type": "application",
+      "name": "texlive-local-tree",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-anysize",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-appendix",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-changebar",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-courier",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-eepic",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-eso-pic",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-fancybox",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-fancyvrb",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-float",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-footmisc",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-helvetic",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-jknapltx",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-listings",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-multirow",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-overpic",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-pdflscape",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-pdfpages",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-rsfs",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-stmaryrd",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-subfigure",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-times",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-titlesec",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "texlive-wasysym",
+      "version": "2026.1"
+    },
+    {
+      "type": "application",
+      "name": "fig2dev",
+      "version": "3.2.9"
+    },
+    {
+      "type": "application",
+      "name": "netpbm",
+      "version": "10.78.3"
+    },
+    {
+      "type": "application",
+      "name": "xorg-rgb",
+      "version": "1.1.0"
+    },
+    {
+      "type": "application",
+      "name": "imagemagick",
+      "version": "6.9.13-5"
+    },
+    {
+      "type": "application",
+      "name": "fftw",
+      "version": "3.3.10"
+    },
+    {
+      "type": "application",
+      "name": "imagemagick",
+      "version": "6.9.13-5"
+    },
+    {
+      "type": "application",
+      "name": "inkscape",
+      "version": "1.3.2"
+    },
+    {
+      "type": "application",
+      "name": "librsvg",
+      "version": "2.58.5"
+    },
+    {
+      "type": "application",
+      "name": "gdk-pixbuf",
+      "version": "2.44.4"
+    },
+    {
+      "type": "application",
+      "name": "gi-docgen",
+      "version": "2025.4"
+    },
+    {
+      "type": "application",
+      "name": "python-markdown",
+      "version": "3.10"
+    },
+    {
+      "type": "application",
+      "name": "python-typogrify",
+      "version": "2.1.0"
+    },
+    {
+      "type": "application",
+      "name": "python-smartypants",
+      "version": "2.0.2"
+    },
+    {
+      "type": "application",
+      "name": "shared-mime-info",
+      "version": "2.3"
+    },
+    {
+      "type": "application",
+      "name": "xdgmime",
+      "version": "0.0-2.1792967"
+    },
+    {
+      "type": "application",
+      "name": "vala",
+      "version": "0.56.18"
+    },
+    {
+      "type": "application",
+      "name": "autotrace",
+      "version": "0.31.10"
+    },
+    {
+      "type": "application",
+      "name": "intltool",
+      "version": "0.51.0"
+    },
+    {
+      "type": "application",
+      "name": "pstoedit",
+      "version": "4.00"
+    },
+    {
+      "type": "application",
+      "name": "plotutils",
+      "version": "2.6"
+    },
+    {
+      "type": "application",
+      "name": "libzip",
+      "version": "1.9.2"
+    },
+    {
+      "type": "application",
+      "name": "gdl-minimal",
+      "version": "3.40.0"
+    },
+    {
+      "type": "application",
+      "name": "gnome-common",
+      "version": "3.18.0"
+    },
+    {
+      "type": "application",
+      "name": "gtk+",
+      "version": "3.24.51"
+    },
+    {
+      "type": "application",
+      "name": "hicolor-icon-theme",
+      "version": "0.18"
+    },
+    {
+      "type": "application",
+      "name": "sassc",
+      "version": "3.6.2"
+    },
+    {
+      "type": "application",
+      "name": "libsass",
+      "version": "3.6.4"
+    },
+    {
+      "type": "application",
+      "name": "colord-minimal",
+      "version": "1.4.6"
+    },
+    {
+      "type": "application",
+      "name": "dbus-glib",
+      "version": "0.112"
+    },
+    {
+      "type": "application",
+      "name": "gusb-minimal",
+      "version": "0.3.5"
+    },
+    {
+      "type": "application",
+      "name": "libusb",
+      "version": "1.0.25"
+    },
+    {
+      "type": "application",
+      "name": "libgudev",
+      "version": "238"
+    },
+    {
+      "type": "application",
+      "name": "polkit",
+      "version": "121"
+    },
+    {
+      "type": "application",
+      "name": "python-dbusmock-for-tests",
+      "version": "0.37.2"
+    },
+    {
+      "type": "application",
+      "name": "python-dbus",
+      "version": "1.3.2"
+    },
+    {
+      "type": "application",
+      "name": "meson",
+      "version": "1.9.0"
+    },
+    {
+      "type": "application",
+      "name": "ninja",
+      "version": "1.13.2"
+    },
+    {
+      "type": "application",
+      "name": "re2c",
+      "version": "4.2"
+    },
+    {
+      "type": "application",
+      "name": "ninja",
+      "version": "1.13.2"
+    },
+    {
+      "type": "application",
+      "name": "patchelf",
+      "version": "0.18.0"
+    },
+    {
+      "type": "application",
+      "name": "python-meson",
+      "version": "0.19.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pytest-mock",
+      "version": "3.15.1"
+    },
+    {
+      "type": "application",
+      "name": "python-pytest-asyncio",
+      "version": "1.3.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pyproject-metadata",
+      "version": "0.10.0"
+    },
+    {
+      "type": "application",
+      "name": "python-tappy",
+      "version": "3.2.1"
+    },
+    {
+      "type": "application",
+      "name": "python-pygobject",
+      "version": "3.54.3"
+    },
+    {
+      "type": "application",
+      "name": "python-pycairo",
+      "version": "1.28.0"
+    },
+    {
+      "type": "application",
+      "name": "duktape",
+      "version": "2.6.0"
+    },
+    {
+      "type": "application",
+      "name": "elogind",
+      "version": "255.17"
+    },
+    {
+      "type": "application",
+      "name": "kexec-tools",
+      "version": "2.0.31"
+    },
+    {
+      "type": "application",
+      "name": "ld-wrapper",
+      "version": "0"
+    },
+    {
+      "type": "application",
+      "name": "binutils",
+      "version": "2.44"
+    },
+    {
+      "type": "application",
+      "name": "guile",
+      "version": "3.0.9"
+    },
+    {
+      "type": "application",
+      "name": "pkg-config",
+      "version": "0.29.2"
+    },
+    {
+      "type": "application",
+      "name": "libffi",
+      "version": "3.4.6"
+    },
+    {
+      "type": "application",
+      "name": "bash-minimal",
+      "version": "5.2.37"
+    },
+    {
+      "type": "application",
+      "name": "libunistring",
+      "version": "1.3"
+    },
+    {
+      "type": "application",
+      "name": "libgc",
+      "version": "8.2.8"
+    },
+    {
+      "type": "application",
+      "name": "shepherd",
+      "version": "0.10.5"
+    },
+    {
+      "type": "application",
+      "name": "guile-fibers",
+      "version": "1.3.1"
+    },
+    {
+      "type": "application",
+      "name": "cups",
+      "version": "2.4.14"
+    },
+    {
+      "type": "application",
+      "name": "avahi",
+      "version": "0.8"
+    },
+    {
+      "type": "application",
+      "name": "libdaemon",
+      "version": "0.14"
+    },
+    {
+      "type": "application",
+      "name": "libevent",
+      "version": "2.1.12"
+    },
+    {
+      "type": "application",
+      "name": "cups-filters",
+      "version": "1.28.16"
+    },
+    {
+      "type": "application",
+      "name": "cups-minimal",
+      "version": "2.4.14"
+    },
+    {
+      "type": "application",
+      "name": "ghostscript-with-cups",
+      "version": "9.56.1"
+    },
+    {
+      "type": "application",
+      "name": "grep",
+      "version": "3.11"
+    },
+    {
+      "type": "application",
+      "name": "ijs",
+      "version": "9.56.1"
+    },
+    {
+      "type": "application",
+      "name": "libexif",
+      "version": "0.6.24"
+    },
+    {
+      "type": "application",
+      "name": "qpdf",
+      "version": "11.8.0"
+    },
+    {
+      "type": "application",
+      "name": "graphene",
+      "version": "1.10.8"
+    },
+    {
+      "type": "application",
+      "name": "mutest",
+      "version": "0.0.0"
+    },
+    {
+      "type": "application",
+      "name": "iso-codes",
+      "version": "4.5.0"
+    },
+    {
+      "type": "application",
+      "name": "json-glib-minimal",
+      "version": "1.10.0"
+    },
+    {
+      "type": "application",
+      "name": "librest",
+      "version": "0.10.2"
+    },
+    {
+      "type": "application",
+      "name": "json-glib",
+      "version": "1.10.0"
+    },
+    {
+      "type": "application",
+      "name": "libsoup",
+      "version": "3.6.5"
+    },
+    {
+      "type": "application",
+      "name": "httpd",
+      "version": "2.4.52"
+    },
+    {
+      "type": "application",
+      "name": "apr",
+      "version": "1.7.6"
+    },
+    {
+      "type": "application",
+      "name": "apr-util",
+      "version": "1.6.3"
+    },
+    {
+      "type": "application",
+      "name": "samba",
+      "version": "4.18.1"
+    },
+    {
+      "type": "application",
+      "name": "perl-parse-yapp",
+      "version": "1.21"
+    },
+    {
+      "type": "application",
+      "name": "python-cryptography",
+      "version": "44.0.0"
+    },
+    {
+      "type": "application",
+      "name": "python-certifi",
+      "version": "2025.06.15"
+    },
+    {
+      "type": "application",
+      "name": "nss-certs-for-test",
+      "version": "3.101.4"
+    },
+    {
+      "type": "application",
+      "name": "python-cffi",
+      "version": "1.17.1"
+    },
+    {
+      "type": "application",
+      "name": "python-pycparser",
+      "version": "2.22"
+    },
+    {
+      "type": "application",
+      "name": "python-click",
+      "version": "8.3.1"
+    },
+    {
+      "type": "application",
+      "name": "less",
+      "version": "608"
+    },
+    {
+      "type": "application",
+      "name": "python-cryptography-vectors",
+      "version": "44.0.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pytest-benchmark",
+      "version": "5.2.3"
+    },
+    {
+      "type": "application",
+      "name": "python-py-cpuinfo",
+      "version": "9.0.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pytest-randomly",
+      "version": "4.0.1"
+    },
+    {
+      "type": "application",
+      "name": "python-pytest-xdist",
+      "version": "3.8.0"
+    },
+    {
+      "type": "application",
+      "name": "python-filelock",
+      "version": "3.16.1"
+    },
+    {
+      "type": "application",
+      "name": "python-execnet",
+      "version": "2.1.2"
+    },
+    {
+      "type": "application",
+      "name": "maturin",
+      "version": "1.11.5"
+    },
+    {
+      "type": "application",
+      "name": "python-setuptools-rust",
+      "version": "1.11.1"
+    },
+    {
+      "type": "application",
+      "name": "python-semantic-version",
+      "version": "2.10.0"
+    },
+    {
+      "type": "application",
+      "name": "python-nose2",
+      "version": "0.15.1"
+    },
+    {
+      "type": "application",
+      "name": "rust-ring",
+      "version": "0.17.14"
+    },
+    {
+      "type": "application",
+      "name": "clang",
+      "version": "13.0.1"
+    },
+    {
+      "type": "application",
+      "name": "clang-runtime",
+      "version": "13.0.1"
+    },
+    {
+      "type": "application",
+      "name": "go",
+      "version": "1.25.10"
+    },
+    {
+      "type": "application",
+      "name": "go",
+      "version": "1.22.12"
+    },
+    {
+      "type": "application",
+      "name": "go",
+      "version": "1.20.14"
+    },
+    {
+      "type": "application",
+      "name": "go",
+      "version": "1.17.13"
+    },
+    {
+      "type": "application",
+      "name": "go",
+      "version": "1.4-bootstrap-20171003"
+    },
+    {
+      "type": "application",
+      "name": "python-dnspython",
+      "version": "2.8.0"
+    },
+    {
+      "type": "application",
+      "name": "python-aioquic",
+      "version": "1.2.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pylsqpack",
+      "version": "0.3.22"
+    },
+    {
+      "type": "application",
+      "name": "python-pyopenssl",
+      "version": "24.3.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pytest-rerunfailures",
+      "version": "15.1"
+    },
+    {
+      "type": "application",
+      "name": "python-service-identity",
+      "version": "24.2.0"
+    },
+    {
+      "type": "application",
+      "name": "python-idna",
+      "version": "3.10"
+    },
+    {
+      "type": "application",
+      "name": "python-attrs",
+      "version": "25.3.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pyasn1",
+      "version": "0.6.1"
+    },
+    {
+      "type": "application",
+      "name": "python-pyasn1-modules",
+      "version": "0.4.2"
+    },
+    {
+      "type": "application",
+      "name": "python-h2",
+      "version": "4.1.0"
+    },
+    {
+      "type": "application",
+      "name": "python-hpack",
+      "version": "4.1.0"
+    },
+    {
+      "type": "application",
+      "name": "python-hyperframe",
+      "version": "6.1.0"
+    },
+    {
+      "type": "application",
+      "name": "python-httpcore",
+      "version": "1.0.9"
+    },
+    {
+      "type": "application",
+      "name": "python-pytest-httpbin",
+      "version": "2.1.0"
+    },
+    {
+      "type": "application",
+      "name": "python-httpbin",
+      "version": "0.10.2"
+    },
+    {
+      "type": "application",
+      "name": "python-brotlicffi",
+      "version": "1.1.0.0"
+    },
+    {
+      "type": "application",
+      "name": "python-decorator",
+      "version": "5.2.1"
+    },
+    {
+      "type": "application",
+      "name": "python-flasgger",
+      "version": "0.9.7.1"
+    },
+    {
+      "type": "application",
+      "name": "python-flask",
+      "version": "3.1.0"
+    },
+    {
+      "type": "application",
+      "name": "python-asgiref",
+      "version": "3.8.1"
+    },
+    {
+      "type": "application",
+      "name": "python-blinker",
+      "version": "1.9.0"
+    },
+    {
+      "type": "application",
+      "name": "python-itsdangerous",
+      "version": "2.2.0"
+    },
+    {
+      "type": "application",
+      "name": "python-freezegun",
+      "version": "1.5.3"
+    },
+    {
+      "type": "application",
+      "name": "python-dateutil",
+      "version": "2.9.0"
+    },
+    {
+      "type": "application",
+      "name": "python-werkzeug",
+      "version": "3.1.3"
+    },
+    {
+      "type": "application",
+      "name": "python-watchdog",
+      "version": "6.0.0"
+    },
+    {
+      "type": "application",
+      "name": "python-ephemeral-port-reserve",
+      "version": "1.1.4"
+    },
+    {
+      "type": "application",
+      "name": "python-pytest-timeout",
+      "version": "2.4.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pexpect",
+      "version": "4.9.0"
+    },
+    {
+      "type": "application",
+      "name": "man-db",
+      "version": "2.12.0"
+    },
+    {
+      "type": "application",
+      "name": "groff",
+      "version": "1.22.4"
+    },
+    {
+      "type": "application",
+      "name": "psutils",
+      "version": "2.09"
+    },
+    {
+      "type": "application",
+      "name": "perl-ipc-run3",
+      "version": "0.048"
+    },
+    {
+      "type": "application",
+      "name": "groff-minimal",
+      "version": "1.22.4"
+    },
+    {
+      "type": "application",
+      "name": "libpipeline",
+      "version": "1.5.6"
+    },
+    {
+      "type": "application",
+      "name": "libseccomp",
+      "version": "2.6.0"
+    },
+    {
+      "type": "application",
+      "name": "python-ptyprocess",
+      "version": "0.7.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pytest-xprocess",
+      "version": "1.0.2"
+    },
+    {
+      "type": "application",
+      "name": "python-psutil",
+      "version": "7.2.2"
+    },
+    {
+      "type": "application",
+      "name": "python-psleak",
+      "version": "0.1.5"
+    },
+    {
+      "type": "application",
+      "name": "python-pytest-instafail",
+      "version": "0.5.0"
+    },
+    {
+      "type": "application",
+      "name": "python-psutil-bootstrap",
+      "version": "7.2.2"
+    },
+    {
+      "type": "application",
+      "name": "python-pyperf",
+      "version": "2.10.0"
+    },
+    {
+      "type": "application",
+      "name": "python-requests",
+      "version": "2.32.5"
+    },
+    {
+      "type": "application",
+      "name": "python-charset-normalizer",
+      "version": "3.4.2"
+    },
+    {
+      "type": "application",
+      "name": "python-urllib3",
+      "version": "2.5.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pysocks",
+      "version": "1.7.1"
+    },
+    {
+      "type": "application",
+      "name": "python-jsonschema",
+      "version": "4.23.0"
+    },
+    {
+      "type": "application",
+      "name": "python-fqdn",
+      "version": "1.5.1"
+    },
+    {
+      "type": "application",
+      "name": "python-cached-property",
+      "version": "2.0.1"
+    },
+    {
+      "type": "application",
+      "name": "python-importlib-resources",
+      "version": "6.5.2"
+    },
+    {
+      "type": "application",
+      "name": "python-zipp",
+      "version": "3.23.0"
+    },
+    {
+      "type": "application",
+      "name": "python-isoduration",
+      "version": "20.11.0"
+    },
+    {
+      "type": "application",
+      "name": "python-arrow",
+      "version": "1.3.0"
+    },
+    {
+      "type": "application",
+      "name": "python-dateparser",
+      "version": "1.2.2"
+    },
+    {
+      "type": "application",
+      "name": "python-parameterized",
+      "version": "0.9.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pytz",
+      "version": "2025.1"
+    },
+    {
+      "type": "application",
+      "name": "python-regex",
+      "version": "2026.2.28"
+    },
+    {
+      "type": "application",
+      "name": "python-tzlocal",
+      "version": "5.2"
+    },
+    {
+      "type": "application",
+      "name": "python-tzdata",
+      "version": "2025.1"
+    },
+    {
+      "type": "application",
+      "name": "python-pytest-subtests",
+      "version": "0.15.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pytest",
+      "version": "8.4.2"
+    },
+    {
+      "type": "application",
+      "name": "python-simplejson",
+      "version": "3.20.1"
+    },
+    {
+      "type": "application",
+      "name": "python-types-python-dateutil",
+      "version": "2.9.0.20250708"
+    },
+    {
+      "type": "application",
+      "name": "python-jsonpointer",
+      "version": "3.0.0"
+    },
+    {
+      "type": "application",
+      "name": "python-jsonschema-specifications",
+      "version": "2024.10.1"
+    },
+    {
+      "type": "application",
+      "name": "python-referencing-bootstrap",
+      "version": "0.35.1"
+    },
+    {
+      "type": "application",
+      "name": "python-rpds-py",
+      "version": "0.10.6"
+    },
+    {
+      "type": "application",
+      "name": "python-rfc3339-validator",
+      "version": "0.1.4"
+    },
+    {
+      "type": "application",
+      "name": "python-strict-rfc3339",
+      "version": "0.7"
+    },
+    {
+      "type": "application",
+      "name": "python-rfc3986-validator",
+      "version": "0.1.1"
+    },
+    {
+      "type": "application",
+      "name": "python-rfc3987",
+      "version": "1.3.8"
+    },
+    {
+      "type": "application",
+      "name": "python-uri-template",
+      "version": "1.3.0"
+    },
+    {
+      "type": "application",
+      "name": "python-webcolors",
+      "version": "24.11.1"
+    },
+    {
+      "type": "application",
+      "name": "python-pdm-backend",
+      "version": "2.4.5"
+    },
+    {
+      "type": "application",
+      "name": "python-mistune",
+      "version": "3.1.3"
+    },
+    {
+      "type": "application",
+      "name": "python-greenlet",
+      "version": "3.1.1"
+    },
+    {
+      "type": "application",
+      "name": "python-objgraph",
+      "version": "3.6.2"
+    },
+    {
+      "type": "application",
+      "name": "python-graphviz",
+      "version": "0.21"
+    },
+    {
+      "type": "application",
+      "name": "python-mock",
+      "version": "5.1.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pytest-trio",
+      "version": "0.8.0"
+    },
+    {
+      "type": "application",
+      "name": "python-async-generator",
+      "version": "1.10"
+    },
+    {
+      "type": "application",
+      "name": "python-outcome",
+      "version": "1.3.0.post0"
+    },
+    {
+      "type": "application",
+      "name": "python-trio",
+      "version": "0.32.0"
+    },
+    {
+      "type": "application",
+      "name": "python-trustme",
+      "version": "1.2.1"
+    },
+    {
+      "type": "application",
+      "name": "python-jedi",
+      "version": "0.19.2"
+    },
+    {
+      "type": "application",
+      "name": "python-docopt",
+      "version": "0.6.2"
+    },
+    {
+      "type": "application",
+      "name": "python-parso",
+      "version": "0.8.5"
+    },
+    {
+      "type": "application",
+      "name": "python-pylint",
+      "version": "3.3.8"
+    },
+    {
+      "type": "application",
+      "name": "python-astroid",
+      "version": "3.3.11"
+    },
+    {
+      "type": "application",
+      "name": "python-mypy-minimal",
+      "version": "1.18.2"
+    },
+    {
+      "type": "application",
+      "name": "python-mypy-extensions",
+      "version": "1.1.0"
+    },
+    {
+      "type": "application",
+      "name": "python-lazy-object-proxy",
+      "version": "1.11.0"
+    },
+    {
+      "type": "application",
+      "name": "python-wrapt",
+      "version": "2.0.1"
+    },
+    {
+      "type": "application",
+      "name": "python-mypy-for-tests",
+      "version": "1.16.1"
+    },
+    {
+      "type": "application",
+      "name": "python-types-setuptools",
+      "version": "80.9.0.20250529"
+    },
+    {
+      "type": "application",
+      "name": "python-dill",
+      "version": "0.4.0"
+    },
+    {
+      "type": "application",
+      "name": "python-isort",
+      "version": "6.0.1"
+    },
+    {
+      "type": "application",
+      "name": "python-pylama",
+      "version": "8.4.1"
+    },
+    {
+      "type": "application",
+      "name": "python-mccabe",
+      "version": "0.7.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pycodestyle",
+      "version": "2.12.1"
+    },
+    {
+      "type": "application",
+      "name": "python-pydocstyle",
+      "version": "6.3.0"
+    },
+    {
+      "type": "application",
+      "name": "python-poetry-core",
+      "version": "2.3.2"
+    },
+    {
+      "type": "application",
+      "name": "python-snowballstemmer",
+      "version": "2.2.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pyflakes",
+      "version": "3.2.0"
+    },
+    {
+      "type": "application",
+      "name": "python-platformdirs",
+      "version": "4.3.6"
+    },
+    {
+      "type": "application",
+      "name": "python-appdirs",
+      "version": "1.4.4"
+    },
+    {
+      "type": "application",
+      "name": "python-tomlkit",
+      "version": "0.13.3"
+    },
+    {
+      "type": "application",
+      "name": "python-sniffio",
+      "version": "1.3.1"
+    },
+    {
+      "type": "application",
+      "name": "python-uvicorn",
+      "version": "0.40.0"
+    },
+    {
+      "type": "application",
+      "name": "python-a2wsgi",
+      "version": "1.10.7"
+    },
+    {
+      "type": "application",
+      "name": "python-httpx-bootstrap",
+      "version": "0.28.1"
+    },
+    {
+      "type": "application",
+      "name": "python-anyio",
+      "version": "4.12.1"
+    },
+    {
+      "type": "application",
+      "name": "python-blockbuster",
+      "version": "1.5.26"
+    },
+    {
+      "type": "application",
+      "name": "python-forbiddenfruit",
+      "version": "0.1.4"
+    },
+    {
+      "type": "application",
+      "name": "python-pynose",
+      "version": "1.5.5"
+    },
+    {
+      "type": "application",
+      "name": "python-truststore",
+      "version": "0.10.4"
+    },
+    {
+      "type": "application",
+      "name": "python-uvloop",
+      "version": "0.21.0"
+    },
+    {
+      "type": "application",
+      "name": "python-aiohttp",
+      "version": "3.11.18"
+    },
+    {
+      "type": "application",
+      "name": "gunicorn",
+      "version": "25.3.0"
+    },
+    {
+      "type": "application",
+      "name": "python-isal",
+      "version": "1.8.0"
+    },
+    {
+      "type": "application",
+      "name": "isa-l",
+      "version": "2.31.1"
+    },
+    {
+      "type": "application",
+      "name": "python-re-assert",
+      "version": "1.1.0"
+    },
+    {
+      "type": "application",
+      "name": "python-aiohappyeyeballs",
+      "version": "2.6.1-0.cc53cf8"
+    },
+    {
+      "type": "application",
+      "name": "python-aiosignal",
+      "version": "1.4.0"
+    },
+    {
+      "type": "application",
+      "name": "python-frozenlist",
+      "version": "1.8.0"
+    },
+    {
+      "type": "application",
+      "name": "python-expandvars",
+      "version": "1.1.2"
+    },
+    {
+      "type": "application",
+      "name": "python-multidict",
+      "version": "6.7.0"
+    },
+    {
+      "type": "application",
+      "name": "python-propcache",
+      "version": "0.2.1"
+    },
+    {
+      "type": "application",
+      "name": "python-yarl",
+      "version": "1.18.3"
+    },
+    {
+      "type": "application",
+      "name": "libuv",
+      "version": "1.44.2"
+    },
+    {
+      "type": "application",
+      "name": "python-httpcore-bootstrap",
+      "version": "1.0.9"
+    },
+    {
+      "type": "application",
+      "name": "python-h11",
+      "version": "0.16.0"
+    },
+    {
+      "type": "application",
+      "name": "python-socksio",
+      "version": "1.0.0"
+    },
+    {
+      "type": "application",
+      "name": "python-trio-typing",
+      "version": "0.10.0"
+    },
+    {
+      "type": "application",
+      "name": "python-importlib-metadata",
+      "version": "8.7.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pyfakefs",
+      "version": "5.9.1"
+    },
+    {
+      "type": "application",
+      "name": "python-brotli",
+      "version": "1.0.9"
+    },
+    {
+      "type": "application",
+      "name": "python-zstandard",
+      "version": "0.23.0"
+    },
+    {
+      "type": "application",
+      "name": "python-wsproto",
+      "version": "1.2.0"
+    },
+    {
+      "type": "application",
+      "name": "python-dotenv",
+      "version": "1.1.1"
+    },
+    {
+      "type": "application",
+      "name": "python-sh",
+      "version": "2.2.2"
+    },
+    {
+      "type": "application",
+      "name": "python-httptools",
+      "version": "0.7.1"
+    },
+    {
+      "type": "application",
+      "name": "llhttp",
+      "version": "9.1.3"
+    },
+    {
+      "type": "application",
+      "name": "python-watchfiles",
+      "version": "1.1.1"
+    },
+    {
+      "type": "application",
+      "name": "python-dirty-equals",
+      "version": "0.11.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pydantic",
+      "version": "2.12.5"
+    },
+    {
+      "type": "application",
+      "name": "python-dirty-equals-bootstrap",
+      "version": "0.11.0"
+    },
+    {
+      "type": "application",
+      "name": "python-faker",
+      "version": "37.4.2"
+    },
+    {
+      "type": "application",
+      "name": "python-validators",
+      "version": "0.34.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pytest-examples",
+      "version": "0.0.13"
+    },
+    {
+      "type": "application",
+      "name": "python-black",
+      "version": "26.3.1"
+    },
+    {
+      "type": "application",
+      "name": "python-pytokens",
+      "version": "0.4.1"
+    },
+    {
+      "type": "application",
+      "name": "python-pytest-run-parallel",
+      "version": "0.8.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pytest-order",
+      "version": "1.3.0"
+    },
+    {
+      "type": "application",
+      "name": "python-annotated-types",
+      "version": "0.7.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pydantic-core",
+      "version": "2.41.5"
+    },
+    {
+      "type": "application",
+      "name": "python-typing-inspection",
+      "version": "0.4.2"
+    },
+    {
+      "type": "application",
+      "name": "python-websockets",
+      "version": "13.1"
+    },
+    {
+      "type": "application",
+      "name": "python-httpx",
+      "version": "0.28.1"
+    },
+    {
+      "type": "application",
+      "name": "python-chardet",
+      "version": "5.2.0"
+    },
+    {
+      "type": "application",
+      "name": "python-iso8601",
+      "version": "1.0.2"
+    },
+    {
+      "type": "application",
+      "name": "rpcsvc-proto",
+      "version": "1.4.4"
+    },
+    {
+      "type": "application",
+      "name": "cmocka",
+      "version": "1.1.5"
+    },
+    {
+      "type": "application",
+      "name": "gamin",
+      "version": "0.1.10"
+    },
+    {
+      "type": "application",
+      "name": "gpgme",
+      "version": "1.24.1"
+    },
+    {
+      "type": "application",
+      "name": "gnupg",
+      "version": "2.4.8"
+    },
+    {
+      "type": "application",
+      "name": "libassuan",
+      "version": "3.0.1"
+    },
+    {
+      "type": "application",
+      "name": "libksba",
+      "version": "1.6.7"
+    },
+    {
+      "type": "application",
+      "name": "npth",
+      "version": "1.8"
+    },
+    {
+      "type": "application",
+      "name": "openldap",
+      "version": "2.6.10"
+    },
+    {
+      "type": "application",
+      "name": "bdb",
+      "version": "5.3.28"
+    },
+    {
+      "type": "application",
+      "name": "cyrus-sasl",
+      "version": "2.1.28"
+    },
+    {
+      "type": "application",
+      "name": "pcsc-lite",
+      "version": "2.4.1"
+    },
+    {
+      "type": "application",
+      "name": "libarchive",
+      "version": "3.7.7"
+    },
+    {
+      "type": "application",
+      "name": "lzo",
+      "version": "2.10"
+    },
+    {
+      "type": "application",
+      "name": "libtirpc",
+      "version": "1.3.1"
+    },
+    {
+      "type": "application",
+      "name": "lmdb",
+      "version": "0.9.29"
+    },
+    {
+      "type": "application",
+      "name": "popt",
+      "version": "1.18"
+    },
+    {
+      "type": "application",
+      "name": "tdb",
+      "version": "1.4.12"
+    },
+    {
+      "type": "application",
+      "name": "ldb",
+      "version": "2.9.2"
+    },
+    {
+      "type": "application",
+      "name": "tevent",
+      "version": "0.16.1"
+    },
+    {
+      "type": "application",
+      "name": "talloc",
+      "version": "2.4.2"
+    },
+    {
+      "type": "application",
+      "name": "glib-networking",
+      "version": "2.80.1"
+    },
+    {
+      "type": "application",
+      "name": "gsettings-desktop-schemas",
+      "version": "48.0"
+    },
+    {
+      "type": "application",
+      "name": "gnome-backgrounds",
+      "version": "48.2.1"
+    },
+    {
+      "type": "application",
+      "name": "libproxy",
+      "version": "0.4.17"
+    },
+    {
+      "type": "application",
+      "name": "at-spi2-core",
+      "version": "2.52.0"
+    },
+    {
+      "type": "application",
+      "name": "findutils",
+      "version": "4.10.0"
+    },
+    {
+      "type": "application",
+      "name": "libxtst",
+      "version": "1.2.5"
+    },
+    {
+      "type": "application",
+      "name": "libcloudproviders-minimal",
+      "version": "0.3.6"
+    },
+    {
+      "type": "application",
+      "name": "libxcomposite",
+      "version": "0.4.6"
+    },
+    {
+      "type": "application",
+      "name": "libxinerama",
+      "version": "1.1.5"
+    },
+    {
+      "type": "application",
+      "name": "libxkbcommon",
+      "version": "1.13.1"
+    },
+    {
+      "type": "application",
+      "name": "setxkbmap",
+      "version": "1.3.4"
+    },
+    {
+      "type": "application",
+      "name": "gsl",
+      "version": "2.8"
+    },
+    {
+      "type": "application",
+      "name": "gspell",
+      "version": "1.14.2"
+    },
+    {
+      "type": "application",
+      "name": "aspell-dict-en",
+      "version": "2020.12.07-0"
+    },
+    {
+      "type": "application",
+      "name": "aspell",
+      "version": "0.60.8.1"
+    },
+    {
+      "type": "application",
+      "name": "enchant",
+      "version": "2.6.9"
+    },
+    {
+      "type": "application",
+      "name": "unittest-cpp",
+      "version": "2.0.0"
+    },
+    {
+      "type": "application",
+      "name": "hunspell",
+      "version": "1.7.0"
+    },
+    {
+      "type": "application",
+      "name": "nuspell",
+      "version": "5.1.4"
+    },
+    {
+      "type": "application",
+      "name": "catch2",
+      "version": "3.5.3"
+    },
+    {
+      "type": "application",
+      "name": "gtkmm",
+      "version": "3.24.9"
+    },
+    {
+      "type": "application",
+      "name": "mm-common",
+      "version": "1.0.7"
+    },
+    {
+      "type": "application",
+      "name": "atkmm",
+      "version": "2.28.4"
+    },
+    {
+      "type": "application",
+      "name": "glibmm",
+      "version": "2.66.6"
+    },
+    {
+      "type": "application",
+      "name": "libsigc++",
+      "version": "2.9.3"
+    },
+    {
+      "type": "application",
+      "name": "cairomm",
+      "version": "1.14.2"
+    },
+    {
+      "type": "application",
+      "name": "libsigc++",
+      "version": "3.6.0"
+    },
+    {
+      "type": "application",
+      "name": "glibmm",
+      "version": "2.86.0"
+    },
+    {
+      "type": "application",
+      "name": "pangomm",
+      "version": "2.46.4"
+    },
+    {
+      "type": "application",
+      "name": "lib2geom",
+      "version": "1.3"
+    },
+    {
+      "type": "application",
+      "name": "double-conversion",
+      "version": "3.1.5"
+    },
+    {
+      "type": "application",
+      "name": "libcdr",
+      "version": "0.1.7"
+    },
+    {
+      "type": "application",
+      "name": "cppunit",
+      "version": "1.15.1"
+    },
+    {
+      "type": "application",
+      "name": "librevenge",
+      "version": "0.0.5"
+    },
+    {
+      "type": "application",
+      "name": "libsoup-minimal",
+      "version": "2.74.3"
+    },
+    {
+      "type": "application",
+      "name": "vala",
+      "version": "0.52.11"
+    },
+    {
+      "type": "application",
+      "name": "libvisio",
+      "version": "0.1.7"
+    },
+    {
+      "type": "application",
+      "name": "libwpd",
+      "version": "0.10.3"
+    },
+    {
+      "type": "application",
+      "name": "libwpg",
+      "version": "0.3.3"
+    },
+    {
+      "type": "application",
+      "name": "potrace",
+      "version": "1.16"
+    },
+    {
+      "type": "application",
+      "name": "python-cssselect",
+      "version": "1.2.0"
+    },
+    {
+      "type": "application",
+      "name": "python-numpy",
+      "version": "2.3.1"
+    },
+    {
+      "type": "application",
+      "name": "gfortran",
+      "version": "14.3.0"
+    },
+    {
+      "type": "application",
+      "name": "libstdc++-headers",
+      "version": "14.3.0"
+    },
+    {
+      "type": "application",
+      "name": "libstdc++",
+      "version": "14.3.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pyserial",
+      "version": "3.5"
+    },
+    {
+      "type": "application",
+      "name": "python-scour",
+      "version": "0.38.2"
+    },
+    {
+      "type": "application",
+      "name": "docbook-xml",
+      "version": "5.1"
+    },
+    {
+      "type": "application",
+      "name": "python-anytree",
+      "version": "2.13.0"
+    },
+    {
+      "type": "application",
+      "name": "python-test2ref",
+      "version": "1.1.1"
+    },
+    {
+      "type": "application",
+      "name": "python-binaryornot",
+      "version": "0.4.4"
+    },
+    {
+      "type": "application",
+      "name": "sbc",
+      "version": "2.2"
+    },
+    {
+      "type": "application",
+      "name": "libsndfile",
+      "version": "1.2.2-0.68f6c16"
+    },
+    {
+      "type": "application",
+      "name": "autogen",
+      "version": "5.18.16"
+    },
+    {
+      "type": "application",
+      "name": "flac",
+      "version": "1.5.0"
+    },
+    {
+      "type": "application",
+      "name": "libmpg123",
+      "version": "1.33.5"
+    },
+    {
+      "type": "application",
+      "name": "jack",
+      "version": "0.125.0"
+    },
+    {
+      "type": "application",
+      "name": "fftwf",
+      "version": "3.3.10"
+    },
+    {
+      "type": "application",
+      "name": "webrtc-audio-processing",
+      "version": "1.3"
+    },
+    {
+      "type": "application",
+      "name": "abseil-cpp",
+      "version": "20250814.1"
+    },
+    {
+      "type": "application",
+      "name": "sdl2",
+      "version": "2.30.8"
+    },
+    {
+      "type": "application",
+      "name": "ibus",
+      "version": "1.5.32"
+    },
+    {
+      "type": "application",
+      "name": "dconf",
+      "version": "0.40.0"
+    },
+    {
+      "type": "application",
+      "name": "bash-completion",
+      "version": "2.11"
+    },
+    {
+      "type": "application",
+      "name": "libdbusmenu",
+      "version": "16.04.0-496"
+    },
+    {
+      "type": "application",
+      "name": "libnotify",
+      "version": "0.8.8"
+    },
+    {
+      "type": "application",
+      "name": "ucd",
+      "version": "15.1.0"
+    },
+    {
+      "type": "application",
+      "name": "unicode-cldr-common",
+      "version": "36.0"
+    },
+    {
+      "type": "application",
+      "name": "unicode-emoji",
+      "version": "12.0"
+    },
+    {
+      "type": "application",
+      "name": "xmodmap",
+      "version": "1.0.11"
+    },
+    {
+      "type": "application",
+      "name": "soxr",
+      "version": "0.1.3"
+    },
+    {
+      "type": "application",
+      "name": "srt",
+      "version": "1.4.4"
+    },
+    {
+      "type": "application",
+      "name": "svt-av1",
+      "version": "1.7.0"
+    },
+    {
+      "type": "application",
+      "name": "twolame",
+      "version": "0.4.0"
+    },
+    {
+      "type": "application",
+      "name": "vidstab",
+      "version": "1.1.0-0.aeabc8d"
+    },
+    {
+      "type": "application",
+      "name": "x265",
+      "version": "3.5"
+    },
+    {
+      "type": "application",
+      "name": "xvid",
+      "version": "1.3.7"
+    },
+    {
+      "type": "application",
+      "name": "sbcl-slynk",
+      "version": "1.0.43-9.9c43bf6"
+    },
+    {
+      "type": "application",
+      "name": "libfixposix",
+      "version": "0.4.3"
+    },
+    {
+      "type": "application",
+      "name": "node-synchronous-socket",
+      "version": "0.0.2"
+    },
+    {
+      "type": "application",
+      "name": "node-nan",
+      "version": "2.28.0"
+    },
+    {
+      "type": "application",
+      "name": "electron-node-headers",
+      "version": "36.9.5"
+    },
+    {
+      "type": "application",
+      "name": "node-bindings",
+      "version": "1.5.0"
+    },
+    {
+      "type": "application",
+      "name": "node-file-uri-to-path",
+      "version": "1.0.0"
+    },
+    {
+      "type": "operating-system",
+      "name": "guix"
+    }
+  ]
+}

@@ -162,8 +162,9 @@
         (m (make-array 65536 :element-type '(unsigned-byte 8))))
     (loop
       (handler-case
-          (multiple-value-bind (n token) (darterfly/worlds:receive-into port m :timeout 1)
-            (case (u64-at m 0)
+          (multiple-value-bind (n token sender) (darterfly/worlds:receive-into port m :timeout 1)
+            (unless (= sender world) (error "Unexpected world service sender"))
+            (case (if (>= n 8) (u64-at m 0) 0)
               (1 (let ((request (subseq m 0 n)))
                    (sb-thread:make-thread
                     (lambda ()

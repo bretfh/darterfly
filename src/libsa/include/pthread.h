@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <sys/types.h>
 #include <signal.h>
 #include <time.h>
@@ -9,6 +12,14 @@ typedef struct { volatile int state; int kind, owner, count; } pthread_mutex_t;
 typedef struct { int kind; } pthread_mutexattr_t;
 typedef struct { volatile unsigned seq; } pthread_cond_t;
 typedef struct { int pshared, clock; } pthread_condattr_t;
+typedef struct { volatile unsigned state; } pthread_rwlock_t;
+typedef struct { int pshared; } pthread_rwlockattr_t;
+#define PTHREAD_RWLOCK_INITIALIZER {0}
+int pthread_rwlock_init(pthread_rwlock_t *, const pthread_rwlockattr_t *);
+int pthread_rwlock_destroy(pthread_rwlock_t *);
+int pthread_rwlock_rdlock(pthread_rwlock_t *);
+int pthread_rwlock_wrlock(pthread_rwlock_t *);
+int pthread_rwlock_unlock(pthread_rwlock_t *);
 typedef unsigned pthread_key_t;
 typedef volatile int pthread_once_t;
 
@@ -70,3 +81,7 @@ int pthread_setspecific(pthread_key_t, const void *);
 int pthread_once(pthread_once_t *, void (*)(void));
 int pthread_setname_np(pthread_t, const char *);
 int pthread_getname_np(pthread_t, char *, size_t);
+
+#ifdef __cplusplus
+}
+#endif

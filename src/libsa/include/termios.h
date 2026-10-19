@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 typedef unsigned char cc_t;
 typedef unsigned int speed_t;
 typedef unsigned int tcflag_t;
@@ -114,3 +117,7 @@ int cfsetispeed(struct termios *, speed_t);
 #define TCIFLUSH 0
 #define TCOFLUSH 1
 #define TCIOFLUSH 2
+
+#ifdef __cplusplus
+}
+#endif

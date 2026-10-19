@@ -1,5 +1,10 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <sys/types.h>
+#include <sys/uio.h>
+#include <stdint.h>
 typedef unsigned socklen_t;
 typedef unsigned short sa_family_t;
 struct sockaddr { sa_family_t sa_family; char sa_data[14]; };
@@ -16,6 +21,8 @@ struct linger { int l_onoff; int l_linger; };
 #define PF_UNIX 1
 #define PF_INET 2
 #define PF_INET6 10
+#define SOCK_NONBLOCK 00004000
+#define SOCK_CLOEXEC 02000000
 #define SOCK_STREAM 1
 #define SOCK_DGRAM 2
 #define SOCK_RAW 3
@@ -42,6 +49,40 @@ struct linger { int l_onoff; int l_linger; };
 #define SO_RCVTIMEO 20
 #define SO_SNDTIMEO 21
 #define SO_BINDTODEVICE 25
+#define SCM_RIGHTS 1
+#define MSG_CTRUNC 0x08
+#define MSG_CMSG_CLOEXEC 0x40000000
+struct msghdr {
+    void *msg_name;
+    socklen_t msg_namelen;
+    struct iovec *msg_iov;
+    size_t msg_iovlen;
+    void *msg_control;
+    size_t msg_controllen;
+    int msg_flags;
+};
+struct cmsghdr { size_t cmsg_len; int cmsg_level; int cmsg_type; };
+#define CMSG_ALIGN(n) (((size_t)(n) + sizeof(size_t)-1) & ~(sizeof(size_t)-1))
+#define CMSG_LEN(n) (CMSG_ALIGN(sizeof(struct cmsghdr)) + (size_t)(n))
+#define CMSG_SPACE(n) (CMSG_ALIGN(sizeof(struct cmsghdr)) + CMSG_ALIGN(n))
+#define CMSG_DATA(c) ((unsigned char *)(c) + CMSG_ALIGN(sizeof(struct cmsghdr)))
+#define CMSG_FIRSTHDR(m) ((m)->msg_controllen >= sizeof(struct cmsghdr) ? \
+                         (struct cmsghdr *)(m)->msg_control : (struct cmsghdr *)0)
+static inline struct cmsghdr *CMSG_NXTHDR(const struct msghdr *m,
+                                         const struct cmsghdr *c) {
+    uintptr_t base = (uintptr_t)m->msg_control, at = (uintptr_t)c;
+    size_t left, step;
+    if (at < base || at-base > m->msg_controllen) return 0;
+    left = m->msg_controllen - (at-base);
+    if (left < sizeof(*c) || c->cmsg_len < sizeof(*c) || c->cmsg_len > left)
+        return 0;
+    step = CMSG_ALIGN(c->cmsg_len);
+    if (step < c->cmsg_len || step > left || left-step < sizeof(*c)) return 0;
+    return (struct cmsghdr *)(at+step);
+}
+ssize_t sendmsg(int, const struct msghdr *, int);
+ssize_t recvmsg(int, struct msghdr *, int);
+
 #define MSG_OOB 1
 #define MSG_PEEK 2
 #define MSG_DONTROUTE 4
@@ -55,3 +96,18 @@ struct linger { int l_onoff; int l_linger; };
 #define SHUT_RD 0
 #define SHUT_WR 1
 #define SHUT_RDWR 2
+
+int socketpair(int domain, int type, int protocol, int sv[2]);
+int shutdown(int fd, int how);
+
+int socket(int domain, int type, int protocol);
+int bind(int fd, const struct sockaddr *addr, socklen_t len);
+int listen(int fd, int backlog);
+int accept(int fd, struct sockaddr *addr, socklen_t *len);
+int connect(int fd, const struct sockaddr *addr, socklen_t len);
+int getsockname(int fd, struct sockaddr *addr, socklen_t *len);
+int getpeername(int fd, struct sockaddr *addr, socklen_t *len);
+
+#ifdef __cplusplus
+}
+#endif

@@ -1,0 +1,1341 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "metadata": {
+    "timestamp": "2026-10-18T17:28:03Z",
+    "tools": {
+      "components": [
+        {
+          "type": "operating-system",
+          "name": "guix"
+        },
+        {
+          "type": "application",
+          "name": "guix-graph"
+        }
+      ]
+    }
+  },
+  "components": [
+
+    {
+      "type": "application",
+      "name": "clang",
+      "version": "21.1.8"
+    },
+    {
+      "type": "application",
+      "name": "cmake-minimal",
+      "version": "3.31.10"
+    },
+    {
+      "type": "application",
+      "name": "cmake-bootstrap",
+      "version": "3.31.10"
+    },
+    {
+      "type": "application",
+      "name": "bzip2",
+      "version": "1.0.8"
+    },
+    {
+      "type": "application",
+      "name": "tar",
+      "version": "1.35"
+    },
+    {
+      "type": "application",
+      "name": "coreutils",
+      "version": "9.1"
+    },
+    {
+      "type": "application",
+      "name": "bash-minimal",
+      "version": "5.2.37"
+    },
+    {
+      "type": "application",
+      "name": "gcc",
+      "version": "14.3.0"
+    },
+    {
+      "type": "application",
+      "name": "texinfo",
+      "version": "6.8"
+    },
+    {
+      "type": "application",
+      "name": "bzip2-boot0",
+      "version": "1.0.8"
+    },
+    {
+      "type": "application",
+      "name": "diffutils-boot0",
+      "version": "3.12"
+    },
+    {
+      "type": "application",
+      "name": "make-boot0",
+      "version": "4.4.1"
+    },
+    {
+      "type": "application",
+      "name": "bash-mesboot",
+      "version": "5.2.37"
+    },
+    {
+      "type": "application",
+      "name": "gcc-mesboot-wrapper",
+      "version": "4.9.4"
+    },
+    {
+      "type": "application",
+      "name": "gash-boot",
+      "version": "0.3.1"
+    },
+    {
+      "type": "application",
+      "name": "bootar",
+      "version": "1b"
+    },
+    {
+      "type": "application",
+      "name": "guile-bootstrap",
+      "version": "2.0"
+    },
+    {
+      "type": "application",
+      "name": "gash-utils-boot",
+      "version": "0.2.0"
+    },
+    {
+      "type": "application",
+      "name": "glibc-mesboot",
+      "version": "2.16.0"
+    },
+    {
+      "type": "application",
+      "name": "glibc-headers-mesboot",
+      "version": "2.16.0"
+    },
+    {
+      "type": "application",
+      "name": "mesboot-headers",
+      "version": "0.25.1"
+    },
+    {
+      "type": "application",
+      "name": "linux-libre-headers-bootstrap",
+      "version": "0"
+    },
+    {
+      "type": "application",
+      "name": "gzip-mesboot",
+      "version": "1.2.4"
+    },
+    {
+      "type": "application",
+      "name": "tcc-boot0",
+      "version": "0.9.26-1149-g46a75d0c"
+    },
+    {
+      "type": "application",
+      "name": "mes-boot",
+      "version": "0.25.1"
+    },
+    {
+      "type": "application",
+      "name": "stage0-posix",
+      "version": "1.6.0"
+    },
+    {
+      "type": "application",
+      "name": "patch-mesboot",
+      "version": "2.5.9"
+    },
+    {
+      "type": "application",
+      "name": "make-mesboot0",
+      "version": "3.80"
+    },
+    {
+      "type": "application",
+      "name": "tcc-boot",
+      "version": "0.9.27"
+    },
+    {
+      "type": "application",
+      "name": "binutils-mesboot",
+      "version": "2.20.1a"
+    },
+    {
+      "type": "application",
+      "name": "gcc-mesboot1",
+      "version": "4.6.4"
+    },
+    {
+      "type": "application",
+      "name": "binutils-mesboot1",
+      "version": "2.20.1a"
+    },
+    {
+      "type": "application",
+      "name": "gcc-mesboot0",
+      "version": "2.95.3"
+    },
+    {
+      "type": "application",
+      "name": "glibc-mesboot0",
+      "version": "2.2.5"
+    },
+    {
+      "type": "application",
+      "name": "binutils-mesboot0",
+      "version": "2.20.1a"
+    },
+    {
+      "type": "application",
+      "name": "gcc-core-mesboot0",
+      "version": "2.95.3"
+    },
+    {
+      "type": "application",
+      "name": "make-mesboot",
+      "version": "3.82"
+    },
+    {
+      "type": "application",
+      "name": "gawk-mesboot",
+      "version": "3.1.8"
+    },
+    {
+      "type": "application",
+      "name": "gcc-mesboot",
+      "version": "4.9.4"
+    },
+    {
+      "type": "application",
+      "name": "gcc-mesboot1-wrapper",
+      "version": "4.6.4"
+    },
+    {
+      "type": "application",
+      "name": "coreutils-mesboot",
+      "version": "9.1"
+    },
+    {
+      "type": "application",
+      "name": "sed-mesboot",
+      "version": "4.8"
+    },
+    {
+      "type": "application",
+      "name": "grep-mesboot",
+      "version": "3.11"
+    },
+    {
+      "type": "application",
+      "name": "tar-mesboot",
+      "version": "1.35"
+    },
+    {
+      "type": "application",
+      "name": "xz-mesboot",
+      "version": "5.4.5"
+    },
+    {
+      "type": "application",
+      "name": "coreutils-boot0",
+      "version": "9.1"
+    },
+    {
+      "type": "application",
+      "name": "gawk-boot0",
+      "version": "5.3.0"
+    },
+    {
+      "type": "application",
+      "name": "patch-boot0",
+      "version": "2.7.6"
+    },
+    {
+      "type": "application",
+      "name": "sed-boot0",
+      "version": "4.9"
+    },
+    {
+      "type": "application",
+      "name": "tar-boot0",
+      "version": "1.35"
+    },
+    {
+      "type": "application",
+      "name": "findutils-boot0",
+      "version": "4.10.0"
+    },
+    {
+      "type": "application",
+      "name": "file-boot0",
+      "version": "5.46"
+    },
+    {
+      "type": "application",
+      "name": "perl-boot0",
+      "version": "5.36.0"
+    },
+    {
+      "type": "application",
+      "name": "bash-static",
+      "version": "5.2.37"
+    },
+    {
+      "type": "application",
+      "name": "gcc-cross-boot0-wrapped",
+      "version": "14.3.0"
+    },
+    {
+      "type": "application",
+      "name": "binutils-cross-boot0",
+      "version": "2.44"
+    },
+    {
+      "type": "application",
+      "name": "gcc-cross-boot0",
+      "version": "14.3.0"
+    },
+    {
+      "type": "application",
+      "name": "libstdc++-boot0",
+      "version": "4.9.4"
+    },
+    {
+      "type": "application",
+      "name": "glibc-intermediate",
+      "version": "2.41"
+    },
+    {
+      "type": "application",
+      "name": "bison-boot0",
+      "version": "3.8.2"
+    },
+    {
+      "type": "application",
+      "name": "m4-boot0",
+      "version": "1.4.19"
+    },
+    {
+      "type": "application",
+      "name": "python-boot0",
+      "version": "3.5.9"
+    },
+    {
+      "type": "application",
+      "name": "expat",
+      "version": "2.7.1"
+    },
+    {
+      "type": "application",
+      "name": "ld-wrapper-boot0",
+      "version": "0"
+    },
+    {
+      "type": "application",
+      "name": "linux-libre-headers",
+      "version": "6.12.17"
+    },
+    {
+      "type": "application",
+      "name": "flex",
+      "version": "2.6.4"
+    },
+    {
+      "type": "application",
+      "name": "ld-wrapper-boot3",
+      "version": "0"
+    },
+    {
+      "type": "application",
+      "name": "binutils",
+      "version": "2.44"
+    },
+    {
+      "type": "application",
+      "name": "libstdc++",
+      "version": "14.3.0"
+    },
+    {
+      "type": "application",
+      "name": "glibc",
+      "version": "2.41"
+    },
+    {
+      "type": "application",
+      "name": "gettext-boot0",
+      "version": "0.19.8.1"
+    },
+    {
+      "type": "application",
+      "name": "gcc-cross-boot0-wrapped",
+      "version": "14.3.0"
+    },
+    {
+      "type": "application",
+      "name": "zlib",
+      "version": "1.3.1"
+    },
+    {
+      "type": "application",
+      "name": "grep",
+      "version": "3.11"
+    },
+    {
+      "type": "application",
+      "name": "xz",
+      "version": "5.4.5"
+    },
+    {
+      "type": "application",
+      "name": "gzip",
+      "version": "1.14"
+    },
+    {
+      "type": "application",
+      "name": "bzip2",
+      "version": "1.0.8"
+    },
+    {
+      "type": "application",
+      "name": "file",
+      "version": "5.46"
+    },
+    {
+      "type": "application",
+      "name": "diffutils",
+      "version": "3.12"
+    },
+    {
+      "type": "application",
+      "name": "perl",
+      "version": "5.36.0"
+    },
+    {
+      "type": "application",
+      "name": "patch",
+      "version": "2.7.6"
+    },
+    {
+      "type": "application",
+      "name": "ed",
+      "version": "1.21"
+    },
+    {
+      "type": "application",
+      "name": "lzip",
+      "version": "1.25"
+    },
+    {
+      "type": "application",
+      "name": "findutils",
+      "version": "4.10.0"
+    },
+    {
+      "type": "application",
+      "name": "gawk",
+      "version": "5.3.0"
+    },
+    {
+      "type": "application",
+      "name": "glibc-utf8-locales",
+      "version": "2.41"
+    },
+    {
+      "type": "application",
+      "name": "gzip",
+      "version": "1.14"
+    },
+    {
+      "type": "application",
+      "name": "libsigsegv",
+      "version": "2.14"
+    },
+    {
+      "type": "application",
+      "name": "zstd",
+      "version": "1.5.6"
+    },
+    {
+      "type": "application",
+      "name": "sed",
+      "version": "4.9"
+    },
+    {
+      "type": "application",
+      "name": "make",
+      "version": "4.4.1"
+    },
+    {
+      "type": "application",
+      "name": "pkg-config",
+      "version": "0.29.2"
+    },
+    {
+      "type": "application",
+      "name": "guile",
+      "version": "3.0.9"
+    },
+    {
+      "type": "application",
+      "name": "pkg-config",
+      "version": "0.29.2"
+    },
+    {
+      "type": "application",
+      "name": "libffi",
+      "version": "3.4.6"
+    },
+    {
+      "type": "application",
+      "name": "bash-minimal",
+      "version": "5.2.37"
+    },
+    {
+      "type": "application",
+      "name": "libunistring",
+      "version": "1.3"
+    },
+    {
+      "type": "application",
+      "name": "libgc",
+      "version": "8.2.8"
+    },
+    {
+      "type": "application",
+      "name": "ld-wrapper",
+      "version": "0"
+    },
+    {
+      "type": "application",
+      "name": "curl",
+      "version": "8.6.0"
+    },
+    {
+      "type": "application",
+      "name": "nghttp2",
+      "version": "1.58.0"
+    },
+    {
+      "type": "application",
+      "name": "pkg-config",
+      "version": "0.29.2"
+    },
+    {
+      "type": "application",
+      "name": "cunit",
+      "version": "2.1-3"
+    },
+    {
+      "type": "application",
+      "name": "automake",
+      "version": "1.17"
+    },
+    {
+      "type": "application",
+      "name": "autoconf-wrapper",
+      "version": "2.69"
+    },
+    {
+      "type": "application",
+      "name": "perl",
+      "version": "5.36.0"
+    },
+    {
+      "type": "application",
+      "name": "m4",
+      "version": "1.4.19"
+    },
+    {
+      "type": "application",
+      "name": "guile",
+      "version": "3.0.9"
+    },
+    {
+      "type": "application",
+      "name": "libffi",
+      "version": "3.4.6"
+    },
+    {
+      "type": "application",
+      "name": "libxcrypt",
+      "version": "4.4.38"
+    },
+    {
+      "type": "application",
+      "name": "bash-minimal",
+      "version": "5.2.37"
+    },
+    {
+      "type": "application",
+      "name": "libunistring",
+      "version": "1.3"
+    },
+    {
+      "type": "application",
+      "name": "libgc",
+      "version": "8.2.8"
+    },
+    {
+      "type": "application",
+      "name": "autoconf",
+      "version": "2.69"
+    },
+    {
+      "type": "application",
+      "name": "libtool",
+      "version": "2.4.7"
+    },
+    {
+      "type": "application",
+      "name": "libltdl",
+      "version": "2.4.7"
+    },
+    {
+      "type": "application",
+      "name": "help2man",
+      "version": "1.49.2"
+    },
+    {
+      "type": "application",
+      "name": "gettext-minimal",
+      "version": "0.23.1"
+    },
+    {
+      "type": "application",
+      "name": "libxml2",
+      "version": "2.14.6"
+    },
+    {
+      "type": "application",
+      "name": "python-minimal",
+      "version": "3.12.12"
+    },
+    {
+      "type": "application",
+      "name": "tzdata",
+      "version": "2025a"
+    },
+    {
+      "type": "application",
+      "name": "unzip",
+      "version": "6.0"
+    },
+    {
+      "type": "application",
+      "name": "zip",
+      "version": "3.0"
+    },
+    {
+      "type": "application",
+      "name": "expat",
+      "version": "2.7.1"
+    },
+    {
+      "type": "application",
+      "name": "openssl",
+      "version": "3.5.5"
+    },
+    {
+      "type": "application",
+      "name": "zlib",
+      "version": "1.3.1"
+    },
+    {
+      "type": "application",
+      "name": "xz",
+      "version": "5.4.5"
+    },
+    {
+      "type": "application",
+      "name": "ncurses",
+      "version": "6.2.20210619"
+    },
+    {
+      "type": "application",
+      "name": "perl-gettext",
+      "version": "1.07"
+    },
+    {
+      "type": "application",
+      "name": "python",
+      "version": "3.12.12"
+    },
+    {
+      "type": "application",
+      "name": "gdbm",
+      "version": "1.25"
+    },
+    {
+      "type": "application",
+      "name": "sqlite",
+      "version": "3.39.3"
+    },
+    {
+      "type": "application",
+      "name": "readline",
+      "version": "8.2.13"
+    },
+    {
+      "type": "application",
+      "name": "tcl",
+      "version": "8.6.12"
+    },
+    {
+      "type": "application",
+      "name": "tk",
+      "version": "8.6.12"
+    },
+    {
+      "type": "application",
+      "name": "libxft",
+      "version": "2.3.8"
+    },
+    {
+      "type": "application",
+      "name": "libx11",
+      "version": "1.8.12"
+    },
+    {
+      "type": "application",
+      "name": "xtrans",
+      "version": "1.5.2"
+    },
+    {
+      "type": "application",
+      "name": "xorgproto",
+      "version": "2024.1"
+    },
+    {
+      "type": "application",
+      "name": "util-macros",
+      "version": "1.20.2"
+    },
+    {
+      "type": "application",
+      "name": "libxcb",
+      "version": "1.17.0"
+    },
+    {
+      "type": "application",
+      "name": "python-minimal-wrapper",
+      "version": "3.12.12"
+    },
+    {
+      "type": "application",
+      "name": "bash",
+      "version": "5.2.37"
+    },
+    {
+      "type": "application",
+      "name": "xcb-proto",
+      "version": "1.17.0"
+    },
+    {
+      "type": "application",
+      "name": "check",
+      "version": "0.15.2"
+    },
+    {
+      "type": "application",
+      "name": "libxau",
+      "version": "1.0.12"
+    },
+    {
+      "type": "application",
+      "name": "libxdmcp",
+      "version": "1.1.5"
+    },
+    {
+      "type": "application",
+      "name": "libxrender",
+      "version": "0.9.12"
+    },
+    {
+      "type": "application",
+      "name": "freetype",
+      "version": "2.13.3"
+    },
+    {
+      "type": "application",
+      "name": "libpng",
+      "version": "1.6.39"
+    },
+    {
+      "type": "application",
+      "name": "fontconfig-minimal",
+      "version": "2.16.0"
+    },
+    {
+      "type": "application",
+      "name": "autoconf",
+      "version": "2.71"
+    },
+    {
+      "type": "application",
+      "name": "gperf",
+      "version": "3.3"
+    },
+    {
+      "type": "application",
+      "name": "font-dejavu",
+      "version": "2.37"
+    },
+    {
+      "type": "application",
+      "name": "tar",
+      "version": "1.35"
+    },
+    {
+      "type": "application",
+      "name": "gzip",
+      "version": "1.14"
+    },
+    {
+      "type": "application",
+      "name": "util-linux",
+      "version": "2.40.4"
+    },
+    {
+      "type": "application",
+      "name": "net-base",
+      "version": "5.3"
+    },
+    {
+      "type": "application",
+      "name": "file",
+      "version": "5.46"
+    },
+    {
+      "type": "application",
+      "name": "libxext",
+      "version": "1.3.6"
+    },
+    {
+      "type": "application",
+      "name": "jemalloc",
+      "version": "5.3.0"
+    },
+    {
+      "type": "application",
+      "name": "c-ares",
+      "version": "1.34.4"
+    },
+    {
+      "type": "application",
+      "name": "jansson",
+      "version": "2.14"
+    },
+    {
+      "type": "application",
+      "name": "libev",
+      "version": "4.33"
+    },
+    {
+      "type": "application",
+      "name": "gnutls",
+      "version": "3.8.9"
+    },
+    {
+      "type": "application",
+      "name": "texinfo",
+      "version": "6.8"
+    },
+    {
+      "type": "application",
+      "name": "net-tools",
+      "version": "1.60-0.479bb4a"
+    },
+    {
+      "type": "application",
+      "name": "iproute2",
+      "version": "6.4.0"
+    },
+    {
+      "type": "application",
+      "name": "bison",
+      "version": "3.8.2"
+    },
+    {
+      "type": "application",
+      "name": "flex",
+      "version": "2.6.4"
+    },
+    {
+      "type": "application",
+      "name": "bison",
+      "version": "3.8.2"
+    },
+    {
+      "type": "application",
+      "name": "bdb",
+      "version": "6.2.32"
+    },
+    {
+      "type": "application",
+      "name": "automake",
+      "version": "1.16.5"
+    },
+    {
+      "type": "application",
+      "name": "iptables",
+      "version": "1.8.11"
+    },
+    {
+      "type": "application",
+      "name": "libmnl",
+      "version": "1.0.5"
+    },
+    {
+      "type": "application",
+      "name": "libnftnl",
+      "version": "1.2.8"
+    },
+    {
+      "type": "application",
+      "name": "socat",
+      "version": "1.7.4.4"
+    },
+    {
+      "type": "application",
+      "name": "datefudge",
+      "version": "1.27"
+    },
+    {
+      "type": "application",
+      "name": "libtasn1",
+      "version": "4.21.0"
+    },
+    {
+      "type": "application",
+      "name": "libidn2",
+      "version": "2.3.7"
+    },
+    {
+      "type": "application",
+      "name": "p11-kit",
+      "version": "0.25.5"
+    },
+    {
+      "type": "application",
+      "name": "nss-certs",
+      "version": "3.101.4"
+    },
+    {
+      "type": "application",
+      "name": "certdata2pem",
+      "version": "0.0.0"
+    },
+    {
+      "type": "application",
+      "name": "nettle",
+      "version": "3.10.2"
+    },
+    {
+      "type": "application",
+      "name": "gmp",
+      "version": "6.3.0"
+    },
+    {
+      "type": "application",
+      "name": "zstd",
+      "version": "1.5.6"
+    },
+    {
+      "type": "application",
+      "name": "libidn",
+      "version": "1.43"
+    },
+    {
+      "type": "application",
+      "name": "libpsl",
+      "version": "0.21.5"
+    },
+    {
+      "type": "application",
+      "name": "mit-krb5",
+      "version": "1.21"
+    },
+    {
+      "type": "application",
+      "name": "jsoncpp",
+      "version": "1.9.6"
+    },
+    {
+      "type": "application",
+      "name": "meson",
+      "version": "1.9.0"
+    },
+    {
+      "type": "application",
+      "name": "python-setuptools-bootstrap",
+      "version": "80.9.0"
+    },
+    {
+      "type": "application",
+      "name": "python-wrapper",
+      "version": "3.12.12"
+    },
+    {
+      "type": "application",
+      "name": "ninja",
+      "version": "1.13.2"
+    },
+    {
+      "type": "application",
+      "name": "re2c",
+      "version": "4.2"
+    },
+    {
+      "type": "application",
+      "name": "libarchive",
+      "version": "3.7.7"
+    },
+    {
+      "type": "application",
+      "name": "lzo",
+      "version": "2.10"
+    },
+    {
+      "type": "application",
+      "name": "libuv",
+      "version": "1.44.2"
+    },
+    {
+      "type": "application",
+      "name": "rhash",
+      "version": "1.4.3"
+    },
+    {
+      "type": "application",
+      "name": "gcc",
+      "version": "14.3.0"
+    },
+    {
+      "type": "application",
+      "name": "isl",
+      "version": "0.24"
+    },
+    {
+      "type": "application",
+      "name": "libstdc++-headers",
+      "version": "14.3.0"
+    },
+    {
+      "type": "application",
+      "name": "libstdc++",
+      "version": "14.3.0"
+    },
+    {
+      "type": "application",
+      "name": "mpfr",
+      "version": "4.2.2"
+    },
+    {
+      "type": "application",
+      "name": "mpc",
+      "version": "1.3.1"
+    },
+    {
+      "type": "application",
+      "name": "elfutils",
+      "version": "0.192"
+    },
+    {
+      "type": "application",
+      "name": "llvm",
+      "version": "21.1.8"
+    },
+    {
+      "type": "application",
+      "name": "clang-runtime",
+      "version": "21.1.8"
+    },
+    {
+      "type": "application",
+      "name": "gcc",
+      "version": "15.2.0"
+    },
+    {
+      "type": "application",
+      "name": "libstdc++-headers",
+      "version": "15.2.0"
+    },
+    {
+      "type": "application",
+      "name": "libstdc++",
+      "version": "15.2.0"
+    },
+    {
+      "type": "application",
+      "name": "python-setuptools",
+      "version": "80.9.0"
+    },
+    {
+      "type": "application",
+      "name": "python-wrapper",
+      "version": "3.12.12"
+    },
+    {
+      "type": "application",
+      "name": "python",
+      "version": "3.12.12"
+    },
+    {
+      "type": "application",
+      "name": "python-pytest-guix",
+      "version": "0.0.1"
+    },
+    {
+      "type": "application",
+      "name": "python-autocommand",
+      "version": "2.2.2"
+    },
+    {
+      "type": "application",
+      "name": "python-pytest-bootstrap",
+      "version": "9.0.2"
+    },
+    {
+      "type": "application",
+      "name": "python-setuptools-scm-bootstrap",
+      "version": "8.3.1"
+    },
+    {
+      "type": "application",
+      "name": "python-packaging-bootstrap",
+      "version": "25.0"
+    },
+    {
+      "type": "application",
+      "name": "python-flit-core",
+      "version": "3.12.0"
+    },
+    {
+      "type": "application",
+      "name": "python-tomli",
+      "version": "2.2.1"
+    },
+    {
+      "type": "application",
+      "name": "python-flit-core-bootstrap",
+      "version": "3.12.0"
+    },
+    {
+      "type": "application",
+      "name": "python-toml",
+      "version": "0.10.2"
+    },
+    {
+      "type": "application",
+      "name": "python-iniconfig",
+      "version": "2.1.0"
+    },
+    {
+      "type": "application",
+      "name": "python-hatch-vcs-bootstrap",
+      "version": "0.5.0"
+    },
+    {
+      "type": "application",
+      "name": "python-hatchling-bootstrap",
+      "version": "1.27.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pathspec",
+      "version": "1.0.4"
+    },
+    {
+      "type": "application",
+      "name": "python-pluggy",
+      "version": "1.6.0"
+    },
+    {
+      "type": "application",
+      "name": "python-setuptools-scm",
+      "version": "8.3.1"
+    },
+    {
+      "type": "application",
+      "name": "python-trove-classifiers",
+      "version": "2025.5.9.12"
+    },
+    {
+      "type": "application",
+      "name": "python-pygments-bootstrap",
+      "version": "2.19.2"
+    },
+    {
+      "type": "application",
+      "name": "python-hatchling",
+      "version": "1.27.0"
+    },
+    {
+      "type": "application",
+      "name": "python-backports-tarfile",
+      "version": "1.2.0"
+    },
+    {
+      "type": "application",
+      "name": "python-filelock-bootstrap",
+      "version": "3.16.1"
+    },
+    {
+      "type": "application",
+      "name": "python-inflect",
+      "version": "7.5.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pygments",
+      "version": "2.19.2"
+    },
+    {
+      "type": "application",
+      "name": "python-more-itertools",
+      "version": "10.6.0"
+    },
+    {
+      "type": "application",
+      "name": "python-typeguard",
+      "version": "4.4.4"
+    },
+    {
+      "type": "application",
+      "name": "python-typing-extensions",
+      "version": "4.15.0"
+    },
+    {
+      "type": "application",
+      "name": "python-jaraco-collections",
+      "version": "5.2.1"
+    },
+    {
+      "type": "application",
+      "name": "python-jaraco-text",
+      "version": "4.0.0"
+    },
+    {
+      "type": "application",
+      "name": "python-jaraco-context",
+      "version": "6.0.1"
+    },
+    {
+      "type": "application",
+      "name": "python-jaraco-functools",
+      "version": "4.2.1"
+    },
+    {
+      "type": "application",
+      "name": "python-jaraco-classes",
+      "version": "3.4.0"
+    },
+    {
+      "type": "application",
+      "name": "python-jaraco-envs-bootstrap",
+      "version": "2.6.0"
+    },
+    {
+      "type": "application",
+      "name": "python-path",
+      "version": "17.1.0"
+    },
+    {
+      "type": "application",
+      "name": "python-virtualenv-bootstrap",
+      "version": "20.29.1"
+    },
+    {
+      "type": "application",
+      "name": "python-distlib",
+      "version": "0.3.7"
+    },
+    {
+      "type": "application",
+      "name": "python-platformdirs-bootstrap",
+      "version": "4.3.6"
+    },
+    {
+      "type": "application",
+      "name": "python-hatch-vcs",
+      "version": "0.5.0"
+    },
+    {
+      "type": "application",
+      "name": "python-jaraco-path",
+      "version": "3.7.2"
+    },
+    {
+      "type": "application",
+      "name": "python-jaraco-test",
+      "version": "5.5.1"
+    },
+    {
+      "type": "application",
+      "name": "python-packaging",
+      "version": "25.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pretend",
+      "version": "1.0.9"
+    },
+    {
+      "type": "application",
+      "name": "python-pyparsing",
+      "version": "3.2.3"
+    },
+    {
+      "type": "application",
+      "name": "python-six",
+      "version": "1.17.0"
+    },
+    {
+      "type": "application",
+      "name": "python-pip",
+      "version": "25.1.1"
+    },
+    {
+      "type": "application",
+      "name": "python-pypa-build",
+      "version": "1.3.0"
+    },
+    {
+      "type": "application",
+      "name": "python-colorama",
+      "version": "0.4.6"
+    },
+    {
+      "type": "application",
+      "name": "python-pyproject-hooks",
+      "version": "1.2.0"
+    },
+    {
+      "type": "application",
+      "name": "python-testpath",
+      "version": "0.6.0"
+    },
+    {
+      "type": "application",
+      "name": "python-wheel",
+      "version": "0.46.1"
+    },
+    {
+      "type": "application",
+      "name": "lld",
+      "version": "21.1.8"
+    },
+    {
+      "type": "operating-system",
+      "name": "guix"
+    }
+  ]
+}

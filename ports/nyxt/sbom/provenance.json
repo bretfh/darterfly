@@ -1,0 +1,15 @@
+{
+  "system": "x86_64-linux",
+  "guix_version": "guix (GNU Guix) fc665909ddc733882c7a1bf1cd3db2273bcaf739",
+  "darterfly_commit": "4577a0644e67f81c5a37e56091b573f9377258e1",
+  "nyxt_worktree_commit": "cfa068ea781fe4866ae435c2950c00c5ec51cfee",
+  "nyxt_package_source_commit": "641fd65824036965e24ed803698977e74b3afd3e",
+  "installed_nyxt": "/gnu/store/rc5mjlkq7j7drlfh01f6kw5pky9s6q38-nyxt-4.0.0-pre-3",
+  "guix_modules_sha256": {
+    "gnu/packages/chromium.scm": "49e26ef7e1b042a9c27afd1e9258fb847cd2b60481b2290c7db30b443711b444",
+    "gnu/packages/llvm.scm": "8262211752a27b92897c97f1175a96bb2fbf055e7bd402b8b5a84798ecb4dea6",
+    "nongnu/packages/chromium.scm": "12deb5fedaf9c71040a22f5b2b24d772ff510b615ca995080973d459e131a505",
+    "nongnu/packages/electron.scm": "f5e933f77706655cef5609f14e6e03cd5b44d079a6fa0fc371423adc4cdf4ef2",
+    "guix/graph.scm": "dbf4a175ddd5d398aa450747dd723e5684967352bbd8ba145dc8f362e2bc7d7e"
+  }
+}

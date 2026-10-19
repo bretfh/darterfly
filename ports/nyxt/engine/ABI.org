@@ -1,0 +1,237 @@
+#+title: Darterfly engine ABI and dynamic loading
+#+date: 2026-10-18
+#+startup: overview
+#+options: toc:2 num:nil
+
+* Decision
+
+Use native x86-64 ELF shared objects built for Darterfly's existing libsa.
+Keep one allocator, pthread implementation, thread pointer and OS service
+path in each world. The browser engine must be rebuilt for this contract.
+The existing Guix libcef.so is the behavior reference, not a target binary.
+
+The engine-facing boundary remains CEF's versioned C API. Nyxt's Lisp
+renderer and cl-cef's Lisp interface should remain intact. The current
+cl-cef bridge uses CEF's C++ wrapper and desktop views; that adapter still
+needs a Darterfly display/event backend. A C API engine probe qualifies the
+engine before changing that adapter. No new browser engine is proposed.
+
+This decision is an implementation direction, not evidence that the full
+CEF dependency closure has been ported. The loader fixture is not CEF.
+The measured acceptance target remains the same local HTML page, CPU
+paint, mouse click, JavaScript result and clean shutdown inside Darterfly.
+
+* Layers and ownership
+
+#+begin_example
+Nyxt Lisp world
+  Nyxt commands, buffers, modes; existing cl-cef interface
+    target-built bridge / CEF C API
+      libcef.so and target-built dependencies
+        shared libsa: malloc, pthreads, errno, dynamic TLS, dlopen
+          existing world services: files, sockets, polling, spawn, mmap
+            Darterfly supervisor and hardware
+#+end_example
+
+The drawing adapter will send CEF's software-rendered pixels to Darterfly
+surfaces and translate input/events. This does not require inventing an
+HTML renderer. Browser subprocesses must be separate native worlds and
+use the existing descriptor-passing and shared-memory facilities.
+
+World isolation is the protection boundary. A DSO loaded into a world
+has that world's authority. A corrupt engine can corrupt its own world;
+dlopen does not sandbox one library from another in the same address space.
+
+* CEF boundary to preserve
+
+Use the pinned CEF headers and matching C API hash/version checks. This
+version agreement is a CEF API contract, not ELF GLIBC symbol versioning.
+The bridge must retain CEF's reference-counted structure layouts, callback
+calling convention and matching string/object release functions.
+
+Keep cef_execute_process ahead of browser-process initialization. Drive
+the external message pump through the OS event/timer service; route CEF
+work onto its required threads. Deliver input through the existing CEF
+browser-host methods. Copy on_paint's width * height * 4 BGRA bytes and
+dirty rectangles into Darterfly surfaces while the callback buffer is
+valid. These are the adapter boundaries to implement, not a replacement
+for Nyxt's commands or renderer model.
+
+A shared dependency graph must use one compatible libc++/libc++abi build.
+The native qualification tools are LLVM 19 seeds. The recorded Chromium
+revision pins a newer toolchain in cef-reference.json; this fixture does
+not establish that LLVM 19 can build that engine revision. Start the
+engine port with its pinned cross toolchain and retain native rebuilding
+as a later gate.
+
+* Implemented native DSO contract
+
+| Area | Contract |
+|------+----------|
+| Machine | Little-endian ELF64, x86-64, SysV calls, LP64 |
+| Object | ET_DYN, no PT_INTERP, non-executable stack |
+| Runtime | Imports resolve to the world's existing Low libsa |
+| Dependency identity | Canonical path; sibling DT_NEEDED basenames |
+| Search path | No environment search; optional literal $ORIGIN |
+| Runtime SONAME | libdarterfly.so.1 denotes the existing provider |
+| Symbols | SysV or GNU hash bounds; global/weak/protected, ordinary and TLS |
+| Relocations | RELATIVE, 64, GLOB_DAT, JUMP_SLOT, DTPMOD64, DTPOFF64 |
+| Binding | Eager, including requests with RTLD_LAZY |
+| Scope | RTLD_LOCAL closure; RTLD_GLOBAL promotion; dependency breadth first |
+| Lifecycle | Dependencies before constructors; reverse finalization at exit |
+| TLS | General/local dynamic; lazy allocation on each existing or new thread |
+| Protection | Separate R/RX/RW pages; RELRO; reject W+X and text relocations |
+| dlclose | Release handle; successful mappings remain resident until exit |
+
+The export provider is generated from the same Low definitions as libsa.
+DSO links do not embed a second libsa object. The __cxa_thread_atexit import
+aliases the existing __cxa_thread_atexit_impl destructor registration.
+C++ destructor registration and malloc/free therefore use the same state
+as the executable.
+
+The existing thread-pointer allocation has reserved words. Dynamic TLS
+uses offset 32 for its module list; errors use 40 and an optional diagnostic
+buffer at 48. Static executable TLS keeps its existing negative offsets.
+There is no second pthread runtime or competing thread pointer. Module
+TLS metadata is immutable after publication; per-thread TLS lookup does
+not take the loader lock. A constructor can start and join a worker that
+uses its TLS without deadlocking against its own dlopen call.
+
+Loading is transactional until constructors run: dependency discovery,
+table validation, relocation and protection must all succeed. A failure
+unmaps the newly allocated images and removes their module records.
+Existing modules are retained. Constructor faults are process faults,
+not recoverable loader errors.
+
+The native Clang helper accepts :pic t and selects general-dynamic TLS.
+The native LLD helper accepts :shared t and does not inject CRT0 or libsa.
+It emits $ORIGIN, immediate binding, RELRO and separated code segments.
+These are options on the existing tool runner, not a second build system.
+
+#+begin_src lisp
+(darterfly/cc:compile-native-cxx
+  "/usr/bin/clang" "/tmp/example.cpp" "/tmp/example.o"
+  :pic t :exceptions nil)
+(darterfly/cc:link-native-cxx
+  "/usr/bin/ld.lld" "/tmp/libexample.so" '("/tmp/example.o")
+  :shared t :soname "libexample.so")
+#+end_src
+
+* Deliberate limits and unresolved engine requirements
+
+This is a bounded native loader, not an ld-linux replacement. It rejects
+glibc symbol-version tables, IFUNC, REL/RELR, static/initial-exec DSO TLS,
+copy relocations, DT_SYMBOLIC binding and unsupported relocation kinds. There is no Linux
+syscall interpreter, glibc ABI emulation or alternate C runtime.
+
+Limits are 64 resident modules, 512 MiB per input file, 1 GiB virtual image,
+64 program headers and 1 MiB TLS per module. PT_LOAD segments must occupy
+distinct pages and have alignment no greater than 64 KiB. These are
+explicit initial limits, not measurements of the complete engine closure.
+
+There is no RTLD_NEXT, namespace loader, library unloading, GNU symbol
+version selection or general executable -rdynamic export support.
+dladdr identifies the DSO and its base; nearest-symbol reporting is still
+limited to the old kernel-image path. Symbol lookup currently scans the
+bounded symbol tables; engine-scale performance is not qualified.
+
+C++ exceptions across dynamically loaded frames are not qualified.
+Dynamic unwind registration and a coherent shared libc++/libc++abi closure
+remain work. The current fixture disables exceptions and tests C++ global
+and thread-local destructors, callbacks, dependency calls and allocation
+across the DSO boundary. It does not establish full C++ engine support.
+
+The target engine build must make its libc, TLS model, allocator policy,
+C++ runtime, platform macros and dependency search layout explicit.
+Chromium's private allocators may exist for engine-owned objects, but
+ownership must never cross APIs that expect another allocator to free it.
+The current host libcef has versioned GLIBC imports and Linux dependencies.
+Renaming it or copying its dependency files does not meet this contract.
+
+* Why this loader is part of libsa
+
+The reviewed musl loader is coupled to musl's pthread metadata, DTV/TCB,
+startup, relocation bookkeeping and libc internals. Transplanting it
+unchanged would not reuse Darterfly's existing thread runtime. A deliberate
+musl migration remains possible, but it is a separate architecture change.
+
+This implementation follows the ELF records and relocation ABI directly
+in Low and calls the already working allocation, file, mapping and thread
+interfaces. It adds dynamic linking without introducing another libc.
+No musl code has been copied into this implementation.
+
+References:
+- [[https://refspecs.linuxfoundation.org/elf/gabi4%2B/ch5.dynamic.html][ELF dynamic linking]]
+- [[https://android.googlesource.com/platform/external/musl/+/e8035c3f686db07475eb947494e2d5765c33c958/ldso/dynlink.c][Reviewed musl loader source]]
+- [[https://wiki.musl-libc.org/design-concepts.html][Musl design: TLS and library lifetime]]
+- [[file:../cef-reference.json][Pinned CEF, Chromium, bridge and Nyxt sources]]
+
+* Qualification
+
+Run make test-native-dl-guest. It boots the actual OS in QEMU, compiles
+the C++ fixture sources with native Clang, links their DSOs with native
+LLD and runs the loader client in its own world. The host compiler does
+not build these fixture DSOs. Clang and LLD themselves remain cross seeds.
+
+The guest checks dependency constructors, GNU and SysV hash inputs,
+symbol scopes, callbacks, shared allocator/errno, aligned initialized and
+zero TLS on threads created before and after dlopen, constructor-created
+threads, C++ TLS destructors, resident close/reopen, finalizers, malformed
+inputs, failed-load rollback,
+text/RELRO write faults and supervisor process cleanup. A separate Lisp
+world uses SBCL's ordinary load-shared-object and alien call path.
+
+Native DSO mappings are not a serialized Lisp image format. Saving and
+restoring an image with foreign libraries needs its own reopen and
+lifetime qualification; the current test does not claim that milestone.
+
+All qualification runs passed. The transcript is build/native-dl-guest.log.
+[[file:abi-validation.json][Recorded commands, seed hashes and transcript hashes]] distinguish the
+DSO fixture from actual engine execution.
+
+| Qualification | Result |
+|---------------+--------|
+| Source load check | LOADED |
+| Host socket/native-service checks | 206 passed |
+| Dynamic-loading QEMU assertions | 29 passed; 37 distinct guest PASS markers |
+| Native Clang/LLD/C++ regression | 18 passed |
+| Native IPC regression | 13 passed |
+| Packaged CEF boundary | 11 observations passed; engine not running |
+
+The final DSO run includes the constructor-created TLS worker and the
+isolated SBCL foreign call. The CEF boundary run maps the actual packaged
+engine and rejects its foreign/versioned ABI; executable spawn still
+rejects the Linux artifacts with ENOEXEC.
+
+#+begin_src sh
+make check
+make test-local-sockets test-native-host
+make test-native-dl-guest
+make test-native-lld-guest
+make test-native-ipc-guest
+CEF_PROBE_RUNTIME=/path/to/pinned/cl-cef make test-engine-boundary-guest
+#+end_src
+
+Run QEMU targets sequentially in this worktree. They share image and
+monitor paths. The unrelated existing FIRST-START-ENTRIES installation
+test warning remains; the entire host/recovery suite is not claimed green.
+
+* Browser-first next gates
+
+1. Obtain the pinned CEF/Chromium source and make a minimal target
+   configure/link attempt. Record the actual missing platform interfaces
+   and build dependencies. The existing Guix SBOM is still the inventory.
+   Do not spend this step rebuilding more compiler components.
+2. Establish the target-built dependency closure and C++ runtime policy.
+   Qualify dynamic unwind support and any additional relocations/TLS
+   models required by that concrete build, rather than guessing.
+3. Run the existing C API software-paint probe inside a native world.
+   Bring up real subprocess launch and Mojo descriptor/shared-memory use
+   against existing OS services. Record each missing semantic operation.
+4. Connect software paint and input to Darterfly's graphics/events.
+   Keep the bridge changes local and preserve Nyxt's Lisp renderer API.
+5. Launch Nyxt, load a page, navigate, evaluate JavaScript and close it
+   without killing the supervisor. Then qualify networking and persistence.
+6. Restore native engine/compiler rebuild work once the browser works.
+   Preserve sources, recipes and Guix provenance throughout; a cross seed
+   is a bootstrap tool, not the final self-hosting claim.

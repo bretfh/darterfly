@@ -1,6 +1,5 @@
 (in-package #:darterfly/libsa)
 
-(define-low setlocale (c l) "C")
 
 (define-low dirname (p)
   (let ((s (strrchr p 47)))

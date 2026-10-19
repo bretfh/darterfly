@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <sys/types.h>
 #define DT_UNKNOWN 0
 #define DT_DIR 4
@@ -25,3 +28,7 @@ struct dirent64 {
   unsigned char d_type;
   char d_name[256];
 };
+
+#ifdef __cplusplus
+}
+#endif

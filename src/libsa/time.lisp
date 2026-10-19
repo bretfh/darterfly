@@ -404,3 +404,18 @@
 (define-low select (n r w e tv)
   (setf (mem :u32 (__errno_location)) +enosys+)
   (- 0 1))
+
+(define-global asctime-buffer :u8 :count 26)
+(define-low asctime_r (tm out)
+  (let ((day (mem :u32 (+ tm 24))) (month (mem :u32 (+ tm 16)))
+        (year (+ 1900 (sign-extend :u32 (mem :u32 (+ tm 20))))))
+    (when (or (> day 6) (> month 11) (signed< year 0) (> year 9999))
+      (fail-with +einval+) (result 0))
+    (snprintf out 26 "%.3s %.3s %2d %02d:%02d:%02d %04d
+"
+              (+ "SunMonTueWedThuFriSat" (* day 3))
+              (+ "JanFebMarAprMayJunJulAugSepOctNovDec" (* month 3))
+              (mem :u32 (+ tm 12)) (mem :u32 (+ tm 8))
+              (mem :u32 (+ tm 4)) (mem :u32 tm) year)
+    out))
+(define-low asctime (tm) (asctime_r tm (address asctime-buffer)))

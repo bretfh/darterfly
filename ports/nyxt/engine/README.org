@@ -1,0 +1,246 @@
+#+title: CEF on Darterfly: measured engine boundary
+#+date: 2026-10-18
+#+startup: overview
+#+options: toc:2 num:nil
+
+* Result
+
+The pinned CEF engine renders a local HTML page into CPU pixels on Guix,
+accepts a mouse click, executes JavaScript, paints the changed page and
+shuts down. No display server or hardware GPU acceleration is required
+for this fixture. The harness uses CEF's C API; Nyxt is unchanged.
+
+CEF does not run inside Darterfly. In QEMU, a small C probe compiled in
+Darterfly runs as a native process using shared libsa. It verifies working
+Unix sockets and polling. The subsequent [[file:IPC.org][browser IPC milestone]] adds
+SCM_RIGHTS and coherent RAM-file MAP_SHARED across isolated worlds. The
+native [[file:ABI.org][dynamic loader and engine ABI]] now cover target-built DSOs.
+The Guix engine still has a foreign glibc ABI; native loading does not
+make it compatible. Actual host executable and engine files remain
+rejected by the executable loader. No child process remains published.
+
+The result narrows the problem to engine/platform integration. It does
+not establish the effort required for a complete engine port. There is
+no defensible completion percentage or calendar estimate from this test.
+
+See [[file:validation.json][original binary, trace and guest evidence]] and
+[[file:ipc-validation.json][the later IPC qualification]] and
+[[file:abi-validation.json][native DSO/ABI qualification]]. The existing
+[[file:../SBOM.org][Guix SBOM]] remains the dependency inventory. This experiment measures
+runtime behavior; it does not replace the SBOM with a guessed package list.
+
+* What musl would change
+
+Musl is a serious reuse candidate for the foreign-program runtime. Its
+stdio, conversion, math and other C/POSIX implementations could replace
+hand-maintained library code. Its dynamic linker is also reusable source
+worth assessing before implementing a new loader from scratch.
+
+It is not a portable OS implementation underneath those functions.
+Upstream musl targets the Linux syscall layer. Its thread creation,
+signals, TLS initialization and dynamic linker depend on an integrated
+platform ABI. Porting it requires more than renaming syscall numbers.
+The local x86-64 sources issue Linux syscalls directly; pthread creation
+also has architecture-specific machinery.
+
+The pinned libcef.so has 32 direct DT_NEEDED entries, including libc.so.6,
+libpthread.so.0, libdl.so.2 and ld-linux-x86-64.so.2, and versioned GLIBC
+imports. Substituting musl is not a supported drop-in loading strategy.
+A musl route normally means rebuilding the engine and dependency closure,
+with any necessary source patches. A separate glibc compatibility layer
+would itself need justification and maintenance.
+
+The choices are:
+
+| Choice | Potential saving | Work that remains |
+|--------+------------------+-------------------|
+| Reuse selected musl routines | Mature library implementations | Preserve libsa ABI and semantics; track upstream/license |
+| Port musl as the native foreign runtime | Much broader C/POSIX library and loader | Darterfly OS backend, thread/TLS integration, migrate and rebuild consumers |
+| Provide a Linux ABI for native worlds | More upstream Linux code can remain unchanged | Kernel/API semantics, direct syscalls, process/memory/IPC behavior; choose compatible libc |
+
+Decision: defer musl. Retain the working shared runtime. No immediate
+browser shortcut from changing libc has been demonstrated.
+If adopted broadly, migrate toward one coherent libc/allocator/TLS
+contract per native process. Do not accidentally link two competing
+implementations into the same process, or add another kernel service path.
+Separate isolated processes may legitimately use different libc builds;
+that does not require duplicating OS services.
+
+If a later blocker justifies a musl evaluation, first inventory hooks and
+structure/layout assumptions. Then cross-build a small port using the
+existing world services and qualify stdio, allocation, TLS/pthreads,
+process launch, shared mappings and a two-library dlopen fixture in QEMU.
+Use existing upstream conformance tests where applicable. Only proceed to
+a runtime migration when the reduced maintenance cost is demonstrated.
+This experiment has not built or ported musl.
+
+Sources:
+- [[https://wiki.musl-libc.org/supported-platforms][musl: supported OS and architectures]]
+- [[https://wiki.musl-libc.org/functional-differences-from-glibc.html][musl: ABI, thread and dynamic-loader differences]]
+
+* Host experiment
+
+The engine is the existing Guix-packaged CEF 147.0.14 reference, Chromium
+147.0.7727.138. Its provenance is in [[file:../cef-reference.json][cef-reference.json]].
+The harness creates a 320 by 200 windowless browser. A local red HTML
+surface has a click handler that turns it green and sets the page title
+to the computed value result-42. Success requires all of:
+
+1. CEF initializes and its browser context becomes ready.
+2. OnPaint supplies the expected red BGRA pixel and a full CPU frame.
+3. A CEF mouse event triggers the DOM handler and produces a green frame.
+4. A title callback observes the JavaScript computation result.
+5. OnBeforeClose arrives and cef_shutdown returns normally.
+
+The runner unsets DISPLAY and WAYLAND_DISPLAY, selects headless Ozone,
+disables GPU acceleration, and points D-Bus addresses at nonexistent
+private paths. D-Bus failures are logged but do not prevent this fixture.
+D-Bus client libraries still load: an optional service is different from
+a required shared library in this binary.
+
+Sandboxing is disabled for this local fixture. No browser-security,
+remote networking, HTTPS, fonts, media, downloads or general web-app
+qualification is claimed. Background networking flags are not a network
+sandbox. The named GPU process can still exist for software rendering;
+its existence does not mean hardware acceleration was used.
+
+The trace observes successful writable shared-memory mappings,
+SCM_RIGHTS descriptor transfers, Unix sequenced-packet sockets, epoll,
+eventfd, futex and process/thread creation. These are exercised paths,
+not proof that every exact Linux syscall is unavoidable in a source port.
+For example, memfd_create was probed unsuccessfully and /dev/shm files
+were used. A successful fallback must not become a fictitious hard
+requirement for memfd_create.
+
+An early harness failure was caused by retaining getenv pointers across
+Chromium initialization. Copying those strings fixed the blank URL.
+The final reference also follows CEF C-API reference ownership, uses
+private profiles and cleans up only its own process group.
+
+* Actual Darterfly boundaries
+
+| Boundary | Evidence | Consequence |
+|----------+----------+-------------|
+| Static native execution | Guest C compilation and execution pass | Existing compiler/world substrate is useful |
+| Socket and poll baseline | Native guest transfers one byte and observes readiness | Existing descriptor services should be extended |
+| Dynamic ELF loading | Host harness has PT_INTERP/PT_DYNAMIC; native loader rejects it | Static tools working does not imply a DSO loader exists |
+| Library loading | Native dlopen of the staged libcef.so returns an explicit error | No general dynamic library implementation yet |
+| Engine image size | libcef.so is 251901696 bytes; largest PT_LOAD is 194891848 bytes | Both exceed present 128 MiB native limits |
+| Shared memory | RAM-file MAP_SHARED now passes cross-world visibility/protection tests | Persistent disk mappings and shrink/revocation remain unsupported |
+| Descriptor passing | Guest sendmsg/recvmsg passes files and sockets over stream and sequenced-packet sockets | Qualify the actual engine protocols next |
+| Linux syscall interface | The libsa syscall(319) shim returns ENOSYS (38) | This is not evidence of a general kernel Linux ABI |
+| Failure lifecycle | Both actual images return ENOEXEC, process counts unchanged | Supervisor survives rejected engine attempts |
+
+The engine DSO is not itself an executable. Its direct spawn rejection is
+an image-boundary observation; dlopen is the relevant library test. The
+large file is staged intact on the disposable guest disk, not replaced by
+a smaller mock. No loader limits or protection checks were weakened.
+
+Code examined:
+- [[file:../../../src/kern/i386/native.lisp][Static ELF validation and native worlds]]
+- [[file:../../../src/worlds/worlds.lisp][Executable snapshots and size limits]]
+- [[file:../../../src/libsa/unistd.lisp][dlopen, mmap and syscall shim]]
+- [[file:../../../src/libsa/include/sys/socket.h][Current socket C interface]]
+
+* Pinned source inspection
+
+The [[file:source-audit.json][source audit record]] pins the inspected CEF build file and Chromium
+platform files by URL and SHA-256. This is not a full source build.
+
+Chromium's default toolchain selection rejects an unknown target_os;
+Darterfly is not an existing target there. Declaring a target triple alone
+will not supply a platform backend. The POSIX shared-memory implementation
+uses temporary files, descriptor duplication and access-mode checks; Mojo
+uses socket helpers for descriptor transfer. Those are specific existing
+interfaces to adapt and test, rather than reasons to invent another IPC
+system for the browser.
+
+CEF's cef_use_gtk switch controls its cefclient sample's GTK integration.
+It is not proof that this switch removes every GTK/GLib dependency from
+libcef. Reducing the engine dependency closure still needs a real build
+configuration and link result. The host probe only proves that a running
+display server and D-Bus services are unnecessary for this local fixture.
+
+The existing cl-cef bridge sets windowless_rendering_enabled to false and
+uses CefWindow/CefBrowserView. The CPU-pixel harness therefore does not
+prove unchanged cl-cef already supports Darterfly display surfaces.
+The intended adaptation point is a small cl-cef platform/display layer
+preserving the existing Lisp API and Nyxt renderer. It must compose the
+page, status and prompt views, route input and preserve custom-scheme and
+JavaScript callbacks. This adapter has not yet been implemented.
+
+* Next gate
+
+Pause expansion of compiler-source rebuild coverage while establishing
+which engine platform contract we intend to support. The selected
+clang-tblgen rebuild remains valid progress; more compiler tests will not
+answer the missing engine/runtime question.
+
+Compare a Darterfly source port with a Linux-compatible native-world
+personality using this pinned dependency and syscall evidence. Musl is a
+runtime choice within that comparison, not a third way around OS services.
+The existing Guix CEF SDK contains headers and wrapper sources, not the
+complete Chromium engine source tree. No target engine build or link has
+been completed by this experiment.
+
+Before a large implementation, inspect a pinned engine source checkout
+and its build configuration for direct syscall assumptions, shared-memory
+and Mojo IPC hooks, process launch, threading, platform display and the
+supported toolchain. Produce a target configuration/link attempt and a
+patch inventory. Keep necessary compatibility at the platform boundary;
+keep Nyxt and its existing CEF backend unchanged where possible.
+
+The [[file:IPC.org][cross-world shared-page and descriptor proof]] now passes in QEMU,
+including visibility, permissions, ownership and teardown. The target
+build/link and runtime-ABI decision remains open. Follow it with a real
+DSO/TLS loading fixture using that architecture. A loader that only accepts
+libcef.so's header is not an engine milestone.
+
+The next engine acceptance remains the same five pixel/input/shutdown
+checks running inside Darterfly. A host engine streaming pixels into the
+guest would be a remote-display experiment, not that acceptance gate.
+Native engine execution and eventual native source rebuilding remain
+separate requirements. The full Clang/Rust/generator closure is already
+recorded in the SBOM plan; this small C harness does not eliminate it.
+
+* Reproduce
+
+Run from the worktree root. Set CEF_PROBE_SDK and CEF_PROBE_RUNTIME to the
+pinned SDK and runtime store directories recorded in validation.json.
+Build the host harness:
+
+#+begin_src sh
+guix shell -m ports/nyxt/host-build-manifest.scm -- \
+  sh ports/nyxt/engine/build-host.sh
+#+end_src
+
+Choose a new output directory for each host run. Supply the absolute path
+to strace if syscall evidence is wanted:
+
+#+begin_src sh
+guix shell -m ports/nyxt/host-test-manifest.scm -- \
+  python3 ports/nyxt/engine/run-host.py \
+  --binary build/cef-engine/osr-probe \
+  --runtime "$CEF_PROBE_RUNTIME" \
+  --out build/cef-engine/new-host-run --strace /path/to/strace
+python3 ports/nyxt/engine/audit.py \
+  --binary build/cef-engine/osr-probe \
+  --runtime "$CEF_PROBE_RUNTIME" \
+  --trace-dir build/cef-engine/new-host-run \
+  --readelf /path/to/readelf --out build/cef-engine/new-audit
+#+end_src
+
+The guest run needs the existing SBCL/image bootstrap. Run only one guest
+at a time in this worktree, because the ESP and console paths are shared:
+
+#+begin_src sh
+guix shell -m manifest.scm -- sh -c '
+  export CL_SOURCE_REGISTRY="$PWD//:$GUIX_ENVIRONMENT/share/common-lisp//"
+  export ASDF_OUTPUT_TRANSLATIONS="/:$HOME/.cache/common-lisp/darterfly/"
+  sbcl --dynamic-space-size 4096 --no-userinit --non-interactive \
+    --load ports/nyxt/engine/run-guest.lisp'
+#+end_src
+
+The guest driver records build/cef-engine/guest.log. Ten successful
+observations mean the stated boundaries were reproduced, including
+unsupported operations. They do not mean ten engine features now work.

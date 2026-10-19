@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <sys/types.h>
 #define STDIN_FILENO 0
 #ifndef SEEK_SET
@@ -12,6 +15,9 @@
 #define X_OK 1
 #define W_OK 2
 #define R_OK 4
+#define _SC_GETPW_R_SIZE_MAX 70
+#define _SC_ARG_MAX 0
+#define _POSIX_ARG_MAX 4096
 #define _SC_PAGESIZE 30
 #define _SC_PAGE_SIZE _SC_PAGESIZE
 #define _SC_NPROCESSORS_ONLN 84
@@ -32,6 +38,7 @@ pid_t getppid(void);
 pid_t getpgrp(void);
 int setpgid(pid_t, pid_t);
 pid_t setsid(void);
+pid_t getsid(pid_t);
 pid_t tcgetpgrp(int);
 uid_t getuid(void);
 uid_t geteuid(void);
@@ -51,6 +58,7 @@ int truncate(const char *, off_t);
 int ftruncate(int, off_t);
 int fsync(int);
 unsigned sleep(unsigned);
+unsigned alarm(unsigned);
 int usleep(useconds_t);
 pid_t fork(void);
 int execv(const char *, char *const[]);
@@ -60,6 +68,7 @@ void _exit(int) __attribute__((noreturn));
 char *ttyname(int);
 int gethostname(char *, size_t);
 long syscall(long, ...);
+int fchown(int, uid_t, gid_t);
 int chown(const char *, uid_t, gid_t);
 int fchdir(int);
 int close_range(unsigned, unsigned, int);
@@ -71,3 +80,7 @@ int tcsetpgrp(int, pid_t);
 #define F_TLOCK 2
 #define F_TEST 3
 #define _POSIX_VDISABLE 0
+
+#ifdef __cplusplus
+}
+#endif

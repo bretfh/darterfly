@@ -1,0 +1,54 @@
+{
+  "cef_version": "147.0.14+g76d2442+chromium-147.0.7727.138",
+  "cef_commit": "76d244268947a52f43755983ef83766a353a1335",
+  "chromium_version": "147.0.7727.138",
+  "chromium_tag": "147.0.7727.138",
+  "selected_file": {
+    "last_modified": "2026-05-13T04:02:57.194000Z",
+    "name": "cef_binary_147.0.14+g76d2442+chromium-147.0.7727.138_linux64_minimal.tar.bz2",
+    "sha1": "27b2c574f9a21791374b21a4e85473ffa451d12e",
+    "size": 304145285,
+    "type": "minimal"
+  },
+  "sha256": "a2cef000527e9952bae470a292f12384c790523dadcbbcbee807743a539c6de0",
+  "purpose": "host compatibility reference; not a shipping security baseline",
+  "cl_cef_commit": "257c6421bb173cbe50d2b5a2a1066bace15347fc",
+  "nyxt_commit": "cfa068ea781fe4866ae435c2950c00c5ec51cfee",
+  "source_build_metadata": {
+    "DEPS": {
+      "url": "https://raw.githubusercontent.com/chromium/chromium/147.0.7727.138/DEPS",
+      "sha256": "96ff59c99b0233243193fde910592dbe3ff74c57c2bf55dd274e57e0a65f917c"
+    },
+    "tools/clang/scripts/update.py": {
+      "url": "https://raw.githubusercontent.com/chromium/chromium/147.0.7727.138/tools/clang/scripts/update.py",
+      "sha256": "3a94a051198678cf15b647ab0b520ad2317539515da58e9a539a7b466a6fcbb9"
+    },
+    "tools/rust/update_rust.py": {
+      "url": "https://raw.githubusercontent.com/chromium/chromium/147.0.7727.138/tools/rust/update_rust.py",
+      "sha256": "d9d2a1ab75ddfd4b6d2ffe6f8c943c752e57ea5fd190c3e2053e0fdfc765a04a"
+    },
+    "tools/rust/README.md": {
+      "url": "https://raw.githubusercontent.com/chromium/chromium/147.0.7727.138/tools/rust/README.md",
+      "sha256": "af0d02228c82b1b693f68b3d59d1f2829488ba42df5e2bc0653c5b1593da887e"
+    }
+  },
+  "upstream_toolchain": {
+    "clang_revision": "llvmorg-23-init-5669-g8a0be0bc",
+    "clang_sub_revision": "1",
+    "rust_revision": "6f54d591c3116ee7f8ce9321ddeca286810cc142",
+    "rust_sub_revision": "2",
+    "gn_version": "git_revision:d8c2f07d653520568da7cace755a87dad241b72d",
+    "ninja_version": "version:3@1.12.1.chromium.4",
+    "siso_version": "git_revision:bea0f245b6973702ddcb457090706d03145855f8"
+  },
+  "host_dependency_overrides": {
+    "closer_mop_url": "https://codeberg.org/pcostanza/closer-mop.git",
+    "closer_mop_commit_unchanged": "7b86f2add029208ebc74ec6a41c2ccfd3c382dbc",
+    "named_readtables": "4a96687aaebd509da100b8f1dfe6a02c745f41e7",
+    "mgl_pax": "e924cd01e322c1b2a5b48a442e1aa2b9bf3df964"
+  },
+  "bridge_patch": {
+    "path": "patches/cl-cef-quit-on-ui-thread.patch",
+    "sha256": "71f12cbfb1ecab15bf1a85ab948ea05725a3ab2dea4ddff7eaebba72598b7600"
+  }
+}

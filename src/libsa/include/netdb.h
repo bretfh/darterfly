@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 extern int h_errno;
 struct hostent { char *h_name; char **h_aliases; int h_addrtype, h_length; char **h_addr_list; };
 struct hostent *gethostbyname(const char *);
@@ -17,3 +20,7 @@ struct addrinfo { int ai_flags; int ai_family; int ai_socktype; int ai_protocol;
 #define EAI_MEMORY -10
 #define EAI_SYSTEM -11
 #define NI_NAMEREQD 8
+
+#ifdef __cplusplus
+}
+#endif

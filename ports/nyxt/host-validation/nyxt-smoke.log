@@ -1,0 +1,38 @@
+Nyxt version 4
+<INFO> [14:01:45] Source location: #P"/tmp/darterfly-cef-reproduction/nyxt/"
+<INFO> [14:01:45] Loading Lisp file #P"/home/bfh/git/cl/darterfly-nyxt/ports/nyxt/tests/nyxt-cef-host-smoke.lisp".
+<INFO> [14:01:45] Listening to socket: #P"/tmp/darterfly-cef-3__vywrr/nyxt.sock"
+<INFO> [14:01:46] Loading #P"/tmp/darterfly-cef-3__vywrr/data/nyxt/history/default.lisp".
+NYXT-CEF-HOST-PASS
+<INFO> [14:01:46] Deleting socket #P"/tmp/darterfly-cef-3__vywrr/nyxt.sock".
+cl-cef quit message loop
+<WARN> [14:01:46] Warning: Error on separate thread: There is no applicable method for the generic function
+  #&lt;STANDARD-GENERIC-FUNCTION NYXT::TITLER (1)&gt;
+when called with arguments
+  (NIL).
+See also:
+  The ANSI Standard, Section 7.6.6
+<WARN> [14:01:46] Warning while echoing: There is no applicable method for the generic function
+                                           #<STANDARD-GENERIC-FUNCTION NYXT:MESSAGE-BUFFER (1)>
+                                         when called with arguments
+                                           (NIL).
+See also:
+  The ANSI Standard, Section 7.6.6
+cl-cef message loop returned
+<WARN> [14:01:46] Warning: Error on separate thread: When attempting to read the slot's value (slot-value), the slot HISTORY-VECTOR
+is missing from the object NIL.
+<WARN> [14:01:46] Warning: Error on separate thread: When attempting to read the slot's value (slot-value), the slot HISTORY-VECTOR
+is missing from the object NIL.
+<WARN> [14:01:46] Warning while echoing: There is no applicable method for the generic function
+                                           #<STANDARD-GENERIC-FUNCTION NYXT:MESSAGE-BUFFER (1)>
+                                         when called with arguments
+                                           (NIL).
+See also:
+  The ANSI Standard, Section 7.6.6
+<WARN> [14:01:46] Warning while echoing: There is no applicable method for the generic function
+                                           #<STANDARD-GENERIC-FUNCTION NYXT:MESSAGE-BUFFER (1)>
+                                         when called with arguments
+                                           (NIL).
+See also:
+  The ANSI Standard, Section 7.6.6
+WARNING: Already terminated, nothing to do.

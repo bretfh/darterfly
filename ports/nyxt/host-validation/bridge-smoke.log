@@ -1,0 +1,11 @@
+PASS: engine launched from Lisp
+PASS: Lisp custom scheme loaded in renderer
+PASS: JavaScript value returned to Lisp
+PASS: CSS layout measured through JavaScript
+PASS: DOM text returned to Lisp
+PASS: browser finished asynchronous close
+cl-cef quit message loop
+cl-cef message loop returned
+PASS: engine shut down cleanly
+CEF-HOST-SMOKE-PASS
+WARNING: Already terminated, nothing to do.

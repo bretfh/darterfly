@@ -1,5 +1,6 @@
 (in-package #:darterfly/bsd)
 
+(defconstant +af-local+ 1)
 (defconstant +af-inet+ 2)
 (defconstant +af-inet6+ 30)
 (defconstant +sock-stream+ 1)
@@ -11,6 +12,9 @@
    (pcb :initform nil :accessor socket-pcb)
    (peer :initform nil :accessor socket-peer)
    (pending :initform nil :accessor socket-pending)))
+
+(defgeneric internet-socket-p (socket)
+  (:method ((socket socket)) t))
 
 (defmacro without-bsd (&body body)
   `(if (sb-thread:holding-mutex-p *bsd*)
@@ -40,16 +44,17 @@
             ((and (plusp (deliverable *proc*)) (deliver *proc*)) (fail :eintr))))))
 
 (defun socket (domain type &optional (protocol 0))
-  (declare (ignore protocol))
   (syscall
+    (when (= domain +af-local+)
+      (return-from socket (fd-alloc (new-local-socket type protocol))))
     (unless (member domain (list +af-inet+ +af-inet6+)) (fail :eafnosupport))
     (unless (member type (list +sock-stream+ +sock-dgram+)) (fail :eprotonosupport))
     (fd-alloc (make-instance 'socket :type type :flags 2))))
 
-(defun bind (fd address port)
-  (declare (ignore address))
+(defun bind (fd address &optional port)
   (syscall
     (let ((s (fd-socket fd)))
+      (unless (internet-socket-p s) (return-from bind (local-bind s address)))
       (when (socket-port s) (fail :einval))
       (setf (socket-port s) port)
       (when (= (socket-type s) +sock-dgram+)
@@ -57,9 +62,9 @@
       0)))
 
 (defun listen (fd &optional (backlog 5))
-  (declare (ignore backlog))
   (syscall
     (let ((s (fd-socket fd)))
+      (unless (internet-socket-p s) (return-from listen (local-listen s backlog)))
       (unless (= (socket-type s) +sock-stream+) (fail :eopnotsupp))
       (unless (socket-port s) (fail :edestaddrreq))
       (setf (socket-pcb s) (darterfly/net:tcp-listen (socket-port s)))
@@ -68,6 +73,7 @@
 (defun accept (fd)
   (syscall
     (let ((s (fd-socket fd)))
+      (unless (internet-socket-p s) (return-from accept (local-accept s)))
       (unless (typep (socket-pcb s) 'darterfly/net:listener) (fail :einval))
       (let* ((c (net-wait s (lambda (timeout) (or (darterfly/net:tcp-accept (socket-pcb s) :timeout timeout) :again))))
              (new (make-instance 'socket :type +sock-stream+ :flags 2)))
@@ -75,9 +81,10 @@
         (multiple-value-bind (address port) (darterfly/net:tcp-peer c)
           (values (fd-alloc new) address port))))))
 
-(defun connect (fd address port)
+(defun connect (fd address &optional port)
   (syscall
     (let ((s (fd-socket fd)))
+      (unless (internet-socket-p s) (return-from connect (local-connect s address)))
       (if (= (socket-type s) +sock-stream+)
           (progn
             (when (socket-pcb s) (fail :eisconn))

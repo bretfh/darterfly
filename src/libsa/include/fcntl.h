@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <sys/types.h>
 #define O_RDONLY 0
 #define O_WRONLY 1
@@ -40,3 +43,7 @@ int fcntl(int, int, ...);
 #define F_WRLCK 1
 #define F_UNLCK 2
 struct flock { short l_type; short l_whence; off_t l_start; off_t l_len; pid_t l_pid; };
+
+#ifdef __cplusplus
+}
+#endif

@@ -150,3 +150,12 @@
    (darterfly/asm:routine "ldexpl"
      (dolist (b '(#x48 #x83 #xEC #x08 #x89 #x3C #x24 #xDB #x04 #x24 #xDB #x6C #x24 #x10 #xD9 #xFD #xDD #xD9 #x48 #x83 #xC4 #x08 #xC3))
        (darterfly/asm:inst byte b)))))
+
+;; LLVM's own code lowers some expressions to these libm entry points.
+;; Reuse the same x87 implementation and C ABI as the existing math routines.
+(define-low exp2 ((x :f64)) (declare (returns :f64))
+  (cond ((nan-p x) x)
+        ((f>= x #x4090000000000000) +infinity+) ; 1024
+        ((f< x #xC090CC0000000000) +zero+)     ; -1075
+        (t (x87 (x) +exp2+))))
+(define-low log2f ((x :f32)) (declare (returns :f32)) (log2 x))

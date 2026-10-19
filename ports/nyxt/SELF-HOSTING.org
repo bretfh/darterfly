@@ -1,0 +1,458 @@
+#+title: Darterfly browser and toolchain: self-hosting decision
+#+date: 2026-10-18
+#+startup: overview
+#+options: toc:2 num:nil
+
+See [[file:SBOM.org][Guix SBOM exports and the compiler/engine dependency plan]].
+
+* Decision
+
+Local rebuilding is a requirement of the browser architecture. An engine
+that remains permanently dependent on a Guix build host does not meet the
+stated goal. Cross compilation is an acceptable bootstrap stage, with an
+explicit route to replacing it with locally executable build tools.
+
+Keep SBCL, low and TCC. Investigate a port of an existing C++ toolchain;
+do not write a C++ compiler or grow TCC/low into one. Clang/LLVM is the
+leading candidate if Chromium is chosen. Its native -cc1 frontend now
+runs against shared libsa and compiles working C++ programs inside the OS.
+Native LLD also links and runs that output. Native llvm-ar and both
+TableGen tools now run on the same runtime. The complete compiler and
+build-tool chain is not yet self-hosted. The
+[[file:../llvm-tools/REBUILD.org][clang-tblgen source rebuild]] is the first selected tool closure: 248
+translation units, including LLVM libraries and the selected C++ runtime.
+Configuration regeneration remains a separate gate.
+
+CEF remains a candidate, not a settled engine choice. Its existing Nyxt
+backend reduces browser-integration work. That advantage must be weighed
+against engine porting, native build dependencies, and ongoing updates.
+A working Guix CEF binary is a reference experiment, not this decision's
+acceptance criterion.
+
+The immediate target is a usable Nyxt browser running on Darterfly.
+The [[file:HOST-REFERENCE.org][Nyxt/CEF host reference]] establishes the upstream browser path.
+Toolchain expansion is justified only when it blocks that target; native
+source rebuilding remains the longer-term self-hosting requirement.
+The engine source build and Darterfly engine execution remain outstanding.
+
+* Latest measured engine gate
+
+The [[file:engine/README.org][headless CEF experiment]] now passes CPU painting, mouse input,
+JavaScript and shutdown on Guix. QEMU confirms the current Darterfly
+boundary: shared libsa runs native probes. The subsequent
+[[file:engine/ABI.org][native DSO loader and ABI decision]] add target-built dynamic libraries;
+the Guix glibc engine remains incompatible with this target.
+The [[file:engine/IPC.org][next IPC milestone]] now passes descriptors and writable shared
+RAM-file pages between isolated native worlds, with an isolated Lisp-world
+check too. The actual CEF artifacts are still rejected cleanly. Compiler
+rebuild expansion is paused while the engine platform contract is
+evaluated. Musl is deferred; it does not replace the missing OS mechanisms.
+
+* Three different things we must be able to rebuild
+
+| Layer | Compiler/build mechanism | What rebuilding changes |
+|-------+--------------------------+-------------------------|
+| Nyxt and Lisp side of cl-cef | SBCL, ASDF, Lisp dependencies | Commands, modes, UI and browser policy |
+| Native cl-cef bridge/helper | C++20 compiler, linker, CEF headers/libraries | CEF integration and subprocess glue |
+| CEF/Chromium and dependencies | Pinned engine toolchain and generators | Layout, JavaScript, networking, engine fixes |
+
+The inspected cl-cef source explicitly defers loading its foreign library
+until launch. Its Lisp system can compile without a CEF distribution.
+Nyxt's makefile also distinguishes building the C++ bridge from building
+its ASDF application. Editing Nyxt therefore does not inherently require
+rebuilding Chromium or installing a C++ compiler.
+
+That does not mean unchanged Nyxt compiles on Darterfly today. Its ASDF
+dependencies include IOLib, SQLite, Enchant and other libraries with
+foreign/platform requirements. These must load, grovel and compile on the
+target. Saving and reopening a runnable Nyxt image is another test.
+
+Acceptance must cover all three layers separately. A successful Lisp
+rebuild is valuable early progress; it does not stand in for engine
+rebuildability. Conversely, the engine's large build should not prevent
+daily Lisp development once its runtime is available.
+
+Local evidence:
+- [[file:/home/bfh/git/cl/nyxt/nyxt.asd][Nyxt dependency graph and existing renderer systems]]
+- [[file:/home/bfh/git/cl/nyxt/makefile][Separate CEF bridge and Lisp build steps]]
+- [[file:/tmp/darterfly-nyxt-audit-cl-cef/cl-cef.asd][cl-cef Lisp system]]
+- [[file:/tmp/darterfly-nyxt-audit-cl-cef/source/lisp/library.lisp][Deferred ensure-library call]]
+- [[file:/tmp/darterfly-nyxt-audit-cl-cef/CMakeLists.txt][C++20 bridge and helper build]]
+
+* Why a Lisp OS can host a C++ compiler
+
+The compiler is a user program. Once compiled for Darterfly, it executes
+machine code, reads source files and writes objects. It does not require
+the kernel, desktop or application model to become C++. It needs correct
+runtime and operating-system interfaces, just as SBCL does.
+
+LLVM concentrates many OS dependencies in its Support library. Libc++
+also has an interface for adapting threading. These are useful porting
+boundaries, not evidence that one replacement file makes the entire
+compiler work. Filesystem behavior, allocation, TLS, clocks, atomics,
+process launch and the C/C++ runtime still need implementation and tests.
+
+Proposed placement: native compiler and engine tools execute in isolated
+worlds, with filesystem/process services supplied by Darterfly. The Lisp
+system owns launching, cancellation, diagnostics and artifact publication.
+Do not link the entire compiler into the privileged kernel merely to
+avoid implementing program launch.
+
+A POSIX-facing compatibility library for foreign tools is compatible with
+a Lisp-machine user experience. Native applications can keep structured
+Lisp interfaces, live objects and image persistence. Compatibility at the
+foreign-program boundary need not dictate the public application model.
+
+* Bootstrapping without a circular requirement
+
+Build, host and target describe different machines:
+
+| Stage | Build runs on | Resulting compiler runs on | It emits code for |
+|-------+---------------+----------------------------+-------------------|
+| Cross SDK | Guix | Guix | Darterfly |
+| Native compiler seed | Guix | Darterfly | Darterfly |
+| Local compiler rebuild | Darterfly | Darterfly | Darterfly |
+| Local browser rebuild | Darterfly | Darterfly | Darterfly |
+
+A Guix compiler first builds the Darterfly runtime libraries and a
+Darterfly-hosted compiler. The imported compiler then rebuilds the same
+compiler sources locally. Subsequent compiler and browser rebuilds use
+the local tools. There is no requirement that TCC compile modern Clang's
+C++ implementation during this bootstrap.
+
+The existing x86-64 code generator can be reused. The work is the target
+ABI, driver/sysroot configuration, runtime and host-platform integration.
+The target triple is a declaration to implement, not a magic command-line
+switch that supplies missing libraries or OS services.
+
+Generators such as LLVM's TableGen must run on the build machine. During
+cross bootstrap they are Guix executables; during a native rebuild they
+must also be buildable and runnable on Darterfly. Carrying host-generated
+files forever would conceal an incomplete build dependency chain.
+
+A source bootstrap from a tiny trusted binary seed, in the spirit of Mes,
+is a separate reproducibility/trust project. It is not a prerequisite for
+local self-hosting from a recorded compiler seed. Record that seed and
+its provenance rather than claiming it did not exist.
+
+* Current substrate and the actual gaps
+
+Initial audit: Darterfly ae6b4af on codex/nyxt-compat. Updated below for
+the native tool source-build work on this branch. Clang -cc1 compiles C++
+and -cc1as assembles in native worlds. Chromium has not been executed on
+Darterfly.
+
+| Facility | Observed implementation | What must be established next |
+|----------+-------------------------+--------------------------------|
+| Lisp compilation | SBCL, ASDF and source-generation machinery | Nyxt's full dependency graph builds locally |
+| C compilation | Embedded seed and standalone TCC; local compiler rebuild with shared libsa | Broader C corpus and bootstrap-input regeneration |
+| C++ compilation | Native Clang 19.1.7 -cc1; C++ client and upstream LLVM demangler compiled in guest | Full compiler/runtime source rebuild and configuration regeneration |
+| Linking | Native LLD handles tested archives, COMDAT, partial and final links; Lisp image linker remains | Larger compiler links, configuration regeneration and seed source rebuild |
+| Archives | Native llvm-ar and ranlib create, modify and index tested archives | Larger compiler archives and remaining object utilities |
+| Table generation | Native LLVM/Clang TableGen; clang-tblgen source build with its selected library/runtime closure | Complete table set, other generator source builds and local configuration |
+| Isolated execution | Static ELF64 startup, protected segments, argv/env, exit/wait; raw and SBCL worlds | Selected LLVM C++ runtime passes; broader coverage and resource limits |
+| Process launching | BSD spawn/exec of Lisp programs and isolated static ELF; descriptor actions, cwd, wait4/signals | Native child spawn/wait and isolated SBCL run-program work; broaden attributes and groups |
+| C exec/spawn API | One Low libsa posix_spawn/wait path for native and Lisp worlds | Attributes/groups/exec and measured tool requirements |
+| Foreign libraries | Native ELF DSOs, dependencies, dynamic TLS and constructors through shared libsa; SBCL foreign loading works in a world | Target CEF closure, dynamic C++ unwinding and bridge integration |
+| Threads and memory | pthread and mmap/mprotect implementations | C++ lifetimes/exceptions pass; thread reclamation and concurrent services remain |
+| IPC/readiness | Named stream/packet sockets, poll, descriptor passing and coherent RAM-file MAP_SHARED | Engine event APIs and actual Mojo protocol semantics |
+| Build storage | VFS/APFS and persistence facilities | Large source trees, metadata load, capacity and memory-pressure tests |
+
+The raw world-spawn primitive starts machine code at an entry point.
+A separate static ELF64 loader and waitable world lifecycle are now
+implemented; see [[file:NATIVE-PROGRAMS.org][the native-program contract and guest tests]].
+[[file:BSD-NATIVE.org][BSD execve and posix-spawn now also launch native ELF]], with inherited
+descriptors, cwd, signals and wait4. [[file:CHILD-PROCESSES.org][Native and isolated-SBCL child spawn/wait now work]] with a locally rebuilt driver. [[file:SHARED-RUNTIME.org][Native tools now reuse libsa, its allocator and static TLS]], with one public
+spawn/service path. [[file:../clang/README.org][Native Clang and the selected C++ runtime now pass guest tests]].
+Native dynamic linkage is qualified in [[file:engine/ABI.org][the DSO milestone]]. Full C++
+shared-runtime and engine-library qualification remain open.
+Count capabilities by behavior, not name.
+
+The existing linker is useful for Darterfly's own image, but its explicit
+relocation cases do not establish general C++ archive/COMDAT support.
+Prefer qualifying LLD for foreign tools over turning the OS image linker
+into an unplanned general C++ linker project. The current Clang seed uses
+host LLD to resolve archives/COMDAT, then the Lisp linker for its final
+executable. Guest-generated objects link directly for the tested programs.
+
+The mapping implementation sometimes implements a file mapping by reading
+into anonymous memory. Audit the selected compiler/engine's MAP_SHARED,
+coherency and lifetime needs; an mmap symbol alone is not sufficient.
+RAM-file MAP_SHARED now shares real frames across worlds, including files
+in /dev/shm. Persistent disk mappings still fail with EOPNOTSUPP instead of
+silently providing a private copy. LLD can use explicit output writes or
+its upstream fallback there. Read-only core mappings retain their existing
+path. File shrinking/revocation, disk writeback and live shared-mapping
+checkpoints remain open; see [[file:engine/IPC.org][the tested IPC contract and limits]].
+
+Source anchors:
+- [[file:../../src/cc/cc.lisp][Current target C compilation]]
+- [[file:../../src/link/link.lisp][Image linker and relocation cases]]
+- [[file:../../src/kern/i386/world.lisp][Raw world entry and memory setup]]
+- [[file:../../src/bsd/exec.lisp][Registered Lisp program execution]]
+- [[file:../../src/libsa/unistd.lisp][exec, loading and mapping boundaries]]
+- [[file:../../src/libsa/pthread.lisp][Foreign threading implementation]]
+- [[file:../../tests/boot.lisp][Existing source rebuild test definitions]]
+- [[file:VALIDATION.org][Executed IPC tests and their limits]]
+
+* What an engine choice commits us to
+
+Chromium's supported toolchain is Clang with libc++, with a version
+selected by the engine revision. Current upstream also maintains a Rust
+toolchain tied to its LLVM revision. Its build environment includes Python,
+GN and a build executor, plus generated resources and build-time programs.
+A promise to port only a C++ compiler is therefore not a complete plan.
+
+For the chosen revision, extract which Rust targets, host tools, proc
+macros, bindings and generators are actually needed. Do not assume Cargo,
+Node, Siso or every development tool is mandatory; do not assume any can
+be removed without examining the build graph either. If Ninja can replace
+a heavier executor in that revision, qualify that exact configuration.
+
+The compiler/runtime candidate is a selected LLVM distribution: x86-64
+backend, Clang, LLD, needed archive/object tools and runtime components.
+Begin without optional debuggers, extra targets, plugins or LTO where the
+selected build permits it. This reduces the experiment; it does not prove
+that the final engine needs no additional tools or ABI features.
+
+Qualify constructors/destructors, allocation, static initialization,
+thread_local, atomics, C++ standard-library facilities, and ABI support.
+Unwinding/exceptions must match the selected libraries and configuration.
+Do not disable them globally and assume all dependencies remain correct.
+
+| Route | Existing Nyxt integration | Build/maintenance consequence |
+|-------+---------------------------+-------------------------------|
+| CEF / Chromium | Present | Large engine port; Clang/libc++ and Rust/generator audit |
+| Electron / Chromium | Present; current Guix package | Chromium work plus Node/Electron and addon integration |
+| WebKitGTK | Present | Modern C++ engine plus GTK/GLib and their platform/build work |
+| WPE WebKit | No dedicated backend in inspected Nyxt tree | Potential presentation benefits, but new Nyxt integration and OS port |
+| Permanent external engine build | Can use any backend | Fails the local engine rebuild requirement |
+
+WPE is not a way to eliminate C++. WebKit's own dependency policy
+explicitly discusses modern C++ compiler requirements. Existing Nyxt
+integration and complete native build cost must both count in selection.
+
+The present cl-cef sets windowless_rendering_enabled to zero and creates
+CefBrowserView windows. Offscreen rendering is an engine capability, not
+a mode already implemented by this binding. Any presentation changes
+must preserve Nyxt's page views and its HTML-based interface panels.
+
+A Linux binary compatibility layer is another possible architecture, but
+is not selected here. It would move the work into Linux ABI semantics,
+loading, signals, threads and sandbox interfaces. Running a Linux guest
+or using a remote builder may be useful temporarily; neither establishes
+a Darterfly-hosted native toolchain under the definition above.
+
+* Ordered gates, with evidence required to pass
+
+** R0: Freeze the reference and enumerate the build
+
+Pin Nyxt, every backend dependency, CEF/Chromium source and matching tools.
+The current Nyxt and cl-cef revisions are recorded below; no engine source
+revision has yet been selected. The Guix Electron recipe has a different
+Nyxt pin and is a separate reference.
+
+Build the existing Nyxt/CEF backend on Guix without changing its UI.
+Verify a local page, JavaScript, prompt/status panels, input and shutdown.
+Then obtain the matching engine source build graph. A prebuilt libcef
+may help the UI smoke test but cannot close this source-build gate.
+
+Deliverables: pinned manifests, exact commands, imported binary list,
+source locations, build graph, patches and logs. Classify every executable
+as build-time or runtime, including tools generated and then executed
+within the same build. Record compiler/linker versions and peak resources.
+
+Stop expanding the port if the engine's source/tool chain cannot be
+reproduced or its required source inputs cannot be obtained.
+
+** R1: Establish the foreign native-program contract
+
+Partial implementation: [[file:NATIVE-PROGRAMS.org][static ELF startup and world lifecycle]] pass
+18 guest checks, including a target-TCC/Lisp-linker build and execution.
+[[file:BSD-NATIVE.org][BSD process integration and bounded descriptor services]] now also pass
+booted-OS tests, including a target-rebuilt runtime doing redirected I/O.
+Native child spawning and isolated SBCL run-program now pass, including
+pipe redirection, fault waits and descendant cleanup on world teardown.
+The static utility behavior below is established. The duplicate native
+runtime has been removed: native tools reuse existing libsa, allocation,
+static TLS and public Low spawn. Guest tests rebuild this runtime locally.
+[[file:../cxx/README.org][The selected LLVM C++ runtime now runs against shared libsa]], including
+constructors, exceptions, RTTI and thread-local destruction. Thread memory
+reclamation and concurrent services need broader coverage. Native dynamic
+linkage is now qualified; dynamic C++ unwinding remains open.
+
+[[file:NATIVE-TCC.org][Standalone TCC now runs in its own world and rebuilds itself]].
+The seed is built inside Darterfly with embedded TCC. Subsequent compiler
+C/assembly builds run through the standalone compiler; Low builds libsa
+and the Lisp linker produces executables. The rebuilt compiler also
+produces a working client. Source/configuration generation is still staged
+by the image build, so this is not complete bootstrap-input closure.
+
+Keep this local build loop passing while qualifying C++ runtime behavior,
+thread cleanup/concurrency and dynamic linkage for the selected LLVM
+configuration. Native Clang -cc1 now works with that same runtime. The
+archive and TableGen tools also run locally. The next gates are build
+configuration regeneration and complete compiler/runtime source rebuilds.
+
+Define executable format, startup ABI, libc/sysroot, TLS, C++ ABI, library
+loading and child-process behavior. Use a native program world, with
+explicit argv/env, working directory, descriptor actions and exit status.
+The native DSO contract is now selected and tested. Qualify the actual
+target-built cl-cef/CEF closure against it; a small loader test alone does
+not establish that the engine can execute.
+
+Acceptance: a compiled utility in its own world reads a source file,
+writes an artifact, captures diagnostics, launches/waits for a child and
+survives child failure. Confirm cancellation and resource cleanup.
+
+** R2: Prove C++ runtime and native compiler execution early
+
+The first native compilation gate now passes: Clang 19.1.7 -cc1 executes
+in its own world and produces C++ objects. Darterfly links them against
+shared libsa and the selected LLVM C++ runtime, then runs them in new
+worlds. Tests cover containers, constructors, exceptions, streams and a
+thread, invalid-source diagnostics, recompilation, and process cleanup.
+The same frontend compiles unchanged upstream ItaniumDemangle.cpp and a
+separate caller; the locally linked program demangles and exits correctly.
+All 13 frontend guest assertions pass. The expanded runtime test passes
+17 assertions; see [[file:../clang/README.org][the native Clang guide and recorded scope]].
+
+This initial frontend qualification used imported compiler/runtime seeds.
+The subsequent clang-tblgen source build compiles the selected runtime
+sources locally. Clang itself remains an imported seed, so R3's complete
+compiler source-rebuild gate remains open.
+
+Using Guix as the seed builder, qualify the remaining runtime components
+and port the selected LLVM host interfaces. Run the resulting compiler
+inside a Darterfly world. Restrict targets/features only through supported
+configuration and record what was excluded.
+
+Acceptance: on Darterfly, compile and link a multi-file C++ program using
+selected STL features, constructors, thread_local, threads and atomics.
+Run the resulting executable in another world and verify its behavior.
+A cross-built C++ hello-world alone does not pass this gate.
+
+Do this before committing to a long engine-only port. If it fails, record
+specific ABI/API/resource blockers and reconsider the architecture.
+
+** R3: Close the native compiler and build-tool dependency chain
+
+[[file:../lld/README.org][Native ELF LLD now runs against shared libsa]]. It links guest-compiled
+C++ objects, extracts needed archive members, resolves COMDAT, performs
+relocatable links, and produces working executables. It also combines the
+individual imported runtime objects inside Darterfly. The later
+clang-tblgen build compiles those runtime sources locally; LLD's own
+source rebuild remains outstanding.
+
+[[file:../llvm-tools/README.org][Native llvm-ar and both TableGen tools now use the same shared runtime]].
+The guest generates LLVM attributes, Clang declarations and x86 register
+tables and compares them with the pinned host build. A local TD edit feeds
+native Clang, llvm-ar and LLD to produce a working executable. Archive
+replacement changes the running program.
+
+The [[file:../llvm-tools/REBUILD.org][clang-tblgen source-build path]] now selects all 248 required translation
+units, including Support, TableGen, Demangle and the C++ runtime. Native
+Clang/assembler, llvm-ar and LLD produce the new executable using shared
+libsa. Its tests generate tables, compile an edited-table client and run
+a runtime probe. Complete table generation, the other tools' source
+builds and local configuration/build-graph regeneration remain open.
+
+Bring the necessary build tools and generators onto Darterfly. Rebuild
+Clang/LLD and required runtimes from their pinned sources using the seed.
+Use the rebuilt compiler for a further build/test stage. Account for
+Python/CMake/Ninja and TableGen as the selected configuration requires.
+
+Acceptance: the locally rebuilt compiler produces working artifacts and
+passes a recorded subset of upstream/runtime tests. Run with no remote
+build execution and no undeclared host executables. Record binary
+comparisons separately from functional self-hosting; nondeterminism needs
+explanation, not an unsupported claim of bit-for-bit reproducibility.
+
+** R4: Make Nyxt's Lisp development loop native
+
+This can progress once its dependency/runtime prerequisites exist; it
+need not wait for a full local Chromium build. Build the ASDF systems on
+Darterfly, edit a command, recompile it, use it in the running browser,
+save an application image and reopen it with the change intact.
+
+Acceptance requires dependency grovellers and native libraries to work,
+not just compiling selected Nyxt files with mocked foreign functions.
+Then rebuild the existing C++ bridge/helper locally against a compatible
+engine SDK. Changing the engine itself is the next independent gate.
+
+** R5: Port the engine harness and its remaining build requirements
+
+After the architecture and compiler gates, port the engine runtime into
+a world and render local HTML/CSS/JavaScript to a CPU surface. Deliver
+input, receive a JS result and recover from a renderer failure. The host
+may still perform early target builds while remaining gaps are measured.
+
+Port the pinned build dependencies needed for a fully local engine build,
+including Rust and generators wherever the actual graph requires them.
+Trace target runtime behavior as well as undefined symbols; static symbol
+lists do not reveal direct syscalls or their required semantics.
+
+** R6: Demonstrate browser self-hosting and an update
+
+With sources and the recorded local toolchain staged, disconnect external
+builders. Rebuild the engine, bridge, Nyxt and required resources inside
+Darterfly. Launch that output in a world and pass the browser smoke corpus.
+Change an engine source file and show that the rebuild changes behavior.
+
+Then move to a second supported upstream revision. Rebuild and rerun the
+corpus, recording patch rebases, added dependencies, time and failures.
+A one-off old engine that cannot follow security updates is not a usable
+long-term browser platform.
+
+* Resource and maintenance decision
+
+Upstream Chromium's Linux instructions specify at least 8GB of RAM and
+100GB of free storage, with more memory recommended. These are reference
+figures, not a measured Darterfly/CEF build budget. The current 512MiB IPC
+test disk plainly is not a browser build environment.
+
+Measure peak compiler and linker memory, scratch/storage demand, process
+and descriptor counts, file metadata load and wall time on the pinned
+host build. Repeat representative workloads on Darterfly before committing
+to the full build. Avoid swap-dependent promises until target memory
+pressure and recovery are qualified.
+
+Choose an engine from measured integration cost, native runtime port cost,
+native source-build cost, site compatibility and update maintenance. Do
+not select CEF solely because Nyxt already has a binding. Do not select
+WPE solely because it is intended for embedded systems.
+
+If full local rebuilding is impractical after these experiments, report
+that as a conflict with the goal. Revisit engine choice or system scope;
+do not silently redefine self-hosting as remote compilation.
+
+* Evidence and open questions
+
+Reviewed local revisions:
+- Darterfly: ae6b4af.
+- Nyxt: cfa068ea781fe4866ae435c2950c00c5ec51cfee.
+- cl-cef: 257c6421bb173cbe50d2b5a2a1066bace15347fc.
+- Guix Nyxt package source: 641fd65824036965e24ed803698977e74b3afd3e.
+
+The pinned Nyxt/CEF host reference now works; see HOST-REFERENCE.org.
+Engine/source pins and native DSO loading are now recorded separately.
+Not yet established: the complete target engine build graph, full C++
+shared-runtime coverage, a locally rebuilt Clang/LLD toolchain, guest
+engine execution or its memory/storage budget. These remain acceptance
+gates; the loader milestone does not claim they already work.
+
+Upstream references, consulted 2026-10-18:
+- [[https://llvm.org/docs/HowToCrossCompileLLVM.html][Cross-building LLVM tools for another host]]
+- [[https://llvm.org/docs/SupportLibrary.html][LLVM operating-system Support library]]
+- [[https://clang.llvm.org/docs/Toolchain.html][Compiler, linker and runtime components]]
+- [[https://libcxx.llvm.org/DesignDocs/ThreadingSupportAPI.html][libc++ threading adaptation]]
+- [[https://llvm.org/docs/BuildingADistribution.html][Selecting LLVM distribution components]]
+- [[https://chromium.googlesource.com/chromium/src/+/main/docs/toolchain_support.md][Chromium toolchain policy]]
+- [[https://raw.githubusercontent.com/chromium/chromium/main/tools/rust/README.md][Chromium Rust toolchain and host/target generators]]
+- [[https://chromium.googlesource.com/chromium/src/+/main/docs/linux/build_instructions.md][Chromium reference build tools and resources]]
+- [[https://docs.webkit.org/Ports/WebKitGTK%20and%20WPE%20WebKit/GCCRequirement.html][WebKit compiler requirements]]
+- [[https://gcc.gnu.org/install/prerequisites.html][GCC also needs an existing compiler seed]]
+
+The upstream references describe their platforms and current policy, not
+Darterfly support. Exact requirements must be rechecked against the engine
+revision chosen at R0.

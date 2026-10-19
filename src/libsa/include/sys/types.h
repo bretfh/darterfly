@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <stddef.h>
 #include <stdint.h>
 typedef long ssize_t;
@@ -28,3 +31,7 @@ typedef long register_t;
 typedef int id_t;
 typedef int key_t;
 #include <sys/select.h>
+
+#ifdef __cplusplus
+}
+#endif

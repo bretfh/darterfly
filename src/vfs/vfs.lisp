@@ -33,6 +33,11 @@
   (:method ((v vnode)) (fail :einval)))
 (defgeneric vnop-create (dir name mode)
   (:method ((dir vnode) name mode) (declare (ignore name mode)) (fail :erofs)))
+;; Special nodes are explicit: unsupported filesystems must not create a
+;; regular file which merely looks like a socket to one caller.
+(defgeneric vnop-mksocket (dir name mode)
+  (:method ((dir vnode) name mode)
+    (declare (ignore name mode)) (fail :eopnotsupp)))
 (defgeneric vnop-mkdir (dir name mode)
   (:method ((dir vnode) name mode) (declare (ignore name mode)) (fail :erofs)))
 (defgeneric vnop-symlink (dir name target)
@@ -157,7 +162,8 @@
         (unless (getf flags :creat) (fail :enoent))
         (multiple-value-bind (parent leaf) (namei-parent path)
           (setf vnode (vnop-create parent leaf (logand mode #o7777 (lognot *umask*))))))
-      (when (and (getf flags :directory) (not (eq (vnode-type vnode) :vdir))) (fail :enotdir))
+      (when (eq (vnode-type vnode) :vsock) (fail :enxio))
+    (when (and (getf flags :directory) (not (eq (vnode-type vnode) :vdir))) (fail :enotdir))
       (when (and (eq (vnode-type vnode) :vdir) (not (eq (getf flags :access) :rdonly)))
         (fail :eisdir))
       (when (and (getf flags :trunc) (eq (vnode-type vnode) :vreg) (not (eq (getf flags :access) :rdonly)))

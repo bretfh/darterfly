@@ -1,4 +1,14 @@
 #pragma once
+#define FP_NAN 0
+#define FP_INFINITE 1
+#define FP_ZERO 2
+#define FP_SUBNORMAL 3
+#define FP_NORMAL 4
+#ifdef __cplusplus
+extern "C" {
+#endif
+#define HUGE_VALF __builtin_huge_valf()
+#define HUGE_VALL __builtin_huge_vall()
 #define HUGE_VAL __builtin_huge_val()
 #define INFINITY __builtin_huge_valf()
 #define NAN __builtin_nanf("")
@@ -22,3 +32,7 @@ double copysign(double, double), nextafter(double, double), rint(double);
 long lrint(double);
 float sqrtf(float), fabsf(float), floorf(float), ceilf(float), truncf(float);
 long double truncl(long double);
+
+#ifdef __cplusplus
+}
+#endif

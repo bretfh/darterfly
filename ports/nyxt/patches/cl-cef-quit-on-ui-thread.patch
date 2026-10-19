@@ -1,0 +1,97 @@
+CEF requires message-loop shutdown on the thread running CefRunMessageLoop.
+Browser closing is asynchronous. Keep that loop alive until OnBeforeClose has
+run for each browser, then release bridge-owned CEF objects before CefShutdown.
+Suppress application events once termination begins; Nyxt clears its state then.
+Release DevTools registrations before their browser, including normal view close.
+
+--- a/source/cxx/cl-cef.cc
++++ b/source/cxx/cl-cef.cc
+@@ -195,6 +195,8 @@
+ std::atomic<cl_cef_event_callback> g_event_cb{nullptr};
+ std::atomic<cl_cef_scheme_callback> g_scheme_cb{nullptr};
+ std::atomic<bool> g_initialized{false};
++// Accessed only on the CEF UI thread.
++bool g_quit_requested = false;
+ 
+ // Scheme handlers run on CEF's IO thread, which is not a Lisp thread.
+ // Requests are handed to a Lisp thread and waited on.
+@@ -274,6 +276,51 @@
+                 }
+               }));
+   return promise->get_future().get();
++}
++
++// Wait for all asynchronous browser closes before stopping the event loop.
++// Drop CEF references on its UI thread, before CefShutdown tears CEF down.
++void FinishShutdown() {
++  if (!g_quit_requested || !g_browser_to_view.empty())
++    return;
++  decltype(g_views) views;
++  decltype(g_windows) windows;
++  {
++    std::lock_guard<std::mutex> lock(g_mu);
++    views.swap(g_views);
++    windows.swap(g_windows);
++  }
++  // Destructors may call back into the bridge: do not hold g_mu here.
++  views.clear();
++  windows.clear();
++  g_download_callbacks.clear();
++  g_menu = nullptr;
++  CefQuitMessageLoop();
++}
++
++void RequestShutdown() {
++  if (g_quit_requested)
++    return;
++  g_quit_requested = true;
++  // Nyxt discards its browser state as soon as termination is requested.
++  g_event_cb.store(nullptr);
++  std::vector<int> views;
++  std::vector<CefRefPtr<CefWindow>> windows;
++  {
++    std::lock_guard<std::mutex> lock(g_mu);
++    for (const auto& entry : g_views) {
++      views.push_back(entry.first);
++    }
++    for (const auto& entry : g_windows) {
++      if (entry.second->window)
++        windows.push_back(entry.second->window);
++    }
++  }
++  for (const auto& window : windows)
++    window->Close();
++  for (int id : views)
++    cl_cef_view_destroy(id);
++  CefPostTask(TID_UI, new ClosureTask(FinishShutdown));
+ }
+ 
+ char* Dup(const std::string& text) {
+@@ -771,6 +818,8 @@
+     if (browser)
+       g_browser_to_view.erase(browser->GetIdentifier());
+     Emit(view_id_, "{\"event\":\"closed\"}");
++    if (g_quit_requested)
++      CefPostTask(TID_UI, new ClosureTask(FinishShutdown));
+   }
+ 
+   void OnLoadingStateChange(CefRefPtr<CefBrowser> browser,
+@@ -1295,7 +1344,7 @@
+   std::fprintf(stderr, "cl-cef quit message loop\n");
+   std::fflush(stderr);
+   if (g_initialized.load())
+-    CefQuitMessageLoop();
++    PostUI(RequestShutdown);
+ }
+ 
+ void cl_cef_post(cl_cef_task_callback callback) {
+@@ -1539,6 +1588,9 @@
+   // caller leaks the browser, so a deleted buffer keeps playing audio.
+   CallUI([record, id]() {
+     record->destroying = true;
++    // Registrations must be released before their browser is destroyed.
++    record->devtools_registration = nullptr;
++    record->devtools_observer = nullptr;
+     if (record->browser)
+       record->browser->GetHost()->SetAudioMuted(true);
+     if (record->widget) {

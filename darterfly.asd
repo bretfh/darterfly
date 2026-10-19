@@ -9,7 +9,7 @@
   :depends-on (#:darterfly/mach #:darterfly/net #:darterfly/vfs #:darterfly/worlds)
   :serial t
   :pathname "src/bsd/"
-  :components ((:file "errno") (:file "proc") (:file "file") (:file "socket") (:file "vfs") (:file "stdio") (:file "stopped") (:file "exec") (:file "libsa")))
+  :components ((:file "errno") (:file "proc") (:file "file") (:file "socket") (:file "vfs") (:file "local-socket") (:file "ancillary") (:file "poll") (:file "stdio") (:file "stopped") (:file "exec") (:file "libsa") (:file "native")))
 
 (asdf:defsystem #:darterfly/init
   :description "init and service"
@@ -205,10 +205,11 @@
   :components ((:file "fat") (:file "vfs")))
 
 (asdf:defsystem #:darterfly/cc
-  :description "C through libtcc"
-  :depends-on (#:uiop)
+  :description "C through libtcc and isolated native TCC"
+  :depends-on (#:uiop #:darterfly/libsa #:darterfly/link (:require #:sb-posix))
+  :serial t
   :pathname "src/cc/"
-  :components ((:file "cc")))
+  :components ((:file "cc") (:file "native")))
 
 (asdf:defsystem #:darterfly/build
   :description "Bootstrap inputs and trees"
@@ -258,7 +259,7 @@
   :depends-on (#:darterfly/low)
   :serial t
   :pathname "src/libsa/"
-  :components ((:file "syscall") (:file "misc") (:file "string") (:file "stdlib") (:file "signal") (:file "pthread") (:file "time") (:file "unistd") (:file "vfs") (:file "start") (:file "run") (:file "math") (:file "strtod") (:file "stdio")))
+  :components ((:file "syscall") (:file "misc") (:file "string") (:file "stdlib") (:file "signal") (:file "pthread") (:file "time") (:file "unistd") (:file "vfs") (:file "message") (:file "dynamic") (:file "start") (:file "spawn") (:file "run") (:file "math") (:file "strtod") (:file "stdio") (:file "locale")))
 
 (asdf:defsystem #:darterfly/platform
   :description "Serial console"
@@ -274,7 +275,7 @@
   :pathname "src/kern/i386/"
   :components ((:file "mtrr") (:file "power") (:file "printf") (:file "rtclock") (:file "vm-map") (:file "pmap") (:file "lapic") (:file "sched")
                (:file "signal" :pathname "../../bsd/kern/signal") (:file "trap") (:file "mp") (:file "sleep")
-               (:file "systemcalls" :pathname "../../bsd/dev/i386/systemcalls") (:file "world")
+               (:file "systemcalls" :pathname "../../bsd/dev/i386/systemcalls") (:file "world") (:file "native")
                (:file "start" :pathname "../x86_64/start") (:file "init") (:file "stubs" :pathname "../x86_64/stubs") (:file "mp-desc") (:file "memory")))
 
 (asdf:defsystem #:darterfly/link
@@ -334,6 +335,6 @@
   :depends-on (#:darterfly #:fiveam (:require #:sb-posix) (:require #:sb-md5) (:require #:sb-bsd-sockets))
   :serial t
   :pathname "tests/"
-  :components ((:file "suite") (:file "mach") (:file "server") (:file "init") (:file "boot") (:file "apfs") (:file "net") (:file "wifi") (:file "power") (:file "install") (:file "onboarding") (:static-file "low-harness.c") (:file "low"))
+  :components ((:file "suite") (:file "local-socket") (:file "native") (:file "native-ipc") (:file "native-tcc") (:file "native-cxx") (:file "native-clang") (:file "native-lld") (:file "native-dl") (:file "native-llvm-tools") (:file "native-tblgen-rebuild") (:file "mach") (:file "server") (:file "init") (:file "boot") (:file "apfs") (:file "net") (:file "wifi") (:file "power") (:file "install") (:file "onboarding") (:static-file "socketpair-probe.c") (:static-file "low-harness.c") (:file "low"))
   :perform (asdf:test-op (o c)
              (uiop:symbol-call :darterfly/test :run-them)))

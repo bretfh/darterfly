@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <sys/types.h>
 #include <time.h>
 struct stat {
@@ -57,3 +60,7 @@ int mkfifo(const char *, mode_t);
 #define S_ISUID 04000
 #define S_ISGID 02000
 #define S_ISVTX 01000
+
+#ifdef __cplusplus
+}
+#endif

@@ -24,6 +24,8 @@
 (defmacro define-program (name (argv envp) &body body)
   `(setf (gethash ,name *programs*) (lambda (,argv ,envp) (declare (ignorable ,argv ,envp)) ,@body)))
 
+(defstruct native-program image)
+
 (defconstant +s-ixall+ #o111)
 
 (defun first-line (full)
@@ -39,7 +41,14 @@
     (unless (and (= (logand mode +s-ifmt+) +s-ifreg+) (logtest mode +s-ixall+))
       (fail :eacces))
     (let ((line (first-line full)))
-      (or (and (uiop:string-prefix-p "#!darterfly " line)
+      (or (and (>= (length line) 4)
+               (equal (map 'list #'char-code (subseq line 0 4))
+                      '(127 69 76 70))
+               (handler-case
+                   (make-native-program
+                    :image (darterfly/worlds:read-native-image full))
+                 (darterfly/worlds:world-error () (fail :enoexec))))
+          (and (uiop:string-prefix-p "#!darterfly " line)
                (gethash (string-trim " " (subseq line (length "#!darterfly "))) *programs*))
           (fail :enoexec)))))
 
@@ -47,9 +56,11 @@
   (subseq name (1+ (or (position #\/ name :from-end t) -1))))
 
 (defun execve (name argv envp)
+  (with-bsd (exec-program name argv envp (program-of name))))
+
+(defun exec-program (name argv envp program)
   (with-bsd
-    (let ((program (program-of name))
-          (proc *proc*))
+    (let ((proc *proc*))
       (loop :for fd :below (length (proc-fds proc))
             :for slot := (aref (proc-fds proc) fd)
             :when (and slot (cdr slot)) :do (release-fd proc fd))
@@ -61,23 +72,64 @@
       (let ((bindings (fresh-bindings)))
         (setf (proc-bindings proc) bindings)
         (throw (exec-tag proc)
-          (lambda () (call-with-bindings bindings (lambda () (with-stdio (funcall program argv envp))))))))))
+          (lambda ()
+            (call-with-bindings
+             bindings
+             (lambda ()
+               (if (native-program-p program)
+                   (run-native-program (native-program-image program) argv envp)
+                   (with-stdio (funcall program argv envp)))))))))))
 
-(defun posix-spawn (name argv envp &key file-actions)
-  (with-bsd
-    (program-of name)
-    (fork (lambda ()
-            (loop :for (action . args) :in file-actions
-                  :do (ecase action
-                        (:open (destructuring-bind (fd path flags &optional (mode #o644)) args
-                                 (let ((new (open path flags mode)))
-                                   (unless (= new fd) (dup2 new fd) (close new)))))
-                        (:dup2 (apply #'dup2 args))
-                        (:close (apply #'close args))
-                        (:closefrom (loop :for fd :from (first args) :below (length (proc-fds *proc*))
-                                          :when (aref (proc-fds *proc*) fd) :do (close fd)))
-                        (:chdir (apply #'chdir args))))
-            (execve name argv envp)))))
+(defun spawn-file-actions (actions)
+  (loop for (action . args) in actions do
+    (ecase action
+      (:open (destructuring-bind (fd path flags &optional (mode #o644)) args
+               (unless (<= 0 fd 4095) (fail :ebadf))
+               ;; OPEN replaces FD, even if it is already occupied.
+               (when (and (< fd (length (proc-fds *proc*)))
+                          (aref (proc-fds *proc*) fd)) (close fd))
+               (let ((new (open path flags mode)))
+                 (unless (= new fd) (dup2 new fd) (close new)))))
+      (:dup2 (destructuring-bind (from to) args
+               (dup2 from to)
+               ;; POSIX spawn's dup2 action clears close-on-exec even for
+               ;; identical descriptors (plain dup2 preserves it then).
+               (setf (cdr (aref (proc-fds *proc*) to)) nil)))
+      (:close (apply #'close args))
+      (:closefrom (unless (<= 0 (first args) 4096) (fail :ebadf))
+                  (loop for fd from (first args)
+                        below (length (proc-fds *proc*))
+                        when (aref (proc-fds *proc*) fd) do (close fd)))
+      (:chdir (apply #'chdir args)))))
+
+(defun spawn-program (name search-path)
+  (if (or (null search-path) (find #\/ name))
+      (values name (program-of name))
+      (let ((denied nil))
+        (dolist (dir (uiop:split-string search-path :separator ":"))
+          (let ((candidate (if (string= dir "") name
+                               (format nil "~a/~a" dir name))))
+            (handler-case
+                (return-from spawn-program
+                  (values candidate (program-of candidate)))
+              (errno (e)
+                (case (errno-name e)
+                  (:eacces (setf denied t))
+                  ((:enoent :enotdir) nil)
+                  (t (error e)))))))
+        (fail (if denied :eacces :enoent)))))
+
+(defun posix-spawn (name argv envp &key file-actions search-path native-only)
+  (let ((program nil) (resolved name))
+    (fork (lambda () (exec-program resolved argv envp program))
+          :prepare (lambda ()
+                     (spawn-file-actions file-actions)
+                     (multiple-value-setq (resolved program)
+                       (spawn-program name search-path))
+                     ;; A foreign caller must not launch a registered Lisp
+                     ;; function in the supervisor's address space.
+                     (when (and native-only (not (native-program-p program)))
+                       (fail :enoexec))))))
 
 (defvar *reboot* nil)
 

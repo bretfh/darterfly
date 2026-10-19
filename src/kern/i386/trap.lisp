@@ -84,7 +84,12 @@ Fault CR2: 0x%016lx, Error code: 0x%016lx, Fault CPU: 0x0
     (unless (privileged)
       (kprintf "world 0x%lx stopped: %s at 0x%lx, address 0x%lx
 " (current-world) (trap-type trapno) (reg regs +r-rip+) cr2)
-      (world-stop (current-world)))
+      (native-exit (current-world)
+                   (cond ((= trapno 6) +sigill+)
+                         ((or (= trapno 0) (= trapno 19)) +sigfpe+)
+                         ((or (= trapno 1) (= trapno 3)) +sigtrap+)
+                         ((= trapno 17) 10) ; BSD wait-status SIGBUS
+                         (t +sigsegv+))))
     (kprintf "user trap with no handler:
 ")
     (panic-trap regs)))

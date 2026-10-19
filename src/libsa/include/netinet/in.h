@@ -1,4 +1,7 @@
 #pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <sys/socket.h>
 typedef uint32_t in_addr_t;
 typedef uint16_t in_port_t;
@@ -17,3 +20,7 @@ struct sockaddr_in6 { sa_family_t sin6_family; in_port_t sin6_port; uint32_t sin
 #define INADDR_ANY ((in_addr_t)0x00000000)
 #define INET_ADDRSTRLEN 16
 #define INET6_ADDRSTRLEN 46
+
+#ifdef __cplusplus
+}
+#endif

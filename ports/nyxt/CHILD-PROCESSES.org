@@ -1,0 +1,222 @@
+#+title: Child processes across Darterfly worlds
+#+date: 2026-10-18
+#+startup: overview
+#+options: toc:2 num:nil
+
+* What this adds
+
+A native executable can now spawn another native executable, redirect
+its descriptors, and wait for it. An isolated SBCL world can use its
+existing run-program to do the same. These calls reach the BSD process
+service in the system world; each executable gets a separate native world.
+
+The guest exercises a three-level chain: isolated SBCL runs a native
+build driver, which launches and waits for native children. The driver
+is compiled by TCC, libsa by Low, and both linked inside Darterfly before
+that chain runs. This establishes the process structure needed by Lisp
+build drivers and compiler/linker pipelines. It does not yet execute
+Clang or a browser engine, or rebuild the compiler itself in isolation.
+
+This extends [[file:BSD-NATIVE.org][BSD native processes]] and the [[file:NATIVE-PROGRAMS.org][static executable ABI]].
+
+* The operating-system boundary
+
+Darterfly has a Unix compatibility layer: BSD-style process and file
+interfaces implemented in Lisp over its own kernel, VFS and world
+machinery. Foreign programs get process IDs, descriptors, arguments,
+environments and wait statuses. Lisp remains the native environment
+for implementing and developing the system.
+
+This is source/API compatibility plus a Darterfly-specific executable
+ABI. It does not establish general Linux or BSD binary compatibility.
+A static ELF file still needs the Darterfly startup/runtime. There is no
+imported Unix kernel underneath these calls and no fork implementation
+that duplicates a running Lisp heap. Spawn constructs a new process from
+an executable and explicit startup state.
+
+#+begin_example
+isolated SBCL                 isolated native driver
+  SBCL run-program              posix_spawn / posix_spawnp
+       |                                  |
+  __libsa_spawn                    shared Low libsa runtime
+       |                                  |
+       +--------- bounded spawn message --+
+                          |
+                system-world BSD process service
+                validate strings/actions/executable
+                inherit descriptors, create child PID
+                          |
+                   new native world
+                   _start -> main -> exit/fault
+                          |
+                BSD child status and descriptor cleanup
+                          |
+            waitpid / SBCL process-wait / process-status
+#+end_example
+
+A cross-world request cannot launch a registered Lisp function in the
+supervisor. These requests require native ELF; a #!darterfly command
+returns ENOEXEC. This preserves the execution boundary even when a caller
+can write executable files. Ordinary trusted BSD callers retain their
+existing registered-program dispatch.
+
+* Native C interface
+
+Link [[file:../../src/libsa/crt0.S][crt0.S]] and the existing libsa-object with the native program,
+using headers in src/libsa/include. See [[file:SHARED-RUNTIME.org][the shared runtime]].
+The following APIs are available:
+
+- posix_spawn and posix_spawnp; errors return errno numbers directly and
+  leave the output PID untouched.
+- File-action init/destroy, addopen, adddup2, addclose, addclosefrom_np
+  and addchdir_np. Actions apply in order in the child.
+- waitpid and wait, including WNOHANG, WUNTRACED and WCONTINUED. A
+  nonblocking wait with no report leaves the caller's status untouched.
+
+#+begin_src c
+posix_spawn_file_actions_t actions;
+pid_t child;
+int status, error;
+char *argv[] = {"/tmp/tool", "input.c", 0};
+char *envp[] = {"LANG=C", 0};
+
+error = posix_spawn_file_actions_init(&actions);
+if (!error) {
+    error = posix_spawn_file_actions_addopen(
+        &actions, 1, "/tmp/output", O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (!error)
+        error = posix_spawn(&child, argv[0], &actions, 0, argv, envp);
+    posix_spawn_file_actions_destroy(&actions);
+}
+if (!error && waitpid(child, &status, 0) == child) {
+    /* Inspect WIFEXITED/WEXITSTATUS or WIFSIGNALED/WTERMSIG. */
+}
+#+end_src
+
+posix_spawnp searches the parent's PATH, with /bin:/usr/bin as the
+fallback. Search happens after child file actions, so relative PATH
+entries use the child's working directory. The child's replacement
+environment does not select the search path. ENOEXEC does not invoke a
+shell fallback.
+
+Wait accepts a positive child PID or -1 for any child. PID 0 and process
+group selectors are not implemented. A sibling, ancestor or already
+reaped child returns ECHILD. The caller cannot select another process's
+child list. C and isolated-SBCL replies translate BSD status words to
+the convention in the target C headers, including stopped signals and
+0xffff for continuation. BSD's SIGEMT and SIGINFO have no target
+counterpart and are reported as SIGABRT.
+
+Spawn requests remain bounded: at most 4096 bytes of strings, counts and
+actions, with at most 64 entries per vector. Action objects use libsa's
+allocator; the old eight-object static pool is gone. Destroy them after
+use. Nonzero spawn attributes return ENOTSUP. Process groups, signal-mask
+attributes, sessions and native exec replacement remain open.
+
+* Isolated Lisp interface
+
+#+begin_src lisp
+;; Inside a disk-backed isolated SBCL world:
+(let ((process
+        (sb-ext:run-program
+         "/tmp/tool" '("input.c") :search nil
+         :directory "/tmp/build"
+         :input #P"/tmp/input"
+         :output #P"/tmp/output"
+         :error #P"/tmp/diagnostics"
+         :if-output-exists :supersede
+         :if-error-exists :supersede)))
+  (unwind-protect
+       (values (sb-ext:process-status process)
+               (sb-ext:process-exit-code process))
+    (sb-ext:process-close process)))
+#+end_src
+
+:wait nil, process-status, process-wait and :input :stream are also
+exercised in the guest. The existing SBCL runtime calls __libsa_spawn;
+Low now serializes that request across the world boundary. SBCL and Nyxt
+sources are unchanged. The public Low posix_spawn/file-action stubs have
+now been replaced by the same implementation used by native tools. The
+SBCL adapter constructs file actions and calls that shared implementation.
+
+Only disk-backed Lisp worlds have a BSD process service. Archive-only
+run worlds still have their private file model and no child-spawn bridge.
+Launching another SBCL image as a child executable also needs the future
+native runtime/loader work; this increment launches static native tools.
+
+* Ownership, teardown and request format
+
+The kernel-supplied sender world identifies the caller. Spawn payloads
+contain strings and typed action records, never nested pointers into the
+supervisor. Wait verifies the descriptor layout before the legacy Lisp
+service can interpret its arguments. Malformed requests fail with errno.
+
+Shared libsa operation 51 carries an inline buffer in argument A, its
+length in B and search mode in C. Its payload is:
+
+#+begin_example
+u64 argc, envc, action-count
+NUL pathname
+NUL parent PATH (ignored without search mode)
+argc NUL argument strings
+envc NUL environment strings
+action-count records:
+    u64 type, A, B, C
+    optional NUL pathname
+
+1: dup2       A=source, B=destination
+2: close      A=descriptor
+3: closefrom  A=first descriptor
+4: open       A=descriptor, B=target open flags, C=mode; pathname
+5: chdir      pathname
+#+end_example
+
+All words are little endian; strings are UTF-8. Counts, terminators,
+flags, descriptor ranges, exact payload consumption and the executable
+are checked before publishing the child. File actions can have filesystem
+side effects even if a later action fails, as in the existing BSD spawn.
+
+The shared libsa waitpid operation is 37. It carries the signed PID and
+options, with a checked four-byte output slot or no status output. The
+reply leaves the caller's status untouched unless a child is reported.
+Native executables and isolated SBCL use this same request and service.
+
+Children and grandchildren of a disk-backed Lisp world retain their
+owning world-process record. Normal native-parent exit uses BSD orphan
+reparenting. Ending the owning Lisp world closes admission to new spawn
+requests, wakes blocked waits, terminates its remaining descendants,
+reaps their records and releases inherited descriptors. This applies
+also after a descendant was reparented. A finished world leaves no
+running compiler tree behind in the tested teardown case.
+
+This is lifecycle isolation, not complete resource containment. Existing
+memory-allocation failure behavior and absent CPU/memory quotas still
+limit hostile-workload guarantees. Teardown relies on the existing BSD
+termination machinery; it does not introduce a kernel resource controller.
+
+* Verification and the next self-hosting gate
+
+#+begin_src sh
+make check
+make test-native-host
+make test-native-bsd-guest
+#+end_src
+
+The guest suite uses four-vCPU QEMU with the real Darterfly kernel and
+image and a disposable disk. It covers redirected file/pipe I/O, exact
+arguments/environment/cwd, native parent identity, nonblocking and
+blocking wait, fault status, double/non-child waits, failed spawn cleanup,
+PATH lookup, repeated child launches, locally rebuilt drivers, isolated
+SBCL run-program, asynchronous pipe input and nested-wait teardown.
+It also rejects registered supervisor Lisp commands at the new boundary.
+See [[file:VALIDATION.org][the validation record]] for final counts and regression results.
+
+The next useful compiler proof is a real standalone tool executing here
+with its measured libc requirements. The shared allocator,
+static TLS initialization and public Low spawn are now integrated. Qualify
+remaining C++ startup, thread cleanup/concurrency, mappings, spawn
+attributes and cancellation against the selected compiler.
+Then cross-seed the chosen C++ compiler/linker and prove their local
+rebuild, followed by the engine build and subprocess harness. The
+acceptance gates and dependency inventories remain in
+[[file:SELF-HOSTING.org][SELF-HOSTING.org]] and [[file:SBOM.org][SBOM.org]].

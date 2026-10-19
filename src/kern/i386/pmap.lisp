@@ -61,7 +61,7 @@
     (+ table (* 8 (logand (shr va 12) 511)))))
 
 (define-low prot-bits (prot)
-  (if (not prot)
+  (if (not (logand prot 7))
       0
       (logior +pte-valid+ +pte-user+
               (if (logand prot +prot-write+) +pte-write+ 0)

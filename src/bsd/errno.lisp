@@ -10,7 +10,7 @@
    #:chdir #:getcwd #:+o-rdonly+ #:+o-wronly+ #:+o-rdwr+ #:+o-append+ #:+o-creat+ #:+o-trunc+
    #:chroot #:execve #:posix-spawn #:define-program #:reboot #:*reboot* #:with-stdio #:proc-comm #:bsdthread-create #:define-process-variable
    #:+o-excl+ #:+o-directory+ #:+s-ifmt+ #:+s-ifdir+ #:+s-ifreg+ #:+s-ififo+ #:+s-iflnk+
-   #:socket #:bind #:listen #:accept #:connect #:send #:recv #:sendto #:recvfrom #:+af-inet+ #:+af-inet6+ #:+sock-stream+ #:+sock-dgram+
+   #:send-message #:receive-message #:socketpair #:shutdown #:+af-local+ #:socket #:bind #:listen #:accept #:connect #:send #:recv #:sendto #:recvfrom #:+af-inet+ #:+af-inet6+ #:+sock-stream+ #:+sock-dgram+
    #:wifexited #:wexitstatus #:wifsignaled #:wtermsig #:wifstopped #:wstopsig #:wifcontinued)
   (:shadow #:read #:write #:close #:open #:listen)
   (:local-nicknames (#:vfs #:darterfly/vfs)))
@@ -23,7 +23,7 @@
     (:enotdir . 20) (:eisdir . 21) (:einval . 22) (:enfile . 23) (:emfile . 24) (:enotty . 25)
     (:etxtbsy . 26) (:efbig . 27) (:enospc . 28) (:espipe . 29) (:erofs . 30) (:emlink . 31)
     (:epipe . 32) (:edom . 33) (:erange . 34) (:eagain . 35) (:einprogress . 36) (:ealready . 37)
-    (:enotsock . 38) (:edestaddrreq . 39) (:eprotonosupport . 43) (:eopnotsupp . 45) (:eafnosupport . 47)
+    (:enotsock . 38) (:edestaddrreq . 39) (:emsgsize . 40) (:eprototype . 41) (:eprotonosupport . 43) (:eopnotsupp . 45) (:eafnosupport . 47)
     (:eaddrinuse . 48) (:enetdown . 50) (:enetunreach . 51) (:econnreset . 54) (:eisconn . 56) (:enotconn . 57)
     (:etimedout . 60) (:econnrefused . 61) (:enametoolong . 63) (:ehostunreach . 65) (:enotempty . 66) (:enosys . 78)))
 
