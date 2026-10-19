@@ -111,3 +111,7 @@ test-native-tblgen-rebuild-guest:
 .PHONY: export-native-tblgen-rebuild
 export-native-tblgen-rebuild:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --script tools/export-tblgen-rebuild.lisp'
+
+.PHONY: test-native-ipc-guest
+test-native-ipc-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-ipc-on-darterfly)) (uiop:quit 1))"'

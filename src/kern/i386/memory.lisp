@@ -91,7 +91,42 @@
       (incf i))
     0))
 
+;; Shared frames use the existing page allocator. A frame absent from this
+;; table has one owner; entries exist only while two or more owners remain.
+(define-global shared-frames :u64 :count 4096)
+
+(define-low shared-frame-bucket (pa)
+  (+ (address shared-frames) (* 8 (logand (shr pa 12) 4095))))
+
+(define-low vm-page-retain (pa)
+  (let* ((bucket (shared-frame-bucket pa)) (node (mem :u64 bucket)))
+    (while node
+      (when (= (mem :u64 node) pa)
+        (incf (mem :u64 (+ node 8)))
+        (result 1))
+      (setf node (mem :u64 (+ node 16))))
+    (setf node (kalloc 24))
+    (setf (mem :u64 node) pa)
+    (setf (mem :u64 (+ node 8)) 2)
+    (setf (mem :u64 (+ node 16)) (mem :u64 bucket))
+    (setf (mem :u64 bucket) node)
+    1))
+
+(define-low vm-page-release-shared (pa)
+  (let* ((link (shared-frame-bucket pa)) (node (mem :u64 link)))
+    (while node
+      (when (= (mem :u64 node) pa)
+        (decf (mem :u64 (+ node 8)))
+        (when (= (mem :u64 (+ node 8)) 1)
+          (setf (mem :u64 link) (mem :u64 (+ node 16)))
+          (kfree node))
+        (result 1))
+      (setf link (+ node 16))
+      (setf node (mem :u64 link)))
+    0))
+
 (define-low vm-page-free (pa)
+  (when (vm-page-release-shared pa) (result 0))
   (setf (mem :u64 (+ pa +physmap-base+)) free-list)
   (setf free-list pa)
   (incf free-count))

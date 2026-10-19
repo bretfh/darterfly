@@ -1,7 +1,7 @@
 (in-package #:darterfly/vfs)
 
 (defparameter +errno+
-  '((:eperm . 1) (:enoent . 2) (:esrch . 3) (:eintr . 4) (:eio . 5) (:enxio . 6) (:e2big . 7) (:enoexec . 8)
+  '((:emsgsize . 90) (:eprototype . 91) (:eperm . 1) (:enoent . 2) (:esrch . 3) (:eintr . 4) (:eio . 5) (:enxio . 6) (:e2big . 7) (:enoexec . 8)
     (:ebadf . 9) (:echild . 10) (:eagain . 11) (:enomem . 12) (:eacces . 13) (:efault . 14) (:ebusy . 16)
     (:eexist . 17) (:exdev . 18) (:enodev . 19) (:enotdir . 20) (:eisdir . 21) (:einval . 22) (:enfile . 23)
     (:emfile . 24) (:enotty . 25) (:efbig . 27) (:enospc . 28) (:espipe . 29) (:erofs . 30) (:emlink . 31)
@@ -28,6 +28,7 @@
 (defun make-devfs ()
   (or *devfs*
       (let ((dev (make-ram-node :vdir #o755)))
+        (add-child dev "shm" (make-ram-node :vdir #o1777))
         (add-child dev "console" (make-instance 'dev-node :type :vchr :device :console :mode #o620))
         (add-child dev "tty" (make-instance 'dev-node :type :vchr :device :console :mode #o666))
         (add-child dev "null" (make-instance 'dev-node :type :vchr :device :null :mode #o666))

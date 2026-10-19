@@ -39,11 +39,12 @@ The engine source build and Darterfly engine execution remain outstanding.
 
 The [[file:engine/README.org][headless CEF experiment]] now passes CPU painting, mouse input,
 JavaScript and shutdown on Guix. QEMU confirms the current Darterfly
-boundary: shared libsa runs a native probe, but dynamic loading and
-writable shared-file mappings are missing. The actual CEF artifacts are
-rejected cleanly. Compiler rebuild expansion is paused while the engine
-platform contract is evaluated. Musl is a reuse candidate for that
-runtime, not a substitute for the missing OS mechanisms.
+boundary: shared libsa runs native probes, but dynamic loading is missing.
+The [[file:engine/IPC.org][next IPC milestone]] now passes descriptors and writable shared
+RAM-file pages between isolated native worlds, with an isolated Lisp-world
+check too. The actual CEF artifacts are still rejected cleanly. Compiler
+rebuild expansion is paused while the engine platform contract is
+evaluated. Musl is deferred; it does not replace the missing OS mechanisms.
 
 * Three different things we must be able to rebuild
 
@@ -174,10 +175,12 @@ executable. Guest-generated objects link directly for the tested programs.
 The mapping implementation sometimes implements a file mapping by reading
 into anonymous memory. Audit the selected compiler/engine's MAP_SHARED,
 coherency and lifetime needs; an mmap symbol alone is not sufficient.
-Writable file-backed MAP_SHARED now fails with EOPNOTSUPP instead of
-silently providing a private copy. LLD uses explicit output writes or its
-upstream fallback. Read-only core mappings retain their existing path;
-general shared-file coherency and writeback remain open.
+RAM-file MAP_SHARED now shares real frames across worlds, including files
+in /dev/shm. Persistent disk mappings still fail with EOPNOTSUPP instead of
+silently providing a private copy. LLD can use explicit output writes or
+its upstream fallback there. Read-only core mappings retain their existing
+path. File shrinking/revocation, disk writeback and live shared-mapping
+checkpoints remain open; see [[file:engine/IPC.org][the tested IPC contract and limits]].
 
 Source anchors:
 - [[file:../../src/cc/cc.lisp][Current target C compilation]]

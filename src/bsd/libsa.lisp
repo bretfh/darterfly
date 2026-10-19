@@ -4,7 +4,7 @@
   #(nil :open :close :read :write :pread :pwrite :lseek :stat :lstat :fstat :readlink :symlink :mkdir :rmdir
     :unlink :rename :chdir :fchdir :getcwd :realpath :chmod :fchmod :chown :fchown :truncate :ftruncate :dup :dup2
     :fcntl :readdir :link :utimes :fsync :umask :pipe :spawn :waitpid
-    :socket :bind :listen :accept :connect :getsockname :getpeername :shutdown :recvfrom :sendto :resolve :socketpair :poll :spawn-packed :getpid :getppid))
+    :socket :bind :listen :accept :connect :getsockname :getpeername :shutdown :recvfrom :sendto :resolve :socketpair :poll :spawn-packed :getpid :getppid :sendmsg :recvmsg :mmap-file))
 
 (defun c-string (address)
   (let* ((sap (sb-sys:int-sap address))
@@ -230,6 +230,55 @@
           (multiple-value-bind (ip port) (get-sockaddr (word 2) (word 3)) (sendto fd octets ip port))
           (write fd octets)))))
 
+(defun libsa-message (op fd address size flags)
+  (unless (<= 1040 size 33808) (fail :einval))
+  (let* ((sap (sb-sys:int-sap address))
+         (count (sb-sys:sap-ref-64 sap 0))
+         (rights (sb-sys:sap-ref-64 sap 8)))
+    (unless (and (= count (- size 1040)) (<= rights +message-rights+))
+      (fail :einval))
+    (if (eq op :sendmsg)
+        (send-message fd (get-octets (+ address 1040) count)
+                      (loop for i below rights
+                            collect (sb-sys:sap-ref-32 sap (+ 24 (* 4 i)))) flags)
+        (multiple-value-bind (data fds out-flags result)
+            (receive-message fd count rights flags)
+          (setf (sb-sys:sap-ref-64 sap 0) (length data)
+                (sb-sys:sap-ref-64 sap 8) (length fds)
+                (sb-sys:sap-ref-64 sap 16) out-flags)
+          (loop for n in fds for i from 0
+                do (setf (sb-sys:sap-ref-32 sap (+ 24 (* 4 i))) n))
+          (put-octets data (+ address 1040))
+          result))))
+
+(defun libsa-map-file (fd address token)
+  (let* ((record (sb-sys:int-sap address))
+         (dst (sb-sys:sap-ref-64 record 0))
+         (len (sb-sys:sap-ref-64 record 8))
+         (prot (sb-sys:sap-ref-64 record 16))
+         (offset (sb-sys:sap-ref-64 record 24))
+         (file (vnode-file fd)) (access (file-access file))
+         (node (fd-vnode fd)))
+    (unless (and (plusp len) (<= len (* 64 1024 1024))
+                 (zerop (logand (logior dst offset) 4095))
+                 (zerop (logandc2 prot 3)))
+      (fail :einval))
+    (when (or (= access 1) (and (logtest prot 2) (/= access 2)))
+      (fail :eacces))
+    (unless (and (typep node 'vfs::ram-node) (eq (vfs:vnode-type node) :vreg))
+      (fail :eopnotsupp))
+    (unless (<= (+ offset (* 4096 (ceiling len 4096)))
+                (* 4096 (ceiling (vfs::node-size node) 4096)))
+      (fail :einval))
+    (let ((source (vfs::promote-shared-data node)))
+      (handler-case
+          (darterfly/worlds::machdep 68 token dst
+            (+ (sb-sys:sap-int source) offset) (* 4096 (ceiling len 4096))
+            (logior prot (if (= access 2) 0 #x100)))
+        (darterfly/worlds:world-error (e)
+          (return-from libsa-map-file
+            (- (darterfly/worlds::world-error-code e))))))))
+
 (defun libsa-call (op a b c d)
   (ecase op
     (:open (let ((fd (open (c-string a) (from-libsa-flags b) c)))
@@ -305,6 +354,8 @@
     (:poll (libsa-poll a b c))
     (:spawn-packed (unless (<= 24 b 4096) (fail :einval))
                    (native-spawn-request (get-octets a b) c :native-only nil))
+    ((:sendmsg :recvmsg) (libsa-message op a b c d))
+    (:mmap-file (libsa-map-file a b 0))
     (:getpid (getpid))
     (:getppid (getppid))))
 
@@ -489,6 +540,10 @@
            (:poll (and (layout '(6 0 0 0)) (<= (second args) 256)
                        (or (and (zerop (first args)) (zerop (first sizes)))
                            (= (first sizes) (* 8 (second args))))))
+           ((:sendmsg :recvmsg)
+            (and (layout (if (eq name :sendmsg) '(0 2 0 0) '(0 6 0 0)))
+                 (<= 1040 (third args) 33808) (= (second sizes) (third args))))
+           (:mmap-file (and (layout '(0 2 0 0)) (len 1 32 32)))
            (:spawn-packed (and (layout '(2 0 0 0)) (<= 24 (second args) 4096)
                                 (= (first sizes) (second args))))
            (t nil)))))
@@ -507,6 +562,15 @@
            (reply-octets -38 '(0 0 0 0) #() offsets))
           ((not (valid-world-request-p name args sizes kinds request))
            (reply-octets -22 '(0 0 0 0) #() offsets))
+          ((eq name :mmap-file)
+           (let ((record (subseq request 72)))
+             (sb-sys:with-pinned-objects (record)
+               (reply-octets
+                 (as-libsa (proc)
+                   (with-bsd
+                     (libsa-map-file (first args)
+                       (sb-sys:sap-int (sb-sys:vector-sap record)) token)))
+                 '(0 0 0 0) #() offsets))))
           ((eq name :spawn-packed)
            (let ((result
                    (as-libsa (proc)

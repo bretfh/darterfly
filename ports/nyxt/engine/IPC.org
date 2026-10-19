@@ -1,0 +1,127 @@
+#+title: Browser IPC: shared pages and descriptor transfer
+#+date: 2026-10-18
+#+startup: overview
+#+options: toc:2 num:nil
+
+* What now works
+
+Darterfly can pass open files and sockets between isolated native worlds
+using sendmsg/recvmsg and SCM_RIGHTS. Both Unix streams and sequenced
+packets work. A RAM file can be mapped MAP_SHARED in multiple worlds;
+writes reach the same physical pages. File reads and writes see those
+pages too. /dev/shm is a RAM directory on both RAM and APFS root boots.
+
+The QEMU test compiles its C program inside Darterfly, links the existing
+shared libsa, spawns native children, and exercises the actual service
+boundary. An isolated SBCL world also modifies a mapping held by the
+supervisor. This is useful browser substrate, not a running CEF engine.
+
+Nyxt, cl-cef and the engine sources are unchanged by this milestone.
+No second libc, allocator or thread-local-storage implementation was added.
+
+* Ownership and isolation
+
+A transferred descriptor refers to the same open-file description. Its
+file offset and status flags are shared; close-on-exec belongs to the new
+descriptor. Queued rights retain references until received or discarded.
+Ordinary reads discard ancillary rights. Truncation, shutdown, failed
+sends and final socket closure release their references. A collector
+reclaims cycles made by passing sockets through other sockets.
+
+The runtime flattens msghdr, iovecs and ancillary data into a bounded
+request. The supervisor validates the layout before reconstructing local
+pointers. An isolated process never supplies a supervisor pointer.
+
+RAM files gain stable, demand-paged backing through the existing mmap
+path. The kernel lends those frames to a received RPC's caller, with
+reference counts in the existing physical-page allocator. Unmapping or
+world destruction releases an ownership reference. The last owner frees
+the page. The existing copy-on-write boot-image helper is not used for
+these writable shared mappings.
+
+Read-only descriptors cannot create writable shared views or upgrade
+those views through mprotect. An O_RDWR descriptor may create a read-only
+view and upgrade it later. Closing or unlinking a file does not invalidate
+its mappings. The guest also forces collection of the RAM-file object,
+then reads and writes the surviving mapping after backing-owner cleanup.
+
+* Deliberate bounds
+
+| Interface | Current contract |
+|-----------+------------------|
+| File sharing | Regular RAM files; persistent disk mappings return EOPNOTSUPP |
+| File size | At most 64 MiB after promotion; virtual reservation is demand-paged |
+| Mapping | Page-aligned offset; range contained in page-rounded EOF; no executable shared views |
+| Truncation | Growth within the reservation works; shrinking a promoted file returns EBUSY |
+| Message payload | At most 32 KiB through the C service bridge |
+| Ancillary rights | At most 253 descriptors per message, 1024 queued per receive buffer |
+| Packet queue | At most 256 records and 64 KiB of payload |
+| Send flags | MSG_DONTWAIT and MSG_NOSIGNAL |
+| Receive flags | MSG_PEEK, MSG_DONTWAIT, MSG_TRUNC and MSG_CMSG_CLOEXEC |
+
+The truncation restriction lasts for the promoted file's lifetime, even
+when its views have been unmapped. Revocation and SIGBUS beyond a shrunken
+EOF are not implemented. File sealing, memfd_create and persistent-file
+writeback are not provided. These bounds need checking against a real
+target engine; passing this fixture is not full POSIX or Mojo conformance.
+
+A world with active shared mappings cannot be independently checkpointed:
+the kernel rejects that snapshot instead of silently restoring private
+copies. Core-save hooks copy reachable RAM-file bytes into Lisp storage
+and remove foreign backing pointers from those nodes. They do not preserve
+live mappings or cross-world sharing across reboot. The host test verifies
+this conversion; a full save/reboot with live browser mappings is not
+qualified.
+
+* Evidence
+
+See [[file:ipc-validation.json][recorded checks and guest transcript digest]].
+
+- Local sockets and RAM-file host tests: 155 checks pass.
+- Native service schema and process host tests: 51 checks pass.
+- Native IPC/shared-memory QEMU test: 13 checks pass.
+- Existing native BSD spawn/descriptor QEMU regression: 43 checks pass.
+- Native Clang/LLD/C++ QEMU regression: 18 checks pass.
+- Updated engine boundary probe: 11 observations pass; CEF remains unloaded.
+
+The native IPC checks cover stream and packet descriptor transfer, shared
+file offsets, close-on-exec, truncation, malformed controls, immediate
+cross-world visibility, read-only protection, mapping offsets, descriptor
+closure, live PROT_NONE mappings at child exit and process cleanup.
+The host checks add packet backpressure, queued socket cycles, shutdown
+cleanup, named packet sockets and malformed RPC layouts.
+
+The known installation-test warning about FIRST-START-ENTRIES is unrelated
+to this change. The entire host or recovery suite is not claimed green.
+
+#+begin_src sh
+make check
+make test-local-sockets test-native-host
+make test-native-ipc-guest
+make test-native-bsd-guest
+make test-native-lld-guest
+#+end_src
+
+Run guest targets sequentially in this worktree: their boot images and
+monitor paths are shared. The new guest transcript is written to
+build/native-ipc-guest.log.
+
+* What this closes, and what remains
+
+The earlier host CEF trace observed descriptor transfers and temporary
+shared files. These two OS mechanisms now have direct guest evidence.
+It remains necessary to qualify Chromium's actual protocols and any
+additional operations it requires.
+
+CEF still cannot load or execute in Darterfly. The dynamic ELF/TLS loader,
+engine ABI, process/thread and event interfaces, library closure, and
+Nyxt's display integration remain outstanding. The shipped Guix libcef
+expects a versioned glibc/Linux environment; implementing these IPC calls
+does not make that binary compatible with shared libsa.
+
+The next decision must use a pinned target build/link attempt to choose
+between an engine source port and a Linux-compatible native-world ABI.
+Then qualify real DSOs, relocations, TLS, constructors and cleanup against
+that choice. Preserve one OS service implementation. Keep the five-part
+CPU-paint/input/JavaScript/shutdown engine probe as the acceptance target
+inside Darterfly; keep compiler-rebuild expansion paused meanwhile.

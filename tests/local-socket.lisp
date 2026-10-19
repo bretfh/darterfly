@@ -386,3 +386,131 @@
                (ask "(darterfly/bsd:unlink \"/tmp/nyxt-world.sock\")")
                (is (search "[ALIVE 42]" (ask "(format nil \"[ALIVE ~a]\" (+ 40 2))"))))
           (image:finish c 5))))))
+
+(in-suite local-socket)
+
+(test ancillary-rights-survive-close-and-share-offset
+  (with-local-process
+    (multiple-value-bind (a b) (bsd:socketpair 1 1)
+      (multiple-value-bind (r w) (bsd:pipe)
+        (let ((file (bsd::fd-file w)))
+          (is (= 1 (bsd:send-message a #(7) (list w))))
+          (bsd:close w)
+          (is (= 1 (bsd::file-refs file)))
+          (multiple-value-bind (bytes rights flags) (bsd:receive-message b 10 1 #x40000000)
+            (is (equalp #(7) bytes)) (is (zerop flags))
+            (is (= 1 (length rights)))
+            (is (cdr (aref (bsd::proc-fds bsd:*proc*) (first rights))))
+            (is (= 2 (bsd:write (first rights) #(11 12))))
+            (is (equalp #(11 12) (bsd:read r 2)))
+            (bsd:close (first rights)))
+          (is (zerop (bsd::file-refs file))))))))
+
+(test ancillary-boundary-peek-and-truncation
+  (with-local-process
+    (multiple-value-bind (a b) (bsd:socketpair 1 1)
+      (multiple-value-bind (r w) (bsd:pipe)
+        (declare (ignore r))
+        (bsd:write a #(1 2))
+        (bsd:send-message a #(3 4) (list w))
+        (bsd:write a #(5))
+        (is (equalp #(1) (bsd:read b 1)))
+        (multiple-value-bind (bytes rights flags) (bsd:receive-message b 10 1 2)
+          (is (equalp #(2 3 4) bytes)) (is (zerop flags))
+          (is (= 1 (length rights))) (bsd:close (first rights)))
+        (multiple-value-bind (bytes rights flags) (bsd:receive-message b 10 0)
+          (is (equalp #(2 3 4) bytes)) (is (null rights)) (is (= 8 flags)))
+        (is (equalp #(5) (bsd:read b 1)))
+        (is (= 1 (bsd::file-refs (bsd::fd-file w))))))))
+
+(test ancillary-discard-and-invalid-send
+  (with-local-process
+    (multiple-value-bind (a b) (bsd:socketpair 1 1)
+      (let ((f (bsd::fd-file a)))
+        (is (eq :ebadf (local-errno (lambda () (bsd:send-message a #(1) (list a 999))))))
+        (is (= 1 (bsd::file-refs f))))
+      (bsd:send-message a #(1) (list a))
+      (is (= 2 (bsd::file-refs (bsd::fd-file a))))
+      (is (equalp #(1) (bsd:read b 1)))
+      (is (= 1 (bsd::file-refs (bsd::fd-file a))))
+      (bsd:shutdown b 0)
+      (is (eq :epipe (local-errno (lambda () (bsd:send-message a #(1) nil #x4000))))))))
+
+(test ancillary-socket-cycles-are-collected
+  (with-local-process
+    (let ((before (hash-table-count bsd::*control-buffers*)))
+      (multiple-value-bind (a b) (bsd:socketpair 1 1)
+        (let ((fa (bsd::fd-file a)) (fb (bsd::fd-file b)))
+          (bsd:send-message a #(1) (list a))
+          (bsd:send-message b #(2) (list b))
+          (bsd:close a)
+          (is (plusp (bsd::file-refs fa)))
+          (bsd:close b)
+          (is (zerop (bsd::file-refs fa)))
+          (is (zerop (bsd::file-refs fb)))
+          (is (= before (hash-table-count bsd::*control-buffers*))))))))
+
+(test local-seqpacket-records-and-rights
+  (with-local-process
+    (multiple-value-bind (a b) (bsd:socketpair 1 5)
+      (bsd:send-message a #(1 2 3) (list a))
+      (bsd:send-message a #(4 5) nil)
+      (is (equal '(1) (bsd::poll-fds (list (list b 1)) 0)))
+      (multiple-value-bind (bytes rights flags size) (bsd:receive-message b 1 1 #x20)
+        (is (equalp #(1) bytes)) (is (= 3 size)) (is (= #x20 flags))
+        (is (= 1 (length rights))) (bsd:close (first rights)))
+      (is (equalp #(4 5) (bsd:read b 10)))
+      (bsd:send-message a #() nil)
+      (is (equal '(1) (bsd::poll-fds (list (list b 1)) 0)))
+      (is (equalp #() (bsd:read b 10)))
+      (is (equal '(0) (bsd::poll-fds (list (list b 1)) 0))))))
+
+(test ancillary-backpressure-and-shutdown-release-ownership
+  (with-local-process
+    (multiple-value-bind (a b) (bsd:socketpair 1 5)
+      (let ((file (bsd::fd-file a)))
+        (dotimes (i 256) (bsd:send-message a #() nil))
+        (is (eq :eagain
+                (local-errno (lambda () (bsd:send-message a #(1) (list a) #x40)))))
+        (is (= 1 (bsd::file-refs file)))
+        (bsd:read b 1)
+        (is (= 1 (bsd:send-message a #(2) (list a) #x40)))
+        (is (= 2 (bsd::file-refs file)))
+        (bsd:shutdown b 0)
+        (is (= 1 (bsd::file-refs file)))))))
+
+(test named-seqpacket-preserves-records
+  (with-local-filesystem
+    (let ((server (bsd:socket 1 5)) (client (bsd:socket 1 5))
+          (wrong (bsd:socket 1 1)))
+      (bsd:bind server "/packet")
+      (bsd:listen server)
+      (is (eq :eprototype (local-errno (lambda () (bsd:connect wrong "/packet")))))
+      (bsd:connect client "/packet")
+      (let ((peer (bsd:accept server)))
+        (bsd:write client #(1 2 3)) (bsd:write client #(4))
+        (is (equalp #(1) (bsd:read peer 1)))
+        (is (equalp #(4) (bsd:read peer 10)))))))
+
+(test shared-ram-core-save-keeps-bytes-not-addresses
+  (let* ((darterfly/vfs::*shared-ram-nodes* nil)
+         (n (darterfly/vfs:make-ram-node :vreg #o600))
+         (sap nil))
+    (unwind-protect
+         (progn
+           (darterfly/vfs:vnop-write n 0 #(1 2 3))
+           (setf sap (darterfly/vfs::promote-shared-data n))
+           (setf (sb-sys:sap-ref-8 sap 1) 9)
+           (is (equalp #(1 9 3) (darterfly/vfs:vnop-read n 0 3)))
+           (darterfly/vfs:vnop-write n 3 #(4))
+           (is (= 4 (sb-sys:sap-ref-8 sap 3)))
+           (darterfly/vfs:vnop-truncate n 8)
+           (is (equalp #(1 9 3 4 0 0 0 0) (darterfly/vfs:vnop-read n 0 8)))
+           (signals darterfly/vfs:vfs-error (darterfly/vfs:vnop-truncate n 3))
+           (darterfly/vfs::save-shared-ram-data)
+           (is (null (darterfly/vfs::node-external n)))
+           (is (zerop (darterfly/vfs::node-shared-capacity n)))
+           (is (equalp #(1 9 3 4 0 0 0 0) (darterfly/vfs:vnop-read n 0 8))))
+      (when sap
+        (sb-ext:cancel-finalization n)
+        (sb-posix:munmap sap darterfly/vfs::+shared-file-capacity+)))))

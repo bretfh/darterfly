@@ -13,9 +13,13 @@ static bool aligned() {
 int main() {
   int fd = open("/tmp/lld-mmap-check", O_CREAT | O_TRUNC | O_RDWR, 0600);
   if (fd < 0 || write(fd, "ABCD", 4) != 4) return 93;
-  errno = 0;
-  if (mmap(nullptr, 4, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0) != MAP_FAILED ||
-      errno != EOPNOTSUPP) return 94;
+  char *shared = static_cast<char *>(mmap(nullptr, 4, PROT_READ | PROT_WRITE,
+                                         MAP_SHARED, fd, 0));
+  if (shared == MAP_FAILED || shared[0] != 'A') return 94;
+  shared[1] = 'Q';
+  char visible = 0;
+  if (pread(fd, &visible, 1, 1) != 1 || visible != 'Q' || munmap(shared, 4))
+    return 98;
   char *p = static_cast<char *>(mmap(nullptr, 4, PROT_READ | PROT_WRITE,
                                     MAP_PRIVATE, fd, 0));
   if (p == MAP_FAILED || p[0] != 'A' || p[3] != 'D') return 95;

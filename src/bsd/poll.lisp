@@ -20,9 +20,10 @@
                 (eof (or (local-read-shut s) (zerop (writers in))))
                 (broken (zerop (readers out))))
            (logior
-            (if (or eof (plusp (length (octets in)))) 1 0)
+            (if (or eof (local-queued-p s)) 1 0)
             (if (or (local-write-shut s) broken
-                    (< (length (octets out)) +pipe-size+)) 4 0)
+                    (and (plusp (local-room s))
+                         (< (length (buffer-packets out)) 256))) 4 0)
             (if broken #x8 0)
             (if (and eof (or (local-write-shut s) broken)) #x10 0))))))
 

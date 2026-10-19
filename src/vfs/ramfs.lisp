@@ -15,6 +15,7 @@
    (data :initform (make-array 0 :element-type '(unsigned-byte 8)) :accessor node-data)
    (size :initform 0 :accessor node-size)
    (external :initform nil :accessor node-external)
+   (shared-capacity :initform 0 :accessor node-shared-capacity)
    (target :initform nil :accessor node-target)))
 
 (defmethod initialize-instance :after ((n ram-node) &key)
@@ -53,18 +54,90 @@
           (replace out (node-data n) :start2 offset)))
     out))
 
+(defvar *shared-ram-nodes* nil)
+
+(defconstant +shared-file-capacity+ (* 64 1024 1024))
+
+(defun shared-zero (n start end)
+  (when (> end start)
+    (sb-alien:alien-funcall
+     (sb-alien:extern-alien "memset"
+       (function sb-alien:system-area-pointer sb-alien:system-area-pointer
+                 sb-alien:int sb-alien:unsigned-long))
+     (sb-sys:sap+ (node-external n) start) 0 (- end start))))
+
+(defun promote-shared-data (n)
+  ;; Reserve a stable address, with physical pages allocated on demand by the
+  ;; normal VM. Mapped processes retain frames independently of this owner.
+  (unless (and (typep n 'ram-node) (eq (vnode-type n) :vreg))
+    (fail :eopnotsupp))
+  (when (> (node-size n) +shared-file-capacity+) (fail :efbig))
+  (when (zerop (node-shared-capacity n))
+    (let ((sap (sb-posix:mmap (sb-sys:int-sap 0) +shared-file-capacity+
+                             (logior sb-posix:prot-read sb-posix:prot-write)
+                             (logior sb-posix:map-private sb-posix:map-anon)
+                             -1 0)))
+      (if (node-external n)
+          (sb-kernel:system-area-ub8-copy (node-external n) 0 sap 0 (node-size n))
+          (let ((data (node-data n)))
+            (sb-sys:with-pinned-objects (data)
+              (sb-kernel:system-area-ub8-copy (sb-sys:vector-sap data) 0
+                                             sap 0 (node-size n)))))
+      (setf (node-external n) sap
+            (node-data n) (make-array 0 :element-type '(unsigned-byte 8))
+            (node-shared-capacity n) +shared-file-capacity+)
+      (setf *shared-ram-nodes*
+            (delete-if-not #'sb-ext:weak-pointer-value *shared-ram-nodes*))
+      (push (sb-ext:make-weak-pointer n) *shared-ram-nodes*)
+      (sb-ext:finalize n (lambda () (sb-posix:munmap sap +shared-file-capacity+))
+                       :dont-save t)))
+  (node-external n))
+
+(defun save-shared-ram-data ()
+  ;; Core files retain file bytes, never an address into the previous VM.
+  ;; Keep old frames alive until this saving process exits: outstanding views
+  ;; may still refer to them. Live cross-world mappings are not checkpointed.
+  (dolist (weak *shared-ram-nodes*)
+    (let ((node (sb-ext:weak-pointer-value weak)))
+      (when node
+        (let ((data (vnop-read node 0 (node-size node))))
+          (sb-ext:cancel-finalization node)
+          (setf (node-data node) data (node-external node) nil
+                (node-shared-capacity node) 0)))))
+  (setf *shared-ram-nodes* nil))
+
+(pushnew 'save-shared-ram-data sb-ext:*save-hooks*)
+
 (defmethod vnop-write ((n ram-node) offset octets)
   (let ((end (+ offset (length octets))))
-    (own-data n (max end (node-size n)))
-    (when (> offset (node-size n)) (fill (node-data n) 0 :start (node-size n) :end offset))
-    (replace (node-data n) octets :start1 offset)
+    (if (plusp (node-shared-capacity n))
+        (progn
+          (when (> end (node-shared-capacity n)) (fail :efbig))
+          (shared-zero n (node-size n) offset)
+          (let ((data (coerce octets '(simple-array (unsigned-byte 8) (*)))))
+            (sb-sys:with-pinned-objects (data)
+              (sb-kernel:system-area-ub8-copy (sb-sys:vector-sap data) 0
+                                             (node-external n) offset (length data)))))
+        (progn
+          (own-data n (max end (node-size n)))
+          (when (> offset (node-size n))
+            (fill (node-data n) 0 :start (node-size n) :end offset))
+          (replace (node-data n) octets :start1 offset)))
     (setf (node-size n) (max end (node-size n)) (node-mtime n) (now))
     (length octets)))
 
 (defmethod vnop-truncate ((n ram-node) size)
   (unless (eq (vnode-type n) :vreg) (fail :einval))
-  (own-data n (max size (node-size n)))
-  (when (> size (node-size n)) (fill (node-data n) 0 :start (node-size n) :end size))
+  (if (plusp (node-shared-capacity n))
+      (progn
+        ;; Shrinking would require revocation and SIGBUS for existing views.
+        (when (< size (node-size n)) (fail :ebusy))
+        (when (> size (node-shared-capacity n)) (fail :efbig))
+        (shared-zero n (node-size n) size))
+      (progn
+        (own-data n (max size (node-size n)))
+        (when (> size (node-size n))
+          (fill (node-data n) 0 :start (node-size n) :end size))))
   (setf (node-size n) size))
 
 (defmethod vnop-getattr ((n ram-node))

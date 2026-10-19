@@ -21,15 +21,25 @@ int main(void) {
                 poll(&p, 1, 1000) == 1 && (p.revents & POLLIN) &&
                 read(pair[1], &value, 1) == 1 && value == 'D');
     close(pair[0]); close(pair[1]);
-    int fd = open("/tmp/engine-shared", O_CREAT | O_TRUNC | O_RDWR, 0600);
+    int fd = open("/dev/shm/engine-shared", O_CREAT | O_TRUNC | O_RDWR, 0600);
     if (fd < 0 || ftruncate(fd, 4096)) return 3;
     errno = 0;
     void *map = mmap(0, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     int saved = errno;
-    printf("writable file MAP_SHARED errno=%d\n", saved);
-    ok &= check("SHARED-MAPPING-UNSUPPORTED", map == MAP_FAILED && saved == EOPNOTSUPP);
+    if (map != MAP_FAILED) *(char *)map = 'S';
+    char shared = 0;
+    ok &= check("RAM-SHARED-MAPPING", map != MAP_FAILED &&
+                pread(fd, &shared, 1, 0) == 1 && shared == 'S');
     if (map != MAP_FAILED) munmap(map, 4096);
-    close(fd);
+    close(fd); unlink("/dev/shm/engine-shared");
+    fd = open("/Users/darterfly/engine-disk-map", O_CREAT | O_TRUNC | O_RDWR, 0600);
+    if (fd < 0 || ftruncate(fd, 4096)) return 4;
+    errno = 0;
+    map = mmap(0, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    saved = errno;
+    ok &= check("DISK-SHARED-UNSUPPORTED", map == MAP_FAILED && saved == EOPNOTSUPP);
+    if (map != MAP_FAILED) munmap(map, 4096);
+    close(fd); unlink("/Users/darterfly/engine-disk-map");
     void *engine = dlopen("/usr/lib/libcef.so", RTLD_NOW);
     const char *error = dlerror();
     printf("dlopen libcef: %s\n", error ? error : "no error");

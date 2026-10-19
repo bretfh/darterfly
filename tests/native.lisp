@@ -21,7 +21,7 @@
   (with-local-process
     (is (= -22 (service-result #())))
     (is (= -38 (service-result (service-request 999 0 0 0 '(0 0 0 0) '(0 0 0 0)))))
-    (dolist (op '(1 3 4 8 10 19 35 37 48 49 50 51))
+    (dolist (op '(1 3 4 8 10 19 35 37 48 49 50 51 54 55 56))
       (is (= -22 (service-result
                   (service-request op #x1000 #x2000 1 '(0 0 0 0) '(0 0 0 0))))))
     (is (= -22 (service-result
@@ -225,3 +225,16 @@
                  (is (search (format nil "[BSD-NATIVE ~a PASS]" label) output)
                      "BSD native check ~a: ~a" label output))))
         (image:finish c 5)))))
+
+(in-suite native-bsd)
+(test shared-file-request-rejects-untrusted-layouts
+  (with-local-process
+    (dolist (n '(0 8 24 31 33 64))
+      (is (= -22 (service-result
+                   (service-request 56 3 1 0 '(0 2 0 0) (list 0 n 0 0)
+                     (make-array n :element-type '(unsigned-byte 8) :initial-element 0))))))
+    (dolist (op '(54 55))
+      (is (= -22 (service-result
+                   (service-request op 3 1 1040
+                     (if (= op 54) '(0 2 0 0) '(0 6 0 0)) '(0 8 0 0)
+                     (make-array 8 :element-type '(unsigned-byte 8) :initial-element 0))))))))

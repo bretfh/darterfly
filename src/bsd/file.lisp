@@ -13,6 +13,9 @@
 (defgeneric file-read (file count))
 (defgeneric file-write (file octets))
 (defgeneric file-close (file))
+(defgeneric descriptor-released (file)
+  (:method ((file file)) nil))
+
 (defgeneric file-access (file)
   (:method ((file file)) 2))
 
@@ -40,6 +43,7 @@
     (setf (aref (proc-fds proc) fd) nil)
     (when (zerop (decf (file-refs file)))
       (file-close file))
+    (descriptor-released file)
     (changed)))
 
 (defun close (fd)
@@ -81,7 +85,13 @@
   (syscall (file-write (fd-file fd) octets)))
 
 (defclass pipe-buffer ()
-  ((octets :initform (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0)
+  ((controls :initform nil :accessor buffer-controls)
+   (owner :initform nil :accessor buffer-owner)
+   (read-position :initform 0 :accessor buffer-read-position)
+   (write-position :initform 0 :accessor buffer-write-position)
+   (packets :initform nil :accessor buffer-packets)
+   (packet-bytes :initform 0 :accessor buffer-packet-bytes)
+   (octets :initform (make-array 0 :element-type '(unsigned-byte 8) :adjustable t :fill-pointer 0)
            :accessor octets)
    (readers :initform 1 :accessor readers)
    (writers :initform 1 :accessor writers)))

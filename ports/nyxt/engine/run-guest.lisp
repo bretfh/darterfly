@@ -31,11 +31,11 @@
              (with-open-file (s (darterfly-file "build/cef-engine/guest.log")
                                 :direction :output :if-exists :supersede)
                (write-string output s))
-             (dolist (label '("COMPILE" "SOCKET-POLL" "SHARED-MAPPING-UNSUPPORTED"
+             (dolist (label '("COMPILE" "SOCKET-POLL" "RAM-SHARED-MAPPING" "DISK-SHARED-UNSUPPORTED"
                               "DYNAMIC-LOADING-UNSUPPORTED" "MEMFD-SHIM-UNSUPPORTED"
                               "NATIVE-RUNTIME" "HOST-EXE-REJECTED" "CEF-REJECTED"
                               "CLEAN" "SUPERVISOR-ALIVE"))
                (unless (search (format nil "[ENGINE-BOUNDARY ~a PASS]" label) output)
                  (error "Missing boundary result ~a; see build/cef-engine/guest.log" label)))
-             (format t "~&Engine boundary probe: 10/10 observations; engine not running.~%")))
+             (format t "~&Engine boundary probe: 11/11 observations; engine not running.~%")))
       (image:finish c 5))))

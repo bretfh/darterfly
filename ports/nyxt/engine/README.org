@@ -12,15 +12,17 @@ for this fixture. The harness uses CEF's C API; Nyxt is unchanged.
 
 CEF does not run inside Darterfly. In QEMU, a small C probe compiled in
 Darterfly runs as a native process using shared libsa. It verifies working
-Unix stream sockets and polling, then reports the missing dynamic loader
-and writable shared-file mappings. Actual host executable and engine
-files are rejected with ENOEXEC. No child process remains published.
+Unix sockets and polling. The subsequent [[file:IPC.org][browser IPC milestone]] adds
+SCM_RIGHTS and coherent RAM-file MAP_SHARED across isolated worlds. The
+dynamic loader is still missing. Actual host executable and engine files
+are rejected with ENOEXEC. No child process remains published.
 
 The result narrows the problem to engine/platform integration. It does
 not establish the effort required for a complete engine port. There is
 no defensible completion percentage or calendar estimate from this test.
 
-See [[file:validation.json][recorded binary, trace and guest evidence]]. The existing
+See [[file:validation.json][original binary, trace and guest evidence]] and
+[[file:ipc-validation.json][the later IPC qualification]]. The existing
 [[file:../SBOM.org][Guix SBOM]] remains the dependency inventory. This experiment measures
 runtime behavior; it does not replace the SBOM with a guessed package list.
 
@@ -121,8 +123,8 @@ private profiles and cleans up only its own process group.
 | Dynamic ELF loading | Host harness has PT_INTERP/PT_DYNAMIC; native loader rejects it | Static tools working does not imply a DSO loader exists |
 | Library loading | Native dlopen of the staged libcef.so returns an explicit error | No general dynamic library implementation yet |
 | Engine image size | libcef.so is 251901696 bytes; largest PT_LOAD is 194891848 bytes | Both exceed present 128 MiB native limits |
-| Shared memory | Guest writable file MAP_SHARED returns EOPNOTSUPP (95) | Private snapshots cannot substitute for coherent shared pages |
-| Descriptor passing | Host SCM_RIGHTS observed; no libsa sendmsg/recvmsg implementation found | Ordinary socketpair/poll support is insufficient |
+| Shared memory | RAM-file MAP_SHARED now passes cross-world visibility/protection tests | Persistent disk mappings and shrink/revocation remain unsupported |
+| Descriptor passing | Guest sendmsg/recvmsg passes files and sockets over stream and sequenced-packet sockets | Qualify the actual engine protocols next |
 | Linux syscall interface | The libsa syscall(319) shim returns ENOSYS (38) | This is not evidence of a general kernel Linux ABI |
 | Failure lifecycle | Both actual images return ENOEXEC, process counts unchanged | Supervisor survives rejected engine attempts |
 
@@ -185,12 +187,11 @@ supported toolchain. Produce a target configuration/link attempt and a
 patch inventory. Keep necessary compatibility at the platform boundary;
 keep Nyxt and its existing CEF backend unchanged where possible.
 
-The next independent OS proof should share writable pages across two
-isolated native worlds and transfer the corresponding descriptor through
-a Unix socket. It must verify visibility, permissions, descriptor
-ownership and teardown. Follow with a real DSO/TLS loading fixture using
-the chosen runtime architecture. A loader that only accepts libcef.so's
-header is not an engine milestone.
+The [[file:IPC.org][cross-world shared-page and descriptor proof]] now passes in QEMU,
+including visibility, permissions, ownership and teardown. The target
+build/link and runtime-ABI decision remains open. Follow it with a real
+DSO/TLS loading fixture using that architecture. A loader that only accepts
+libcef.so's header is not an engine milestone.
 
 The next engine acceptance remains the same five pixel/input/shutdown
 checks running inside Darterfly. A host engine streaming pixels into the
