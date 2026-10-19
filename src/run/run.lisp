@@ -1,7 +1,7 @@
 (defpackage #:darterfly/run
   (:use #:cl)
   (:export #:run-core #:run-world #:start-world #:finish-world #:stop-world #:world-eval #:attach #:world-id #:world-name
-           #:new-world #:list-worlds #:find-world #:save-world #:restart-world #:checkpoint-world #:restore-world #:restore-worlds #:*worlds-dir* #:collect #:tree-files #:in-run-p #:in-world-p))
+           #:new-world #:list-worlds #:find-world #:save-world #:restart-world #:checkpoint-world #:restore-world #:restore-worlds #:*worlds-dir* #:collect #:tree-files #:in-run-p #:in-world-p #:no-room #:memory-use #:*system-reserve-mb*))
 (in-package #:darterfly/run)
 
 (defconstant +magic+ #x4e555248434e4946)
@@ -212,7 +212,7 @@
                                           (printed (with-output-to-string (*standard-output*)
                                                      (setf values (multiple-value-list (eval (read-from-string text)))))))
                                      (format nil \"~a~{~s~^ ~}\" printed values))
-                                 (error (e)
+                                 (serious-condition (e)
                                    (format nil \"error: ~a~%~a\" e
                                            (with-output-to-string (s) (sb-debug:print-backtrace :stream s :count 15))))))
                            :external-format :utf-8)))
@@ -232,7 +232,7 @@
   (let ((at (or (position "--eval" argv :test #'string=) (position "--quit" argv :test #'string=) (length argv))))
     (append (subseq argv 0 at) (list "--eval" *attach-prelude*) (subseq argv at))))
 
-(defstruct (world (:constructor make-world)) id inward thread name core stopping restarts command cwd disk base every)
+(defstruct (world (:constructor make-world)) id inward thread name core stopping restarts command cwd disk base every memory)
 
 (defvar *worlds* nil)
 (defvar *worlds-lock* (sb-thread:make-mutex :name "worlds"))
@@ -254,9 +254,49 @@
 
 (defun failed-p (result) (not (eql 0 (getf result :exit))))
 
-(defun new-world (name &key (core "/usr/lib/sbcl/sbcl.core") (cwd "/") (evals (list "(loop (sleep 60))")) restart (restarts nil) checkpoint)
+(defparameter *system-reserve-mb* 256)
+
+(define-condition no-room (error)
+  ((wanted :initarg :wanted :reader no-room-wanted)
+   (free :initarg :free :reader no-room-free)
+   (promised :initarg :promised :reader no-room-promised)
+   (using :initarg :using :reader no-room-using))
+  (:report (lambda (c s)
+             (format s "no room for a world of ~d MB: ~d MB free, ~d MB promised to running worlds, ~d MB kept for the system~@[; in use: ~{~a~^, ~}~]"
+                     (no-room-wanted c) (no-room-free c) (no-room-promised c) *system-reserve-mb*
+                     (no-room-using c)))))
+
+(defun resident-mb (id)
+  (or (getf (find id (darterfly/worlds:worlds) :key (lambda (w) (getf w :id))) :resident-mb) 0))
+
+(defun memory-use ()
+  (sb-thread:with-mutex (*worlds-lock*)
+    (loop for w in *worlds*
+          collect (list :name (world-name w)
+                        :memory (world-memory w)
+                        :resident (resident-mb (world-id w))))))
+
+(defun room-for (memory)
+  (let* ((free (round (* 4096 (darterfly/worlds:free-pages)) (* 1024 1024)))
+         (use (memory-use))
+         (promised (loop for w in use
+                         for budget = (getf w :memory)
+                         when budget sum (max 0 (- budget (getf w :resident))))))
+    (when (> (+ memory promised *system-reserve-mb*) free)
+      (error 'no-room
+             :wanted memory :free free :promised promised
+             :using (loop for w in use
+                          collect (format nil "~a ~d MB~@[ of ~d~]" (getf w :name) (getf w :resident) (getf w :memory)))))
+    t))
+
+(defun with-memory (argv memory)
+  (if memory
+      (list* (first argv) "--dynamic-space-size" (format nil "~dMB" memory) (rest argv))
+      argv))
+
+(defun new-world (name &key (core "/usr/lib/sbcl/sbcl.core") (cwd "/") (evals (list "(loop (sleep 60))")) restart (restarts nil) checkpoint memory)
   (when (find-world name) (error "a world named ~a is already running" name))
-  (let ((world (start-world core (apply #'world-argv evals) :cwd cwd :disk t :attach t :name name)))
+  (let ((world (start-world core (apply #'world-argv evals) :cwd cwd :disk t :attach t :name name :memory memory)))
     (setf (world-restarts world) restarts)
     (when checkpoint
       (setf (world-every world) checkpoint)
@@ -269,7 +309,7 @@
                (recent (remove-if (lambda (time) (< time (- (get-universal-time) 60))) restarts)))
            (when (and (not (world-stopping world)) (failed-p result) (< (length recent) 5))
              (sleep (if recent 2 0))
-             (new-world name :core core :cwd cwd :evals evals :restart restart
+             (new-world name :core core :cwd cwd :evals evals :restart restart :memory memory
                              :restarts (cons (get-universal-time) recent)))))
        :name (format nil "supervise ~a" name)))
     world))
@@ -298,8 +338,9 @@
     (push base *bases*)
     base))
 
-(defun start-world (core argv &key files cwd stdin disk timeout attach name)
-  (let* ((argv (if attach (with-prelude argv) argv))
+(defun start-world (core argv &key files cwd stdin disk timeout attach name memory)
+  (when memory (room-for memory))
+  (let* ((argv (with-memory (if attach (with-prelude argv) argv) memory))
          (parts (record-parts core argv files cwd stdin nil))
          (base (free-base))
          (port (darterfly/worlds:make-port)))
@@ -307,12 +348,12 @@
       (write-record base size parts offsets back-at 0 0 1 disk)
       (multiple-value-bind (id inward) (darterfly/worlds:spawn-record base size port)
         (launch-world id inward port base size disk timeout
-                      :name name :core core :argv argv :cwd cwd)))))
+                      :name name :core core :argv argv :cwd cwd :memory memory)))))
 
-(defun launch-world (id inward port base size disk timeout &key name core argv cwd)
+(defun launch-world (id inward port base size disk timeout &key name core argv cwd memory)
   (let* ((proc (and disk (darterfly/bsd:make-world-proc (or cwd "/"))))
          (world (make-world :id id :inward inward :name (or name (format nil "world ~d" id)) :core core
-                            :command argv :cwd cwd :disk disk :base base)))
+                            :command argv :cwd cwd :disk disk :base base :memory memory)))
     (sb-thread:with-mutex (*worlds-lock*) (push world *worlds*))
     (setf (world-thread world)
           (sb-thread:make-thread

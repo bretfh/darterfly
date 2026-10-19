@@ -1741,6 +1741,33 @@
                (is (search "is still silent; stopping it" (image:transcript c)) "and the kernel says why"))
           (image:finish c 5))))))
 
+(test a-world-gets-the-memory-it-asks-for-or-a-plain-no
+  (let ((disk (merge-pathnames "world-memory.img" (darterfly-file "build/"))))
+    (uiop:delete-file-if-exists disk)
+    (darterfly/image::root-disk disk (* 256 1048576)
+                                (append (darterfly/image::root-entries)
+                                        (list (list :file "usr/lib/sbcl/sbcl.core" (image::octets (darterfly-file "build/sbcl-mt/output/sbcl.core"))))))
+    (let ((c (image:bare-console :root disk)))
+      (flet ((ask (form &optional (timeout 120))
+               (image:send c form)
+               (image:expect c (format nil "~%* ") :timeout timeout)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 90)
+               (ask "(defparameter *small* (darterfly/run:new-world \"small\" :memory 256))")
+               (ask "(loop :repeat 100 :until (ignore-errors (darterfly/run:world-eval *small* \"(+ 1 2)\")) :do (sleep 0.1))")
+               (is (search "\"268435456\"" (ask "(darterfly/run:world-eval *small* \"(sb-ext:dynamic-space-size)\")"))
+                   "the world's heap is the size it asked for")
+               (let ((use (ask "(darterfly/run:memory-use)")))
+                 (is (search ":NAME \"small\" :MEMORY 256 :RESIDENT" use) "its budget and what it uses are known: ~a" use))
+               (let ((greedy (ask "(darterfly/run:world-eval *small* \"(length (make-array (* 400 1024 1024) :element-type '(unsigned-byte 8)))\")" 300)))
+                 (is (search "error" greedy) "asking for more than its budget fails inside the world: ~a" greedy))
+               (is (search "3" (ask "(+ 1 2)")) "and the system carries on")
+               (let ((refused (ask "(handler-case (darterfly/run:new-world \"huge\" :memory 8000) (darterfly/run:no-room (e) (princ-to-string e)))")))
+                 (is (search "no room for a world of 8000 MB" refused) "a world that doesn't fit gets a plain no: ~a" refused)
+                 (is (search "small" refused) "which says what is using the memory")))
+          (image:finish c 5))))))
+
 (test a-world-uses-the-network
   (let ((disk (merge-pathnames "world-net.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists disk)

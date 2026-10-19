@@ -129,7 +129,7 @@
         (t :running)))
 
 (defun worlds (&optional (most 64))
-  (let* ((fields 5)
+  (let* ((fields 6)
          (buffer (make-array (* fields most) :element-type '(unsigned-byte 64)))
          (count (sb-sys:with-pinned-objects (buffer)
                   (machdep 75 (sb-sys:sap-int (sb-sys:vector-sap buffer)) most)))
@@ -140,7 +140,8 @@
                         :state (world-flags-state (aref buffer (+ at 1)))
                         :rights (rights-named (aref buffer (+ at 2)))
                         :threads (aref buffer (+ at 3))
-                        :cpu-seconds (float (/ (aref buffer (+ at 4)) hz))))))
+                        :cpu-seconds (float (/ (aref buffer (+ at 4)) hz))
+                        :resident-mb (round (* 4096 (aref buffer (+ at 5))) (* 1024 1024))))))
 
 (defun pause (world) (machdep 53 world))
 
