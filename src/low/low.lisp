@@ -1,7 +1,7 @@
 (defpackage #:darterfly/low
   (:use #:cl #:darterfly/asm)
   (:shadow #:compile)
-  (:export #:define-low #:define-global #:low-object #:inb #:inw #:outb #:ref #:mem #:pause #:result #:while
+  (:export #:define-low #:define-global #:low-object #:inb #:inw #:outb #:inl #:outl #:ref #:mem #:pause #:result #:while
            #:package-object #:shl #:shr #:rdmsr #:wrmsr #:wbinvd #:cli #:sti #:hlt #:monitor #:sti-mwait #:outw #:address
            #:rep-movsb #:rep-stosb #:&va #:va-next #:rdtsc #:rdtscp #:trap #:trap-errno #:exchange #:fetch-add #:fs-word #:absolute #:f+ #:f- #:f* #:f/ #:f< #:f<= #:f> #:f>= #:f= #:float-of #:float-truncate #:fsqrt #:mxcsr #:set-mxcsr #:x87 #:va-next-double #:returns #:floats #:return-address
            #:invlpg #:set-cr3 #:cpuid-edx #:cpuid #:cpu-data #:fxsave #:fxrstor #:code-address #:call-pointer #:read-cr #:set-cr #:fninit #:compare-and-swap #:rdrand #:int3 #:build-date #:*build-date* #:lidt #:ltr
@@ -405,6 +405,16 @@
                   (inst mov rdx-tn rax-tn)
                   (in :word)
                   (inst movzx '(:word :dword) (reg :dword 0) (reg :word 0)))
+             (inl (compile (first args))
+                  (inst mov rdx-tn rax-tn)
+                  (in :dword)
+                  (inst mov :dword (reg :dword 0) (reg :dword 0)))
+             (outl (compile (second args))
+                   (spush rax-tn)
+                   (compile (first args))
+                   (inst mov rdx-tn rax-tn)
+                   (spop rax-tn)
+                   (out :dword))
              (outb (compile (second args))
                    (spush rax-tn)
                    (compile (first args))

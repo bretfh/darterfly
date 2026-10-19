@@ -220,7 +220,7 @@
          +right-console+)
         ((or (= n 22) (= n 23) (= n 24) (= n 65) (= n 67) (= n 68))
          +right-hardware+)
-        ((or (= n 26) (= n 27) (= n 66) (= n 73))
+        ((or (= n 26) (= n 27) (= n 66) (= n 73) (= n 79))
          +right-power+)
         ((or (= n 44) (= n 45) (= n 46) (= n 48) (= n 53) (= n 54) (= n 55) (= n 56) (= n 57)
              (= n 58) (= n 59) (= n 60) (= n 62) (= n 63) (= n 64) (= n 74))
@@ -271,6 +271,7 @@
       ((= n 72) (ok regs (log-previous-read a b)))
       ((= n 73) (panic "requested by world 0
 "))
+      ((= n 79) (ok regs (want-world-0-restart "asked to")))
       ((= n 67) (ok regs (if (logand b #x200)
                              (if (logand b #x100) (progn (outw a (logand (shr b 16) #xFFFF)) 0) (inw a))
                              (if (logand b #x100) (progn (outb a (logand b #xFF)) 0) (inb a)))))
