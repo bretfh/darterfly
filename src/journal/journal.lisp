@@ -24,6 +24,18 @@
 (defun note-save ()
   (append-record (list :saved (get-universal-time))))
 
+(defun unsave ()
+  (sb-thread:with-mutex (*journal-lock*)
+    (let* ((records (records))
+           (last (position :saved records :key #'first :from-end t)))
+      (when last
+        (with-open-file (s *journal* :direction :output :if-exists :supersede)
+          (with-standard-io-syntax
+            (let ((*print-readably* nil))
+              (loop for r in records for i from 0
+                    unless (= i last) do (prin1 r s) (terpri s)))))
+        t))))
+
 (defun records ()
   (with-open-file (s *journal* :if-does-not-exist nil)
     (when s

@@ -73,10 +73,29 @@
     (loop :repeat 200 :while (others) :do (sleep 0.05))
     (others)))
 
+(defparameter *pending-generation* "/Library/Settings/pending-generation")
+
+(defvar *installing* (sb-thread:make-mutex :name "installing"))
+
+(defun save-failed (condition)
+  (format *error-output* "~&save failed: ~a~%save: the world carries on unsaved~%" condition)
+  (handler-case (delete-file *pending-generation*)
+    (error (e) (format *error-output* "~&save: pending generation: ~a~%" e)))
+  (handler-case (darterfly/journal::unsave)
+    (error (e) (format *error-output* "~&save: journal: ~a~%" e)))
+  (handler-case (darterfly/power:flush-disks)
+    (error (e) (format *error-output* "~&save: flush: ~a~%" e)))
+  (unless (typep condition 'sb-impl::save-error)
+    (sb-impl::call-hooks "save" sb-ext:*save-hooks* :on-error :warn)
+    (sb-impl::call-hooks "initialization" sb-ext:*init-hooks* :on-error :warn)))
+
 (defun save ()
-  (let ((left (stop-threads)))
-    (when left (error "threads still running: ~a" left)))
-  (sb-ext:save-lisp-and-die "/System/Library/Kernels/saved.core"))
+  (handler-case
+      (progn
+        (let ((left (stop-threads)))
+          (when left (error "threads still running: ~a" left)))
+        (sb-ext:save-lisp-and-die "/System/Library/Kernels/saved.core"))
+    (error (e) (save-failed e) nil)))
 
 (define-condition bad-world (error)
   ((errors :initarg :errors :reader bad-world-errors))
@@ -102,12 +121,11 @@
 
 (defparameter *stable-after* 90)
 
-(defparameter *pending-generation* "/Library/Settings/pending-generation")
-
 (defun save-generation (&key kernel loader boot-conf restart then)
   (let ((errors (heap-errors)))
     (when (null errors) (format *error-output* "~&save: this runtime can't check the heap; saving unchecked~%"))
     (when (and errors (plusp errors)) (error 'bad-world :errors errors)))
+  (sb-thread:with-mutex (*installing*))
   (darterfly/journal:note-save)
   (ensure-directories-exist *pending-generation*)
   (with-open-file (s *pending-generation* :direction :output :if-exists :supersede)
@@ -124,6 +142,10 @@
       (sb-thread:interrupt-thread (sb-thread:main-thread) #'save)))
 
 (defun install-saved-generation ()
+  (sb-thread:with-mutex (*installing*)
+    (install-pending)))
+
+(defun install-pending ()
   (when (probe-file *pending-generation*)
     (let ((pending (ignore-errors (with-open-file (s *pending-generation*)
                                     (with-standard-io-syntax (let ((*read-eval* nil)) (read s)))))))
