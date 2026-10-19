@@ -213,7 +213,7 @@
 
 (define-low machdep-right (n)
   (cond ((or (= n 3) (= n 4) (= n 6) (= n 9) (= n 10) (= n 12) (= n 13) (= n 14) (= n 16) (= n 17)
-             (= n 30) (= n 40) (= n 41) (= n 42) (= n 43) (= n 49) (= n 50) (= n 51) (= n 61))
+             (= n 30) (= n 40) (= n 41) (= n 42) (= n 43) (= n 49) (= n 50) (= n 51) (= n 52) (= n 61))
          0)
         ((or (= n 5) (= n 11) (= n 21))
          +right-console+)
@@ -226,7 +226,7 @@
          +right-worlds+)
         ((or (= n 25) (= n 28) (= n 29) (= n 47) (= n 75))
          +right-stats+)
-        ((or (= n 7) (= n 8) (= n 19) (= n 52))
+        ((or (= n 7) (= n 8) (= n 19))
          +right-boot+)
         ((or (= n 69) (= n 70) (= n 71) (= n 72))
          +right-log+)

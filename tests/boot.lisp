@@ -1707,6 +1707,40 @@
                  (is (search "\"-1\"" seen) "and still nothing else, such as resetting the machine: ~a" seen)))
           (image:finish c 5))))))
 
+(test a-silent-world-is-stopped-and-the-rest-keep-going
+  (let ((disk (merge-pathnames "world-watchdog.img" (darterfly-file "build/")))
+        (beat "(sb-alien:alien-funcall (sb-alien:extern-alien \"__machdep5\" (function sb-alien:long sb-alien:long sb-alien:unsigned-long sb-alien:unsigned-long sb-alien:unsigned-long sb-alien:unsigned-long sb-alien:unsigned-long)) 52 2 0 0 0 0)"))
+    (uiop:delete-file-if-exists disk)
+    (darterfly/image::root-disk disk (* 256 1048576)
+                                (append (darterfly/image::root-entries)
+                                        (list (list :file "usr/lib/sbcl/sbcl.core" (image::octets (darterfly-file "build/sbcl-mt/output/sbcl.core"))))))
+    (let ((c (image:bare-console :root disk)))
+      (flet ((ask (form &optional (timeout 120))
+               (image:send c form)
+               (image:expect c (format nil "~%* ") :timeout timeout))
+             (start (name)
+               (format nil "(defparameter ~a (darterfly/run:start-world \"/usr/lib/sbcl/sbcl.core\" '~s :cwd \"/\" :attach t))"
+                       name (list "/System/Library/Kernels/kernel" "--core" "/System/Library/Kernels/darterfly.core"
+                                  "--no-sysinit" "--no-userinit" "--disable-debugger" "--eval" "(loop (sleep 1))")))
+             (state (name)
+               (format nil "(getf (find (darterfly/run:world-id ~a) (darterfly/worlds:worlds) :key (lambda (w) (getf w :id))) :state)" name)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 90)
+               (ask (start "*steady*"))
+               (ask (start "*silent*"))
+               (dolist (w '("*steady*" "*silent*"))
+                 (ask (format nil "(loop :repeat 100 :until (ignore-errors (darterfly/run:world-eval ~a \"(+ 1 2)\")) :do (sleep 0.1))" w)))
+               (ask (format nil "(darterfly/run:world-eval *steady* ~s)"
+                            (format nil "(progn (sb-thread:make-thread (lambda () (loop ~a (sleep 0.5)))) :beating)" beat)))
+               (ask (format nil "(darterfly/run:world-eval *silent* ~s)" beat))
+               (sleep 8)
+               (is (search ":RUNNING" (ask (state "*steady*"))) "a world that checks in keeps running")
+               (let ((silent (ask (state "*silent*"))))
+                 (is (or (search ":STOPPED" silent) (search "NIL" silent)) "a world that stops checking in is stopped: ~a" silent))
+               (is (search "is still silent; stopping it" (image:transcript c)) "and the kernel says why"))
+          (image:finish c 5))))))
+
 (test a-world-uses-the-network
   (let ((disk (merge-pathnames "world-net.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists disk)
