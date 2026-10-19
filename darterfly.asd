@@ -222,12 +222,6 @@
   :pathname "src/run/"
   :components ((:file "run")))
 
-(asdf:defsystem #:darterfly/supervise
-  :description "Keeps worlds running"
-  :depends-on (#:darterfly/run #:darterfly/worlds)
-  :pathname "src/supervise/"
-  :components ((:file "supervise")))
-
 (asdf:defsystem #:darterfly/generation
   :description "Builds a generation"
   :depends-on (#:uiop #:darterfly/vfs #:darterfly/run #:darterfly/cc #:darterfly/build #:darterfly/install #:darterfly/boot)
@@ -333,7 +327,7 @@
 
 (asdf:defsystem #:darterfly
   :description "A live, hackable OS on SBCL"
-  :depends-on (#:darterfly/mach #:darterfly/server #:darterfly/layer #:darterfly/bsd #:darterfly/init #:darterfly/shell #:darterfly/io #:darterfly/text #:darterfly/edit #:darterfly/imageio #:darterfly/kit #:darterfly/stats #:darterfly/windowserver #:darterfly/bench #:darterfly/apps #:darterfly/devices #:darterfly/vfs #:darterfly/apfs #:darterfly/fat #:darterfly/install #:darterfly/net #:darterfly/nrepl #:darterfly/run #:darterfly/generation #:darterfly/kernel #:darterfly/image #:darterfly/crypto #:darterfly/wifi #:darterfly/journal #:darterfly/worlds #:darterfly/storage #:darterfly/log #:darterfly/start #:darterfly/health #:darterfly/supervise)
+  :depends-on (#:darterfly/mach #:darterfly/server #:darterfly/layer #:darterfly/bsd #:darterfly/init #:darterfly/shell #:darterfly/io #:darterfly/text #:darterfly/edit #:darterfly/imageio #:darterfly/kit #:darterfly/stats #:darterfly/windowserver #:darterfly/bench #:darterfly/apps #:darterfly/devices #:darterfly/vfs #:darterfly/apfs #:darterfly/fat #:darterfly/install #:darterfly/net #:darterfly/nrepl #:darterfly/run #:darterfly/generation #:darterfly/kernel #:darterfly/image #:darterfly/crypto #:darterfly/wifi #:darterfly/journal #:darterfly/worlds #:darterfly/storage #:darterfly/log #:darterfly/start #:darterfly/health)
   :in-order-to ((asdf:test-op (asdf:test-op #:darterfly/test))))
 
 (asdf:defsystem #:darterfly/test
