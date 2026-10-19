@@ -1,7 +1,7 @@
 (defpackage #:darterfly/run
   (:use #:cl)
   (:export #:run-core #:run-world #:start-world #:finish-world #:stop-world #:world-eval #:attach #:world-id #:world-name
-           #:new-world #:list-worlds #:find-world #:save-world #:restart-world #:checkpoint-world #:restore-world #:restore-worlds #:*worlds-dir* #:collect #:tree-files #:in-run-p #:in-world-p #:no-room #:no-answer #:memory-use #:*system-reserve-mb*))
+           #:new-world #:list-worlds #:find-world #:save-world #:restart-world #:checkpoint-world #:restore-world #:restore-worlds #:*worlds-dir* #:collect #:tree-files #:in-run-p #:in-world-p #:no-room #:no-answer #:memory-use #:*system-reserve-mb* #:*answer-within*))
 (in-package #:darterfly/run)
 
 (defconstant +magic+ #x4e555248434e4946)
@@ -302,7 +302,7 @@
     world))
 
 (defun save-world (world path)
-  (world-eval world (concatenate 'string ":save " path))
+  (world-eval world (concatenate 'string ":save " path) :timeout nil)
   (finish-world world)
   (and (probe-file path) path))
 
@@ -456,7 +456,9 @@
   (:report (lambda (c s)
              (format s "world ~d didn't answer in ~a s" (no-answer-world c) (no-answer-seconds c)))))
 
-(defun world-eval (world form &key timeout)
+(defparameter *answer-within* 60)
+
+(defun world-eval (world form &key (timeout *answer-within*))
   (when (world-paused-p world)
     (error "world ~d is paused" (world-id world)))
   (let ((text (if (stringp form) form (prin1-to-string form))))
@@ -476,7 +478,7 @@
     (let ((line (read-line input nil)))
       (when (or (null line) (string= (string-trim " " line) ":q")) (return))
       (unless (string= (string-trim " " line) "")
-        (format output "~a~%" (handler-case (world-eval world line) (error (e) (format nil "world ~d: ~a" (world-id world) e))))))))
+        (format output "~a~%" (handler-case (world-eval world line :timeout nil) (error (e) (format nil "world ~d: ~a" (world-id world) e))))))))
 
 (defun in-world-p ()
   (/= 0 (libsa "__libsa_in_world" sb-alien:int)))
