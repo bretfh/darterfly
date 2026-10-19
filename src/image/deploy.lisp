@@ -44,7 +44,7 @@
 (defun device-log (host &key (lines 100) (nrepl-port 4011))
   (device-eval host (format nil "(progn (write-string (darterfly/log:tail ~d)) (values))" lines) :timeout 60 :nrepl-port nrepl-port))
 
-(defparameter *receiver-sources* '("src/power/power.lisp" "src/install/deploy.lisp"))
+(defparameter *receiver-sources* '("src/power/power.lisp" "src/install/install.lisp" "src/install/deploy.lisp"))
 
 (defun receiver-code ()
   (format nil "(progn ~{(with-input-from-string (s ~s) (let ((*package* (find-package \"DARTERFLY/INSTALL\"))) (loop for f = (read s nil s) until (eq f s) do (eval f)))) ~})"
