@@ -188,4 +188,15 @@
   (with-timeouts-that-drop-the-mutex
     (is (null (darterfly/devices:wait-for-interrupt (list darterfly/devices::+input-vector+) 0.2)) "an interrupt wait times out cleanly")
     (let ((darterfly/net:*interface* (darterfly/net::make-interface)))
-      (is (null (darterfly/net:udp-receive (darterfly/net:udp-bind 40999) :timeout 0.2)) "and so does a udp receive"))))
+      (is (null (darterfly/net:udp-receive (darterfly/net:udp-bind 40999) :timeout 0.2)) "and so does a udp receive"))
+    (let ((darterfly/net:*interface* (darterfly/net::make-interface :device (make-instance 'captured-device) :mac +peer-mac+
+                                                                    :ip (darterfly/net:ip-address "10.0.2.15") :prefix 24
+                                                                    :gateway (darterfly/net:ip-address "10.0.2.2"))))
+      (setf (gethash (darterfly/net:ip-address "10.0.2.2") (darterfly/net::interface-arp darterfly/net:*interface*)) +peer-mac+)
+      (is (search "no answer" (handler-case (progn (darterfly/net::resolve (darterfly/net:ip-address "10.0.2.77")) "answered")
+                                (darterfly/net::net-error (e) (princ-to-string e))))
+          "an address that never answers arp is unreachable")
+      (is (null (darterfly/net:ping "10.0.2.2" :timeout 0.2)) "a ping nobody answers times out")
+      (is (search "no answer" (handler-case (progn (darterfly/net::nd6-resolve (darterfly/net:ip-address "fe80::77")) "answered")
+                                (darterfly/net::net-error (e) (princ-to-string e))))
+          "and so does one that never answers neighbor discovery"))))
