@@ -211,8 +211,17 @@
           ((= n 186) (__syscall 372 0 0 0 0 0 0))
           (t (fail-with +enosys+)))))
 
+(define-low console-only (fds n)
+  (let ((i 0))
+    (while (< i n)
+      (when (= (the :u32 (__libsa_fd_console (mem :u32 (+ fds (* 8 i))))) 0)
+        (result 0))
+      (incf i))
+    1))
+
 (define-low poll (fds n (timeout :u32))
-  (when vfs (result (ret (call 50 fds n timeout 0))))
+  (when (and vfs (not (the :u32 (console-only fds n))))
+    (result (ret (call 50 fds n timeout 0))))
   (let ((second 0) (first 0) (ready 0) (count 0) (want-in 0) (want-out 0) (i 0) (console 0))
     (setf console (address first))
     (while (< i n)

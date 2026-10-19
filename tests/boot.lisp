@@ -679,6 +679,12 @@
         (image:send-keys (string #\Escape))
         (ask (format nil "(loop :repeat 300 :while (find ~s (darterfly/bsd:procs) :key (function darterfly/bsd::proc-comm) :test (function equal)) :do (sleep 0.1) :finally (return :closed))" name))))))
 
+(defun marked (c form &optional (timeout 120))
+  (image:send c (format nil "(format t \"~~&[[R ~~a]]~~%\" (substitute #\\_ #\\Newline (princ-to-string ~a)))" form))
+  (image:expect c "[[R " :timeout timeout)
+  (prog1 (image:expect c "]]" :timeout 10)
+    (image:expect c (format nil "~%* ") :timeout 30)))
+
 (defun settled (c)
   (image:send c ":sync")
   (image:expect c ":SYNC" :timeout 120)
@@ -1947,6 +1953,37 @@
         (image:*network-device* "usb-net,netdev=net0,bus=xhci.0"))
     (network-world-check "0:b.0")))
 
+(test the-network-driver-world-starts-at-boot-comes-back-and-falls-back
+  (let ((c (image:bare-console :boot-args "init")))
+    (labels ((ask (form &optional (timeout 120))
+               (image:send c form)
+               (image:expect c (format nil "~%* ") :timeout timeout))
+             (answer (form &optional (timeout 180))
+               (image:send c (format nil "(format t \"~~&[[R ~~a]]~~%\" (substitute #\\_ #\\Newline (princ-to-string ~a)))" form))
+               (image:expect c "[[R " :timeout timeout)
+               (prog1 (image:expect c "]]" :timeout 10)
+                 (image:expect c (format nil "~%* ") :timeout 30)))
+             (state ()
+               (answer "(loop :repeat 120 :for rtt := (ignore-errors (darterfly/net:ping \"10.0.2.2\")) :until rtt :do (sleep 1) :finally (return (list (type-of (darterfly/net::interface-device darterfly/net:*interface*)) (and rtt t) (getf (find-if (lambda (j) (search \"driver\" (getf j :label))) (darterfly/init:jobs)) :state))))"))
+             (stop-driver ()
+               (ask "(darterfly/worlds:stop (getf (find-if (lambda (j) (search \"driver\" (getf j :label))) (darterfly/init:jobs)) :world))")))
+      (unwind-protect
+           (progn
+             (image:expect c "init: pid 1" :timeout 120)
+             (let ((first (state)))
+               (is (search "REMOTE-NETWORK T RUNNING" first) "at boot the network controller is driven from its own world, kept by init: ~a" first))
+             (stop-driver)
+             (is (image:expect c "init: driver" :timeout 30))
+             (let ((again (state)))
+               (is (search "REMOTE-NETWORK T RUNNING" again) "when that world dies, init starts it again and the network comes back: ~a" again))
+             (stop-driver)
+             (image:expect c "running" :timeout 60)
+             (stop-driver)
+             (is (image:expect c "failed: 3 exits" :timeout 60) "a driver world that keeps dying is given up")
+             (let ((fallen (state)))
+               (is (search "VIRTIO-NETWORK T FAILED" fallen) "and the first world drives the controller itself: ~a" fallen)))
+        (image:finish c 5)))))
+
 (test a-world-uses-the-network
   (let ((disk (merge-pathnames "world-net.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists disk)
@@ -2956,6 +2993,26 @@
       (uiop:delete-directory-tree (image::results-dir (format nil "hw-~a" label)) :validate t :if-does-not-exist :ignore)
       (image:finish c 5))))
 
+(test the-network-world-sleeps-and-wakes
+  (let* ((port (free-udp-port))
+         (image:*extra-qemu* (list "-global" "ICH9-LPC.disable_s3=0"))
+         (image::*expected* '(:log :network :disk))
+         (label "vm-world-check")
+         (c (image:bare-console :boot-args "init" :forwards (list (list :tcp port 4011)))))
+    (unwind-protect
+         (progn
+           (image:expect c "init: driver" :timeout 120)
+           (image:expect c "running" :timeout 120)
+           (image:send c (format nil "(progn (loop :repeat 120 :until (ignore-errors (darterfly/net:ping \"10.0.2.2\")) :do (sleep 1)) (darterfly/nrepl:start :key ~s) :up)" (image::nrepl-key)))
+           (image:expect c ":UP" :timeout 180)
+           (let* ((out (make-string-output-stream))
+                  (ok (let ((*standard-output* out)) (image:hw "127.0.0.1" :label label :wake-after 5 :settle 60 :nrepl-port port)))
+                  (text (get-output-stream-string out)))
+             (is (eq t ok) "with the network in its own world, the check passes before and after the sleep:~%~a" text)
+             (is (search "suspend: => 1" text) "the machine slept and woke: ~a" text)))
+      (uiop:delete-directory-tree (image::results-dir (format nil "hw-~a" label)) :validate t :if-does-not-exist :ignore)
+      (image:finish c 5))))
+
 (test sound-plays-and-sleeps
   (let* ((image:*input-devices* '("virtio-keyboard-pci" "virtio-tablet-pci" "intel-hda" "hda-duplex"))
          (c (image:bare-console)))
@@ -3223,9 +3280,9 @@
                (is (search "42" (listener-text-until c "42")) "and the listener comes back with it")
                (sleep 60)
                (is (uiop:process-alive-p (image::console-process c)) "the new kernel's boot stays up")
-               (is (search "NIL" (ask "(and (probe-file darterfly/install::*pending-generation*) t)")) "nothing is left pending")
-               (is (search "\"kept\"" (ask "(with-open-file (s \"/Users/darterfly/kept\") (read-line s))")) "user files survive")
-               (is (search "T" (ask "(and (probe-file \"/usr/src/darterfly/src/install/deploy.lisp\") t)"))))
+               (is (search "NIL" (marked c "(and (probe-file darterfly/install::*pending-generation*) t)")) "nothing is left pending")
+               (is (search "kept" (marked c "(with-open-file (s \"/Users/darterfly/kept\") (read-line s))")) "user files survive")
+               (is (search "T" (marked c "(and (probe-file \"/usr/src/darterfly/src/install/deploy.lisp\") t)"))))
           (image:finish c 5))))))
 
 (test install-from-the-desktop

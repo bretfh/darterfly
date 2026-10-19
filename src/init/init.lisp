@@ -26,7 +26,9 @@
    (reason :initform nil :accessor reason)
    (exits :initform nil :accessor exits)
    (cpu :initform nil :accessor cpu)
-   (removing :initform nil :accessor removing)))
+   (removing :initform nil :accessor removing)
+   (checked-at :initform 0 :accessor checked-at)
+   (unhealthy-since :initform nil :accessor unhealthy-since)))
 
 (defclass service ()
   ((name :initarg :name :reader name)
@@ -177,7 +179,13 @@
            (note job :stopped why)
            (setf (state job) :stopped (reason job) why))
        nil)
-      (:give-up (note job :failed why) nil)
+      (:give-up
+       (note job :failed why)
+       (let ((failed (key (job-plist job) :when-failed)))
+         (when failed
+           (handler-case (funcall failed)
+             (error (e) (log-line "~a: ~a" (label job) e)))))
+       nil)
       (:restart
        (let ((delay (throttle job)))
          (note job :restarting (format nil "~a; again in ~d s" why (round delay)))
@@ -220,6 +228,12 @@
           (started job) (get-internal-real-time))
     (when (and seconds (answering world))
       (darterfly/run:world-eval world (beat-form seconds) :timeout 30))
+    (let ((after (key (job-plist job) :after-start)))
+      (when after
+        (handler-case (funcall after world)
+          (error (e)
+            (ignore-errors (darterfly/run:stop-world world))
+            (error e)))))
     world))
 
 (defun sample (job)
@@ -254,12 +268,28 @@
                          (eq (state job) :quarantined)
                          (darterfly/worlds:inspect-world id))))))
 
+(defun check-health (job)
+  (let ((healthy (key (job-plist job) :healthy))
+        (now (get-universal-time)))
+    (when (and healthy (>= (- now (checked-at job)) (key (job-plist job) :check-every 10)))
+      (setf (checked-at job) now)
+      (if (ignore-errors (funcall healthy))
+          (setf (unhealthy-since job) nil)
+          (let ((since (or (unhealthy-since job) (setf (unhealthy-since job) now))))
+            (when (>= (- now since) (key (job-plist job) :unhealthy-for 60))
+              (setf (unhealthy-since job) nil)
+              (note job :unhealthy (format nil "unhealthy for ~d s" (- now since)))
+              (darterfly/worlds:stop (darterfly/run:world-id (world job)))))))))
+
 (defun wait-for-world (job)
   (let ((thread (darterfly/run::world-thread (world job))))
+    (setf (checked-at job) (get-universal-time)
+          (unhealthy-since job) nil)
     (loop
       (let ((result (sb-thread:join-thread thread :default :running :timeout *sample-every*)))
         (unless (eq result :running)
           (return result)))
+      (check-health job)
       (when (eq (state job) :running)
         (let ((detail (sample job)))
           (when detail

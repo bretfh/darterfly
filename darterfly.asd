@@ -131,7 +131,7 @@
 
 (asdf:defsystem #:darterfly/drivers
   :description "Devices driven in their own world"
-  :depends-on (#:darterfly/devices #:darterfly/worlds #:darterfly/run)
+  :depends-on (#:darterfly/devices #:darterfly/worlds #:darterfly/run #:darterfly/init #:darterfly/net)
   :pathname "src/drivers/"
   :components ((:file "drivers")))
 
@@ -170,7 +170,7 @@
 
 (asdf:defsystem #:darterfly/start
   :description "Boot"
-  :depends-on (#:uiop #:darterfly/log #:darterfly/vfs #:darterfly/bsd #:darterfly/apfs #:darterfly/run #:darterfly/install #:darterfly/devices #:darterfly/display #:darterfly/audio #:darterfly/generation #:darterfly/net #:darterfly/wifi #:darterfly/nrepl #:darterfly/kernel #:darterfly/health #:darterfly/storage)
+  :depends-on (#:uiop #:darterfly/log #:darterfly/vfs #:darterfly/bsd #:darterfly/apfs #:darterfly/run #:darterfly/install #:darterfly/devices #:darterfly/display #:darterfly/audio #:darterfly/generation #:darterfly/net #:darterfly/wifi #:darterfly/nrepl #:darterfly/kernel #:darterfly/health #:darterfly/storage #:darterfly/drivers)
   :serial t
   :pathname "src/start/"
   :components ((:file "start")))

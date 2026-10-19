@@ -1,8 +1,8 @@
 (defpackage #:darterfly/drivers
   (:use #:cl)
   (:local-nicknames (#:devices #:darterfly/devices) (#:worlds #:darterfly/worlds) (#:run #:darterfly/run))
-  (:export #:grant-device #:attach-controller #:start-driver-world #:serve-requests
-           #:serve-network #:remote-network #:start-network-world))
+  (:export #:grant-device #:attach-controller #:serve-requests #:serve-network #:remote-network
+           #:start-network-world #:start-driver-worlds #:*in-own-world*))
 (in-package #:darterfly/drivers)
 
 (defun pci-address (node)
@@ -45,15 +45,6 @@
                              (let ((*package* (find-package :cl-user)))
                                (prin1-to-string form)))))))
 
-(defun start-driver-world (node core &key name serve)
-  (let* ((world (run:start-world core (run::world-argv "(loop (sleep 60))") :cwd "/" :disk t :attach t :name name))
-         (id (run:world-id world)))
-    (loop :repeat 300 :until (ignore-errors (run:world-eval world "t")) :do (sleep 0.1))
-    (let ((granted (grant-device id node)))
-      (multiple-value-bind (theirs ours) (worlds:port-into id)
-        (let ((started (eval-in world (list* serve theirs granted))))
-          (values world ours started))))))
-
 (defun serve-requests (port handle &key (name "requests"))
   (sb-thread:make-thread
    (lambda ()
@@ -79,6 +70,8 @@
 
 (defconstant +send+ 1)
 (defconstant +receive+ 2)
+(defconstant +suspend+ 3)
+(defconstant +wake+ 4)
 (defconstant +receive-wait+ 0.1)
 
 (defvar *nic* nil)
@@ -109,6 +102,28 @@
               (incf at (+ 2 (length frame))))
     (values out at)))
 
+(defvar *sleeper* nil)
+
+(defun sleep-devices ()
+  (let ((suspended (sb-thread:make-semaphore))
+        (woken (sb-thread:make-semaphore))
+        (done (sb-thread:make-semaphore)))
+    (setf *sleeper* (list woken done))
+    (sb-thread:make-thread (lambda ()
+                             (devices:suspend-devices)
+                             (sb-thread:signal-semaphore suspended)
+                             (sb-thread:wait-on-semaphore woken)
+                             (devices:wake-devices)
+                             (sb-thread:signal-semaphore done))
+                           :name "sleep")
+    (sb-thread:wait-on-semaphore suspended)))
+
+(defun wake-devices ()
+  (when *sleeper*
+    (destructuring-bind (woken done) (shiftf *sleeper* nil)
+      (sb-thread:signal-semaphore woken)
+      (sb-thread:wait-on-semaphore done))))
+
 (defun handle-network (request token)
   (let ((op (u64 request 0))
         (address (u64 request 8))
@@ -126,6 +141,12 @@
                  (sb-sys:with-pinned-objects (packed)
                    (worlds:copy-into token address (sb-sys:sap-int (sb-sys:vector-sap packed)) length)))
                (octets length))))
+          ((= op +suspend+)
+           (sleep-devices)
+           (octets 0))
+          ((= op +wake+)
+           (wake-devices)
+           (octets 0))
           (t (octets 0)))))
 
 (defparameter *appear-within* 30)
@@ -173,6 +194,14 @@
 
 (defmethod devices:interrupt-vector ((net remote-network)) nil)
 
+(defmethod devices:suspend ((net remote-network))
+  (worlds:call (remote-port net) (octets +suspend+ 0 0) :timeout 30)
+  t)
+
+(defmethod devices:wake ((net remote-network))
+  (worlds:call (remote-port net) (octets +wake+ 0 0) :timeout 60)
+  t)
+
 (defun watch-driver-world (world net)
   (sb-thread:make-thread
    (lambda ()
@@ -181,11 +210,67 @@
      (devices::announce :removed net))
    :name "network world"))
 
+(defun attach-network-world (world node)
+  (let ((id (run:world-id world)))
+    (loop :repeat 300 :until (ignore-errors (run:world-eval world "t")) :do (sleep 0.1))
+    (let ((granted (grant-device id node)))
+      (multiple-value-bind (theirs ours) (worlds:port-into id)
+        (let* ((mac (eval-in world (list* 'serve-network theirs granted)))
+               (net (make-instance 'remote-network :name "RemoteNetwork" :world world :port ours
+                                                   :mac (coerce mac '(vector (unsigned-byte 8))))))
+          (devices::attach net node)
+          (watch-driver-world world net)
+          (devices::announce :added net)
+          net)))))
+
 (defun start-network-world (node core &key (name "network"))
-  (multiple-value-bind (world port mac) (start-driver-world node core :name name :serve 'serve-network)
-    (let ((net (make-instance 'remote-network :name "RemoteNetwork" :world world :port port
-                                              :mac (coerce mac '(vector (unsigned-byte 8))))))
-      (devices::attach net node)
-      (watch-driver-world world net)
-      (devices::announce :added net)
-      (values world net))))
+  (let ((world (run:start-world core (run::world-argv "(loop (sleep 60))") :cwd "/" :disk t :attach t :name name)))
+    (values world (attach-network-world world node))))
+
+(defparameter *in-own-world* (list (cons #x020000 'attach-network-world)))
+
+(defparameter *driver-memory* 256)
+
+(defun attach-of (node)
+  (cdr (assoc (devices::pci-class node) *in-own-world*)))
+
+(defun own-world-p (node)
+  (and (attach-of node) t))
+
+(pushnew 'own-world-p devices::*reservations*)
+
+(defun driver-job (node)
+  (let ((attach (attach-of node)))
+    (list :label (format nil "driver ~(~a~)" (devices::pci-location node))
+          :world (list :core "/System/Library/Kernels/darterfly.core" :memory *driver-memory*)
+          :keep-alive t :throttle 2 :most-exits 3 :window 120
+          :healthy #'network-healthy-p :check-every 10 :unhealthy-for 60
+          :after-start (lambda (world) (funcall attach world node))
+          :when-failed (lambda () (drive-here node)))))
+
+(defun drive-here (node)
+  (devices:register-service node)
+  (dolist (controller (devices:find-entries 'devices:ethernet-controller node))
+    (devices::announce :added controller)))
+
+(defun network-healthy-p ()
+  (let* ((interface darterfly/net:*interface*)
+         (gateway (and interface (darterfly/net::interface-gateway interface))))
+    (or (null gateway)
+        (zerop gateway)
+        (darterfly/net:ping gateway :timeout 2)
+        (darterfly/net:ping gateway :timeout 2))))
+
+(defun init-running-p ()
+  (ignore-errors (darterfly/init:jobs)))
+
+(defun start-driver-worlds ()
+  (when (devices:boot-arg "init")
+    (loop :repeat 300 :until (init-running-p) :do (sleep 0.1)))
+  (dolist (node (devices:find-entries 'devices:pci-node))
+    (when (and (own-world-p node)
+               (not (devices::reserved-by-boot-p node))
+               (null (devices:entry-children node)))
+      (if (init-running-p)
+          (darterfly/init:submit (driver-job node))
+          (drive-here node)))))
