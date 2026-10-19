@@ -920,6 +920,24 @@
                  (is (search "gen-2" later) "with room again it installs: ~a" later)))
           (image:finish c 5))))))
 
+(test a-thread-that-runs-out-of-memory-fails-alone
+  (let ((c (image:bare-console :boot-args "init")))
+    (labels ((ask (form &optional (timeout 300))
+               (image:send c form)
+               (image:expect c (format nil "~%* ") :timeout timeout)))
+      (unwind-protect
+           (progn
+             (is (image:expect c "init: pid 1" :timeout 120))
+             (settled c)
+             (ask "(defvar cl-user::*hog* (sb-thread:make-thread (lambda () (let ((kept nil)) (handler-case (loop (push (make-array 1048576 :element-type '(unsigned-byte 8)) kept)) (storage-condition (e) (setf kept nil) (list :out-of-memory (princ-to-string e)))))) :name \"hog\"))")
+             (let ((ended (ask "(format nil \"[[~s]]\" (sb-thread:join-thread cl-user::*hog* :default :still-going :timeout 280))")))
+               (is (search "OUT-OF-MEMORY" ended) "the thread that asks for too much gets a storage condition: ~a" ended))
+             (ask "(sb-ext:gc :full t)")
+             (is (search "3" (ask "(+ 1 2)")) "the system answers after")
+             (let ((jobs (ask "(length (darterfly/init:jobs))")))
+               (is (search "6" jobs) "and init still runs its jobs: ~a" jobs)))
+        (image:finish c 5)))))
+
 (test a-failed-save-leaves-the-world-running
   (let ((esp (merge-pathnames "esp-failed-save.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists esp)
