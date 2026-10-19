@@ -744,6 +744,8 @@
                (sleep 10)
                (is (search "(T NIL)" (ask "(list darterfly/bsd:*safe* (and (find \"Listener\" (darterfly/bsd:procs) :key #'darterfly/bsd:proc-comm :test #'equal) t))"))
                    "a safe start resumes nothing")
+               (let ((tried (ask "(darterfly/install::link \"tried\")")))
+                 (is (not (search "gen-2" tried)) "and doesn't count as a try of the generation: ~a" tried))
                (image:send c "(sb-ext:exit)")
                (image:expect c "exit(0)" :timeout 120))
           (image:finish c 5))))
@@ -897,6 +899,24 @@
                (let ((seen (ask "(list :current (darterfly/install:current) :pending (and (probe-file darterfly/install::*pending-generation*) t) :lost (length (darterfly/journal:forms-since-save)))")))
                  (is (search "(:CURRENT \"gen-1\" :PENDING NIL :LOST 1)" (remove #\Newline seen))
                      "the old core isn't installed as a new generation, and the journal still holds the lost form: ~a" seen)))
+          (image:finish c 5))))))
+
+(test a-generation-is-good-only-when-it-is-healthy
+  (let ((esp (merge-pathnames "esp-healthy.img" (darterfly-file "build/"))))
+    (uiop:delete-file-if-exists esp)
+    (let ((c (image:bare-console :boot-args "init" :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 300)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "init: pid 1" :timeout 120))
+               (settled c)
+               (is (search "\"gen-1\"" (ask "(darterfly/start::confirm-when-healthy :tries 1 :every 1)"))
+                   "a healthy generation is confirmed")
+               (is (search "T" (ask "(and (darterfly/start::recorded-health \"gen-1\") t)")) "and its health is kept with it")
+               (ask "(with-open-file (s (darterfly/start::health-path \"gen-1\") :direction :output :if-exists :supersede) (prin1 (cons (list :frobnicator :ok) (darterfly/start::recorded-health \"gen-1\")) s))")
+               (let ((seen (ask "(darterfly/start::confirm-when-healthy :tries 1 :every 1)")))
+                 (is (and (search "isn't good yet: frobnicator" seen) (search "NIL" seen))
+                     "a part that worked in the good generation and doesn't now keeps it from being confirmed: ~a" seen)))
           (image:finish c 5))))))
 
 (test stats-see-what-the-system-does

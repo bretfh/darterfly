@@ -164,7 +164,7 @@
 
 (asdf:defsystem #:darterfly/start
   :description "Boot"
-  :depends-on (#:uiop #:darterfly/log #:darterfly/vfs #:darterfly/bsd #:darterfly/apfs #:darterfly/run #:darterfly/install #:darterfly/devices #:darterfly/display #:darterfly/audio #:darterfly/generation #:darterfly/net #:darterfly/wifi #:darterfly/nrepl #:darterfly/kernel)
+  :depends-on (#:uiop #:darterfly/log #:darterfly/vfs #:darterfly/bsd #:darterfly/apfs #:darterfly/run #:darterfly/install #:darterfly/devices #:darterfly/display #:darterfly/audio #:darterfly/generation #:darterfly/net #:darterfly/wifi #:darterfly/nrepl #:darterfly/kernel #:darterfly/health)
   :serial t
   :pathname "src/start/"
   :components ((:file "start")))

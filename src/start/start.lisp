@@ -16,6 +16,43 @@
 (defun in-thread (name function)
   (sb-thread:make-thread (lambda () (attempt name function)) :name name))
 
+(defparameter *surroundings* '(:network :wifi :battery :errors))
+
+(defun health-path (name) (darterfly/install::esp-path (format nil "~a/health" name)))
+
+(defun recorded-health (name)
+  (and name (probe-file (health-path name))
+       (with-open-file (s (health-path name))
+         (with-standard-io-syntax (let ((*read-eval* nil)) (read s nil))))))
+
+(defun unhealthy (now before)
+  (remove-duplicates
+   (append (loop for part in '(:log :disk)
+                 unless (eq (second (assoc part now)) :ok) collect part)
+           (loop for (part status) in before
+                 when (and (eq status :ok) (not (member part *surroundings*))
+                           (not (eq (second (assoc part now)) :ok)))
+                   collect part))))
+
+(defun confirm-when-healthy (&key (tries 10) (every 60))
+  (let ((name (darterfly/install:current))
+        (before (recorded-health (darterfly/install::link "good"))))
+    (loop repeat tries
+          for now = (darterfly/health:check)
+          for bad = (unhealthy now before)
+          do (if (null bad)
+                 (progn
+                   (with-open-file (s (health-path name) :direction :output :if-exists :supersede)
+                     (with-standard-io-syntax (let ((*print-readably* nil)) (prin1 now s))))
+                   (darterfly/install:confirm)
+                   (format *error-output* "~&confirm: ~a is good~%" name)
+                   (return name))
+                 (progn
+                   (format *error-output* "~&confirm: ~a isn't good yet: ~{~(~a~)~^, ~}~%" name bad)
+                   (sleep every)))
+          finally (format *error-output* "~&confirm: ~a never became good; the next boot goes back to ~a~%"
+                          name (darterfly/install::link "good")))))
+
 (defun sources ()
   (or (probe-file "/Users/darterfly/src/darterfly/darterfly.asd")
       (probe-file "/usr/src/darterfly/darterfly.asd")))
@@ -52,7 +89,7 @@
     (setf darterfly/bsd:*safe* (and (darterfly/devices:boot-arg "safe") t))
     (format *error-output* "~&boot: generation ~a~:[~;, safe~]~%" (ignore-errors (darterfly/install:current)) darterfly/bsd:*safe*)
     (unless darterfly/bsd:*safe*
-      (in-thread "confirm" (lambda () (sleep darterfly/install:*stable-after*) (darterfly/install:confirm)))
+      (in-thread "confirm" (lambda () (sleep darterfly/install:*stable-after*) (confirm-when-healthy)))
       (in-thread "saved generation" #'darterfly/install:install-saved-generation))
     (in-thread "brightness" (lambda () (darterfly/devices:start-devices) (darterfly/devices:restore-brightness)))
     (in-thread "display start" #'darterfly/display:start-display)

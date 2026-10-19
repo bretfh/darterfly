@@ -506,8 +506,9 @@ darterfly boot.efi
     (setf conf (kernel-flags root args))
     (let ((choice (boot-choice)))
       (when (or (= choice 112) (= choice 80)) (use-previous-generation root))
-      (when (or (= choice 115) (= choice 83)) (append-safe args)))
-    (choose-generation root)
+      (if (or (= choice 115) (= choice 83))
+          (append-safe args)
+          (choose-generation root)))
     (setf entry (try-generation root "/EFI/darterfly/current" args))
     (unless entry (setf entry (try-generation root "/EFI/darterfly/previous" args)))
     (unless entry
