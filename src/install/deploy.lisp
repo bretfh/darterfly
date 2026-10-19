@@ -57,9 +57,11 @@
                             (incf kept))))))
       (sb-bsd-sockets:socket-close socket))
     (flush-disks)
-    (setf *written* (loop for path in written
-                          when (uiop:string-suffix-p path ".lisp")
-                            collect (concatenate 'string "/" path)))
+    (setf *written* (union *written*
+                           (loop for path in written
+                                 when (uiop:string-suffix-p path ".lisp")
+                                   collect (concatenate 'string "/" path))
+                           :test #'string=))
     (list :written (length written) :unchanged kept)))
 
 
@@ -152,7 +154,8 @@
                               (muffle-warning w))))
       (unwind-protect
            (progn (setf darterfly/bsd::*reloading* t)
-                  (asdf:load-system :darterfly))
+                  (asdf:load-system :darterfly)
+                  (setf *written* nil))
         (setf darterfly/bsd::*reloaded* (get-internal-real-time)
               darterfly/bsd::*reloading* nil)))
     (list :seconds (/ (round (- (get-internal-real-time) t0) 100000) 10.0) :warnings (reverse problems))))
