@@ -14,15 +14,18 @@ CEF does not run inside Darterfly. In QEMU, a small C probe compiled in
 Darterfly runs as a native process using shared libsa. It verifies working
 Unix sockets and polling. The subsequent [[file:IPC.org][browser IPC milestone]] adds
 SCM_RIGHTS and coherent RAM-file MAP_SHARED across isolated worlds. The
-dynamic loader is still missing. Actual host executable and engine files
-are rejected with ENOEXEC. No child process remains published.
+native [[file:ABI.org][dynamic loader and engine ABI]] now cover target-built DSOs.
+The Guix engine still has a foreign glibc ABI; native loading does not
+make it compatible. Actual host executable and engine files remain
+rejected by the executable loader. No child process remains published.
 
 The result narrows the problem to engine/platform integration. It does
 not establish the effort required for a complete engine port. There is
 no defensible completion percentage or calendar estimate from this test.
 
 See [[file:validation.json][original binary, trace and guest evidence]] and
-[[file:ipc-validation.json][the later IPC qualification]]. The existing
+[[file:ipc-validation.json][the later IPC qualification]] and
+[[file:abi-validation.json][native DSO/ABI qualification]]. The existing
 [[file:../SBOM.org][Guix SBOM]] remains the dependency inventory. This experiment measures
 runtime behavior; it does not replace the SBOM with a guessed package list.
 

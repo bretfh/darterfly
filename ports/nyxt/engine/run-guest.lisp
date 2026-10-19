@@ -32,7 +32,7 @@
                                 :direction :output :if-exists :supersede)
                (write-string output s))
              (dolist (label '("COMPILE" "SOCKET-POLL" "RAM-SHARED-MAPPING" "DISK-SHARED-UNSUPPORTED"
-                              "DYNAMIC-LOADING-UNSUPPORTED" "MEMFD-SHIM-UNSUPPORTED"
+                              "FOREIGN-ENGINE-ABI-REJECTED" "MEMFD-SHIM-UNSUPPORTED"
                               "NATIVE-RUNTIME" "HOST-EXE-REJECTED" "CEF-REJECTED"
                               "CLEAN" "SUPERVISOR-ALIVE"))
                (unless (search (format nil "[ENGINE-BOUNDARY ~a PASS]" label) output)

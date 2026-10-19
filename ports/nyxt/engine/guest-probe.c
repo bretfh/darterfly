@@ -1,5 +1,6 @@
 /* Build in Darterfly, run in a native world, link only shared libsa. */
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -43,7 +44,7 @@ int main(void) {
     void *engine = dlopen("/usr/lib/libcef.so", RTLD_NOW);
     const char *error = dlerror();
     printf("dlopen libcef: %s\n", error ? error : "no error");
-    ok &= check("DYNAMIC-LOADING-UNSUPPORTED", !engine && error);
+    ok &= check("FOREIGN-ENGINE-ABI-REJECTED", !engine && error && strstr(error, "foreign/versioned ABI"));
     if (engine) dlclose(engine);
     /* Test the libc shim, not a raw kernel Linux syscall ABI. */
     errno = 0;

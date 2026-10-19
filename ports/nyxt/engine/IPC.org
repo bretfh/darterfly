@@ -113,15 +113,16 @@ shared files. These two OS mechanisms now have direct guest evidence.
 It remains necessary to qualify Chromium's actual protocols and any
 additional operations it requires.
 
-CEF still cannot load or execute in Darterfly. The dynamic ELF/TLS loader,
-engine ABI, process/thread and event interfaces, library closure, and
-Nyxt's display integration remain outstanding. The shipped Guix libcef
+CEF still cannot load or execute in Darterfly. The subsequent
+[[file:ABI.org][engine ABI and dynamic-loading milestone]] covers native target-built
+DSOs. Engine process/thread and event interfaces, the target-built library
+closure and Nyxt's display integration remain outstanding. The shipped Guix libcef
 expects a versioned glibc/Linux environment; implementing these IPC calls
 does not make that binary compatible with shared libsa.
 
-The next decision must use a pinned target build/link attempt to choose
-between an engine source port and a Linux-compatible native-world ABI.
-Then qualify real DSOs, relocations, TLS, constructors and cleanup against
-that choice. Preserve one OS service implementation. Keep the five-part
+The selected direction is the source-port/native-libsa ABI. The next
+engine gate is a pinned target configure/link attempt that identifies its
+concrete platform gaps. Native DSO qualification is recorded separately
+from any claim that Chromium itself builds or runs. Preserve one OS service implementation. Keep the five-part
 CPU-paint/input/JavaScript/shutdown engine probe as the acceptance target
 inside Darterfly; keep compiler-rebuild expansion paused meanwhile.

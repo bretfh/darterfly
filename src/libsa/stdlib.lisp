@@ -179,6 +179,8 @@
 (define-low exit ((code :u32))
   (__libsa_thread_dtors)
   (__cxa_finalize 0)
+  (__libsa_dl_fini)
+  (__libsa_dl_tls_destroy)
   (let ((at (absolute "__fini_array_end"))
         (start (absolute "__fini_array_start")))
     (while (> at start)

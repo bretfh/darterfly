@@ -15,6 +15,15 @@ The host reference carries a focused cl-cef lifecycle patch; see
 Base: f11c970. Branch: codex/nyxt-compat. The original networking worktree
 is independent of this worktree.
 
+* Browser engine path
+
+The [[file:engine/ABI.org][native engine ABI and DSO loader]] reuse shared libsa for target-built
+libraries. Native Clang/LLD can build those DSOs inside Darterfly. The Guix
+CEF binary still expects glibc/Linux; the selected direction is a source
+port with CEF's existing API and a small display/event adapter. The engine
+does not yet execute inside Darterfly. See the ABI document for measured
+coverage and the next browser-first gates.
+
 * Native compiler progress
 
 [[file:../clang/README.org][Clang -cc1 now runs in an isolated world]], compiles C++ and an upstream

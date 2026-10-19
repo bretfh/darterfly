@@ -95,6 +95,7 @@
 (define-low pthread_exit (value)
   (__libsa_thread_dtors)
   (__libsa_key_dtors)
+  (__libsa_dl_tls_destroy)
   (let ((self (pthread_self)))
     (setf (mem :u64 (+ self +t-retval+)) value)
     (__syscall 361 0 0 0 (+ self +t-done+) 0 0)

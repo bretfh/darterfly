@@ -87,12 +87,13 @@ The upstream command-line driver is unchanged; Low builds libsa and Lisp links."
 
 (defun compile-native-cxx (compiler source object &key includes defines directory
                               (output *standard-output*) (error *error-output*)
-                              (standard "c++20")
+                              pic (exceptions t) (standard "c++20")
                               (cxx-include "/usr/include/c++/v1")
                               (libsa-include "/usr/src/darterfly/src/libsa/include")
                               (resource-dir "/usr/lib/clang/19"))
   "Run upstream Clang's cc1 frontend in a native world, producing an ELF object.
-The compiler is a recorded cross seed; compiling SOURCE happens in Darterfly."
+The compiler is a recorded cross seed; compiling SOURCE happens in Darterfly.
+PIC selects general-dynamic TLS for shared objects. EXCEPTIONS defaults to T."
   (setf object (namestring (merge-pathnames object
                             (uiop:ensure-directory-pathname
                              (merge-pathnames (or directory (uiop:getcwd))
@@ -101,13 +102,15 @@ The compiler is a recorded cross seed; compiling SOURCE happens in Darterfly."
   (let* ((args (append
                 (list "-cc1" "-triple" "x86_64-unknown-none-elf"
                       "-emit-obj" "-x" "c++" (concatenate 'string "-std=" standard)
-                      "-mrelocation-model" "static" "-disable-red-zone"
-                      "-ftls-model=local-exec" "-fcxx-exceptions" "-fexceptions"
+                      "-mrelocation-model" (if pic "pic" "static") "-disable-red-zone"
+                      (if pic "-ftls-model=global-dynamic" "-ftls-model=local-exec")
                       "-D__darterfly__" "-nostdsysteminc"
                       "-resource-dir" resource-dir
                       "-internal-isystem" cxx-include
                       "-internal-isystem" libsa-include
                       "-internal-isystem" (concatenate 'string resource-dir "/include"))
+                (when pic (list "-pic-level" "2"))
+                (when exceptions (list "-fcxx-exceptions" "-fexceptions"))
                 (loop for i in includes append (list "-I" i))
                 (loop for d in defines collect (concatenate 'string "-D" d))
                 (list source "-o" object)))
@@ -125,9 +128,12 @@ The compiler is a recorded cross seed; compiling SOURCE happens in Darterfly."
 (defun link-native-cxx (linker executable objects &key directory
                             (output *standard-output*) (error *error-output*)
                             (script "/usr/src/darterfly/ports/lld/native.ld")
-                            relocatable)
+                            relocatable shared soname (hash-style "both"))
   "Run upstream ELF LLD in a world. Final links regenerate shared Low libsa.
-OBJECTS includes CRT0 and the C++ runtime for an executable; -r adds neither."
+OBJECTS includes CRT0 and the C++ runtime for an executable. Partial and
+SHARED links inject neither CRT nor libsa. Shared libraries import the existing
+process runtime and use sibling dependencies through $ORIGIN."
+  (when (and relocatable shared) (error "Choose either a partial or shared link"))
   (setf executable (namestring (merge-pathnames executable
                                 (uiop:ensure-directory-pathname
                                  (merge-pathnames (or directory (uiop:getcwd))
@@ -137,15 +143,22 @@ OBJECTS includes CRT0 and the C++ runtime for an executable; -r adds neither."
     (uiop:delete-file-if-exists executable)
     (unwind-protect
          (progn
-           (unless relocatable
+           (unless (or relocatable shared)
              (with-open-file (s runtime :direction :output :if-exists :supersede
                                         :element-type '(unsigned-byte 8))
                (write-sequence (darterfly/libsa:libsa-object) s)))
            (let* ((args (append
                          '("-m" "elf_x86_64" "--threads=1" "--no-mmap-output-file")
-                         (if relocatable '("-r")
-                             (list "-static" "--no-dynamic-linker" "--build-id=none"
-                                   "-z" "noexecstack" "-T" script runtime))
+                         (cond (relocatable '("-r"))
+                               (shared
+                                (append
+                                 (list "-shared" "--build-id=none"
+                                       (concatenate 'string "--hash-style=" hash-style)
+                                       "-z" "now" "-z" "relro" "-z" "separate-code"
+                                       "-z" "noexecstack" "-rpath" "$ORIGIN")
+                                 (when soname (list "-soname" soname))))
+                               (t (list "-static" "--no-dynamic-linker" "--build-id=none"
+                                        "-z" "noexecstack" "-T" script runtime)))
                          objects (list "-o" executable)))
                   ;; LLVM's own response parser avoids the world's argv limit.
                   (process
@@ -166,8 +179,8 @@ OBJECTS includes CRT0 and the C++ runtime for an executable; -r adds neither."
                                  (eql status 0) (probe-file executable))
                       (uiop:delete-file-if-exists executable)
                       (return-from link-native-cxx (values nil status)))
-                    (unless relocatable (sb-posix:chmod executable #o755))
+                    (unless (or relocatable shared) (sb-posix:chmod executable #o755))
                     (values t status))
                (sb-ext:process-close process))))
       (uiop:delete-file-if-exists response)
-      (unless relocatable (uiop:delete-file-if-exists runtime)))))
+      (unless (or relocatable shared) (uiop:delete-file-if-exists runtime)))))

@@ -95,20 +95,7 @@
 (define-low getpwuid ((u :u32)) (if (= u 0) (root-entry) 0))
 (define-low getpwnam (n) (if (= (the :u32 (strcmp n "root")) 0) (root-entry) 0))
 
-(define-global dl-failed :u64)
 (define-global runtime-handle :u64)
-
-(define-low dlopen (p f)
-  (when (or (= p 0) (= (the :u32 (strcmp p "/System/Library/Kernels/kernel")) 0)) (result (address runtime-handle)))
-  (setf dl-failed 1)
-  0)
-
-(define-low dlclose (h) 0)
-
-(define-low dlerror ()
-  (unless dl-failed (result 0))
-  (setf dl-failed 0)
-  "no dynamic loading on darterfly")
 
 (define-global symbols :u64)
 (define-global symbol-names :u64)
@@ -129,10 +116,7 @@
           (setf symbol-names (+ k (mem :u64 (+ sh (* 64 (mem :u32 (+ h 40))) 24))))))
       (incf i))))
 
-(define-low dlsym (h name)
-  (when (and h (/= h (address runtime-handle)))
-    (setf dl-failed 1)
-    (result 0))
+(define-low dl-legacy-symbol (name)
   (unless symbols (load-symbols))
   (let ((i 0))
     (while (< i symbol-count)
@@ -141,10 +125,9 @@
                    (= (the :u32 (strcmp (+ symbol-names (mem :u32 sym)) name)) 0))
           (result (mem :u64 (+ sym 8)))))
       (incf i)))
-  (setf dl-failed 1)
   0)
 
-(define-low dladdr (a info)
+(define-low dl-legacy-address (a info)
   (unless symbols (load-symbols))
   (let ((best 0) (i 0))
     (while (< i symbol-count)

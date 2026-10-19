@@ -39,7 +39,9 @@ The engine source build and Darterfly engine execution remain outstanding.
 
 The [[file:engine/README.org][headless CEF experiment]] now passes CPU painting, mouse input,
 JavaScript and shutdown on Guix. QEMU confirms the current Darterfly
-boundary: shared libsa runs native probes, but dynamic loading is missing.
+boundary: shared libsa runs native probes. The subsequent
+[[file:engine/ABI.org][native DSO loader and ABI decision]] add target-built dynamic libraries;
+the Guix glibc engine remains incompatible with this target.
 The [[file:engine/IPC.org][next IPC milestone]] now passes descriptors and writable shared
 RAM-file pages between isolated native worlds, with an isolated Lisp-world
 check too. The actual CEF artifacts are still rejected cleanly. Compiler
@@ -151,9 +153,9 @@ Darterfly.
 | Isolated execution | Static ELF64 startup, protected segments, argv/env, exit/wait; raw and SBCL worlds | Selected LLVM C++ runtime passes; broader coverage and resource limits |
 | Process launching | BSD spawn/exec of Lisp programs and isolated static ELF; descriptor actions, cwd, wait4/signals | Native child spawn/wait and isolated SBCL run-program work; broaden attributes and groups |
 | C exec/spawn API | One Low libsa posix_spawn/wait path for native and Lisp worlds | Attributes/groups/exec and measured tool requirements |
-| Foreign libraries | dlopen only exposes built-in runtime symbols | Real loading/relocation/lifetime for unchanged cl-cef and dependencies |
+| Foreign libraries | Native ELF DSOs, dependencies, dynamic TLS and constructors through shared libsa; SBCL foreign loading works in a world | Target CEF closure, dynamic C++ unwinding and bridge integration |
 | Threads and memory | pthread and mmap/mprotect implementations | C++ lifetimes/exceptions pass; thread reclamation and concurrent services remain |
-| IPC/readiness | Stream pairs, RAMFS named sockets, poll | Descriptor transfer, event APIs and engine-specific semantics |
+| IPC/readiness | Named stream/packet sockets, poll, descriptor passing and coherent RAM-file MAP_SHARED | Engine event APIs and actual Mojo protocol semantics |
 | Build storage | VFS/APFS and persistence facilities | Large source trees, metadata load, capacity and memory-pressure tests |
 
 The raw world-spawn primitive starts machine code at an entry point.
@@ -162,7 +164,8 @@ implemented; see [[file:NATIVE-PROGRAMS.org][the native-program contract and gue
 [[file:BSD-NATIVE.org][BSD execve and posix-spawn now also launch native ELF]], with inherited
 descriptors, cwd, signals and wait4. [[file:CHILD-PROCESSES.org][Native and isolated-SBCL child spawn/wait now work]] with a locally rebuilt driver. [[file:SHARED-RUNTIME.org][Native tools now reuse libsa, its allocator and static TLS]], with one public
 spawn/service path. [[file:../clang/README.org][Native Clang and the selected C++ runtime now pass guest tests]].
-Dynamic linkage and full standard-library qualification remain missing.
+Native dynamic linkage is qualified in [[file:engine/ABI.org][the DSO milestone]]. Full C++
+shared-runtime and engine-library qualification remain open.
 Count capabilities by behavior, not name.
 
 The existing linker is useful for Darterfly's own image, but its explicit
@@ -275,8 +278,8 @@ runtime has been removed: native tools reuse existing libsa, allocation,
 static TLS and public Low spawn. Guest tests rebuild this runtime locally.
 [[file:../cxx/README.org][The selected LLVM C++ runtime now runs against shared libsa]], including
 constructors, exceptions, RTTI and thread-local destruction. Thread memory
-reclamation, concurrent blocking services, dynamic linkage and measured
-compiler requirements remain open.
+reclamation and concurrent services need broader coverage. Native dynamic
+linkage is now qualified; dynamic C++ unwinding remains open.
 
 [[file:NATIVE-TCC.org][Standalone TCC now runs in its own world and rebuilds itself]].
 The seed is built inside Darterfly with embedded TCC. Subsequent compiler
@@ -294,8 +297,9 @@ configuration regeneration and complete compiler/runtime source rebuilds.
 Define executable format, startup ABI, libc/sysroot, TLS, C++ ABI, library
 loading and child-process behavior. Use a native program world, with
 explicit argv/env, working directory, descriptor actions and exit status.
-A static early probe is reasonable; unchanged cl-cef still needs a viable
-shared-library story. Preserve that distinction in the test report.
+The native DSO contract is now selected and tested. Qualify the actual
+target-built cl-cef/CEF closure against it; a small loader test alone does
+not establish that the engine can execute.
 
 Acceptance: a compiled utility in its own world reads a source file,
 writes an artifact, captures diagnostics, launches/waits for a child and
@@ -431,10 +435,11 @@ Reviewed local revisions:
 - Guix Nyxt package source: 641fd65824036965e24ed803698977e74b3afd3e.
 
 The pinned Nyxt/CEF host reference now works; see HOST-REFERENCE.org.
-Not yet established: engine source revision, complete build graph,
-complete C++ runtime coverage, a locally rebuilt Clang/LLD toolchain,
-full dynamic loader, engine harness, or memory/storage budget. This plan
-turns those into acceptance gates; it does not claim they already work.
+Engine/source pins and native DSO loading are now recorded separately.
+Not yet established: the complete target engine build graph, full C++
+shared-runtime coverage, a locally rebuilt Clang/LLD toolchain, guest
+engine execution or its memory/storage budget. These remain acceptance
+gates; the loader milestone does not claim they already work.
 
 Upstream references, consulted 2026-10-18:
 - [[https://llvm.org/docs/HowToCrossCompileLLVM.html][Cross-building LLVM tools for another host]]

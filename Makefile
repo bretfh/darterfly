@@ -115,3 +115,11 @@ export-native-tblgen-rebuild:
 .PHONY: test-native-ipc-guest
 test-native-ipc-guest:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-ipc-on-darterfly)) (uiop:quit 1))"'
+
+.PHONY: test-native-dl-guest
+test-native-dl-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-dynamic-loading-on-darterfly)) (uiop:quit 1))"'
+
+.PHONY: test-engine-boundary-guest
+test-engine-boundary-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --load ports/nyxt/engine/run-guest.lisp'
