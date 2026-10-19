@@ -71,6 +71,13 @@
       (setf x (mem :u64 (+ x +m-all+))))
     0))
 
+(define-low calls-live ()
+  (let ((x all-calls) (n 0))
+    (while x
+      (incf n)
+      (setf x (mem :u64 (+ x +m-all+))))
+    n))
+
 (define-low call-free (m)
   (if (= all-calls m)
       (setf all-calls (mem :u64 (+ m +m-all+)))
@@ -282,6 +289,19 @@
     (while p
       (when (= (mem :u64 (+ p +p-receiver+)) w) (setf (mem :u64 (+ p +p-receiver+)) 0))
       (setf p (mem :u64 (+ p +p-next+)))))
+  (let ((m all-calls))
+    (while m
+      (let ((next (mem :u64 (+ m +m-all+)))
+            (state (mem :u64 (+ m +m-state+))))
+        (when (= (mem :u64 (+ m +m-world+)) w)
+          (cond ((= state +abandoned+)
+                 (setf (mem :u64 (+ m +m-world+)) 0)
+                 (setf (mem :u64 (+ m +m-caller+)) 0))
+                (t
+                 (when (= state +queued+)
+                   (unqueue (mem :u64 (+ m +m-port+)) m))
+                 (call-free m))))
+        (setf m next))))
   (free-tables (mem :u64 (+ w +w-pml4+)) 4)
   (kfree w))
 

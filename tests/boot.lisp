@@ -1215,6 +1215,7 @@
       (unwind-protect
            (progn
              (is (image:expect c "init: pid 1" :timeout 120))
+             (settled c)
              (ask "(defparameter *program* (let ((v (make-array 2052 :element-type '(unsigned-byte 8) :initial-element #x90))) (replace v #(184 41 0 0 0 191 1 0 0 0 72 190 0 8 0 64 0 0 0 0 186 4 0 0 0 73 186 0 9 0 64 0 0 0 0 65 184 16 0 0 0 205 130 184 41 0 0 0 191 1 0 0 0 72 190 0 9 0 64 0 0 0 0 186 4 0 0 0 73 186 0 10 0 64 0 0 0 0 65 184 16 0 0 0 205 130 184 1 0 0 0 49 255 205 128 235)) (replace v (sb-ext:string-to-octets \"ping\") :start1 #x800)))")
              (ask "(defparameter *port* (darterfly/worlds:make-port))")
              (ask "(defparameter *world* (darterfly/worlds:spawn *program* :port *port*))")
@@ -1978,6 +1979,39 @@
              (let ((peak (answer "(second *busy*)")))
                (is (search "4" peak) "but no more than four run at a time: ~a" peak))
              (ask "(progn (darterfly/run:stop-world *flood*) t)" 60))
+        (image:finish c 5)))))
+
+(test calls-left-behind-by-a-world-that-ends-are-freed
+  (let ((c (image:bare-console :boot-args "init")))
+    (labels ((ask (form &optional (timeout 120))
+               (image:send c form)
+               (image:expect c (format nil "~%* ") :timeout timeout))
+             (answer (form &optional (timeout 120))
+               (image:send c (format nil "(format t \"~~&[[R ~~a]]~~%\" (substitute #\\_ #\\Newline (princ-to-string ~a)))" form))
+               (image:expect c "[[R " :timeout timeout)
+               (prog1 (image:expect c "]]" :timeout 10)
+                 (image:expect c (format nil "~%* ") :timeout 30))))
+      (unwind-protect
+           (progn
+             (image:expect c "init: pid 1" :timeout 120)
+             (ask "(progn (darterfly/install::esp) (sleep 10) t)")
+             (ask "(setf darterfly/worlds:*requests-at-once* 1)")
+             (ask "(defparameter *held* (sb-thread:make-semaphore))")
+             (ask "(darterfly/run:offer-service \"hold\" (lambda (world proc request token) (declare (ignore world proc request token)) (sb-thread:wait-on-semaphore *held*) #(1)))")
+             (ask "(defparameter *calls-before* (darterfly/worlds:live-calls))")
+             (ask "(defparameter *caller* (darterfly/run:new-world \"caller\" :core \"/Volumes/EFI/EFI/darterfly/gen-1/darterfly.core\" :memory 512))" 300)
+             (ask "(darterfly/run:await-answer *caller* :within 120)" 180)
+             (let ((started (answer (format nil "(darterfly/run:world-eval *caller* ~s :timeout 120)"
+                                            "(let ((port (darterfly/run:look-up \"hold\")) (m (make-array 60000 :element-type '(unsigned-byte 8)))) (darterfly/worlds::with-octets (ms m) (loop :repeat 100 :count (not (< -4096 (darterfly/worlds::machdep-raw 76 port ms (length m)) 0)))))"))))
+               (is (search "100" started) "the world starts a hundred calls it never waits for: ~a" started))
+             (let ((in-flight (answer "(- (darterfly/worlds:live-calls) *calls-before*)")))
+               (is (search "10" in-flight) "they are in flight: ~a" in-flight))
+             (ask "(progn (darterfly/run:stop-world *caller*) t)" 120)
+             (ask "(progn (dotimes (i 200) (sb-thread:signal-semaphore *held*)) (sleep 5) t)")
+             (ask "(loop :repeat 100 :until (eq :gone (darterfly/worlds:world-state (darterfly/run:world-id *caller*))) :do (sleep 0.1))")
+             (let ((left (answer "(- (darterfly/worlds:live-calls) *calls-before*)")))
+               (is (<= (abs (or (parse-integer left :junk-allowed t) 1000)) 3)
+                   "once the world is gone, its calls are freed: ~a left" left)))
         (image:finish c 5)))))
 
 (test an-app-in-its-own-world-opens-a-window-and-dying-takes-it-away

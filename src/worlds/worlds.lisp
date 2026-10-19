@@ -1,6 +1,6 @@
 (defpackage #:darterfly/worlds
   (:use #:cl)
-  (:export #:spawn-native #:spawn-native-image #:read-native-image #:wait-native #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages #:spawn-record #:receive-into #:dispatcher #:dispatch #:*requests-at-once* #:copy-from #:copy-into
+  (:export #:spawn-native #:spawn-native-image #:read-native-image #:wait-native #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages #:live-calls #:spawn-record #:receive-into #:dispatcher #:dispatch #:*requests-at-once* #:copy-from #:copy-into
            #:heartbeat #:*watchdog-limit* #:quiet-watchdog #:pause #:resume #:checkpoint #:restore #:grant-memory #:grant-vectors #:port-into #:grant-rights #:*rights* #:worlds #:inspect-world #:peek #:no-reply #:when-silent #:port-give))
 (in-package #:darterfly/worlds)
 
@@ -133,6 +133,8 @@
       (values (machdep 48 base size port os) (aref out 0)))))
 
 (defun free-pages () (machdep 47))
+
+(defun live-calls () (machdep 85))
 
 (defvar *watchdog-limit* 30)
 
