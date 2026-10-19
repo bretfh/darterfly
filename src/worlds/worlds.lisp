@@ -1,7 +1,7 @@
 (defpackage #:darterfly/worlds
   (:use #:cl)
   (:export #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages #:spawn-record #:receive-into #:copy-from #:copy-into
-           #:heartbeat #:*watchdog-limit* #:quiet-watchdog #:pause #:resume #:checkpoint #:restore #:grant-memory #:grant-vectors #:port-into))
+           #:heartbeat #:*watchdog-limit* #:quiet-watchdog #:pause #:resume #:checkpoint #:restore #:grant-memory #:grant-vectors #:port-into #:grant-rights #:*rights*))
 (in-package #:darterfly/worlds)
 
 (define-condition world-error (error)
@@ -97,6 +97,22 @@
   (let ((out (make-array 2 :element-type '(unsigned-byte 64))))
     (with-octets (o out) (machdep 64 world o))
     (values (aref out 0) (aref out 1))))
+
+(defparameter *rights*
+  '((:console . 2) (:hardware . 4) (:power . 8) (:worlds . 16) (:stats . 32) (:boot . 64) (:log . 128)))
+
+(defun rights-mask (rights)
+  (loop for right in rights
+        for bit = (or (cdr (assoc right *rights*))
+                      (error "no right ~s; the rights are ~{~s~^ ~}" right (mapcar #'car *rights*)))
+        sum bit))
+
+(defun rights-named (mask)
+  (loop for (right . bit) in *rights*
+        when (logtest mask bit) collect right))
+
+(defun grant-rights (world &rest rights)
+  (rights-named (machdep 74 world (rights-mask rights))))
 
 (defun pause (world) (machdep 53 world))
 

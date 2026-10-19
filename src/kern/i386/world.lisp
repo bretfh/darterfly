@@ -440,7 +440,7 @@
 
 (define-low world-pause ((id :u64))
   (let ((w (world-by-id id)) (th all-threads) (tries 0))
-    (when (or (not w) (logand (mem :u64 (+ w +w-flags+)) +privileged+)) (result (- 0 +einval+)))
+    (when (or (not w) (physmap-world-p w)) (result (- 0 +einval+)))
     (setf (mem :u64 (+ w +w-flags+)) (logior (mem :u64 (+ w +w-flags+)) +paused+))
     (while th
       (when (and (= (world-of th) w) (/= (mem :u32 (+ th +t-state+)) +th-terminate+))
@@ -644,11 +644,26 @@
   (setf (mem :u64 (pte-in (mem :u64 (+ w +w-pml4+)) (+ +phys-window+ pa) 1))
         (logior (logand pa +pte-pfn+) +pte-valid+ +pte-write+ +pte-user+ +pte-nx+ bits)))
 
+(define-low grant-rights ((id :u64) (rights :u64))
+  (let ((w (world-by-id id))
+        (mine (rights-of (current-world))))
+    (cond ((or (not w) (= w (current-world)))
+           (- 0 +einval+))
+          ((not (has-rights +right-worlds+))
+           (- 0 +eperm+))
+          ((logand rights +right-physmap+)
+           (- 0 +einval+))
+          ((/= (logand rights mine) rights)
+           (- 0 +eperm+))
+          (t
+           (setf (mem :u64 (+ w +w-rights+)) (logior (rights-of w) rights))
+           (rights-of w)))))
+
 (define-low grant-slot (w (i :u64)) (+ w +w-grants+ (* 24 i)))
 
 (define-low grant-memory ((id :u64) (pa :u64) (len :u64) (kind :u64))
   (let ((w (world-by-id id)) (off 0) (i 0))
-    (when (or (not w) (logand (mem :u64 (+ w +w-flags+)) +privileged+)) (result (- 0 +einval+)))
+    (when (or (not w) (physmap-world-p w)) (result (- 0 +einval+)))
     (when (logand pa (- +page-size+ 1)) (result (- 0 +einval+)))
     (when (= kind 0)
       (when (> (+ pa len) +window-limit+) (result (- 0 +einval+)))
@@ -678,7 +693,7 @@
 
 (define-low grant-vectors ((id :u64) (mask :u64))
   (let ((w (world-by-id id)))
-    (when (or (not w) (logand (mem :u64 (+ w +w-flags+)) +privileged+)) (result (- 0 +einval+)))
+    (when (or (not w) (physmap-world-p w)) (result (- 0 +einval+)))
     (setf (mem :u64 (+ w +w-vectors+)) (logior (mem :u64 (+ w +w-vectors+)) mask))
     0))
 
@@ -708,7 +723,7 @@
 
 (define-low port-into ((id :u64) out)
   (let ((w (world-by-id id)))
-    (when (or (not w) (logand (mem :u64 (+ w +w-flags+)) +privileged+)) (result (- 0 +einval+)))
+    (when (or (not w) (physmap-world-p w)) (result (- 0 +einval+)))
     (unless (the :u32 (user-ok out 16 1)) (result (- 0 +efault+)))
     (let ((p (port-make w)))
       (setf (mem :u64 out) (name-add w p +receive-right+))

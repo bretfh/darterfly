@@ -1671,6 +1671,39 @@
                    "its files, a rename and a large write are on the disk"))
           (image:finish c 5))))))
 
+(test a-world-has-only-the-rights-it-is-given
+  (let ((disk (merge-pathnames "world-rights.img" (darterfly-file "build/")))
+        (machdep "(sb-alien:alien-funcall (sb-alien:extern-alien \"__machdep5\" (function sb-alien:long sb-alien:long sb-alien:unsigned-long sb-alien:unsigned-long sb-alien:unsigned-long sb-alien:unsigned-long sb-alien:unsigned-long)) ~d ~d ~d 0 0 0)"))
+    (uiop:delete-file-if-exists disk)
+    (darterfly/image::root-disk disk (* 256 1048576)
+                                (append (darterfly/image::root-entries)
+                                        (list (list :file "usr/lib/sbcl/sbcl.core" (image::octets (darterfly-file "build/sbcl-mt/output/sbcl.core"))))))
+    (let ((c (image:bare-console :root disk)))
+      (flet ((ask (form &optional (timeout 120))
+               (image:send c form)
+               (image:expect c (format nil "~%* ") :timeout timeout))
+             (in-world (n a b)
+               (format nil "(darterfly/run:world-eval *w* ~s)" (format nil machdep n a b))))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 90)
+               (ask (format nil "(defparameter *w* (darterfly/run:start-world \"/usr/lib/sbcl/sbcl.core\" '~s :cwd \"/\" :attach t))"
+                            (list "/System/Library/Kernels/kernel" "--core" "/System/Library/Kernels/darterfly.core"
+                                  "--no-sysinit" "--no-userinit" "--disable-debugger" "--eval" "(loop (sleep 1))")))
+               (ask "(loop :repeat 100 :until (ignore-errors (darterfly/run:world-eval *w* \"(+ 1 2)\")) :do (sleep 0.1))")
+               (let ((seen (ask (in-world 47 0 0))))
+                 (is (search "\"-1\"" seen) "a new world can't read the system's page count: ~a" seen))
+               (let ((seen (ask (in-world 74 0 32))))
+                 (is (search "\"-1\"" seen) "and can't hand itself rights: ~a" seen))
+               (is (search "(:STATS)" (ask "(darterfly/worlds:grant-rights (darterfly/run:world-id *w*) :stats)"))
+                   "the system grants it the stats right")
+               (let ((pages (ask (in-world 47 0 0))))
+                 (is (and (not (search "\"-" pages)) (search "\"" pages))
+                     "after which it can: ~a" pages))
+               (let ((seen (ask (in-world 26 0 0))))
+                 (is (search "\"-1\"" seen) "and still nothing else, such as resetting the machine: ~a" seen)))
+          (image:finish c 5))))))
+
 (test a-world-uses-the-network
   (let ((disk (merge-pathnames "world-net.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists disk)

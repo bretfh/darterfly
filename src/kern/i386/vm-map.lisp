@@ -29,17 +29,26 @@
 (defconstant +w-io-next+ 26776)
 (defconstant +w-grants+ 26784)
 (defconstant +max-grants+ 16)
-(defconstant +world-size+ 27168)
+(defconstant +w-rights+ 27168)
+(defconstant +world-size+ 27176)
 (defconstant +io-window+ #x0000700000000000)
 (defconstant +phys-window+ #x0000600000000000)
 (defconstant +window-limit+ #x00001F0000000000)
-(defconstant +privileged+ 1)
+(defconstant +right-physmap+ 1)
+(defconstant +right-console+ 2)
+(defconstant +right-hardware+ 4)
+(defconstant +right-power+ 8)
+(defconstant +right-worlds+ 16)
+(defconstant +right-stats+ 32)
+(defconstant +right-boot+ 64)
+(defconstant +right-log+ 128)
+(defconstant +all-rights+ 255)
 (defconstant +stopped+ 2)
 (defconstant +paused+ 4)
 (defconstant +gone+ 8)
 (defconstant +commpage-va+ #x00007FFFFFE00000)
 
-(define-global world-0-map :u8 :count 27168 :alignment 4096)
+(define-global world-0-map :u8 :count 27176 :alignment 4096)
 (define-global kernel-map :u8 :count 27168 :alignment 4096)
 (define-global io-next :u64)
 
@@ -158,7 +167,17 @@
       (incf i))
     0))
 
-(define-low privileged () (logand (mem :u64 (+ (current-world) +w-flags+)) +privileged+))
+(define-low rights-of (w)
+  (mem :u64 (+ w +w-rights+)))
+
+(define-low has-rights (needed)
+  (= (logand (rights-of (current-world)) needed) needed))
+
+(define-low privileged ()
+  (has-rights +right-physmap+))
+
+(define-low physmap-world-p (w)
+  (logand (rights-of w) +right-physmap+))
 
 (define-low user-range (a len)
   (and (< a +user-top+) (<= len +user-top+) (<= (+ a len) +user-top+)))
