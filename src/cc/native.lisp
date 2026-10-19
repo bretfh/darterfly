@@ -51,10 +51,12 @@
     output))
 
 (defun build-native-tcc (output &key compiler verbose
+                          (tcc-dir "/usr/lib/tcc/")
                           (directory "/usr/src/darterfly/")
                           (work "/tmp/native-tcc-build/"))
-  "Seed with embedded TCC, or rebuild with standalone COMPILER in its own world.
-The upstream command-line driver is unchanged; Low builds libsa and Lisp links."
+  "Seed with embedded TCC, or build using standalone COMPILER.
+On Darterfly the compiler runs in its own world. Host packaging can use the
+pinned host TCC. The upstream driver is unchanged; Lisp links shared libsa."
   (let* ((root (uiop:ensure-directory-pathname directory))
          (work (uiop:ensure-directory-pathname work))
          (tree (namestring (merge-pathnames "build/tcc/darterfly-src/" root)))
@@ -71,7 +73,7 @@ The upstream command-line driver is unchanged; Low builds libsa and Lisp links."
                (format t "~&TCC [~a]: ~a~%" (or compiler :embedded) source)
                (finish-output))
              (setf options (append options
-                                   (list :libsa-dir (namestring
+                                   (list :tcc-dir tcc-dir :libsa-dir (namestring
                                          (merge-pathnames "src/libsa/" root)))))
              (unless (if compiler
                          (apply #'compile-native-c compiler source object options)

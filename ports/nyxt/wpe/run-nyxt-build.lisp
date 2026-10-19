@@ -33,9 +33,7 @@
               ("engine/WPEWebProcess" "usr/libexec/wpe-webkit-2.0/WPEWebProcess")
               ("engine/WPENetworkProcess" "usr/libexec/wpe-webkit-2.0/WPENetworkProcess"))
             collect (list :file target (image::octets (merge-pathnames source root)) #o755))
-          (list (list :file "usr/bin/nyxt-window-server"
-                       (image::text (format nil "#!darterfly Nyxt Windows~%")) #o755)
-                (list :dir "etc/fonts")
+          (list (list :dir "etc/fonts")
                 (list :file "etc/fonts/fonts.conf"
                       (image::octets (darterfly-file "ports/nyxt/wpe/engine-fonts.conf")))
                 (list :file "Users/darterfly/DejaVuSans.ttf"
@@ -65,7 +63,7 @@
                     (sb-ext:string-to-octets "refresh" :external-format :utf-8))))
       (loop for (source target) in
         '(("ports/nyxt/wpe/nyxt-wire.lisp" "Users/darterfly/nyxt-wire.lisp")
-          ("ports/nyxt/wpe/nyxt-window-server.lisp" "Users/darterfly/nyxt-window-server.lisp")
+          ("ports/nyxt/wpe/nyxt-windows.lisp" "Users/darterfly/nyxt-windows.lisp")
           ("ports/nyxt/wpe/nyxt-renderer.lisp" "Users/darterfly/nyxt-renderer.lisp")
           ("ports/nyxt/wpe/nyxt-browser-checks.lisp" "Users/darterfly/nyxt-browser-checks.lisp")
           ("build/lld/ld.lld" "usr/bin/ld.lld")
@@ -99,18 +97,6 @@
            (when (uiop:getenv "DARTER_HTTP_FIXTURE_DIR")
              (image:send c "(progn (darterfly/net:start-network) :network-ready)")
              (image:expect c ":NETWORK-READY" :timeout 45)
-             (image:expect c "* " :timeout 30))
-           (when browserp
-             (image:send c
-               "(progn (load \"/Users/darterfly/nyxt-wire.lisp\")
-                 (load \"/Users/darterfly/nyxt-window-server.lisp\")
-                 (defparameter *nyxt-window-adapter*
-                   (darterfly/bsd:posix-spawn \"/usr/bin/nyxt-window-server\"
-                     '(\"nyxt-window-server\") nil))
-                 :window-adapter-started)")
-             (let ((reply (image:expect c '(":WINDOW-ADAPTER-STARTED" "debugger invoked") :timeout 30)))
-               (unless (search ":WINDOW-ADAPTER-STARTED" reply)
-                 (error "Window adapter startup failed: ~a" reply)))
              (image:expect c "* " :timeout 30))
            (image:send c
              "(progn (defparameter *nyxt-build*
@@ -174,13 +160,6 @@
                (image:expect c "* " :timeout 15)
                (image:send c
                  "(progn
-                    (let ((status
-                      (loop repeat 500
-                        for result = (multiple-value-list
-                          (darterfly/bsd:wait4 *nyxt-window-adapter* :nohang t))
-                        when (plusp (first result)) return (second result)
-                        do (sleep .01))))
-                      (format t \"~%[NYXT WINDOW ADAPTER WAIT ~s]~%\" status))
                     (let ((clean
                     (loop repeat 500
                       when (darterfly/bsd::with-bsd
@@ -197,8 +176,8 @@
                  (unless (search "[NYXT BROWSER CHILDREN REAPED T]" cleanup)
                    (error "Browser left child processes: ~a" cleanup)))
                (setf out (image:transcript c))
-               (unless (search "[NYXT WINDOW ADAPTER WAIT 0]" out)
-                 (error "Window adapter did not exit successfully")))
+               (unless (search "[NYXT WORLD RESULT (:EXIT 0" out)
+                 (error "Direct-window browser world did not exit successfully")))
              (write-string out)
              (with-open-file (s (darterfly-file "build/wpe-assessment/nyxt-build-guest.log")
                                 :direction :output :if-exists :supersede)

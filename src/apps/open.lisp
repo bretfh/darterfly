@@ -1,8 +1,11 @@
 (in-package #:darterfly/apps)
 
-(defparameter *in-own-world* '("Hello" "Terminal" "Editor"))
+(defparameter *in-own-world* '("Hello" "Terminal" "Editor" "Nyxt"))
 
 (defparameter *app-memory* 512)
+;; Explicit per-app budgets; keep the existing lightweight app default.
+(defparameter *single-instance-apps* '("Nyxt"))
+(defparameter *app-memory-overrides* '(("Nyxt" . 2048)))
 
 (defun program-name (path)
   (subseq path (1+ (or (position #\/ path :from-end t) -1))))
@@ -19,15 +22,31 @@
         :unless (active-label-p label)
           :return label))
 
-(defun world-job (path)
-  (list :label (fresh-label (program-name path))
+(defun world-job (path &optional (argv (list path)))
+  (list :label (if (member (program-name path) *single-instance-apps* :test #'equal)
+                   (program-name path) (fresh-label (program-name path)))
         :world (list :core "/System/Library/Kernels/darterfly.core"
-                     :memory *app-memory*
-                     :evals (list (format nil "(progn (darterfly/bsd:wait4 (darterfly/bsd:posix-spawn ~s (list ~s) nil)) (sb-ext:exit))"
-                                          path path)))
+                     :memory (or (cdr (assoc (program-name path) *app-memory-overrides*
+                                              :test #'equal)) *app-memory*)
+                     :evals (list (format nil "(progn (let ((status (nth-value 1 (darterfly/bsd:wait4 (darterfly/bsd:posix-spawn ~s (quote ~s) nil))))) (sb-ext:exit :code (if (and status (darterfly/bsd:wifexited status)) (darterfly/bsd:wexitstatus status) 1))))"
+                                          path argv)))
         :run-at-load t))
 
-(defun open-application (path)
-  (if (member (program-name path) *in-own-world* :test #'string=)
-      (darterfly/init:submit (world-job path))
-      (bsd:posix-spawn path (list path) nil)))
+(defun activate-application (name argv)
+  (let ((world (darterfly/run:find-world name)))
+    (when world
+      ;; A second click during startup must not create a competing engine.
+      ;; Activation is optional until the installed application is loaded.
+      (darterfly/run:world-eval world
+        (format nil "(let* ((p (find-package ~s)) (f (and p (find-symbol ~s p)))) (when (and f (fboundp f)) (funcall f (quote ~s))))"
+          (format nil "DARTERFLY/~a-APPLICATION" (string-upcase name)) "ACTIVATE" (rest argv)) :timeout 5)))
+  name)
+
+(defun open-application (path &optional (argv (list path)))
+  (let ((name (program-name path)))
+    (cond ((and (member name *single-instance-apps* :test #'equal)
+                (active-label-p name))
+           (activate-application name argv))
+          ((member name *in-own-world* :test #'string=)
+           (darterfly/init:submit (world-job path argv)))
+          (t (bsd:posix-spawn path argv nil)))))

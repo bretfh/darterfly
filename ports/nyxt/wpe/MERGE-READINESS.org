@@ -9,10 +9,9 @@ The next milestone is a maintained desktop application on current master, with
 durable state, predictable resource use and recoverable failures. No engine
 change, Linux runtime or new browser implementation is proposed.
 
-This document is a source-reviewed execution plan. Only the baseline below has
-passed; the checkboxes are acceptance requirements, not completed work. The
-earlier test used a resumed guest source-build disk. It is not qualification
-of a clean installation or current master.
+This document separates measured milestones from remaining acceptance gates.
+The original browser record is historical. The current integration also uses
+a resumed source-build disk; it does not qualify a clean installation.
 
 * Proven baseline
 
@@ -31,46 +30,80 @@ network/TLS stack. Keep those established consumers and shared libsa.
 
 See [[file:browser-evidence.json][the browser evidence]], [[file:NYXT-RENDERER.org][implementation notes]], [[file:nyxt-build-evidence.json][the earlier clean-disk core build]], and [[file:render-evidence.json][the engine baseline]].
 
-* Branch integration must come first
+* Branch integration (completed 2026-10-19)
 
-At review, this checkout is codex/nyxt-guix-engine at 5e25835. Master is
-54ef189 and contains that HEAD, with 74 subsequent commits. The outstanding D2
-MERGE_HEAD is 0548aa7, also already an ancestor of master. The index has no
-unresolved conflict entries, but the merge is unfinished and browser/runtime
-work remains unstaged or untracked. Do not mistake the committed branch diff
-for the browser implementation.
+The initial review found HEAD 5e25835, an unfinished D2 merge and substantial
+uncommitted browser work. A complete source/index/merge-state snapshot was
+saved before changes. Commits 784ee56 and 23ec577 preserve that work; 8ccace8
+integrates master 54ef189. The active master worktree was not edited.
+
+Master's native syscall IDs 80--84 and newer world rights checks are
+preserved. The browser's colliding signal operation moved to 85. The denied
+native-call probe covers the protected operations, including that signal.
 
 Master already has app worlds, init supervision and a world-facing
 WindowServer service. Its app entry points are src/apps/open.lisp and
-src/init/init.lisp; the display client is src/layer/world.lisp. The browser
-proof still uses a root-side Nyxt Windows process and dedicated frame socket.
-Reuse master's service instead of making that temporary broker a second
-permanent window API.
+src/init/init.lisp; the display client is src/layer/world.lisp. The normal
+application now uses that existing service directly from the Nyxt world. The temporary Nyxt Windows process and frame socket are removed.
 
-- [ ] Preserve a recoverable snapshot of HEAD, merge/index state, tracked
+- [X] Preserve a recoverable snapshot of HEAD, merge/index state, tracked
   changes and all untracked source/evidence before rearranging work.
-- [ ] Reconcile the pending D2 merge without attributing its hardware/audio
+- [X] Reconcile the pending D2 merge without attributing its hardware/audio
   work to the browser change. Preserve the tested browser state while
   preparing reviewable commits.
-- [ ] Integrate current master in this browser worktree or an isolated
+- [X] Integrate current master in this browser worktree or an isolated
   integration checkout. Preserve newer world rights, native syscall numbering,
   app lifecycle and network-driver changes; do not copy older files wholesale
   over master.
-- [ ] Leave the active master worktree and its local documentation/design
+- [X] Leave the active master worktree and its local documentation/design
   edits untouched. Compare against master again before the final merge.
-- [ ] Boot the integrated base and rerun the existing browser baseline before
+- [X] Boot the integrated base and rerun the existing browser baseline before
   adding more browser features. Retain the old evidence as historical
   evidence.
+
+* Normal application qualification (passed 2026-10-19)
+
+The actual QEMU OS boots normal init and launches Nyxt from a real Dock
+click into its registered app world. The existing Layer client supplies the
+window and HID input. A second Dock click reuses the instance. The test
+passes HTTPS with the system CA bundle plus a test-only fixture CA,
+JavaScript, trusted UI callbacks, denied web callbacks, typing, Ctrl-L and
+Enter navigation, and a late update to a deleted prompt. It then uses
+upstream Ctrl-Q, verifies init's exit history reports zero, and checks that
+native children and the WindowServer client are gone. Dock relaunch and a
+second clean Ctrl-Q exit pass too.
+
+Shared libsa input buffering fixes the system-CA load that previously kept
+WebKit's main thread busy until its responsiveness watchdog killed the
+NetworkProcess. No trust exception or watchdog relaxation was added.
+The renderer now implements Nyxt's uninstall interface as well as install.
+
+The host regression suites pass 87 checks. Actual-OS regressions pass
+43 native-process/runtime checks and 9 existing app-world/WindowServer
+checks. The native runtime probe includes mixed buffered input, pushback,
+positioning, pipes, caller-owned buffers and 4,096 lines, both before and
+after rebuilding the probe inside Darterfly.
+
+See [[file:app-evidence.json][the normal-app evidence]], [[file:qualification-logs/nyxt-app-guest.log][guest transcript]],
+and [[file:qualification-logs/nyxt-app-input.png][actual desktop screenshot]]. All 5,615 pinned Nyxt source files
+still match their manifest. This is a resumed dependency-cache disk with
+a newly staged application package, not a fresh source build/install.
+Two successful launch/quit cycles do not satisfy the 20-cycle stress gate.
+Startup dependency/deprecation warnings remain visible in the transcript.
+The older cached/resumed browser harness also passes against the same
+engine binaries, including input, navigation, exit zero and child reaping.
+Its [[file:qualification-logs/integrated-browser-host.log][regression transcript]] is separate from the preserved historical record.
 
 * Source findings that block dependable use
 
 ** Application lifecycle
 
 nyxt-renderer.lisp launches fixed /tmp socket names and stores process,
-buffer, window and reply state in globals. Shutdown waits without a deadline,
-does not explicitly close both connections or join its reader threads, and
-does not reset all those tables. A second launch in the same world is not
-qualified. A partial startup can leave resources behind.
+buffer, window and reply state in globals. Normal shutdown now closes the
+engine connection and display session, joins reader threads, clears tables
+and releases the installed renderer interface. The engine wait still lacks a deadline.
+A partial startup or engine failure can leave resources behind. Relaunch
+uses a fresh app world; repeated launch inside one world is not qualified.
 
 Use a session object with explicit starting/running/stopping/stopped states
 and owned processes, descriptors, threads and requests. Clean up partial
@@ -83,7 +116,7 @@ existing bounded recovery policy.
 
 The native send path retries EAGAIN inside the GLib thread without a deadline.
 A stalled receiver can therefore stop all WebKit progress. The Lisp engine
-reader also forwards full frames synchronously to the window socket. RPC
+reader still presents full frames synchronously through the Layer service. RPC
 replies compete with pixels. callback-thread creates a fresh thread per
 callback; independent load callbacks can finish out of order. Several global
 tables have multiple readers/writers with no explicit ownership rule.
@@ -168,8 +201,10 @@ Keep the WPE process boundary; remove the redundant window broker once the
 replacement passes. Browser-specific core, data and memory settings should be
 explicit rather than silently inheriting the small default app budget.
 
-- [ ] From a fresh boot, open Nyxt through the normal desktop path without
+- [X] From a fresh boot, open Nyxt through the normal desktop path without
   host REPL injection, fixture services or manual loads.
+- [X] Reuse the existing instance on a repeated Dock click; browse through
+  upstream URL entry, quit successfully and relaunch from the Dock.
 - [ ] Open a supplied URL and a second window/buffer; focus an existing
   instance when appropriate. Define one-owner-per-profile behavior.
 - [ ] Close and reopen 20 times; test partial startup failure and stale
@@ -180,9 +215,10 @@ explicit rather than silently inheriting the small default app budget.
 ** 2. Bounded transport and recoverable failures
 
 Deliver session ownership, ordered/bounded events, nonblocking frame output,
-cancellation and visible failure handling. A page JavaScript error must not
-permanently poison every RPC through the global *failure* flag. Engine loss
-should become an actionable browser state, not an unbounded wait.
+cancellation and visible failure handling. Asynchronous page JavaScript
+errors no longer poison the global *failure* flag; view submission/deletion
+is serialized for late prompt updates. Engine loss should become an
+actionable browser state, not an unbounded wait.
 
 - [ ] Kill WebProcess, NetworkProcess and UI process separately; also close a
   socket mid-header and mid-frame. The desktop remains responsive and recovery
@@ -292,8 +328,7 @@ facilities.
 
 * Immediate next change
 
-Preserve the current working state and reconcile it with current master. Then
-move window presentation and launch onto master's existing
-app-world/WindowServer path and rerun the native browser baseline. That
-removes temporary architecture before hardening it, and makes every subsequent
-test exercise the application that will actually ship.
+Normal-app lifecycle qualification is recorded. Next, bound transport and
+shutdown behavior under engine failure. Keep persistence, broader input
+and fresh-install reproducibility as explicit gates. Ordinary launch alone
+is not a claim that the browser is ready for daily use or final merge.

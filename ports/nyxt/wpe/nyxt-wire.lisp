@@ -73,6 +73,12 @@
     (unless (<= n (* 16 1024 1024)) (error "Oversized Nyxt message on fd ~d: ~s" (connection-fd c) (loop for i below 24 by 4 collect (u32 h i))))
     (values (u32 h 0) (u32 h 4) (u32 h 8) (u32 h 12) (u32 h 16)
             (transfer c (make-array n :element-type '(unsigned-byte 8)) nil))))
+(defun close-connection (c)
+  (if (connection-root c) (darterfly/bsd:close (connection-fd c))
+      (sb-alien:alien-funcall
+        (sb-alien:extern-alien "close" (function sb-alien:int sb-alien:int))
+        (connection-fd c))))
+
 (defun connect-local (path)
   (let ((addr (make-array 110 :element-type '(unsigned-byte 8) :initial-element 0)))
     (assert (< (length (utf8 path)) 108))
@@ -95,8 +101,3 @@
            (close-connection c))
          (sleep .05))
     (error "No Nyxt service at ~a" path)))
-(defun close-connection (c)
-  (if (connection-root c) (darterfly/bsd:close (connection-fd c))
-      (sb-alien:alien-funcall
-        (sb-alien:extern-alien "close" (function sb-alien:int sb-alien:int))
-        (connection-fd c))))

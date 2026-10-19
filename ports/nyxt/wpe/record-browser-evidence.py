@@ -30,7 +30,7 @@ markers = [
     '[NYXT BROWSER PROMPT TEXT PASS]', '[NYXT BROWSER COMMAND NAVIGATION PASS]',
     '[NYXT ENGINE WAIT 0]', '[NYXT BROWSER QUALIFICATION PASS]',
     '[NYXT WORLD RESULT (:EXIT 0 :FILES 0)]',
-    '[NYXT BROWSER CHILDREN REAPED T]', '[NYXT WINDOW ADAPTER WAIT 0]',
+    '[NYXT BROWSER CHILDREN REAPED T]',
 ]
 missing = [m for m in markers if m not in log]
 if missing or '[NYXT DEVELOPMENT TOOLCHAIN REUSE]' in log:
@@ -87,7 +87,7 @@ evidence = {
                                       cwd=repo, text=True).strip(),
     'head': subprocess.check_output(['git', 'rev-parse', 'HEAD'],
                                     cwd=repo, text=True).strip(),
-    'worktree': 'Uncommitted; preexisting staged D2 merge preserved.',
+    'worktree': subprocess.check_output(['git', 'status', '--porcelain=v1'], cwd=repo, text=True),
     'nyxt_revision': source['revision'],
     'webkit_version': '2.54.1',
     'native_browser_window_qualified': True,
@@ -102,7 +102,7 @@ evidence = {
     'engine_sha256': {name: digest(root / 'engine' / name)
                      for name in ['nyxt-engine', 'WPEWebProcess', 'WPENetworkProcess']},
     'remaining': ['Persistent WebKit sessions and browser-database locking',
-                  'Desktop app packaging and restart/recovery integration',
+                  'Crash recovery and broader normal-app qualification',
                   'Downloads, clipboard, wheel/motion and complete renderer API coverage',
                   'Broader real-site compatibility, media and performance qualification'],
 }

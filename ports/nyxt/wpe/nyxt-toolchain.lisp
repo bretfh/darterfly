@@ -2,17 +2,23 @@
 ;; Build the existing standalone TCC in this guest, then use its CLI for
 ;; CFFI-generated C. LLD links with the same libsa and CRT as all native worlds.
 (defparameter *nyxt-tcc-support* nil)
+(defvar *nyxt-runtime-load* nil)
 (defparameter *nyxt-renderer-only*
-  (and (probe-file "/Users/darterfly/nyxt-quick-mode")
+  (or *nyxt-runtime-load* (and (probe-file "/Users/darterfly/nyxt-quick-mode")
        (equal "enabled" (uiop:read-file-string
-                        "/Users/darterfly/nyxt-quick-mode"))))
+                        "/Users/darterfly/nyxt-quick-mode")))))
 (if *nyxt-renderer-only*
     (progn
       ;; Renderer-only development loads previously generated CFFI FASLs.
       ;; Do not claim another compiler build or regenerate native probes here.
-      (setf *nyxt-tcc-support* '("/usr/lib/nyxt/crt0.o"))
+      (setf *nyxt-tcc-support*
+        (if *nyxt-runtime-load*
+            (or (mapcar #'namestring (directory "/usr/lib/nyxt/tcc-support/*.o"))
+                (error "Nyxt's installed compiler support objects are missing"))
+            '("/usr/lib/nyxt/crt0.o")))
       (assert (probe-file "/usr/bin/tcc"))
-      (format t "~&[NYXT DEVELOPMENT TOOLCHAIN REUSE]~%"))
+      (format t (if *nyxt-runtime-load* "~&[NYXT INSTALLED TOOLCHAIN READY]~%"
+                       "~&[NYXT DEVELOPMENT TOOLCHAIN REUSE]~%")))
     (multiple-value-bind (exe support)
         (darterfly/cc:build-native-tcc "/usr/bin/tcc" :verbose t)
       (assert exe)
