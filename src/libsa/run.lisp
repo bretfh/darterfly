@@ -422,8 +422,9 @@
           ((or (= op 39) (= op 42))
            (setf (mem :u64 (+ kinds 8)) +arg-in+) (setf (mem :u64 (+ lens 8)) (capped c 28)))
           ((or (= op 41) (= op 43) (= op 44))
-           (setf (mem :u64 (+ kinds 8)) +arg-out+) (setf (mem :u64 (+ lens 8)) 28)
-           (setf (mem :u64 (+ kinds 16)) +arg-out+) (setf (mem :u64 (+ lens 16)) 4))
+           (when c
+             (setf (mem :u64 (+ kinds 8)) +arg-out+) (setf (mem :u64 (+ lens 8)) (capped (mem :u32 c) 28))
+             (setf (mem :u64 (+ kinds 16)) +arg-out+) (setf (mem :u64 (+ lens 16)) 4)))
           ((= op 48)
            (setf (mem :u64 kinds) +arg-string+)
            (setf (mem :u64 (+ kinds 8)) +arg-out+) (setf (mem :u64 (+ lens 8)) 128)
