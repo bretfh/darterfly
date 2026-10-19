@@ -130,6 +130,7 @@
     (setf (mem :u64 (+ (world-0) +w-pml4+)) (kvtophys (address idle-pml4)))
     (setf (mem :u64 (+ (world-0) +w-flags+)) 0)
     (setf (mem :u64 (+ (world-0) +w-rights+)) +all-rights+)
+    (setf (mem :u64 (+ (world-0) +w-when-silent+)) +silent-reset+)
     (setf (mem :u64 (+ th +t-world+)) (world-0))
     (setf (mem :u64 (+ (cpu-data) +c-active-thread+)) th)
     (setf (mem :u64 (+ (cpu-data) +c-idle-thread+)) (idle-thread-create))

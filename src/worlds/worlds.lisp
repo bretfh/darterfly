@@ -1,7 +1,7 @@
 (defpackage #:darterfly/worlds
   (:use #:cl)
   (:export #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages #:spawn-record #:receive-into #:copy-from #:copy-into
-           #:heartbeat #:*watchdog-limit* #:quiet-watchdog #:pause #:resume #:checkpoint #:restore #:grant-memory #:grant-vectors #:port-into #:grant-rights #:*rights* #:worlds #:inspect-world #:peek #:no-reply))
+           #:heartbeat #:*watchdog-limit* #:quiet-watchdog #:pause #:resume #:checkpoint #:restore #:grant-memory #:grant-vectors #:port-into #:grant-rights #:*rights* #:worlds #:inspect-world #:peek #:no-reply #:when-silent))
 (in-package #:darterfly/worlds)
 
 (define-condition world-error (error)
@@ -167,8 +167,15 @@
         ((logtest flags 4) :paused)
         (t :running)))
 
+(defparameter *silent-actions* '((:stop . 0) (:reset . 1)))
+
+(defun when-silent (world action)
+  (machdep 79 world (or (cdr (assoc action *silent-actions*))
+                        (error "no action ~s; the actions are ~{~s~^ ~}" action (mapcar #'car *silent-actions*))))
+  action)
+
 (defun worlds (&optional (most 64))
-  (let* ((fields 6)
+  (let* ((fields 7)
          (buffer (make-array (* fields most) :element-type '(unsigned-byte 64)))
          (count (sb-sys:with-pinned-objects (buffer)
                   (machdep 75 (sb-sys:sap-int (sb-sys:vector-sap buffer)) most)))
@@ -180,7 +187,8 @@
                         :rights (rights-named (aref buffer (+ at 2)))
                         :threads (aref buffer (+ at 3))
                         :cpu-seconds (float (/ (aref buffer (+ at 4)) hz))
-                        :resident-mb (round (* 4096 (aref buffer (+ at 5))) (* 1024 1024))))))
+                        :resident-mb (round (* 4096 (aref buffer (+ at 5))) (* 1024 1024))
+                        :when-silent (car (rassoc (aref buffer (+ at 6)) *silent-actions*))))))
 
 (defun pause (world) (machdep 53 world))
 

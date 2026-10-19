@@ -33,7 +33,10 @@
 (defconstant +w-beat-at+ 27176)
 (defconstant +w-beat-limit+ 27184)
 (defconstant +w-beat-warned+ 27192)
-(defconstant +world-size+ 27200)
+(defconstant +w-when-silent+ 27200)
+(defconstant +world-size+ 27208)
+(defconstant +silent-stop+ 0)
+(defconstant +silent-reset+ 1)
 (defconstant +io-window+ #x0000700000000000)
 (defconstant +phys-window+ #x0000600000000000)
 (defconstant +window-limit+ #x00001F0000000000)
@@ -51,7 +54,7 @@
 (defconstant +gone+ 8)
 (defconstant +commpage-va+ #x00007FFFFFE00000)
 
-(define-global world-0-map :u8 :count 27200 :alignment 4096)
+(define-global world-0-map :u8 :count 27208 :alignment 4096)
 (define-global kernel-map :u8 :count 27168 :alignment 4096)
 (define-global io-next :u64)
 

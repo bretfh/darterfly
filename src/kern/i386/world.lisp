@@ -487,9 +487,9 @@
            (watchdog-report w))
           ((<= now (+ at (* 2 limit)))
            0)
-          ((= w (world-0))
-           (kprintf "watchdog: world 0 is still silent; restarting the machine
-")
+          ((= (mem :u64 (+ w +w-when-silent+)) +silent-reset+)
+           (kprintf "watchdog: world %lu is still silent; restarting the machine
+" id)
            (machine-reset))
           (t
            (kprintf "watchdog: world %lu is still silent; stopping it
@@ -769,20 +769,34 @@
     n))
 
 (define-low list-worlds (buffer (count :u64))
+  (unless (the :u32 (user-ok buffer (* 56 count) 1)) (result (- 0 +efault+)))
   (reap-threads)
   (let ((n 0)
         (w (world-0)))
     (while (and w (< n count))
-      (let ((record (+ buffer (* 48 n))))
+      (let ((record (+ buffer (* 56 n))))
         (setf (mem :u64 record) (mem :u64 (+ w +w-id+)))
         (setf (mem :u64 (+ record 8)) (mem :u64 (+ w +w-flags+)))
         (setf (mem :u64 (+ record 16)) (rights-of w))
         (setf (mem :u64 (+ record 24)) (live-threads w))
         (setf (mem :u64 (+ record 32)) (world-cpu w))
-        (setf (mem :u64 (+ record 40)) (world-resident w)))
+        (setf (mem :u64 (+ record 40)) (world-resident w))
+        (setf (mem :u64 (+ record 48)) (mem :u64 (+ w +w-when-silent+))))
       (incf n)
       (setf w (mem :u64 (+ w +w-next+))))
     n))
+
+(define-low set-when-silent ((id :u64) (action :u64))
+  (let ((w (world-by-id id)))
+    (cond ((not w)
+           (- 0 +einval+))
+          ((and (/= action +silent-stop+) (/= action +silent-reset+))
+           (- 0 +einval+))
+          ((and (= action +silent-reset+) (not (has-rights +right-power+)))
+           (- 0 +eperm+))
+          (t
+           (setf (mem :u64 (+ w +w-when-silent+)) action)
+           0))))
 
 (define-low grant-rights ((id :u64) (rights :u64))
   (let ((w (world-by-id id))

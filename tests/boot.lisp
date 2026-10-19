@@ -1738,7 +1738,21 @@
                (is (search ":RUNNING" (ask (state "*steady*"))) "a world that checks in keeps running")
                (let ((silent (ask (state "*silent*"))))
                  (is (or (search ":STOPPED" silent) (search "NIL" silent)) "a world that stops checking in is stopped: ~a" silent))
-               (is (search "is still silent; stopping it" (image:transcript c)) "and the kernel says why"))
+               (is (search "is still silent; stopping it" (image:transcript c)) "and the kernel says why")
+               (is (search ":RESET" (ask "(getf (first (darterfly/worlds:worlds)) :when-silent)"))
+                   "the first world starts out resetting the machine when silent")
+               (is (search ":STOP" (ask "(getf (find (darterfly/run:world-id *steady*) (darterfly/worlds:worlds) :key (lambda (w) (getf w :id))) :when-silent)"))
+                   "and a new world is stopped")
+               (let ((refused (ask (format nil "(darterfly/run:world-eval *steady* ~s)"
+                                           (format nil "(sb-alien:alien-funcall (sb-alien:extern-alien \"__machdep5\" (function sb-alien:long sb-alien:long sb-alien:unsigned-long sb-alien:unsigned-long sb-alien:unsigned-long sb-alien:unsigned-long sb-alien:unsigned-long)) 79 ~d 1 0 0 0)"
+                                                   0)))))
+                 (is (search "\"-1\"" refused) "a world without the worlds right can't change what happens to one: ~a" refused))
+               (ask (start "*last*"))
+               (ask "(loop :repeat 100 :until (ignore-errors (darterfly/run:world-eval *last* \"(+ 1 2)\")) :do (sleep 0.1))")
+               (ask "(darterfly/worlds:when-silent (darterfly/run:world-id *last*) :reset)")
+               (image:send c (format nil "(darterfly/run:world-eval *last* ~s)" beat))
+               (is (image:expect c "is still silent; restarting the machine" :timeout 30)
+                   "a world set to reset the machine does, whichever world it is"))
           (image:finish c 5))))))
 
 (test a-world-gets-the-memory-it-asks-for-or-a-plain-no
