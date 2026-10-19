@@ -1909,6 +1909,36 @@
                  (is (equal before left) "and removing the job takes its windows: ~a" left))))
         (image:finish c 5)))))
 
+(test the-network-driver-runs-in-its-own-world
+  (let ((image::*network-device* "virtio-net-pci,netdev=net0,romfile=,addr=0xa"))
+    (let ((c (image:bare-console :boot-args "reserve=0:a.0")))
+      (labels ((ask (form &optional (timeout 120))
+                 (image:send c form)
+                 (image:expect c (format nil "~%* ") :timeout timeout))
+               (answer (form &optional (timeout 120))
+                 (image:send c (format nil "(format t \"~~&[[R ~~a]]~~%\" (substitute #\\_ #\\Newline (princ-to-string ~a)))" form))
+                 (image:expect c "[[R " :timeout timeout)
+                 (prog1 (image:expect c "]]" :timeout 10)
+                   (image:expect c (format nil "~%* ") :timeout 30)))
+               (reaches ()
+                 (answer "(loop :repeat 60 :for rtt := (ignore-errors (darterfly/net:ping \"10.0.2.2\")) :until rtt :do (sleep 1) :finally (return (list :rtt rtt :ip (darterfly/net::interface-ip darterfly/net:*interface*))))" 180)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 90)
+               (ask "(progn (darterfly/devices:start-devices) (darterfly/install::esp) (defparameter *node* (find-if (lambda (d) (string-equal (darterfly/devices::pci-location d) \"0:a.0\")) (darterfly/devices:find-entries 'darterfly/devices:pci-node))) (darterfly/net:start-network) t)" 120)
+               (is (search "NIL" (answer "(darterfly/devices:entry-children *node*)")) "the system leaves the network controller to a driver world")
+               (ask "(defparameter *driver* (darterfly/drivers:start-network-world *node* \"/Volumes/EFI/EFI/darterfly/gen-1/darterfly.core\"))" 300)
+               (let ((first (reaches)))
+                 (is (and (search "RTT " first) (not (search "RTT NIL" first))) "the network works through the driver world and reaches the gateway: ~a" first))
+               (ask "(progn (darterfly/run:stop-world *driver*) (sleep 2) t)" 60)
+               (is (search "NIL" (answer "(darterfly/net::interface-device darterfly/net:*interface*)"))
+                   "when the driver world ends, the interface lets go of it")
+               (is (search "[3]" (ask "(format nil \"[~a]\" (+ 1 2))")) "and the system carries on")
+               (ask "(defparameter *driver* (darterfly/drivers:start-network-world *node* \"/Volumes/EFI/EFI/darterfly/gen-1/darterfly.core\"))" 300)
+               (let ((again (reaches)))
+                 (is (and (search "RTT " again) (not (search "RTT NIL" again))) "a new driver world brings the network back: ~a" again)))
+          (image:finish c 5))))))
+
 (test a-world-uses-the-network
   (let ((disk (merge-pathnames "world-net.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists disk)

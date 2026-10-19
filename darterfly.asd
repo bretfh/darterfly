@@ -129,9 +129,15 @@
   :pathname "src/display/"
   :components ((:file "dmc") (:file "power") (:file "aux") (:file "vbt") (:file "edid") (:file "psr") (:file "state") (:file "modeset") (:file "surface") (:file "events") (:file "sleep")))
 
+(asdf:defsystem #:darterfly/drivers
+  :description "Devices driven in their own world"
+  :depends-on (#:darterfly/devices #:darterfly/worlds #:darterfly/run)
+  :pathname "src/drivers/"
+  :components ((:file "drivers")))
+
 (asdf:defsystem #:darterfly/storage
   :description "Disks served by a world"
-  :depends-on (#:darterfly/vfs #:darterfly/apfs #:darterfly/devices #:darterfly/worlds #:darterfly/run)
+  :depends-on (#:darterfly/vfs #:darterfly/apfs #:darterfly/devices #:darterfly/worlds #:darterfly/run #:darterfly/drivers)
   :pathname "src/storage/"
   :components ((:file "storage")))
 
@@ -328,7 +334,7 @@
 
 (asdf:defsystem #:darterfly
   :description "A live, hackable OS on SBCL"
-  :depends-on (#:darterfly/mach #:darterfly/server #:darterfly/layer #:darterfly/bsd #:darterfly/init #:darterfly/shell #:darterfly/io #:darterfly/text #:darterfly/edit #:darterfly/imageio #:darterfly/kit #:darterfly/stats #:darterfly/windowserver #:darterfly/bench #:darterfly/apps #:darterfly/devices #:darterfly/vfs #:darterfly/apfs #:darterfly/fat #:darterfly/install #:darterfly/net #:darterfly/nrepl #:darterfly/run #:darterfly/generation #:darterfly/kernel #:darterfly/image #:darterfly/crypto #:darterfly/wifi #:darterfly/journal #:darterfly/worlds #:darterfly/storage #:darterfly/log #:darterfly/start #:darterfly/health)
+  :depends-on (#:darterfly/mach #:darterfly/server #:darterfly/layer #:darterfly/bsd #:darterfly/init #:darterfly/shell #:darterfly/io #:darterfly/text #:darterfly/edit #:darterfly/imageio #:darterfly/kit #:darterfly/stats #:darterfly/windowserver #:darterfly/bench #:darterfly/apps #:darterfly/devices #:darterfly/vfs #:darterfly/apfs #:darterfly/fat #:darterfly/install #:darterfly/net #:darterfly/nrepl #:darterfly/run #:darterfly/generation #:darterfly/kernel #:darterfly/image #:darterfly/crypto #:darterfly/wifi #:darterfly/journal #:darterfly/worlds #:darterfly/storage #:darterfly/log #:darterfly/start #:darterfly/health #:darterfly/drivers)
   :in-order-to ((asdf:test-op (asdf:test-op #:darterfly/test))))
 
 (asdf:defsystem #:darterfly/test
