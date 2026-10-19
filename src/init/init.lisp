@@ -2,7 +2,7 @@
   (:use #:cl)
   (:local-nicknames (#:bsd #:darterfly/bsd) (#:mach #:darterfly/mach))
   (:export #:bootstrap-check-in #:bootstrap-look-up #:bootstrap-port #:init-call #:launch
-           #:job #:decide #:submit #:remove-job #:release #:jobs #:*sample-every*))
+           #:job #:decide #:submit #:remove-job #:release #:jobs #:inspect-job #:*sample-every*))
 (in-package #:darterfly/init)
 
 (defconstant +mach-notify-port-destroyed+ #o105)
@@ -26,7 +26,8 @@
    (reason :initform nil :accessor reason)
    (exits :initform nil :accessor exits)
    (cpu :initform nil :accessor cpu)
-   (removing :initform nil :accessor removing)))
+   (removing :initform nil :accessor removing)
+   (backtraces :initform nil :accessor backtraces)))
 
 (defclass service ()
   ((name :initarg :name :reader name)
@@ -240,9 +241,44 @@
                               (and (plusp seconds)
                                    (/ (- cpu (cdr last)) seconds))))))))
 
+(defparameter *backtraces-form*
+  "(let ((out nil) (lock (sb-thread:make-mutex)))
+     (dolist (th (sb-thread:list-all-threads))
+       (unless (eq th sb-thread:*current-thread*)
+         (ignore-errors
+          (sb-thread:interrupt-thread
+           th
+           (lambda ()
+             (let ((trace (with-output-to-string (s) (sb-debug:print-backtrace :count 20 :stream s))))
+               (sb-thread:with-mutex (lock)
+                 (push (list (sb-thread:thread-name sb-thread:*current-thread*) trace) out))))))))
+     (sleep 1)
+     (prin1-to-string out))")
+
+(defun take-backtraces (job)
+  (setf (backtraces job)
+        (handler-case (darterfly/run:world-eval (world job) *backtraces-form* :timeout 5)
+          (error (e) (format nil "no backtraces: ~a" e)))))
+
 (defun quarantine (job why)
+  (take-backtraces job)
   (darterfly/worlds:pause (darterfly/run:world-id (world job)))
   (note job :quarantined why))
+
+(defun inspect-job (label)
+  (let ((job (sb-thread:with-mutex (*lock*) (find-job label))))
+    (unless job
+      (error "no job ~a" label))
+    (let ((id (and (world job) (darterfly/run:world-id (world job)))))
+      (list :label label
+            :state (state job)
+            :reason (reason job)
+            :exits (reverse (exits job))
+            :world id
+            :backtraces (backtraces job)
+            :inside (and id
+                         (eq (state job) :quarantined)
+                         (darterfly/worlds:inspect-world id))))))
 
 (defun wait-for-world (job)
   (let ((thread (darterfly/run::world-thread (world job))))

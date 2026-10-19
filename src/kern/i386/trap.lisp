@@ -24,8 +24,22 @@
 
 (define-low reg (regs offset) (mem :u64 (+ regs offset)))
 
+(define-low kernel-address-p (a)
+  (and (>= a #xFFFFFF0000000000) (not (logand a 7))))
+
+(define-low print-callers (rbp)
+  (let ((frame rbp) (n 0))
+    (kprintf "callers:")
+    (while (and (< n 12) (the :u32 (kernel-address-p frame)))
+      (kprintf " 0x%lx" (mem :u64 (+ frame 8)))
+      (setf frame (mem :u64 frame))
+      (incf n))
+    (kprintf "
+")))
+
 (define-low panic-trap (regs)
   (let ((cr2 (read-cr 2)))
+    (print-callers (reg regs +r-rbp+))
     (panic "Kernel trap at 0x%016lx, type %lu=%s, registers:
 CR0: 0x%016lx, CR2: 0x%016lx, CR3: 0x%016lx, CR4: 0x%016lx
 RAX: 0x%016lx, RBX: 0x%016lx, RCX: 0x%016lx, RDX: 0x%016lx

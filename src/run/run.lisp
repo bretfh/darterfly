@@ -462,14 +462,11 @@
   (when (world-paused-p world)
     (error "world ~d is paused" (world-id world)))
   (let ((text (if (stringp form) form (prin1-to-string form))))
-    (flet ((ask ()
-             (sb-ext:octets-to-string (darterfly/worlds:call (world-inward world) text)
-                                      :external-format :utf-8)))
-      (if timeout
-          (handler-case (sb-ext:with-timeout timeout (ask))
-            (sb-ext:timeout ()
-              (error 'no-answer :world (world-id world) :seconds timeout)))
-          (ask)))))
+    (handler-case
+        (sb-ext:octets-to-string (darterfly/worlds:call (world-inward world) text :timeout timeout)
+                                 :external-format :utf-8)
+      (darterfly/worlds:no-reply ()
+        (error 'no-answer :world (world-id world) :seconds timeout)))))
 
 (defun attach (world &key (input *standard-input*) (output *standard-output*))
   (loop

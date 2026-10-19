@@ -1,7 +1,7 @@
 (defpackage #:darterfly/worlds
   (:use #:cl)
   (:export #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages #:spawn-record #:receive-into #:copy-from #:copy-into
-           #:heartbeat #:*watchdog-limit* #:quiet-watchdog #:pause #:resume #:checkpoint #:restore #:grant-memory #:grant-vectors #:port-into #:grant-rights #:*rights* #:worlds))
+           #:heartbeat #:*watchdog-limit* #:quiet-watchdog #:pause #:resume #:checkpoint #:restore #:grant-memory #:grant-vectors #:port-into #:grant-rights #:*rights* #:worlds #:inspect-world #:peek #:no-reply))
 (in-package #:darterfly/worlds)
 
 (define-condition world-error (error)
@@ -32,14 +32,59 @@
 (defun reply-buffer ()
   (or *reply-buffer* (setf *reply-buffer* (make-array +max-message+ :element-type '(unsigned-byte 8)))))
 
-(defun call (port message)
+(define-condition no-reply (world-error)
+  ((seconds :initarg :seconds :reader no-reply-seconds))
+  (:report (lambda (c s) (format s "no reply in ~a s" (no-reply-seconds c)))))
+
+(defconstant +eintr+ 4)
+(defconstant +etimedout+ 110)
+(defconstant +enosys+ 38)
+(defconstant +eperm+ 1)
+
+(defun machdep-raw (n &optional (a 0) (b 0) (c 0) (d 0) (e 0))
+  (sb-alien:alien-funcall
+   (sb-alien:extern-alien "__machdep5" (function sb-alien:long sb-alien:long sb-alien:unsigned-long sb-alien:unsigned-long
+                                                 sb-alien:unsigned-long sb-alien:unsigned-long sb-alien:unsigned-long))
+   n a b c d e))
+
+(defun microseconds-left (deadline)
+  (let ((left (- deadline (get-internal-real-time))))
+    (max 1 (round (* left 1000000) internal-time-units-per-second))))
+
+(defun call (port message &key timeout)
   (let ((m (octets message))
         (r (if (eq sb-thread:*current-thread* (sb-thread:main-thread))
                (reply-buffer)
-               (make-array 4096 :element-type '(unsigned-byte 8)))))
-    (with-octets (ms m)
-      (with-octets (rs r)
-        (subseq r 0 (machdep 41 port ms (length m) rs (length r)))))))
+               (make-array 4096 :element-type '(unsigned-byte 8))))
+        (deadline (and timeout
+                       (+ (get-internal-real-time)
+                          (round (* timeout internal-time-units-per-second)))))
+        (token nil))
+    (unwind-protect
+         (with-octets (ms m)
+           (let ((started (machdep-raw 76 port ms (length m))))
+             (when (member started (list (- +enosys+) (- +eperm+)))
+               (return-from call
+                 (with-octets (rs r)
+                   (subseq r 0 (machdep 41 port ms (length m) rs (length r))))))
+             (when (< -4096 started 0)
+               (error 'world-error :code (- started)))
+             (setf token (ldb (byte 64 0) started)))
+           (with-octets (rs r)
+             (loop
+               (let ((n (machdep-raw 77 token rs (length r)
+                                     (if deadline (microseconds-left deadline) 0))))
+                 (cond ((not (minusp n))
+                        (setf token nil)
+                        (return (subseq r 0 n)))
+                       ((= n (- +eintr+)))
+                       ((= n (- +etimedout+))
+                        (error 'no-reply :code +etimedout+ :seconds timeout))
+                       (t
+                        (setf token nil)
+                        (error 'world-error :code (- n))))))))
+      (when token
+        (machdep-raw 78 token)))))
 
 (defun receive (port &key (timeout 0))
   (let ((buf (make-array +max-message+ :element-type '(unsigned-byte 8)))
@@ -243,3 +288,53 @@
 (defun world-state (world)
   (let ((flags (machdep 46 world)))
     (cond ((logtest flags 8) :gone) ((logtest flags 2) :stopped) ((logtest flags 4) :paused) (t :running))))
+
+(defconstant +saved-state-size+ 176)
+(defconstant +saved-rbp+ 48)
+(defconstant +saved-rip+ 136)
+(defconstant +saved-rsp+ 160)
+(defconstant +thread-record+ (+ 24 +saved-state-size+ 512))
+
+(defun peek (world address size)
+  (let ((here (make-array size :element-type '(unsigned-byte 8))))
+    (with-octets (h here)
+      (machdep 57 world address h size))
+    here))
+
+(defun octets-u64 (octets at)
+  (loop for i below 8
+        sum (ash (aref octets (+ at i)) (* 8 i))))
+
+(defun peek-u64 (world address)
+  (octets-u64 (peek world address 8) 0))
+
+(defun return-addresses (world rbp &optional (most 32))
+  (loop repeat most
+        for frame = rbp then next
+        for next = (and (plusp frame)
+                        (zerop (mod frame 8))
+                        (ignore-errors (peek-u64 world frame)))
+        for pc = (and next (ignore-errors (peek-u64 world (+ frame 8))))
+        while (and pc (plusp pc))
+        collect pc
+        while (> next frame)))
+
+(defun inspect-world (world)
+  (let* ((describe (make-array (* 4 1048576) :element-type '(unsigned-byte 8)))
+         (length (with-octets (d describe)
+                   (machdep 55 world d (length describe))))
+         (entries (octets-u64 describe 0))
+         (threads-at (+ 8 (* 24 entries) (* 6 8) 1560))
+         (threads (octets-u64 describe threads-at)))
+    (declare (ignore length))
+    (list :entries entries
+          :threads
+          (loop for i below threads
+                for at = (+ threads-at 8 (* i +thread-record+))
+                for state = (+ at 24)
+                for rbp = (octets-u64 describe (+ state +saved-rbp+))
+                collect (list :id (octets-u64 describe at)
+                              :rip (octets-u64 describe (+ state +saved-rip+))
+                              :rsp (octets-u64 describe (+ state +saved-rsp+))
+                              :rbp rbp
+                              :returns (return-addresses world rbp))))))
