@@ -1,0 +1,12 @@
+/gnu/store/d7blq65m3f57j3sk2qzkp0za363ivl3k-harfbuzz-11.4.4.tar.xz
+/gnu/store/sjn5ckgcy91x91j5v3x7325jny4175ym-freetype-2.13.3.tar.xz
+/gnu/store/8nc8by7cw4a3n5zsbcsfza0lhjizyzb3-libjpeg-turbo-3.1.2.tar.gz
+/gnu/store/d26x223zc8zringhnyvjl3idx65j5sbl-libpng-1.6.50.tar.xz
+/gnu/store/7a95v78d4k9bf775027mm56af6r6srwd-libwebp-1.3.2-checkout
+/gnu/store/bf8cwj3yb1kjabzv5bqq1c1a0cfyfwwh-libxml2-2.14.6.tar.zst
+/gnu/store/rqlhj8xk7x34pnsq8y3gzf7dzwyn9flk-libepoxy-1.5.10-checkout
+/gnu/store/wgf87px44q7yccn0dwj04svynlacz1rz-libgcrypt-1.11.0.tar.bz2
+/gnu/store/l580wn1nngk0f9blspxad971m54drbwb-libgpg-error-1.51.tar.bz2
+/gnu/store/k5rr2ajzd92x0g6pcz3ciqjxng0rxcq4-libtasn1-4.21.0.tar.gz
+/gnu/store/96804jl88kh1a4lpgs52w0m53q0cskl4-libxkbcommon-1.13.1-checkout
+/gnu/store/8jj0ygmdwk842pgjwbxnn505ka9fnh8m-fontconfig-2.16.0.tar.zst

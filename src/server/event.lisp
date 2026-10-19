@@ -4,9 +4,9 @@
            #:event-location #:event-window-location))
 (in-package #:darterfly/server)
 
-(defun key-event (down keycode character &key (timestamp 0) (location '(0 0)))
+(defun key-event (down keycode character &key (timestamp 0) (location '(0 0)) (modifiers 0))
   (list :type (if down :key-down :key-up) :keycode keycode :character character
-        :timestamp timestamp :location location))
+        :timestamp timestamp :location location :modifiers modifiers))
 
 (defun mouse-event (type x y &key (timestamp 0) (window 0) (wx 0) (wy 0) (clicks 1))
   (list :type type :location (list x y) :window window :window-location (list wx wy)

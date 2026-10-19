@@ -52,6 +52,7 @@
         ((= n 515) (user-ok b 4 0))
         ((= n 46) (and (or (not b) (user-ok b 32 0)) (or (not c) (user-ok c 24 1))))
         ((or (= n 48) (= n 329)) (and (or (not b) (user-ok b 8 0)) (or (not c) (user-ok c 8 1))))
+        ((= n 111) (user-ok a 8 0))
         ((= n 83) (and (user-ok b 32 0) (or (not c) (user-ok c 32 1))))
         ((= n 86) (user-ok b 32 1))
         ((= n 230) (user-ok a (* b 8) 1))
@@ -147,6 +148,23 @@
              (setf (mem :u64 (+ self +t-sigmask+)) (logand (mem :u64 (+ self +t-sigmask+)) (lognot +unblockable+)))))
          (when c (setf (mem :u64 c) old))
          (ok regs 0)))
+      ((= n 111)
+       ;; The syscall path holds the kernel lock through mask installation
+       ;; and thread-wait. Save the original mask in the signal frame so
+       ;; sigreturn restores it, including when this is a nested handler.
+       (let* ((self (current-thread))
+              (old (mem :u64 (+ self +t-sigmask+))))
+         (setf (mem :u64 (+ self +t-sigmask+))
+               (logand (mem :u64 a) (lognot +unblockable+)))
+         (error regs +eintr+)
+         (while 1
+           (when (the :u32 (bsd-ast regs))
+             (setf (mem :u64 (+ (mem :u64 (+ regs +r-rdx+)) +uc-sigmask+)) old)
+             (result 0))
+           (when (terminating)
+             (setf (mem :u64 (+ self +t-sigmask+)) old)
+             (result 0))
+           (tsleep 0 0 0))))
       ((= n 83)
        (cond ((= a 0) (setitimer-real b c))
              ((= a 2) (setitimer-prof b c))
@@ -220,7 +238,7 @@
     (unless (or (privileged) (= n 3) (= n 4) (and (= n 16) (user-ok a b 1)) (and (>= n 40) (<= n 43)) (= n 49) (= n 50) (= n 51)
                 (and (or (= n 6) (= n 17)) (user-ok a 16 1))
                 (= n 9) (= n 30) (= n 10) (= n 14) (= n 12) (= n 13) (= n 61))
-      (result (if (and (>= n 69) (<= n 72))
+      (result (if (and (>= n 69) (<= n 73))
                   (ok regs (- 0 +eperm+))
                   (error regs +eperm+))))
     (cond
@@ -243,6 +261,12 @@
                                      (reg regs +r-r10+) (reg regs +r-r8+))))
       ((= n 70) (ok regs (native-wait a)))
       ((= n 71) (ok regs (native-validate a b)))
+      ((= n 73)
+       (let ((w (world-by-id a)))
+         (unless w (result (ok regs (- 0 3))))
+         (when (or (= b 0) (>= b +nsig+)) (result (ok regs (- 0 +einval+))))
+         (psignal w b)
+         (ok regs 0)))
       ((= n 72) (ok regs (map-file-pages a b (reg regs +r-rdx+)
                                        (reg regs +r-r10+) (reg regs +r-r8+))))
       ((and (not (privileged)) (= n 6))
@@ -317,7 +341,11 @@
       ((= n 13) (ok regs (mem :u32 (+ (cpu-datap 0) +cpu-phys-number+))))
       ((= n 14) (ok regs (ml-io-map-wcomb a b)))
       ((= n 16)
-       (let ((i 0))
+       ;; The device must fail when hardware entropy is unavailable. Never
+       ;; substitute a clock or the Lisp PRNG for cryptographic seeding.
+       (unless (logand (the :u32 (cpuid 1 :ecx)) (shl 1 30))
+         (result (ok regs 0)))
+       (let ((i 0) (rdrand-value (the :u64 0)))
          (while (< i b)
            (let ((tries 0) (got 0) (k 0))
              (while (and (< tries 10) (not got))
@@ -335,7 +363,6 @@
        (ok regs 0))
       (t (error regs +enosys+)))))
 
-(define-global rdrand-value :u64)
 
 (define-low mach-call (regs)
   (let ((n (reg regs +r-rax+)))

@@ -119,10 +119,15 @@
                   (t (error e)))))))
         (fail (if denied :eacces :enoent)))))
 
-(defun posix-spawn (name argv envp &key file-actions search-path native-only)
+(defun posix-spawn (name argv envp &key file-actions search-path native-only native-signals cloexec-default)
   (let ((program nil) (resolved name))
     (fork (lambda () (exec-program resolved argv envp program))
           :prepare (lambda ()
+                     (setf (proc-native-signals *proc*) native-signals)
+                     (when cloexec-default
+                       (loop for fd from 3 below (length (proc-fds *proc*))
+                             for slot = (aref (proc-fds *proc*) fd)
+                             when slot do (setf (cdr slot) t)))
                      (spawn-file-actions file-actions)
                      (multiple-value-setq (resolved program)
                        (spawn-program name search-path))

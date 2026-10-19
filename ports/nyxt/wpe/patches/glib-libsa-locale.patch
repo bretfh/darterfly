@@ -1,0 +1,14 @@
+--- a/glib/libcharset/localcharset.c
++++ b/glib/libcharset/localcharset.c
+@@ -111,7 +111,10 @@
+   cp = charset_aliases;
+   if (cp == NULL)
+     {
+-#if !(defined VMS || defined WIN32_NATIVE || defined __CYGWIN__)
++#if defined __darterfly__
++      /* libsa currently supports only the C/POSIX locale. */
++      cp = "C\0US-ASCII\0POSIX\0US-ASCII\0";
++#elif !(defined VMS || defined WIN32_NATIVE || defined __CYGWIN__)
+       FILE *fp;
+       const char *dir;
+       const char *base = "charset.alias";

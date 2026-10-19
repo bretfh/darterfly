@@ -1,0 +1,26 @@
+PLATFORM PASS display-connect
+PLATFORM PASS no-egl
+PLATFORM PASS view-created
+PLATFORM PASS view-size
+PLATFORM PASS view-mapped
+PLATFORM PASS focus-in
+PLATFORM PASS focus-out
+PLATFORM PASS skia-cpu-surface
+PLATFORM PASS skia-cpu-pixels
+PLATFORM PASS skia-antialiasing
+PLATFORM PASS shm-buffer
+PLATFORM PASS submit-first
+PLATFORM PASS frame-completion
+PLATFORM PASS first-owned
+PLATFORM PASS pixel-storage
+PLATFORM PASS submit-second
+PLATFORM PASS frame-completion
+PLATFORM PASS release-previous
+PLATFORM PASS view-unmapped
+PLATFORM PASS COMPLETE
+
+[PLATFORM-WORLD STATUS 0]
+
+[PLATFORM-WORLD SUPERVISOR 42]
+
+[PLATFORM-WORLD DONE]

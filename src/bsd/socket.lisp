@@ -7,7 +7,9 @@
 (defconstant +sock-dgram+ 2)
 
 (defclass socket (file)
-  ((type :initarg :type :reader socket-type)
+  ((family :initarg :family :initform +af-inet+ :reader socket-family)
+   (connect-pending :initform nil :accessor socket-connect-pending)
+   (type :initarg :type :reader socket-type)
    (port :initform nil :accessor socket-port)
    (pcb :initform nil :accessor socket-pcb)
    (peer :initform nil :accessor socket-peer)
@@ -49,7 +51,7 @@
       (return-from socket (fd-alloc (new-local-socket type protocol))))
     (unless (member domain (list +af-inet+ +af-inet6+)) (fail :eafnosupport))
     (unless (member type (list +sock-stream+ +sock-dgram+)) (fail :eprotonosupport))
-    (fd-alloc (make-instance 'socket :type type :flags 2))))
+    (fd-alloc (make-instance 'socket :type type :family domain :flags 2))))
 
 (defun bind (fd address &optional port)
   (syscall
@@ -76,7 +78,7 @@
       (unless (internet-socket-p s) (return-from accept (local-accept s)))
       (unless (typep (socket-pcb s) 'darterfly/net:listener) (fail :einval))
       (let* ((c (net-wait s (lambda (timeout) (or (darterfly/net:tcp-accept (socket-pcb s) :timeout timeout) :again))))
-             (new (make-instance 'socket :type +sock-stream+ :flags 2)))
+             (new (make-instance 'socket :type +sock-stream+ :family (socket-family s) :flags 2)))
         (setf (socket-pcb new) c (socket-port new) (socket-port s))
         (multiple-value-bind (address port) (darterfly/net:tcp-peer c)
           (values (fd-alloc new) address port))))))
@@ -87,8 +89,19 @@
       (unless (internet-socket-p s) (return-from connect (local-connect s address)))
       (if (= (socket-type s) +sock-stream+)
           (progn
-            (when (socket-pcb s) (fail :eisconn))
-            (setf (socket-pcb s) (net-wait s (lambda (timeout) (declare (ignore timeout)) (darterfly/net:tcp-connect (ip-of address) port)))))
+            (when (socket-pcb s)
+              (fail (if (socket-connect-pending s) :ealready :eisconn)))
+            (if (nonblocking-p s)
+                (progn
+                  (setf (socket-pcb s)
+                        (without-bsd
+                          (darterfly/net:tcp-connect (ip-of address) port :wait nil))
+                        (socket-connect-pending s) t)
+                  (fail :einprogress))
+                (setf (socket-pcb s)
+                      (net-wait s (lambda (timeout)
+                                    (declare (ignore timeout))
+                                    (darterfly/net:tcp-connect (ip-of address) port))))))
           (setf (socket-peer s) (list (ip-of address) port)))
       0)))
 
@@ -158,3 +171,48 @@
 
 (defun send (fd octets) (write fd octets))
 (defun recv (fd count) (read fd count))
+
+(defun libsa-socket-option (operation fd level option record)
+  (let* ((socket (fd-socket fd))
+         (sap (sb-sys:int-sap record))
+         (length (sb-sys:sap-ref-64 sap 0))
+         (setting (eq operation :setsockopt))
+         (value (when (>= length 4) (sb-sys:signed-sap-ref-32 sap 8)))
+         (pcb (socket-pcb socket)))
+    (when (> length 16) (fail :einval))
+    (if setting
+        ;; TCP output currently sends immediately; disabling Nagle is supported.
+        ;; Unsupported options must not silently succeed.
+        (unless (and (= level 6) (= option 1) value (plusp value)
+                     (internet-socket-p socket) (= (socket-type socket) +sock-stream+))
+          (fail :enoprotoopt))
+        (let ((result
+                (cond ((= level 1)
+                       (case option
+                         (3 (socket-type socket))
+                         (4 (cond
+                              ((and (typep pcb 'darterfly/net:connection)
+                                    (darterfly/net:tcp-reset-p pcb))
+                               (prog1 (vfs:errno-code
+                                        (if (socket-connect-pending socket)
+                                            :econnrefused :econnreset))
+                                 (setf (socket-connect-pending socket) nil)))
+                              (t
+                               (when (and (typep pcb 'darterfly/net:connection)
+                                          (eq (darterfly/net::tcp-state pcb) :established))
+                                 (setf (socket-connect-pending socket) nil))
+                               0)))
+                         (30 (if (if (internet-socket-p socket)
+                                     (typep pcb 'darterfly/net:listener)
+                                     (eq (local-state socket) :listening))
+                                 1 0))
+                         (7 darterfly/net::+sndbuf+)
+                         (8 darterfly/net::+rcvbuf+)
+                         ((2 6 9 10) 0)
+                         (t (fail :enoprotoopt))))
+                      ((and (= level 6) (= option 1)) 1)
+                      (t (fail :enoprotoopt)))))
+          (unless (>= length 4) (fail :einval))
+          (setf (sb-sys:sap-ref-64 sap 0) 4
+                (sb-sys:signed-sap-ref-32 sap 8) result)))
+    0))

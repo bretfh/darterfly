@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/../../.."
+if [ -z "${DARTER_HTTP_FIXTURE_DIR:-}" ]; then
+  exec sh ports/nyxt/wpe/with-http-fixture.sh sh ports/nyxt/wpe/run-tls.sh
+fi
+mkdir -p build/wpe-assessment
+guix shell -m manifest.scm -- sh -c '
+  export CL_SOURCE_REGISTRY="$PWD//:$GUIX_ENVIRONMENT/share/common-lisp//"
+  export ASDF_OUTPUT_TRANSLATIONS="/:$HOME/.cache/common-lisp/darterfly/"
+  exec sbcl --no-userinit --non-interactive \
+    --load ports/nyxt/wpe/run-tls.lisp
+'

@@ -34,12 +34,14 @@
     (__syscall 516 (if all #x101 1) addr 0 0 0 0)
     (setf (mem :u32 (__errno_location)) saved)))
 
-(define-low usec-until (abstime)
+(define-low usec-until-clock (abstime clock)
   (let ((nsec 0) (sec 0))
-    (clock_gettime 0 (address sec))
+    (clock_gettime clock (address sec))
     (let ((usec (+ (* (- (mem :u64 abstime) sec) 1000000)
                    (signed-truncate (- (mem :u64 (+ abstime 8)) nsec) 1000))))
       (if (signed<= usec 0) 1 usec))))
+
+(define-low usec-until (abstime) (usec-until-clock abstime 0))
 
 (define-low __libsa_main_thread () (address main-thread))
 
@@ -184,7 +186,11 @@
 (define-low pthread_mutexattr_destroy (a) 0)
 (define-low pthread_mutexattr_settype (a (k :u32)) (setf (mem :u32 a) k) 0)
 
-(define-low pthread_cond_init (c a) (setf (mem :u32 c) 0) 0)
+;; Keep the published four-byte condition ABI. The top bit records the
+;; clock; the remaining bits are the wake sequence (wrapping independently).
+(define-low pthread_cond_init (c a)
+  (when (and a (mem :u32 a)) (result 95))
+  (setf (mem :u32 c) (if a (shl (mem :u32 (+ a 4)) 31) 0)) 0)
 (define-low pthread_cond_destroy (c) 0)
 
 (define-low cond-wait (c m usec)
@@ -197,13 +203,21 @@
     (if (= (the :u32 r) +etimedout+) +etimedout+ 0)))
 
 (define-low pthread_cond_wait (c m) (cond-wait c m 0))
-(define-low pthread_cond_timedwait (c m abstime) (cond-wait c m (usec-until abstime)))
-(define-low pthread_cond_signal (c) (fetch-add c 1) (ulock-wake c 0) 0)
-(define-low pthread_cond_broadcast (c) (fetch-add c 1) (ulock-wake c 1) 0)
+(define-low pthread_cond_timedwait (c m abstime) (cond-wait c m (usec-until-clock abstime (shr (mem :u32 c) 31))))
+(define-low cond-advance (c)
+  (let ((old (mem :u32 c)))
+    (while (not (compare-and-swap c old
+                  (logior (logand old #x80000000)
+                          (logand (+ old 1) #x7FFFFFFF))))
+      (setf old (mem :u32 c)))))
+(define-low pthread_cond_signal (c) (cond-advance c) (ulock-wake c 0) 0)
+(define-low pthread_cond_broadcast (c) (cond-advance c) (ulock-wake c 1) 0)
 (define-low pthread_condattr_init (a) (memset a 0 8) 0)
 (define-low pthread_condattr_destroy (a) 0)
 (define-low pthread_condattr_setpshared (a (p :u32)) (setf (mem :u32 a) p) 0)
-(define-low pthread_condattr_setclock (a (c :u32)) (setf (mem :u32 (+ a 4)) c) 0)
+(define-low pthread_condattr_setclock (a (c :u32))
+  (when (> c 1) (result 22))
+  (setf (mem :u32 (+ a 4)) c) 0)
 
 (define-low pthread_key_create (k d)
   (let ((key (fetch-add (address next-key) 1)))
@@ -272,6 +286,14 @@
       (setf state (mem :u32 lock))
       (when state (ulock-wait lock state 0))))
   0)
+(define-low pthread_rwlock_tryrdlock (lock)
+  (let ((state 0))
+    (while 1
+      (setf state (mem :u32 lock))
+      (when (>= state #x7fffffff) (result +ebusy+))
+      (when (compare-and-swap lock state (+ state 1)) (result 0)))))
+(define-low pthread_rwlock_trywrlock (lock)
+  (if (compare-and-swap lock 0 #x80000000) 0 +ebusy+))
 (define-low pthread_rwlock_unlock (lock)
   (if (= (mem :u32 lock) #x80000000)
       (exchange lock 0)

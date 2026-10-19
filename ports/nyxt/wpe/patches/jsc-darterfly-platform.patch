@@ -1,0 +1,146 @@
+--- a/Source/WTF/wtf/PlatformOS.h
++++ b/Source/WTF/wtf/PlatformOS.h
+@@ -46,6 +46,10 @@
+ 
+ /* ==== OS() - underlying operating system; only to be used for mandated low-level services like
+    virtual memory, not to choose a GUI toolkit ==== */
++
++#if defined(__darterfly__)
++#define WTF_OS_DARTERFLY 1
++#endif
+ 
+ /* OS(AIX) - AIX */
+ #if defined(_AIX)
+@@ -137,6 +141,7 @@
+     || OS(DARWIN)           \
+     || OS(FREEBSD)          \
+     || OS(FUCHSIA)          \
++    || OS(DARTERFLY)        \
+     || OS(HAIKU)            \
+     || OS(HURD)             \
+     || OS(LINUX)            \
+--- a/Source/WTF/wtf/PlatformHave.h
++++ b/Source/WTF/wtf/PlatformHave.h
+@@ -197,7 +197,7 @@
+ #define HAVE_RESOURCE_H 1
+ #endif
+ 
+-#if OS(UNIX) && !OS(FUCHSIA)
++#if OS(UNIX) && !OS(FUCHSIA) && !OS(DARTERFLY)
+ #define HAVE_PTHREAD_SETSCHEDPARAM 1
+ #endif
+ 
+@@ -237,7 +237,7 @@
+ #define HAVE_MACH_MEMORY_ENTRY 1
+ #endif
+ 
+-#if OS(DARWIN) || OS(FUCHSIA) || ((OS(FREEBSD) || OS(HAIKU) || OS(NETBSD) || OS(OPENBSD) || OS(LINUX) || OS(HURD) || OS(QNX)) && (CPU(X86_64) || CPU(ARM) || CPU(ARM64) || CPU(RISCV64)))
++#if OS(DARWIN) || OS(FUCHSIA) || ((OS(DARTERFLY) || OS(FREEBSD) || OS(HAIKU) || OS(NETBSD) || OS(OPENBSD) || OS(LINUX) || OS(HURD) || OS(QNX)) && (CPU(X86_64) || CPU(ARM) || CPU(ARM64) || CPU(RISCV64)))
+ #define HAVE_MACHINE_CONTEXT 1
+ #endif
+ 
+--- a/Source/JavaScriptCore/runtime/MachineContext.h
++++ b/Source/JavaScriptCore/runtime/MachineContext.h
+@@ -155,6 +155,8 @@
+ #else
+ #error Unknown Architecture
+ #endif
++#elif OS(DARTERFLY)
++    return reinterpret_cast<void*&>(machineContext.rsp);
+ #elif OS(FREEBSD)
+ 
+ #if CPU(X86_64)
+@@ -284,6 +286,8 @@
+ #else
+ #error Unknown Architecture
+ #endif
++#elif OS(DARTERFLY)
++    return reinterpret_cast<void*&>(machineContext.rbp);
+ #elif OS(FREEBSD)
+ 
+ #if CPU(X86_64)
+@@ -444,6 +448,8 @@
+ #else
+ #error Unknown Architecture
+ #endif
++#elif OS(DARTERFLY)
++    return reinterpret_cast<void*&>(machineContext.rip);
+ #elif OS(FREEBSD)
+ 
+ #if CPU(X86_64)
+@@ -620,6 +626,8 @@
+ #else
+ #error Unknown Architecture
+ #endif
++#elif OS(DARTERFLY)
++    return reinterpret_cast<void*&>(machineContext.rsi);
+ #elif OS(FREEBSD)
+ 
+ #if CPU(X86_64)
+@@ -677,6 +685,8 @@
+ {
+ #if OS(DARWIN)
+     return wasmInstancePointer(machineContext->__ss);
++#elif OS(DARTERFLY)
++    return reinterpret_cast<void*>(machineContext.rbx);
+ #elif OS(FREEBSD)
+ 
+ #if CPU(X86_64)
+@@ -797,6 +807,8 @@
+ #else
+ #error Unknown Architecture
+ #endif
++#elif OS(DARTERFLY)
++    return reinterpret_cast<void*&>(machineContext.r8);
+ #elif OS(FREEBSD)
+ 
+ #if CPU(X86_64)
+--- a/Source/WTF/wtf/generic/MemoryFootprintGeneric.cpp
++++ b/Source/WTF/wtf/generic/MemoryFootprintGeneric.cpp
+@@ -33,8 +33,14 @@
+ 
+ size_t memoryFootprint()
+ {
++#if OS(DARTERFLY)
++    // No process footprint telemetry yet. Zero means unavailable; do not
++    // confuse total system RAM or a zero-filled rusage with a measurement.
++    return 0;
++#else
+     auto memoryUse = memoryStatus();
+     return memoryUse.memoryFootprint;
++#endif
+ }
+ 
+ } // namespace WTF
+--- a/Source/JavaScriptCore/heap/BlockDirectory.cpp
++++ b/Source/JavaScriptCore/heap/BlockDirectory.cpp
+@@ -69,7 +69,8 @@
+     // FIXME: We should figure out a solution for Windows and PlayStation.
+     // QNX doesn't have mincore(), though the information can be had. But since all mapped
+     // pages are resident, does it matter?
+-#if OS(UNIX) && !PLATFORM(PLAYSTATION) && !OS(QNX) && !OS(HAIKU)
++// Darterfly has no swapping; paged-out-block statistics are unavailable.
++#if OS(UNIX) && !PLATFORM(PLAYSTATION) && !OS(QNX) && !OS(HAIKU) && !OS(DARTERFLY)
+     size_t pageSize = WTF::pageSize();
+     ASSERT(!(MarkedBlock::blockSize % pageSize));
+     auto numberOfPagesInMarkedBlock = MarkedBlock::blockSize / pageSize;
+--- a/Source/JavaScriptCore/runtime/JSCBytecodeCacheVersion.cpp
++++ b/Source/JavaScriptCore/runtime/JSCBytecodeCacheVersion.cpp
+@@ -31,7 +31,7 @@
+ #include <wtf/NeverDestroyed.h>
+ #include <wtf/text/SuperFastHash.h>
+ 
+-#if OS(UNIX)
++#if OS(UNIX) && !OS(DARTERFLY)
+ #include <dlfcn.h>
+ #if OS(DARWIN)
+ #include <mach-o/dyld.h>
+@@ -68,7 +68,7 @@
+         }
+         cacheVersion.construct(0);
+         dataLogLnIf(JSCBytecodeCacheVersionInternal::verbose, "Failed to get UUID for JavaScriptCore framework");
+-#elif OS(UNIX) && !PLATFORM(PLAYSTATION) && !OS(HAIKU) && !OS(QNX)
++#elif OS(UNIX) && !PLATFORM(PLAYSTATION) && !OS(HAIKU) && !OS(QNX) && !OS(DARTERFLY)
+         auto result = ([&] -> std::optional<uint32_t> {
+             Dl_info info { };
+             if (!dladdr(jsFunctionAddr, &info))

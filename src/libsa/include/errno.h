@@ -128,6 +128,7 @@ int *__errno_location(void);
 #define EDQUOT 122
 #define ENOMEDIUM 123
 #define EMEDIUMTYPE 124
+#define ECANCELED 125
 
 #ifdef __cplusplus
 }

@@ -45,6 +45,7 @@
                  (write-string output s))
                (dolist (label '("BUILD" "OWN-WORLD" "RUN" "FINI" "TEXT-PROTECTED"
                                 "RELRO-PROTECTED" "LISP-WORLD" "CLEAN" "LOAD" "ROLLBACK"
+                                "NOLOAD-ABSENT" "NOLOAD-ERROR" "NOLOAD-RESIDENT"
                                 "CONSTRUCTORS" "CONSTRUCTOR-THREAD" "DEPENDENCY-SCOPE" "SHARED-ALLOCATOR"
                                 "SHARED-ERRNO" "CALLBACK" "TLS-MAIN" "TLS-OLD-THREAD"
                                 "TLS-NEW-THREAD" "REOPEN-GLOBAL" "TRUNCATED"

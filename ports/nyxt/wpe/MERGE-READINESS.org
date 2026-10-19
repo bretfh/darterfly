@@ -1,0 +1,299 @@
+#+title: Nyxt: from native browser proof to supported Darterfly application
+#+date: 2026-10-19
+#+startup: overview
+
+* Decision and scope
+
+Keep Nyxt and WPE. The application, engine and native display/input path work.
+The next milestone is a maintained desktop application on current master, with
+durable state, predictable resource use and recoverable failures. No engine
+change, Linux runtime or new browser implementation is proposed.
+
+This document is a source-reviewed execution plan. Only the baseline below has
+passed; the checkboxes are acceptance requirements, not completed work. The
+earlier test used a resumed guest source-build disk. It is not qualification
+of a clean installation or current master.
+
+* Proven baseline
+
+The recorded actual-OS run starts upstream Nyxt in an isolated Lisp world,
+renders a controlled HTTPS page through WPE, evaluates JavaScript, accepts
+QEMU HID clicks/typing, opens Nyxt's Ctrl-L prompt and navigates on Enter.
+Trusted UI Lisp callbacks execute; the same callback from the HTTPS page is
+denied. Engine, adapter and world exit successfully and native children are
+reaped. The separate host run passed 84 checks.
+
+The renderer extension changes no Nyxt application source. WPE and its
+dependencies have a target port and patches; keeping Nyxt unchanged does not
+mean the entire dependency stack is unmodified. The engine remains
+cross-built. OCICL supplies Nyxt's Lisp-side TLS; WPE uses its existing native
+network/TLS stack. Keep those established consumers and shared libsa.
+
+See [[file:browser-evidence.json][the browser evidence]], [[file:NYXT-RENDERER.org][implementation notes]], [[file:nyxt-build-evidence.json][the earlier clean-disk core build]], and [[file:render-evidence.json][the engine baseline]].
+
+* Branch integration must come first
+
+At review, this checkout is codex/nyxt-guix-engine at 5e25835. Master is
+54ef189 and contains that HEAD, with 74 subsequent commits. The outstanding D2
+MERGE_HEAD is 0548aa7, also already an ancestor of master. The index has no
+unresolved conflict entries, but the merge is unfinished and browser/runtime
+work remains unstaged or untracked. Do not mistake the committed branch diff
+for the browser implementation.
+
+Master already has app worlds, init supervision and a world-facing
+WindowServer service. Its app entry points are src/apps/open.lisp and
+src/init/init.lisp; the display client is src/layer/world.lisp. The browser
+proof still uses a root-side Nyxt Windows process and dedicated frame socket.
+Reuse master's service instead of making that temporary broker a second
+permanent window API.
+
+- [ ] Preserve a recoverable snapshot of HEAD, merge/index state, tracked
+  changes and all untracked source/evidence before rearranging work.
+- [ ] Reconcile the pending D2 merge without attributing its hardware/audio
+  work to the browser change. Preserve the tested browser state while
+  preparing reviewable commits.
+- [ ] Integrate current master in this browser worktree or an isolated
+  integration checkout. Preserve newer world rights, native syscall numbering,
+  app lifecycle and network-driver changes; do not copy older files wholesale
+  over master.
+- [ ] Leave the active master worktree and its local documentation/design
+  edits untouched. Compare against master again before the final merge.
+- [ ] Boot the integrated base and rerun the existing browser baseline before
+  adding more browser features. Retain the old evidence as historical
+  evidence.
+
+* Source findings that block dependable use
+
+** Application lifecycle
+
+nyxt-renderer.lisp launches fixed /tmp socket names and stores process,
+buffer, window and reply state in globals. Shutdown waits without a deadline,
+does not explicitly close both connections or join its reader threads, and
+does not reset all those tables. A second launch in the same world is not
+qualified. A partial startup can leave resources behind.
+
+Use a session object with explicit starting/running/stopping/stopped states
+and owned processes, descriptors, threads and requests. Clean up partial
+startup with unwind-protect. Use unique owned endpoints, or passed descriptors
+where supported; do not unlink another running instance's endpoint. Stop
+intentionally without automatic relaunch. Unexpected crashes should use init's
+existing bounded recovery policy.
+
+** Event ordering and backpressure
+
+The native send path retries EAGAIN inside the GLib thread without a deadline.
+A stalled receiver can therefore stop all WebKit progress. The Lisp engine
+reader also forwards full frames synchronously to the window socket. RPC
+replies compete with pixels. callback-thread creates a fresh thread per
+callback; independent load callbacks can finish out of order. Several global
+tables have multiple readers/writers with no explicit ownership rule.
+
+Keep the GLib thread nonblocking. Bound outbound queues and pending requests;
+coalesce obsolete frames per view while preserving control replies. Give Lisp
+events explicit ownership and ordered dispatch, with a bounded callback
+executor for work that can call synchronous engine RPC. Do not introduce a
+single callback thread that deadlocks waiting for a reply it must itself
+dispatch. Cancel requests on view/session destruction and ignore late replies
+safely.
+
+** Persistence
+
+nyxt-engine.cpp explicitly uses webkit_network_session_new_ephemeral.
+src/bsd/libsa.lisp supports descriptor fcntl operations but rejects record
+locks. SQLite's in-memory test is not evidence for safe browser databases.
+src/libsa/vfs.lisp and the BSD service also need their durability contracts
+checked against actual storage.
+
+Implement the actual record-lock and synchronization behavior needed by the
+pinned SQLite/WebKit configuration in shared libsa/BSD/VFS. Confirm its
+journal/WAL and shared-memory requirements from the selected build. Never
+substitute successful no-op locks. Then use per-user persistent data/cache
+directories with a profile lock. Preserve Nyxt's own history, bookmarks and
+configuration separately from WebKit data.
+
+** Normal interaction
+
+The adapter currently forwards key-down and left-button events; the engine
+synthesizes immediate key-up. There is no complete pointer motion/wheel, drag,
+secondary button, real key-up/repeat or focus transition path. Windows start
+at fixed dimensions; setting the Nyxt window title is a no-op. Several
+renderer interfaces, including named JavaScript worlds, explicitly report
+unsupported behavior.
+
+Use current layer/kit windows and existing input facilities. Define
+key/modifier translation explicitly rather than assuming bit layouts match
+WPE. Inventory Nyxt's foreign interface against this extension, exercising
+each exposed command or marking unsupported capabilities visibly. Do not
+silently report success for operations that did nothing.
+
+** Fault containment and authority
+
+The callback test is useful but narrow. It does not establish a complete
+malicious-content sandbox. The native service routes requests to the sender's
+BSD process, but process-scoped descriptors and isolated heaps alone do not
+prove restricted file, process or service access.
+
+Audit the actual rights and inherited descriptors of each browser process
+against current master. Grant only the services it needs and verify denial of
+unnecessary hardware/world-control authority. Review internal schemes,
+subframes, redirects, navigation races and resource/file access. Test the
+boundary using hostile documents, not only the successful trusted callback.
+State any remaining filesystem or network authority plainly before treating
+the browser as suitable for arbitrary untrusted sites.
+
+** Build and maintenance
+
+The build is pinned and has source/evidence manifests, but scripts still rely
+on assessment directories, an existing /tmp Nyxt checkout, scratch-root
+pointer files and some hard-coded store paths. Build options disable JIT,
+WebAssembly, video/audio, WebGL and several content features including WOFF2.
+CPU rendering works; broad modern-site coverage and performance remain
+unmeasured.
+
+Provide a declared build/staging/install entry point from pinned sources, with
+discoverable Guix inputs, licenses and the actual target closure. Distinguish
+host build dependencies from installed runtime files. Keep WPE patches small
+and explained, remove obsolete workarounds only after proving them
+unnecessary, and establish an engine update/retest procedure. Preserve
+reusable qualification probes; separate historical CEF research from the
+supported WPE route.
+
+* Ordered implementation and acceptance gates
+
+** 1. Current master and a normal application
+
+Deliver the integrated baseline, a Nyxt application bundle/entry point, an
+init-managed app world and direct use of the existing WindowServer client.
+Keep the WPE process boundary; remove the redundant window broker once the
+replacement passes. Browser-specific core, data and memory settings should be
+explicit rather than silently inheriting the small default app budget.
+
+- [ ] From a fresh boot, open Nyxt through the normal desktop path without
+  host REPL injection, fixture services or manual loads.
+- [ ] Open a supplied URL and a second window/buffer; focus an existing
+  instance when appropriate. Define one-owner-per-profile behavior.
+- [ ] Close and reopen 20 times; test partial startup failure and stale
+  endpoints. No orphan windows, descriptors, sockets, children or live session
+  threads remain after cleanup.
+- [ ] Other desktop apps and network-driver worlds continue to work.
+
+** 2. Bounded transport and recoverable failures
+
+Deliver session ownership, ordered/bounded events, nonblocking frame output,
+cancellation and visible failure handling. A page JavaScript error must not
+permanently poison every RPC through the global *failure* flag. Engine loss
+should become an actionable browser state, not an unbounded wait.
+
+- [ ] Kill WebProcess, NetworkProcess and UI process separately; also close a
+  socket mid-header and mid-frame. The desktop remains responsive and recovery
+  is bounded.
+- [ ] Stop the Nyxt world during blocked I/O; verify children, windows and
+  pending requests are reclaimed through normal OS ownership.
+- [ ] Pause the frame consumer while the page animates. Queues remain within
+  configured limits and resume without replaying a backlog of obsolete frames.
+- [ ] Stress navigation, buffer deletion and GC/signal interruption. No lost
+  bytes, stale callbacks, use-after-delete or reply-table growth.
+
+** 3. Interaction sufficient for real work
+
+Deliver scrolling, motion/drag, selection, keyboard modifiers/repeat, focus,
+native window resize/close/title, clipboard, buffer switching,
+back/forward/reload and visible load/TLS errors. Implement file selection and
+downloads through existing OS facilities, with explicit destination ownership
+and cancellation.
+
+- [ ] Read and scroll a long document; select/copy/paste text between Nyxt and
+  Editor.
+- [ ] Fill and submit forms, use multiple buffers, resize windows and close
+  them from normal controls.
+- [ ] Download a fixture file, verify its hash on disk, and upload a selected
+  file. Cancellation leaves no misleading completed file.
+- [ ] Inventory renderer methods, including user scripts and named JS worlds;
+  qualify Nyxt commands that depend on them.
+- [ ] Resolve the observed background suggestion timeout and
+  certificate-parsing warning without suppressing failures or relaxing
+  certificate validation.
+
+** 4. Durable profiles and correct trust
+
+Deliver shared-runtime storage primitives and persistent WebKit/Nyxt profiles.
+Install the normal CA store, use the actual system clock and keep fixture
+CA/environment overrides confined to tests.
+
+- [ ] Cookies, local storage, bookmarks, history and settings survive browser
+  restart and OS reboot. Exercise the storage APIs enabled in the shipped
+  engine, including IndexedDB if enabled.
+- [ ] Two processes contend for database/profile locks correctly. Kill the
+  writer during a transaction; reopen and run database integrity/recovery
+  checks.
+- [ ] Test real guest reset/power-loss behavior separately from clean reboot
+  and document the filesystem's durability guarantees.
+- [ ] Reject untrusted, expired and wrong-host certificates; recover on the
+  next valid load. Display errors to the user without a silent verification
+  bypass.
+
+** 5. Measured efficiency and site coverage
+
+Start with current CPU rendering and interpreter. Measure before choosing
+shared surfaces, JIT or other large changes. The existing 8 GiB guest and 2
+GiB supervisor heap are test settings, not a justified minimum requirement.
+
+- [ ] Record cold/warm startup, idle CPU, resident memory per world, frame
+  bytes/copies, callback counts and input-to-present latency on a fixed QEMU
+  configuration.
+- [ ] Run at least 30 minutes of navigation, scrolling and buffer
+  create/delete. After warm-up and GC, resource counts return to a stable
+  baseline rather than growing each cycle.
+- [ ] Compare before/after frame coalescing and removal of the extra window
+  hop. Hidden/static views should not consume continuous full-frame bandwidth.
+- [ ] Qualify a reproducible local site suite and a recorded selection of
+  public documentation, search and form-heavy sites. Fix missing features
+  required by that baseline; do not equate one HTTPS fixture with general
+  compatibility.
+- [ ] Establish a measured memory configuration and graceful low-memory
+  behavior. The desktop must remain usable when a page exhausts its
+  allocation.
+
+** 6. Reproducibility, review and merge
+
+Deliver a clean build/install path, concise current docs, source/license
+manifests and reviewable changes grouped by responsibility: shared runtime,
+engine port/build, Nyxt renderer, desktop integration and qualification.
+
+- [ ] Build and install from a fresh directory without the old scratch tree or
+  preexisting source checkout; preserve source hashes and complete build
+  instructions.
+- [ ] Run existing runtime/network/native-tool regression suites affected by
+  the diff and current master app-world/init tests.
+- [ ] Run the browser gates on a clean installed guest and again after reboot.
+  Include a manual desktop session and host-independent launch.
+- [ ] Validate the final integrated revision, not just earlier screenshots.
+  Record skipped features, warnings and measured resource requirements.
+- [ ] Resolve the pending merge, review staged/untracked files, and check that
+  generated disks, caches and transient build products are excluded. Keep
+  compact evidence and runnable tests.
+- [ ] Merge the validated branch into master and repeat installed-OS smoke
+  tests on the resulting merge revision. Keep the previous boot generation
+  available for rollback.
+
+* What does not block the first supported version
+
+GPU acceleration, JIT, WebAssembly, video/WebRTC, extensions and rebuilding
+all of WebKit inside Darterfly are separate milestones. Reassess a disabled
+feature only when a required browser workflow demonstrably needs it.
+Unsupported media or APIs should fail clearly; do not promise all modern sites
+will work.
+
+A foundation commit can be reviewed or merged earlier if it is independently
+useful and tested, but that does not satisfy this browser milestone. Ready
+means an ordinary user can launch it, browse the qualified sites, keep work
+across reboots, and recover from failures using the desktop's existing
+facilities.
+
+* Immediate next change
+
+Preserve the current working state and reconcile it with current master. Then
+move window presentation and launch onto master's existing
+app-world/WindowServer path and rerun the native browser baseline. That
+removes temporary architecture before hardening it, and makes every subsequent
+test exercise the application that will actually ship.

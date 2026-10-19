@@ -297,7 +297,9 @@
              (let ((char (io:key-character code *shift* *control*)))
                (when char
                  (post-event (key-client)
-                             (server:key-event t code char :timestamp (get-internal-real-time) :location *cursor*)))))))))
+                             (server:key-event t code char :timestamp (get-internal-real-time) :location *cursor*
+                               :modifiers (logior (if *control* 1 0) (if *shift* 2 0)
+                                                  (if *alt* 4 0) (if *meta* 8 0)))))))))))
 
 (defun hid-devices () (io:input-devices))
 

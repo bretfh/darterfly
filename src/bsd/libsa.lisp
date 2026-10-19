@@ -4,7 +4,7 @@
   #(nil :open :close :read :write :pread :pwrite :lseek :stat :lstat :fstat :readlink :symlink :mkdir :rmdir
     :unlink :rename :chdir :fchdir :getcwd :realpath :chmod :fchmod :chown :fchown :truncate :ftruncate :dup :dup2
     :fcntl :readdir :link :utimes :fsync :umask :pipe :spawn :waitpid
-    :socket :bind :listen :accept :connect :getsockname :getpeername :shutdown :recvfrom :sendto :resolve :socketpair :poll :spawn-packed :getpid :getppid :sendmsg :recvmsg :mmap-file))
+    :socket :bind :listen :accept :connect :getsockname :getpeername :shutdown :recvfrom :sendto :resolve :socketpair :poll :spawn-packed :getpid :getppid :sendmsg :recvmsg :mmap-file :kill :query-dns :fstatat :getsockopt :setsockopt :fchmodat :openat :unlinkat :readlinkat))
 
 (defun c-string (address)
   (let* ((sap (sb-sys:int-sap address))
@@ -36,7 +36,8 @@
   (logior (logand flags 3)
           (if (logtest flags #o100) +o-creat+ 0) (if (logtest flags #o200) +o-excl+ 0)
           (if (logtest flags #o1000) +o-trunc+ 0) (if (logtest flags #o2000) +o-append+ 0)
-          (if (logtest flags #o4000) +o-nonblock+ 0) (if (logtest flags #o200000) +o-directory+ 0)))
+          (if (logtest flags #o4000) +o-nonblock+ 0) (if (logtest flags #o400000) +o-nofollow+ 0)
+          (if (logtest flags #o200000) +o-directory+ 0)))
 
 (defun put-stat (attr id address)
   (let ((sap (sb-sys:int-sap address))
@@ -165,7 +166,14 @@
               (destructuring-bind (&optional ip port) (socket-addresses fd)
                 (unless ip (fail :enotconn))
                 (put-sockaddr ip port address length))
-              (put-sockaddr 0 (or (socket-port s) 0) address length))))))
+              (let ((pcb (socket-pcb s)))
+                (if (typep pcb 'darterfly/net:connection)
+                    (put-sockaddr
+                     (darterfly/net::source-address (darterfly/net::tcp-remote-ip pcb))
+                     (darterfly/net::tcp-local-port pcb) address length)
+                    (put-sockaddr (if (= (socket-family s) +af-inet6+)
+                                      darterfly/net::+unspecified+ 0)
+                                  (or (socket-port s) 0) address length))))))))
 
 (defun libsa-address-call (fd address length connectp)
   (multiple-value-bind (ip port) (get-sockaddr address length)
@@ -198,9 +206,10 @@
 (defun libsa-resolve (name addresses families encoded)
   (let* ((max (ldb (byte 8 0) encoded))
          (family (ldb (byte 8 8) encoded))
-         (ips (or (ignore-errors (list (darterfly/net:ip-address name)))
+         (ips (without-bsd
+                (or (ignore-errors (list (darterfly/net:ip-address name)))
                   (append (unless (= family 10) (ignore-errors (darterfly/net:resolve-name name :type :a)))
-                          (unless (= family 2) (ignore-errors (darterfly/net:resolve-name name :type :aaaa))))))
+                          (unless (= family 2) (ignore-errors (darterfly/net:resolve-name name :type :aaaa)))))))
          (ips (subseq ips 0 (min max (length ips)))))
     (loop :for ip :in ips
           :for i :from 0
@@ -279,14 +288,46 @@
           (return-from libsa-map-file
             (- (darterfly/worlds::world-error-code e))))))))
 
+(defun libsa-node-at (dir address flags)
+  (unless (zerop (logandc2 flags #x100)) (fail :einval))
+  (let ((name (c-string address)) (follow (zerop (logand flags #x100))))
+    (when (zerop (length name)) (fail :enoent))
+    (if (or (= (signed dir) -100)
+            (and (plusp (length name)) (char= (char name 0) #\/)))
+        (path-vnode address follow)
+        (vfs (vfs:namei-at (vfs-fd (vnode-file dir)) name :follow follow)))))
+
+(defun finish-libsa-open (fd flags)
+  (when (and (< fd 3) (not (proc-native-world *proc*)))
+    (setf fd (prog1 (dup-from fd 3) (close fd))))
+  (when (logtest flags #o2000000)
+    (setf (cdr (aref (proc-fds *proc*) fd)) t))
+  fd)
+
 (defun libsa-call (op a b c d)
   (ecase op
-    (:open (let ((fd (open (c-string a) (from-libsa-flags b) c)))
-             (when (and (< fd 3) (not (proc-native-world *proc*)))
-               (setf fd (prog1 (dup-from fd 3) (close fd))))
-             (when (logtest b #o2000000)
-               (setf (cdr (aref (proc-fds *proc*) fd)) t))
-             fd))
+    (:open (finish-libsa-open (open (c-string a) (from-libsa-flags b) c) b))
+    (:openat
+     (let* ((name (c-string b)) (flags (from-libsa-flags c)))
+       (when (zerop (length name)) (fail :enoent))
+       (finish-libsa-open
+        (if (or (= (signed a) -100)
+                (and (plusp (length name)) (char= (char name 0) #\/)))
+            (open name flags d)
+            (let ((fd (vfs (vfs:vfs-open-at (vfs-fd (vnode-file a)) name
+                                           (vfs-flags flags) d))))
+              (fd-alloc (make-instance 'vnode :fd fd :access (logand flags 3)
+                         :device (= (mode-type (vfs:vattr-mode (vfs (vfs:vfs-fstat fd))))
+                                    +s-ifchr+)
+                         :flags (logand flags +o-nonblock+))))) c)))
+    (:unlinkat
+     (unless (zerop (logandc2 c #x200)) (fail :einval))
+     (let ((name (c-string b)) (directory (logtest c #x200)))
+       (when (zerop (length name)) (fail :enoent))
+       (if (or (= (signed a) -100)
+               (and (plusp (length name)) (char= (char name 0) #\/)))
+           (vfs (vfs:vfs-remove (path name) directory))
+           (vfs (vfs:vfs-remove-at (vfs-fd (vnode-file a)) name directory)))))
     (:close (close a))
     (:read (put-octets (read a c) b))
     (:write (write a (get-octets b c)))
@@ -300,6 +341,12 @@
                   (put-vnode-stat (fd-vnode a) b)
                   (put-stat (vfs:make-vattr :mode (logior (if (typep file 'socket) #o140000 +s-ififo+) #o600)) 0 b))))
     (:readlink (put-octets (sb-ext:string-to-octets (vfs (vfs:vfs-readlink (path (c-string a)))) :external-format :utf-8) b c))
+    (:readlinkat
+     (unless (plusp d) (fail :einval))
+     (let ((node (libsa-node-at a b #x100)))
+       (unless (eq (vfs:vnode-type node) :vlnk) (fail :einval))
+       (put-octets (sb-ext:string-to-octets (vfs (vfs:vnop-readlink node))
+                                           :external-format :utf-8) c d)))
     (:symlink (symlink (c-string a) (c-string b)))
     (:mkdir (mkdir (c-string a) b))
     (:rmdir (rmdir (c-string a)))
@@ -325,7 +372,9 @@
                 (2 (setf (cdr (aref (proc-fds *proc*) a)) (logbitp 0 c)) 0)
                 (3 (logior (file-access file) (if (nonblocking-p file) #o4000 0)))
                 (4 (setf (file-flags file) (if (logtest c #o4000) +o-nonblock+ 0)) 0)
-                (t 0)))))
+                ;; In particular, never claim that an unimplemented record
+                ;; lock succeeded: SQLite relies on those locks for safety.
+                (t (fail :einval))))))
     (:readdir (let ((entry (vfs (vfs:vfs-readdir (vfs-fd (vnode-file a)) b))))
                 (if entry (put-dirent (car entry) (cdr entry) c) 0)))
     (:link (fail :enotsup))
@@ -349,6 +398,16 @@
     (:shutdown (shutdown a b))
     (:recvfrom (libsa-recvfrom a b))
     (:sendto (libsa-sendto a b))
+    (:fstatat (put-vnode-stat (libsa-node-at a b d) c))
+    (:fchmodat (vfs (vfs:vnop-setattr (libsa-node-at a b d) :mode c)))
+    ((:getsockopt :setsockopt) (libsa-socket-option op a b c d))
+    (:query-dns
+     (let ((reply (without-bsd
+                    (darterfly/net:query-dns (c-string a)
+                      :type (ldb (byte 16 0) d) :class (ldb (byte 16 16) d)))))
+       (when (> (length reply) 65000) (fail :emsgsize))
+       (put-octets reply b c)
+       (length reply)))
     (:resolve (libsa-resolve (c-string a) b c d))
     (:socketpair (libsa-socketpair a b c d))
     (:poll (libsa-poll a b c))
@@ -357,13 +416,15 @@
     ((:sendmsg :recvmsg) (libsa-message op a b c d))
     (:mmap-file (libsa-map-file a b 0))
     (:getpid (getpid))
-    (:getppid (getppid))))
+    (:getppid (getppid))
+    (:kill (native-kill (signed a) b))))
 
 (defmacro as-libsa ((proc) &body body)
   `(sb-sys:without-interrupts
      (handler-case (or (let ((*proc* ,proc)) ,@body) 0)
        (errno (e) (- (vfs:errno-code (errno-name e))))
        (vfs:vfs-error (e) (- (vfs:errno-code (vfs:vfs-errno e))))
+       (darterfly/net:net-error (e) (- (vfs:errno-code (darterfly/net:net-errno e))))
        (error () (- (vfs:errno-code :eio))))))
 
 (defun libsa-entry (op a b c d &optional (proc *proc0*))
@@ -419,10 +480,10 @@
 (defun serve-transfer (proc token op fd there size offset)
   (case op
     ((:write :pwrite)
-     (let ((octets (make-array size :element-type '(unsigned-byte 8))))
-       (sb-sys:with-pinned-objects (octets)
-         (darterfly/worlds:copy-from token there (sb-sys:sap-int (sb-sys:vector-sap octets)) size))
-       (as-libsa (proc)
+     (as-libsa (proc)
+       (let ((octets (make-array size :element-type '(unsigned-byte 8))))
+         (sb-sys:with-pinned-objects (octets)
+           (darterfly/worlds:copy-from token there (sb-sys:sap-int (sb-sys:vector-sap octets)) size))
          (if (eq op :write)
              (write fd octets)
              (vfs (vfs:vfs-write (vfs-fd (vnode-file fd)) octets (signed offset)))))))
@@ -444,11 +505,11 @@
     (values
      (case op
        (:sendto
-        (let ((octets (make-array size :element-type '(unsigned-byte 8)))
-              (to (subseq request 72 (+ 72 (third sizes)))))
-          (sb-sys:with-pinned-objects (octets)
-            (darterfly/worlds:copy-from token there (sb-sys:sap-int (sb-sys:vector-sap octets)) size))
-          (as-libsa (proc)
+        (as-libsa (proc)
+          (let ((octets (make-array size :element-type '(unsigned-byte 8)))
+                (to (subseq request 72 (+ 72 (third sizes)))))
+            (sb-sys:with-pinned-objects (octets)
+              (darterfly/worlds:copy-from token there (sb-sys:sap-int (sb-sys:vector-sap octets)) size))
             (if (and (= (socket-type (fd-socket fd)) +sock-dgram+) (plusp (length to)))
                 (sb-sys:with-pinned-objects (to)
                   (multiple-value-bind (ip port) (get-sockaddr (sb-sys:sap-int (sb-sys:vector-sap to)) (length to))
@@ -508,7 +569,7 @@
             (layout '(1 0 0 0)))
            ((:symlink :rename :link) (layout '(1 1 0 0)))
            ((:close :lseek :fchdir :fchmod :fchown :ftruncate :dup :dup2
-             :fcntl :fsync :umask :socket :listen :shutdown :getpid :getppid)
+             :fcntl :fsync :umask :socket :listen :shutdown :getpid :getppid :kill)
             (and (layout '(0 0 0 0))
                  (or (not (member name '(:dup2 :fcntl)))
                      (if (eq name :dup2) (<= (second args) 4095)
@@ -534,6 +595,16 @@
            (:recvfrom (and (layout '(0 5 3 3)) (member (third sizes) '(0 28))
                            (member (fourth sizes) '(0 4))))
            (:sendto (and (layout '(0 4 2 0)) (len 2 110)))
+           (:readlinkat
+            (and (layout '(0 1 3 0)) (len 2 4096)
+                 (= (third sizes) (fourth args))))
+           (:fstatat (and (layout '(0 1 3 0)) (len 2 144 144)))
+           ((:fchmodat :openat :unlinkat) (layout '(0 1 0 0)))
+           ((:getsockopt :setsockopt)
+            (and (layout (if (eq name :getsockopt) '(0 0 0 6) '(0 0 0 2)))
+                 (len 3 24 24)))
+           (:query-dns (and (layout '(1 3 0 0)) (<= 1 (third args) 65000)
+                            (= (second sizes) (third args))))
            (:resolve (and (layout '(1 3 3 0)) (len 1 128 128) (len 2 32 32)
                           (<= (ldb (byte 8 0) (fourth args)) 8)))
            (:socketpair (and (layout '(0 0 0 3)) (len 3 8 8)))
@@ -617,7 +688,7 @@
                       (result (libsa-entry op (first real) (second real) (third real) (fourth real) proc))
                       (lens (loop :for kind :in kinds :for size :in sizes
                                   :collect (cond ((not (member kind '(3 6))) 0)
-                                                 ((member name '(:read :pread :readlink)) (if (minusp result) 0 (min result size)))
+                                                 ((member name '(:read :pread :readlink :readlinkat)) (if (minusp result) 0 (min result size)))
                                                  (t size)))))
                  (reply-octets result lens work offsets))))))))
 

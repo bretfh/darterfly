@@ -1,0 +1,10 @@
+This is SBCL 2.6.4, an implementation of ANSI Common Lisp.
+More information about SBCL is available at <http://www.sbcl.org/>.
+
+SBCL is free software, provided as is, with absolutely no warranty.
+It is mostly in the public domain; some portions are provided under
+BSD-style licenses.  See the CREDITS and COPYING files in the
+distribution for more information.
+ELEMENTARY PASS logf/exp2f 100021 inputs within 2 ULP under nearest rounding
+ERFF PASS 1100001 inputs within 2 ULP under nearest rounding
+FLOAT PRIMITIVES PASS 400000 random cases, 1764 stepping/rounding edges, 37044 FMA edges, 1444 remainder edges, four rounding modes

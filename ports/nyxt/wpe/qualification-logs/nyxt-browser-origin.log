@@ -1,0 +1,16 @@
+TLS-SESSION 18766 resumed=False
+ORIGIN 18766 "GET /nyxt HTTP/1.1" 200 -
+TLS-SESSION 18766 resumed=False
+ORIGIN 18766 "GET /nyxt HTTP/1.1" 200 -
+TLS-SESSION 18772 resumed=False
+ORIGIN 18772 "GET /nyxt HTTP/1.1" 200 -
+TLS-SESSION 18772 resumed=False
+ORIGIN 18772 "GET /nyxt HTTP/1.1" 200 -
+TLS-SESSION 18766 resumed=False
+ORIGIN 18766 "GET /browser HTTP/1.1" 200 -
+TLS-SESSION 18766 resumed=True
+ORIGIN 18766 "GET /browser?navigation=2 HTTP/1.1" 200 -
+TLS-HANDSHAKE 18768 [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)
+TLS-HANDSHAKE 18769 [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)
+TLS-HANDSHAKE 18770 [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)
+TLS-HANDSHAKE 18771 [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1010)

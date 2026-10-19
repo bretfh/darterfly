@@ -1,0 +1,11 @@
+--- a/Source/WebKit/PlatformWPE.cmake
++++ b/Source/WebKit/PlatformWPE.cmake
+@@ -503,7 +503,7 @@
+     list(APPEND WebKit_LIBRARIES
+         ${GSTREAMER_FULL_LIBRARIES}
+     )
+-else ()
++elseif (USE_GSTREAMER)
+     list(APPEND WebKit_SYSTEM_INCLUDE_DIRECTORIES
+         ${GSTREAMER_INCLUDE_DIRS}
+         ${GSTREAMER_AUDIO_INCLUDE_DIRS}

@@ -1,0 +1,184 @@
+#+title: Nyxt's native WPE renderer
+#+date: 2026-10-19
+#+startup: overview
+
+* What runs
+
+Nyxt's normal browser initialization, web buffers, status and message
+panels, command dispatch and URL prompt run in an isolated Lisp world.
+The WPE extension presents their software-rendered contents through the
+existing Darterfly WindowServer. Pointer and keyboard events travel back
+through Nyxt's keymaps and into WebKit when Nyxt does not consume them.
+
+The integration is contained in this port directory. This step changes no
+Nyxt application source. It specializes Nyxt's existing renderer classes
+and foreign interface rather than replacing its commands or prompt UI.
+WPE uses the existing source port and shared native CRT/libsa.
+
+See [[file:browser-evidence.json][the recorded browser qualification]],
+[[file:qualification-logs/nyxt-browser-guest.log][the guest transcript]], and
+[[file:qualification-logs/nyxt-browser-origin.log][the independent HTTPS origin log]].
+These records are generated only after the complete test succeeds.
+The earlier [[file:nyxt-build-evidence.json][core-build record]] describes the separate
+clean-disk source-build milestone; it is not the browser test record.
+
+* Architecture
+
+#+begin_example
+Darterfly's normal init and existing world/process services
+  |
+  +-- Nyxt / SBCL world
+  |     upstream commands, modes, buffers and persistent Lisp history
+  |     nyxt-renderer.lisp specializes the renderer interface
+  |       |
+  |       +-- named Unix socket --> native WPE UI world / GLib loop
+  |       |                          +-- trusted Nyxt UI WebProcess
+  |       |                          +-- web content WebProcess(es)
+  |       |                          +-- NetworkProcess / libsoup / TLS
+  |       |                       <-- BGRA frames, events, JS results
+  |       |
+  |       +-- named Unix socket --> Nyxt Windows adapter / BSD process
+  |                                  existing layer and window APIs
+  |                               <-- WindowServer keyboard / pointer
+  |
+  +-- existing WindowServer --> framebuffer
+#+end_example
+
+Nyxt's trusted panels share a WebProcess using WebKit's related-view API.
+Web content uses separate WebProcess instances. All use the same existing
+native loader, libsa, allocator, pthreads and BSD process facilities.
+The adapter process creates ordinary WindowServer windows; it does not
+introduce another compositor or expose root-heap objects to the Lisp world.
+
+WPE owns its GLib loop on one native thread. Lisp callbacks run separately
+from the engine reply reader, allowing synchronous JavaScript requests
+inside Nyxt callbacks. Writes are serialized. The asynchronous evaluation
+API discards return values, including Promises, while reporting errors.
+Synchronous results use Nyxt's JSON representation, including hash tables.
+
+Frames are copied from WPE's premultiplied BGRA buffers, converted to RGBA
+and committed as ordinary layers. This is an initial transport with full
+frame copies. Shared surfaces, damage tracking and frame coalescing remain
+performance work.
+
+* Runtime fixes exposed by the browser
+
+The SBCL spawn bridge now inherits the environment when its environment
+argument is NULL. An explicitly empty environment stays empty. This is
+required for CA trust and font configuration to reach the WPE processes.
+The native guest checks exercise both cases.
+
+The shared passwd/group functions now resolve the default APFS owner,
+uid 501 and gid 20, as darterfly/staff, alongside root. Nyxt's NFiles history
+writer reads and preserves ownership. These entries match the existing
+single-user filesystem defaults; they are not a new account system.
+
+A received world RPC can be abandoned by a signal after its service has
+already consumed socket bytes. Retrying that read loses framing. Both
+ends of this adapter therefore use short nonblocking transfers and defer
+signals across each transfer, restoring the mask before waiting. The Lisp
+end also pins the buffer and defers GC during that call. This is a scoped
+transport fix; general world-RPC cancellation semantics remain separate
+runtime work.
+
+The browser test explicitly allocates 8 GiB guest RAM and a 2 GiB supervisor
+heap. The regular boot configuration retains its existing defaults. These
+sizes are test configuration, not a measured minimum browser requirement.
+
+* Protocol and ownership
+
+Each packet has six little-endian unsigned 32-bit words followed by bytes:
+operation, object ID, request ID, argument A, argument B, payload length.
+Payloads are limited to 16 MiB and frame dimensions to 2048 per axis.
+Strings are UTF-8. Wire packets are never read as Lisp forms.
+
+Engine operations cover view creation/deletion, navigation, HTML loading,
+JavaScript, resize, keyboard/buttons, custom schemes, zoom, history and
+shutdown. Events carry frames, load state, titles, resource requests and
+errors. Window operations create windows, attach/detach buffer layers,
+present frames, release deleted buffers and close. The adapter bounds its
+window and frame caches and removes all client windows on disconnect.
+
+Nyxt's internal Lisp callback scheme is accepted from its own UI and
+internal documents. Ordinary web content cannot invoke those callbacks.
+The Lisp request reader also binds *read-eval* to nil. Qualification tries
+the same registered callback from a trusted status panel and an HTTPS page.
+This check is a boundary regression, not a complete browser security audit.
+
+* Qualification and reproduction
+
+The integration test boots the actual OS under normal init, loads Nyxt in
+its own Lisp world, and uses WPE's real WebProcess and NetworkProcess.
+An external test server provides HTTPS pages; it does not render pages or
+provide an engine at runtime.
+
+The complete run requires:
+
+- The native compiler/CFFI, IOLib process and SQLite memory checks.
+- OCICL HTTPS certificate checks, including rejection and recovery.
+- Nyxt's ordinary startup and a verified HTTPS page in a native window.
+- JavaScript results, trusted UI callbacks and denied web callbacks.
+- Actual QEMU HID clicks and typing, verified by trusted DOM events.
+- Ctrl-L, Nyxt's own URL prompt, typed input and Enter navigation.
+- Screenshots of the page, typed input and prompt.
+- Successful engine, adapter and Lisp-world exits, followed by reaping of
+  the WPE processes through the existing process facilities.
+
+The latest full browser run resumes the previously built guest disk. It
+rebuilds and runs the native input probes; it is not another clean-disk
+Nyxt source build. The separate core-build record covers that earlier test.
+
+#+begin_src sh
+python3 ports/nyxt/wpe/build-engine-probe.py --nyxt
+DARTERFLY_NYXT_BROWSER=1 DARTERFLY_NYXT_RESUME=1 \
+DARTER_HTTP_FIXTURE_LOG="$PWD/build/wpe-assessment/nyxt-browser-origin.log" \
+  sh ports/nyxt/wpe/with-http-fixture.sh \
+  sh ports/nyxt/wpe/run-nyxt-build.sh
+python3 ports/nyxt/wpe/record-browser-evidence.py
+#+end_src
+
+The browser disk is nyxt-browser.img, separate from nyxt.img. Seed it from
+the qualified core-build disk for the first resumed run, or omit RESUME
+for a fresh source build. DARTERFLY_NYXT_QUICK=1 reuses the native compiler
+and cached dependency FASLs for renderer development. The evidence recorder
+rejects quick runs. DARTER_NYXT_TRACE enables engine packet diagnostics;
+the window adapter has a *trace-packets* debugging variable.
+
+With the broker, native binaries and loaded Nyxt system available, the
+extension's entry point uses upstream initialization:
+
+#+begin_src lisp
+(load "/Users/darterfly/nyxt-wire.lisp")
+(load "/Users/darterfly/nyxt-renderer.lisp")
+(nyxt/renderer/wpe:launch '("https://example.org/"))
+#+end_src
+
+The qualification harness uses its fixture CA. A normal browser launch
+should use the installed system trust store, not that fixture certificate.
+The harness closes the browser after its checks. It is not yet a desktop
+application installer or a persistent interactive launch command.
+
+* Remaining work toward everyday use
+
+See [[file:MERGE-READINESS.org][the source-reviewed integration plan and acceptance gates]].
+
+The next work is application packaging and restart/recovery integration,
+then persistent WebKit sessions and browser-database locking. WPE's session
+is currently ephemeral. Nyxt's Lisp history writer executes, but durable
+browser state across reboots is not qualified by this test.
+
+Complete the renderer API for downloads, clipboard, pointer motion/wheel,
+window resize/close controls, named JavaScript worlds and user scripts.
+Qualify buffer switching, error pages, broader site compatibility and
+media. Current tests prove navigation and text interaction with controlled
+HTTPS content; they do not establish compatibility with arbitrary sites.
+
+The successful transcript still contains a background prompter network
+timeout and an OCICL warning about a certificate with a nonpositive serial
+number. Navigation completed, but background network activity is not yet
+fully controlled by the test's search-suggestion setting. These warnings
+remain visible in the saved log and need follow-up before daily use.
+
+The engine remains cross-built from pinned upstream sources. This work
+uses the existing native compiler path, but does not claim that the entire
+WebKit build can already be reproduced inside Darterfly.

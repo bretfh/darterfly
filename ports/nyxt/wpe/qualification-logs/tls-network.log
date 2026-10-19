@@ -1,0 +1,15 @@
+TLS upstream OpenSSL 3.5.7 9 Jun 2026 with GLib networking 2.80.1
+TLS OS entropy and OpenSSL DRBG PASS
+TLS verified HTTPS PASS port=18766 protocol=5
+TLS verified HTTPS PASS port=18767 protocol=4
+TLS certificate rejection PASS identity=wrong.invalid ca=/Users/darterfly/ca.pem flags=2
+TLS certificate rejection PASS identity=localhost ca=/Users/darterfly/untrusted-ca.pem flags=1
+TLS certificate rejection PASS identity=localhost ca=/Users/darterfly/ca.pem flags=8
+TLS certificate rejection PASS identity=localhost ca=/Users/darterfly/ca.pem flags=4
+TLS PASS verified HTTPS TLS1.3 TLS1.2 hostname trust expiry future
+
+[TLS-WORLD STATUS 0]
+
+[TLS-WORLD SUPERVISOR 42]
+
+[TLS-WORLD DONE]

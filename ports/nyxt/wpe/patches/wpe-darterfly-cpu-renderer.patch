@@ -1,0 +1,35 @@
+--- a/Source/WebKit/UIProcess/wpe/WebPreferencesWPE.cpp
++++ b/Source/WebKit/UIProcess/wpe/WebPreferencesWPE.cpp
+@@ -30,9 +30,17 @@
+ 
+ void WebPreferences::platformInitializeStore()
+ {
++#if OS(DARTERFLY)
++    // Use the upstream non-composited Skia/SHM renderer until EGL exists.
++    setHardwareAccelerationEnabled(false);
++    setAcceleratedCompositingEnabled(false);
++    setForceCompositingMode(false);
++    setThreadedScrollingEnabled(false);
++#else
+     setAcceleratedCompositingEnabled(true);
+     setForceCompositingMode(true);
+     setThreadedScrollingEnabled(true);
++#endif
+ }
+ 
+ } // namespace WebKit
+--- a/Source/WebKit/WebProcess/glib/WebProcessGLib.cpp
++++ b/Source/WebKit/WebProcess/glib/WebProcessGLib.cpp
+@@ -146,6 +146,12 @@
+ 
+ void WebProcess::initializePlatformDisplayIfNeeded() const
+ {
++#if OS(DARTERFLY)
++    // CPU Skia uses shared bitmaps and needs no GL platform display.
++    // Do not ask Epoxy to load an EGL implementation that is not present.
++    ProcessCapabilities::setCanUseAcceleratedBuffers(false);
++    return;
++#endif
+     if (PlatformDisplay::sharedDisplayIfExists())
+         return;
+ 

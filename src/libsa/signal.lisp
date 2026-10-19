@@ -101,14 +101,11 @@
 
 (define-low kill ((pid :u32) (sig :u32))
   (when (or (= pid 1) (= pid 0) (= pid #xFFFFFFFF)) (result (raise sig)))
-  (setf (mem :u32 (__errno_location)) +esrch+)
-  (- 0 1))
+  (ret (call 57 (sign-extend :u32 pid) sig 0 0)))
 
 (define-low killpg ((pg :u32) (sig :u32)) (kill pg sig))
 
-(define-low sigsuspend (s)
-  (setf (mem :u32 (__errno_location)) +eintr+)
-  (- 0 1))
+(define-low sigsuspend (s) (__syscall 111 s 0 0 0 0 0))
 
 (define-low sigwait (s sig) +enosys+)
 

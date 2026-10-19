@@ -1,0 +1,22 @@
+Use fresh certificate handshakes for verified connections.
+The pinned pure-tls ticket cache retains neither peer certificates nor
+verification policy; its required-verification path rejects PSK handshakes.
+Do not offer cached PSKs in that mode. This also avoids its independently
+reproduced binder-length and double-parsing errors, without bypassing checks.
+
+--- a/systems/pure-tls-20260207-8138c76/src/handshake/client.lisp
++++ b/systems/pure-tls-20260207-8138c76/src/handshake/client.lisp
+@@ -217,8 +217,11 @@
+                             (setf (client-handshake-grease-ext-data hs)
+                                   (random-bytes 1)))))
+           extensions)
+-    ;; Check for cached session ticket for resumption
+-    (let ((ticket (and (client-handshake-hostname hs)
++    ;; Verified connections require a fresh certificate handshake: this cache
++    ;; retains no certificate chain or verification policy, and the verified
++    ;; Finished path below rejects certificate-less PSK handshakes.
++    (let ((ticket (and (= (client-handshake-verify-mode hs) +verify-none+)
++                       (client-handshake-hostname hs)
+                        (session-ticket-cache-get (client-handshake-hostname hs)))))
+       (when ticket
+         ;; Add psk_key_exchange_modes extension (required when offering PSK)

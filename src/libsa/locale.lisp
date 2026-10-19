@@ -28,6 +28,8 @@
   (address c-lconv))
 (define-low isascii ((c :u32)) (< c 128))
 (define-low isblank ((c :u32)) (or (= c 32) (= c 9)))
+(define-low strcoll (a b) (strcmp a b))
+(define-low strxfrm (d s n) (strxfrm_l d s n 1))
 (define-low strcoll_l (a b locale) (strcmp a b))
 (define-low strxfrm_l (d s n locale)
   (let ((len (strlen s))) (when (> n len) (memcpy d s (+ len 1))) len))

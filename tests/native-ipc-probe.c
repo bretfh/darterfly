@@ -121,10 +121,30 @@ static int shared_child(void) {
 }
 static int shared_test(const char *self) {
     int channel[2],status; pid_t pid; posix_spawn_file_actions_t a;
-    const char *path="/dev/shm/native-shared";
-    int fd=open(path,O_CREAT|O_TRUNC|O_RDWR,0600), ro;
+    const char *path="/native-shared";
+    int fd=shm_open(path,O_CREAT|O_EXCL|O_RDWR,0600), ro;
     CHECK(fd>=0 && ftruncate(fd,8192)==0,81);
-    CHECK((ro=open(path,O_RDONLY))>=0 && unlink(path)==0,82);
+    CHECK(fcntl(fd,F_GETFD)==FD_CLOEXEC,102);
+    errno=0;
+    CHECK(shm_open(path,O_CREAT|O_EXCL|O_RDWR,0600)==-1 && errno==EEXIST,103);
+    CHECK((ro=shm_open(path,O_RDONLY,0))>=0 && shm_unlink(path)==0,82);
+    errno=0;
+    CHECK(shm_open(path,O_RDWR,0)==-1 && errno==ENOENT,104);
+    errno=0;
+    CHECK(shm_unlink(path)==-1 && errno==ENOENT,105);
+    const char *bad[]={"", "relative", "/", "/.", "/..", "/x/y"};
+    for(unsigned i=0;i<sizeof bad/sizeof *bad;++i) {
+        errno=0;
+        CHECK(shm_open(bad[i],O_CREAT|O_RDWR,0600)==-1 && errno==EINVAL,106);
+        errno=0;
+        CHECK(shm_unlink(bad[i])==-1 && errno==EINVAL,107);
+    }
+    char longname[258]; memset(longname,'x',sizeof longname);
+    longname[0]='/'; longname[257]=0; errno=0;
+    CHECK(shm_open(longname,O_CREAT|O_RDWR,0600)==-1 && errno==ENAMETOOLONG,108);
+    errno=0;
+    CHECK(shm_open(path,O_CREAT|O_WRONLY,0600)==-1 && errno==EINVAL,109);
+    puts("[NATIVE-IPC SHM-NAMES PASS]");
     volatile unsigned *view=mmap(0,8192,PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
     CHECK(view!=MAP_FAILED,83);
     view[0]=123; view[1024]=456;

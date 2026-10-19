@@ -1,0 +1,20 @@
+--- a/Source/ThirdParty/xdgmime/src/xdgmimecache.h
++++ b/Source/ThirdParty/xdgmime/src/xdgmimecache.h
+@@ -32,6 +32,7 @@
+ typedef struct _XdgMimeCache XdgMimeCache;
+ 
+ #ifdef XDG_PREFIX
++#define _caches XDG_RESERVED_ENTRY(caches)
+ #define _xdg_mime_cache_new_from_file                 XDG_RESERVED_ENTRY(cache_new_from_file)
+ #define _xdg_mime_cache_ref                           XDG_RESERVED_ENTRY(cache_ref)
+ #define _xdg_mime_cache_unref                         XDG_RESERVED_ENTRY(cache_unref)
+--- a/Source/ThirdParty/xdgmime/src/xdgmimeint.h
++++ b/Source/ThirdParty/xdgmime/src/xdgmimeint.h
+@@ -46,6 +46,7 @@
+ typedef unsigned int   xdg_uint32_t;
+ 
+ #ifdef XDG_PREFIX
++#define _xdg_binary_or_text_fallback XDG_RESERVED_ENTRY(binary_or_text_fallback)
+ #define _xdg_utf8_skip       XDG_RESERVED_ENTRY(utf8_skip)
+ #define _xdg_utf8_to_ucs4    XDG_RESERVED_ENTRY(utf8_to_ucs4)
+ #define _xdg_ucs4_to_lower   XDG_RESERVED_ENTRY(ucs4_to_lower)

@@ -321,7 +321,7 @@
     (when (tcp-wait (lambda () (listener-pending listener)) timeout)
       (pop (listener-pending listener)))))
 
-(defun tcp-connect (address port &key (timeout 10))
+(defun tcp-connect (address port &key (timeout 10) (wait t))
   (ensure-tcp-timer)
   (let* ((ip (if (stringp address) (ip-address address) address))
          (local (sb-thread:with-recursive-lock (*tcp-lock*) (prog1 *next-port* (incf *next-port*))))
@@ -332,9 +332,10 @@
     (sb-thread:with-recursive-lock (*tcp-lock*)
       (setf (gethash (tcp-key local ip port) *connections*) c)
       (queue-segment c +syn+ #())
-      (unless (tcp-wait (lambda () (or (eq (tcp-state c) :established) (tcp-reset c))) timeout)
+      (when wait
+        (unless (tcp-wait (lambda () (or (eq (tcp-state c) :established) (tcp-reset c))) timeout)
         (net-fail :etimedout "tcp: no answer from ~a:~d" (address-string ip) port))
-      (when (tcp-reset c) (net-fail :econnrefused "tcp: ~a:~d refused the connection" (address-string ip) port))
+      (when (tcp-reset c) (net-fail :econnrefused "tcp: ~a:~d refused the connection" (address-string ip) port)))
       c)))
 
 (defun tcp-send (c data)

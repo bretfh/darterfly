@@ -3,6 +3,10 @@
 #+startup: overview
 #+options: toc:2 num:nil
 
+Current engine recommendation: [[file:../wpe/ASSESSMENT.org][bounded WPE qualification]].
+The CEF-specific direction below is historical. Shared runtime, loader
+and self-hosting evidence remain applicable; no engine runs here yet.
+
 * Decision
 
 Use native x86-64 ELF shared objects built for Darterfly's existing libsa.

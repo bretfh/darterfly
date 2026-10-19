@@ -9,6 +9,7 @@ extern "C" {
 #define TIOCSCTTY 0x540E
 #define TIOCNOTTY 0x5422
 #define FIONREAD 0x541B
+#define FIONBIO 0x5421
 struct winsize { unsigned short ws_row, ws_col, ws_xpixel, ws_ypixel; };
 int ioctl(int, unsigned long, ...);
 

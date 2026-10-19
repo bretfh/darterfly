@@ -7,6 +7,7 @@
 (defconstant +o-creat+ #x200)
 (defconstant +o-trunc+ #x400)
 (defconstant +o-excl+ #x800)
+(defconstant +o-nofollow+ #x100)
 (defconstant +o-directory+ #x100000)
 
 (defconstant +s-ifmt+ #o170000)
@@ -27,6 +28,7 @@
   (list :access (ecase (logand flags 3) (0 :rdonly) (1 :wronly) (2 :rdwr))
         :creat (logtest flags +o-creat+) :excl (logtest flags +o-excl+) :trunc (logtest flags +o-trunc+)
         :append (logtest flags +o-append+) :nonblock (logtest flags +o-nonblock+)
+        :nofollow (logtest flags +o-nofollow+)
         :directory (logtest flags +o-directory+)))
 
 (defclass vnode (file)
@@ -65,6 +67,7 @@
 
 (defun open (name flags &optional (mode #o644))
   (syscall
+    (when (zerop (length name)) (fail :enoent))
     (let ((fd (vfs (vfs:vfs-open (path name) (vfs-flags flags) mode))))
       (fd-alloc (make-instance 'vnode :fd fd :access (logand flags 3)
                                       :device (= (mode-type (vfs:vattr-mode (vfs (vfs:vfs-fstat fd)))) +s-ifchr+)

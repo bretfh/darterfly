@@ -21,7 +21,7 @@
   (with-local-process
     (is (= -22 (service-result #())))
     (is (= -38 (service-result (service-request 999 0 0 0 '(0 0 0 0) '(0 0 0 0)))))
-    (dolist (op '(1 3 4 8 10 19 35 37 48 49 50 51 54 55 56))
+    (dolist (op '(1 3 4 8 10 19 35 37 48 49 50 51 54 55 56 62 63 64 65))
       (is (= -22 (service-result
                   (service-request op #x1000 #x2000 1 '(0 0 0 0) '(0 0 0 0))))))
     (is (= -22 (service-result
@@ -238,3 +238,36 @@
                    (service-request op 3 1 1040
                      (if (= op 54) '(0 2 0 0) '(0 6 0 0)) '(0 8 0 0)
                      (make-array 8 :element-type '(unsigned-byte 8) :initial-element 0))))))))
+
+(test exiting-init-and-dead-init-do-not-strand-children
+  (dolist (mode '(:self :closing :zombie :live))
+    (with-local-process
+      (let* ((bsd::*procs* (make-hash-table))
+             (init (make-instance 'bsd:proc :pid 1 :parent bsd:*proc0*
+                     :task (mach:task-create mach:*task* "test init")))
+             (parent (if (eq mode :self) init
+                         (make-instance 'bsd:proc :pid 2 :parent bsd:*proc0*
+                           :task (mach:task-create mach:*task* "test parent"))))
+             (child (make-instance 'bsd:proc :pid 3 :parent parent
+                      :task (mach:task-create mach:*task* "test orphan")))
+             (reaper (if (eq mode :live) init bsd:*proc0*)))
+        (unwind-protect
+             (progn
+               (setf (gethash 1 bsd::*procs*) init
+                     (gethash (bsd::proc-pid parent) bsd::*procs*) parent
+                     (gethash 3 bsd::*procs*) child
+                     (bsd::proc-children parent) (list child)
+                     (bsd::proc-state child) :zombie
+                     (bsd::proc-status child) (ash 17 8)
+                     (bsd::proc-closing init) (eq mode :closing))
+               (when (eq mode :zombie) (setf (bsd::proc-state init) :zombie))
+               (bsd::proc-exit parent 0)
+               (is (eq reaper (bsd::proc-parent child)))
+               (is (null (bsd::proc-children parent)))
+               (let ((bsd:*proc* reaper))
+                 (multiple-value-bind (pid status) (bsd:wait4 3 :nohang t)
+                   (is (= 3 pid))
+                   (is (= (ash 17 8) status))))
+               (is (null (gethash 3 bsd::*procs*))))
+          (mach:task-terminate (bsd::proc-task child))
+          (unless (eq parent init) (mach:task-terminate (bsd::proc-task init))))))))

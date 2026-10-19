@@ -1,0 +1,167 @@
+#+title: Native HTTP and TLS qualification for Darterfly
+#+date: 2026-10-19
+#+startup: overview
+#+options: toc:2 num:nil
+
+* What runs
+
+This continues codex/nyxt-guix-engine. The programs execute as native
+ELF processes in isolated worlds, using the existing Low libsa, allocator,
+thread-local storage, BSD services and Darterfly network stack. Guix is
+used to build the initial libraries. There is no Linux runtime in the OS.
+
+Real GIO 2.86.0 passes file replacement and metadata, subprocess pipes,
+explicit descriptor inheritance, closing other inherited descriptors,
+DNS address and NS-record lookup, asynchronous DNS, asynchronous TCP
+connection establishment, and an HTTP request.
+
+Real OpenSSL 3.5.7 with glib-networking 2.80.1 passes HTTPS over both TLS
+1.2 and TLS 1.3. The guest rejects each of these separately:
+
+- A valid certificate presented for the wrong hostname.
+- A certificate signed by a CA outside the configured trust database.
+- An expired certificate signed by the trusted test CA.
+- A certificate whose validity period has not started yet.
+
+The tests require G_TLS_ERROR_BAD_CERTIFICATE and the corresponding
+certificate error flag. They do not connect an accept-certificate handler
+or turn off certificate checking. Successful requests read and decrypt
+an HTTP response. Each program must exit with status zero, and the Lisp
+supervisor must remain responsive.
+
+The test origin is a local Python HTTP/TLS server reached through QEMU's
+network interface. It is only an origin serving test data; TLS, HTTP,
+certificate validation and socket operations execute inside Darterfly.
+Generated test keys and certificates are temporary and are removed after
+the run. Test certificates are not a production trust store.
+
+Libsoup 3.6.5 also executes in a native world. Its tests pass redirects,
+in-memory cookies, gzip decompression, chunked responses, POST bodies,
+synchronous and asynchronous requests, and certificate rejection. It
+fetches https://example.com/ over HTTP/2 and verifies the response contains
+Example Domain, using the public CA bundle rather than the test CA. The
+controlled tests use HTTP/1.1. Public suffix
+handling uses libpsl with the already ported ICU library.
+
+The local tests are repeatable without external HTTPS access. The complete
+libsoup harness additionally requires external DNS and network access for
+the public-page test. A public-site outage is not equivalent to a local
+TLS implementation failure; the log keeps those results separate.
+
+See [[file:network-evidence.json][network evidence]] for logs, input hashes and component origins. Earlier
+GLib/JSC results remain in qualification-evidence.json.
+
+* Shared runtime work
+
+GIO's resolver now uses the existing Darterfly DNS stack through a raw
+query service. Compressed DNS name decoding and address conversion live
+in shared libsa. UDP queries validate the reply source and question;
+truncated responses have a TCP fallback. The real-network tests qualify
+ordinary DNS responses, not every fallback and malformed-packet case.
+
+Nonblocking TCP connect returns EINPROGRESS and reports completion
+through polling and SO_ERROR. Socket option handling reports unsupported
+options instead of pretending they succeeded. SO_ACCEPTCONN reflects the
+actual listener state. Vector I/O gathers or scatters through the existing
+read/write services; fstatat resolves relative paths using the descriptor.
+
+GSubprocess needed a spawn path that closes inherited descriptors without
+fork. POSIX_SPAWN_CLOEXEC_DEFAULT marks the child's inherited descriptors
+for closure before applying file actions. Explicitly preserved descriptors
+survive, and the parent's table is unchanged. A small GLib patch selects
+that existing native-spawn path. Child-setup callbacks and directory
+changes that require GLib's fork path are not qualified here.
+
+OpenSSL uses /dev/urandom through the existing VFS device. That device
+obtains hardware entropy through the kernel. The kernel's RDRAND scratch
+word is now local to the call, and a CPU without RDRAND fails the request.
+No clock-based or Lisp PRNG fallback is substituted. This first target
+therefore requires working RDRAND; it does not provide a general entropy
+pool for unsupported hardware. OpenSSL's own DRBG consumes the entropy.
+
+* Library builds
+
+| Component | Version | Configuration |
+|-----------+---------+---------------|
+| GIO | 2.86.0 | Static GLib/GObject/GModule/GIO |
+| OpenSSL | 3.5.7 | Static, pthreads, portable C, OS entropy |
+| glib-networking | 2.80.1 | Existing OpenSSL backend, static module |
+| nghttp2 | 1.58.0 | Static HTTP/2 library |
+| SQLite | 3.53.1 | Upstream amalgamation, threads, no loadable extensions |
+| libpsl | 0.21.5 | Built-in suffix list, existing ICU 78.2 |
+| libsoup | 3.6.5 | Static; GSSAPI, NTLM, introspection and Brotli disabled |
+
+OpenSSL has an explicit Darterfly configuration derived from upstream's
+Unix base. It uses no assembly CPU dispatch, dynamic providers, engines,
+QUIC or alternate runtime. The portable implementation avoids requiring
+AVX state that the current native-world context switch does not preserve.
+
+The OpenSSL GIO module is registered through upstream's supported static
+registration entry point with a null GTypeModule. No TLS implementation
+is rewritten. One Meson patch avoids preparing a shared-module cache when
+only static libraries are installed. This does not qualify dynamic GIO
+module loading.
+
+GLib's Python code generators run on the build host. The installed target
+headers, archives and pkg-config records are staged separately from
+native target CLI tools. Build feature checks use actual libsa exports.
+The C++ library name resolves to the existing libc++/libc++abi/unwind
+objects already used by other native programs.
+
+SQLite builds, but persistent cookie databases, file locking, recovery
+and durability are not qualified by the networking probes. Unknown fcntl
+commands, including record locking, now fail with EINVAL instead of
+silently succeeding. The GIO guest probe checks this failure explicitly.
+GIO volume and mount enumeration are also not implemented. These are
+separate from successful file stream, HTTP and certificate-validation tests.
+
+* Reproduce
+
+Sources are the Guix origins listed in build/wpe-assessment/http-sources.txt.
+The GLib, ICU, PCRE2, libffi, libiconv and zlib builds from QUALIFICATION.org
+must already exist, together with the shared native C++ runtime seed.
+
+#+begin_src sh
+python3 ports/nyxt/wpe/build-libraries.py gio
+python3 ports/nyxt/wpe/build-http-libraries.py gio-install
+python3 ports/nyxt/wpe/build-gio-probe.py
+sh ports/nyxt/wpe/run-gio.sh
+python3 ports/nyxt/wpe/build-http-libraries.py openssl
+python3 ports/nyxt/wpe/build-http-libraries.py glib-networking
+python3 ports/nyxt/wpe/build-tls-probe.py
+sh ports/nyxt/wpe/run-tls.sh
+python3 ports/nyxt/wpe/build-http-libraries.py nghttp2
+python3 ports/nyxt/wpe/build-http-libraries.py sqlite
+python3 ports/nyxt/wpe/build-http-libraries.py libpsl
+python3 ports/nyxt/wpe/build-http-libraries.py libsoup
+python3 ports/nyxt/wpe/build-soup-probe.py
+sh ports/nyxt/wpe/run-soup.sh
+sh tools/check-libsa-network.sh
+make test-native-bsd-guest
+#+end_src
+
+The guest harnesses run sequentially because the worktree shares a boot
+image and monitor socket. The fixture binds host loopback ports 18765
+through 18769. Failure to bind is a test failure, not a reason to reuse an
+unknown server. DARTER_PUBLIC_CA_BUNDLE may select a public CA bundle for
+the libsoup test; its default is /etc/ssl/certs/ca-certificates.crt.
+
+* Remaining path to Nyxt
+
+WPE's upstream ProcessLauncherGLib.cpp already uses GSubprocessLauncher,
+passes its socket explicitly and avoids child-setup callbacks. Its normal
+non-Linux path is compatible in shape with the spawn APIs exercised here.
+That is source evidence, not a successful WPEWebProcess launch yet.
+
+The image/font/graphics dependencies and WPEPlatform now pass the
+[[file:RENDER-QUALIFICATION.org][native rendering-library and software-buffer qualification]]. WebCore is
+under compilation. The next proof needs actual HTML rendering, engine IPC
+and shared buffers, and a display/input adapter for Darterfly. These
+library and platform tests do not yet draw an HTML page.
+
+Keep the process boundaries: the Web and Network processes should run in
+their own worlds. Prove rendering, script execution, input and navigation
+in that harness before wiring a small WPE renderer extension into Nyxt.
+Nyxt's commands, buffers and modes should remain upstream. Neither a
+complete Nyxt application nor a usable graphical browser is claimed by
+this qualification.

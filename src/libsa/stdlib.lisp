@@ -62,6 +62,15 @@
       (setf (mem :u64 (+ h 8)) c)
       (+ h 16))))
 
+(define-low malloc_usable_size (p)
+  (unless p (result 0))
+  (let ((n (mem :u64 (- p 16))) (c (mem :u64 (- p 8))))
+    (cond ((= c (lognot 0))
+           (let ((owner (mem :u64 (- p 24))))
+             (- (+ owner (malloc_usable_size owner)) p)))
+          ((= c 0) (- (logand (+ n 16 4095) (lognot 4095)) 16))
+          (t (- (shl 1 c) 16)))))
+
 (define-low free (p)
   (when (= p 0) (result 0))
   (let* ((h (- p 16)) (c (mem :u64 (+ h 8))))

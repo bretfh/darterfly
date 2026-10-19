@@ -1,0 +1,91 @@
+[BSD-NATIVE COPY status 5888]
+[BSD-NATIVE COPY-EXIT PASS]
+[BSD-NATIVE ARTIFACT PASS]
+[BSD-NATIVE IDENTITY PASS]
+[BSD-NATIVE OFFSET PASS]
+[BSD-NATIVE PARENT-FDS PASS]
+[BSD-NATIVE PARENT-CWD PASS]
+[BSD-NATIVE CREATED PASS]
+[BSD-NATIVE BAD-ELF PASS]
+[BSD-NATIVE BAD-ACTION PASS]
+[BSD-NATIVE NO-CHILD-LEAK PASS]
+[BSD-NATIVE FAULT PASS]
+[BSD-NATIVE MALFORMED PASS]
+[BSD-NATIVE SOCKET PASS]
+[BSD-NATIVE EOF PASS]
+[BSD-NATIVE NOHANG PASS]
+[BSD-NATIVE KILL-READ PASS]
+[BSD-NATIVE KILL-POLL PASS]
+[BSD-NATIVE KILL-CONSOLE PASS]
+[BSD-NATIVE STOP PASS]
+[BSD-NATIVE CONTINUE PASS]
+[BSD-NATIVE KILL-LOOP PASS]
+[BSD-NATIVE REBUILD PASS]
+[BSD-NATIVE REBUILT-RUN PASS]
+[BSD-NATIVE RUN-PROGRAM PASS]
+[BSD-NATIVE REPEAT PASS]
+[BSD-NATIVE ALIVE PASS]
+[NATIVE-CHILDREN child driver status 0]
+[BSD-NATIVE NATIVE-CHILDREN PASS]
+[REBUILT-CHILDREN child driver status 0]
+[BSD-NATIVE REBUILT-CHILDREN PASS]
+This is SBCL 2.6.4.darterfly, an implementation of ANSI Common Lisp.
+More information about SBCL is available at <http://www.sbcl.org/>.
+
+SBCL is free software, provided as is, with absolutely no warranty.
+It is mostly in the public domain; some portions are provided under
+BSD-style licenses.  See the CREDITS and COPYING files in the
+distribution for more information.
+[BSD-NATIVE LISP-CHILDREN PASS]
+[BSD-NATIVE LISP-ARTIFACT PASS]
+This is SBCL 2.6.4.darterfly, an implementation of ANSI Common Lisp.
+More information about SBCL is available at <http://www.sbcl.org/>.
+
+SBCL is free software, provided as is, with absolutely no warranty.
+It is mostly in the public domain; some portions are provided under
+BSD-style licenses.  See the CREDITS and COPYING files in the
+distribution for more information.
+[BSD-NATIVE LISP-FAULT PASS]
+This is SBCL 2.6.4.darterfly, an implementation of ANSI Common Lisp.
+More information about SBCL is available at <http://www.sbcl.org/>.
+
+SBCL is free software, provided as is, with absolutely no warranty.
+It is mostly in the public domain; some portions are provided under
+BSD-style licenses.  See the CREDITS and COPYING files in the
+distribution for more information.
+[BSD-NATIVE LISP-WAIT-TEARDOWN PASS]
+This is SBCL 2.6.4.darterfly, an implementation of ANSI Common Lisp.
+More information about SBCL is available at <http://www.sbcl.org/>.
+
+SBCL is free software, provided as is, with absolutely no warranty.
+It is mostly in the public domain; some portions are provided under
+BSD-style licenses.  See the CREDITS and COPYING files in the
+distribution for more information.
+[BSD-NATIVE LISP-DRIVER PASS]
+This is SBCL 2.6.4.darterfly, an implementation of ANSI Common Lisp.
+More information about SBCL is available at <http://www.sbcl.org/>.
+
+SBCL is free software, provided as is, with absolutely no warranty.
+It is mostly in the public domain; some portions are provided under
+BSD-style licenses.  See the CREDITS and COPYING files in the
+distribution for more information.
+[BSD-NATIVE LISP-PIPE PASS]
+[BSD-NATIVE LISP-PIPE-ARTIFACT PASS]
+This is SBCL 2.6.4.darterfly, an implementation of ANSI Common Lisp.
+More information about SBCL is available at <http://www.sbcl.org/>.
+
+SBCL is free software, provided as is, with absolutely no warranty.
+It is mostly in the public domain; some portions are provided under
+BSD-style licenses.  See the CREDITS and COPYING files in the
+distribution for more information.
+[BSD-NATIVE LISP-SPAWN-ERROR PASS]
+[BSD-NATIVE CHILDREN-CLEAN PASS]
+[BSD-NATIVE RUNTIME PASS]
+[BSD-NATIVE REBUILT-RUNTIME PASS]
+[BSD-NATIVE TLS status 0]
+[BSD-NATIVE TLS-THREADS PASS]
+[BSD-NATIVE TLS-VALIDATION PASS]
+[BSD-NATIVE TLS-4 PASS]
+[BSD-NATIVE TLS-65536 PASS]
+T
+* 

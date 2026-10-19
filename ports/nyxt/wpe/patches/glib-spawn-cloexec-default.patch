@@ -1,0 +1,47 @@
+--- a/glib/gspawn-posix.c
++++ b/glib/gspawn-posix.c
+@@ -1000,6 +1000,7 @@
+ do_posix_spawn (const gchar * const *argv,
+                 const gchar * const *envp,
+                 gboolean    search_path,
++                gboolean    close_descriptors,
+                 gboolean    stdout_to_null,
+                 gboolean    stderr_to_null,
+                 gboolean    child_inherits_stdin,
+@@ -1047,7 +1048,14 @@
+                                        GINT_TO_POINTER (child_close_fds[i]));
+     }
+ 
+-  r = posix_spawnattr_setflags (&attr, POSIX_SPAWN_SETSIGDEF);
++  short spawn_flags = POSIX_SPAWN_SETSIGDEF;
++#ifdef POSIX_SPAWN_CLOEXEC_DEFAULT
++  if (close_descriptors)
++    spawn_flags |= POSIX_SPAWN_CLOEXEC_DEFAULT;
++#else
++  (void) close_descriptors;
++#endif
++  r = posix_spawnattr_setflags (&attr, spawn_flags);
+   if (r != 0)
+     goto out_free_spawnattr;
+ 
+@@ -1330,7 +1338,11 @@
+   child_close_fds[n_child_close_fds++] = -1;
+ 
+ #ifdef POSIX_SPAWN_AVAILABLE
+-  if (!intermediate_child && working_directory == NULL && !close_descriptors &&
++  gboolean can_close_descriptors = !close_descriptors;
++#ifdef POSIX_SPAWN_CLOEXEC_DEFAULT
++  can_close_descriptors = TRUE;
++#endif
++  if (!intermediate_child && working_directory == NULL && can_close_descriptors &&
+       !search_path_from_envp && child_setup == NULL)
+     {
+       g_trace_mark (G_TRACE_CURRENT_TIME, 0,
+@@ -1340,6 +1352,7 @@
+       status = do_posix_spawn (argv,
+                                envp,
+                                search_path,
++                               close_descriptors,
+                                stdout_to_null,
+                                stderr_to_null,
+                                child_inherits_stdin,

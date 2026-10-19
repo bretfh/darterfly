@@ -4,6 +4,7 @@
 (defconstant +save-space+ (ash 16 30))
 (defconstant +kernel-fd+ 1000)
 (defconstant +kernel-fds+ 8)
+(defconstant +efault+ 14)
 (defconstant +emfile+ 24)
 (defconstant +espipe+ 29)
 (defconstant +enospc+ 28)
@@ -130,10 +131,53 @@
 (define-low open (path (flags :u32) &va ap)
   (open-mode path flags (if (logand flags +o-creat+) (va-next ap) 0)))
 
-(define-low openat (dir path (flags :u32) &va ap)
-  (open-mode path flags (if (logand flags +o-creat+) (va-next ap) 0)))
+(define-low openat ((dir :u32) path (flags :u32) &va ap)
+  (let ((mode (if (logand flags +o-creat+) (va-next ap) 0)))
+    (if (or (= dir #xFFFFFF9C) (= (mem :u8 path) 47))
+        (open-mode path flags mode)
+        (ret (call 63 (sign-extend :u32 dir) path flags mode)))))
+
+(define-low unlinkat ((dir :u32) path (flags :u32))
+  (ret (call 64 (sign-extend :u32 dir) path flags 0)))
 
 (define-low creat (path (mode :u32)) (open-mode path (logior 1 +o-creat+ #o1000) mode))
+
+;; POSIX shared objects use the existing RAM VFS and shared-mapping service.
+;; Validate a single namespace component before constructing the backing path.
+(define-low shm-path (name)
+  (unless name (ret (- 0 14)) (result 0))
+  (unless (and (= (mem :u8 name) 47) (mem :u8 (+ name 1)))
+    (ret (- 0 22)) (result 0))
+  (let ((n 1))
+    (while (mem :u8 (+ name n))
+      (when (= (mem :u8 (+ name n)) 47) (ret (- 0 22)) (result 0))
+      (when (> n 255) (ret (- 0 36)) (result 0))
+      (incf n))
+    (when (or (= (the :u32 (strcmp name "/.")) 0)
+              (= (the :u32 (strcmp name "/..")) 0))
+      (ret (- 0 22)) (result 0))
+    (let ((p (malloc (+ n 9))))
+      (unless p (result 0))
+      (memcpy p "/dev/shm" 8)
+      (memcpy (+ p 8) name (+ n 1))
+      p)))
+
+(define-low shm_open (name (flags :u32) (mode :u32))
+  (when (or (and (/= (logand flags 3) 0) (/= (logand flags 3) 2))
+            (logand flags (lognot (logior 3 #o100 #o200 #o1000 #o2000000))))
+    (result (ret (- 0 22))))
+  (let ((path (shm-path name)))
+    (unless path (result (- 0 1)))
+    (let ((fd (open-mode path (logior flags #o2000000) mode)))
+      (free path)
+      fd)))
+
+(define-low shm_unlink (name)
+  (let ((path (shm-path name)))
+    (unless path (result (- 0 1)))
+    (let ((r (unlink path)))
+      (free path)
+      r)))
 
 (define-low close ((fd :u32))
   (when (console fd) (result 0))
@@ -199,6 +243,10 @@
   (when (kfd fd) (kernel-stat (mem :u64 (+ (kfd-slot fd) 16)) st) (result 0))
   (ret (call 10 (sign-extend :u32 fd) st 0 0)))
 
+(define-low readlinkat ((dir :u32) path buf size)
+  (if (= size 0) (fail-with +einval+)
+      (ret (call 65 (sign-extend :u32 dir) path buf size))))
+
 (define-low readlink (path buf size) (ret (call 11 path buf size 0)))
 (define-low symlink (target path) (ret (call 12 target path 0 0)))
 (define-low link (a b) (ret (call 31 a b 0 0)))
@@ -236,7 +284,10 @@
       (unless r (setf r (posix_spawn_file_actions_addclosefrom_np actions 3)))
       (when (and (= r 0) pwd) (setf r (posix_spawn_file_actions_addchdir_np actions pwd)))
       (unless r
-        (setf r (spawn-public (address pid) program actions 0 argv envp search)))
+        (setf r ;; SBCL's spawn ABI uses NULL for inheritance; an explicit
+        ;; empty vector still means an empty environment.
+        (spawn-public (address pid) program actions 0 argv
+                      (if envp envp environ) search)))
       (posix_spawn_file_actions_destroy actions))
     (free storage)
     (if r (ret (- 0 r)) pid)))
@@ -276,13 +327,65 @@
 (define-low recv ((fd :u32) buf n (flags :u32)) (recvfrom fd buf n flags 0 0))
 (define-low send ((fd :u32) buf n (flags :u32)) (sendto fd buf n flags 0 0))
 
-(define-low setsockopt (fd level name value len) 0)
+(define-low setsockopt ((fd :u32) (level :u32) (name :u32) value (length :u32))
+  (when (or (= value 0) (> length 16)) (result (fail-with +einval+)))
+  (let ((record (calloc 1 24)) (r 0))
+    (unless record (result (fail-with +enomem+)))
+    (setf (mem :u64 record) length)
+    (memcpy (+ record 8) value length)
+    (setf r (ret (call 61 (sign-extend :u32 fd) level name record)))
+    (free record) r))
 
-(define-low getsockopt (fd level name value len)
-  (when (and value len (>= (mem :u32 len) 4))
-    (setf (mem :u32 value) 0)
-    (setf (mem :u32 len) 4))
-  0)
+(define-low getsockopt ((fd :u32) (level :u32) (name :u32) value length)
+  (when (or (= value 0) (= length 0)) (result (fail-with +einval+)))
+  (let ((record (calloc 1 24)) (r 0) (n (mem :u32 length)))
+    (unless record (result (fail-with +enomem+)))
+    (setf (mem :u64 record) (if (> n 16) 16 n))
+    (setf r (ret (call 60 (sign-extend :u32 fd) level name record)))
+    (when (= r 0)
+      (setf n (mem :u64 record))
+      (memcpy value (+ record 8) n)
+      (setf (mem :u32 length) n))
+    (free record) r))
+
+(define-low fchmodat ((dir :u32) path (mode :u32) (flags :u32))
+  (ret (call 62 (sign-extend :u32 dir) path mode flags)))
+
+(define-low fstatat ((dir :u32) path buf (flags :u32))
+  (ret (call 59 (sign-extend :u32 dir) path buf flags)))
+
+(define-low vector-io ((fd :u32) vectors (count :u32) writing)
+  (when (> count 1024) (result (fail-with +einval+)))
+  (let ((i 0) (size 0) (buf 0) (at 0) (r 0))
+    (while (< i count)
+      (let ((len (mem :u64 (+ vectors (* i 16) 8))))
+        (when (> len (- #x7fffffff size)) (result (fail-with +einval+)))
+        (incf size len))
+      (incf i))
+    (when (= size 0) (result 0))
+    (setf buf (malloc size))
+    (unless buf (result (fail-with +enomem+)))
+    (if writing
+        (progn
+          (setf i 0)
+          (while (< i count)
+            (let ((len (mem :u64 (+ vectors (* i 16) 8))))
+              (memcpy (+ buf at) (mem :u64 (+ vectors (* i 16))) len)
+              (incf at len))
+            (incf i))
+          (setf r (write fd buf size)))
+        (progn
+          (setf r (read fd buf size)) (setf i 0)
+          (while (and (< i count) (signed< at r))
+            (let ((len (mem :u64 (+ vectors (* i 16) 8))))
+              (when (> len (- r at)) (setf len (- r at)))
+              (memcpy (mem :u64 (+ vectors (* i 16))) (+ buf at) len)
+              (incf at len))
+            (incf i))))
+    (free buf) r))
+
+(define-low writev ((fd :u32) vectors (count :u32)) (vector-io fd vectors count 1))
+(define-low readv ((fd :u32) vectors (count :u32)) (vector-io fd vectors count 0))
 
 (define-low getaddrinfo (node service hints res)
   (let* ((family (if hints (mem :u32 (+ hints 4)) 0))
@@ -363,6 +466,14 @@
   0)
 
 (define-low ioctl ((fd :u32) req &va ap)
+  ;; IOLib uses the ioctl spelling of the existing F_SETFL service.
+  (when (= req #x5421)
+    (let ((value (va-next ap)) (flags (fcntl fd 3 0)))
+      (when (signed< (sign-extend :u32 flags) 0) (result (- 0 1)))
+      (unless value (result (ret (- 0 +efault+))))
+      (result (fcntl fd 4 (if (mem :u32 value)
+                             (logior flags #o4000)
+                             (logand flags (lognot #o4000)))))))
   (unless (console fd) (result (ret (- 0 +enotty+))))
   (if (= req #x5413)
       (let ((w (va-next ap)))
@@ -411,7 +522,22 @@
     (setf (mem :u64 (+ d 8)) (+ (mem :u64 (+ d 8)) 1))
     (+ d 16)))
 
+(define-low readdir_r (d entry out)
+  (let ((saved (mem :u32 (__errno_location))) (result-entry 0) (error-code 0))
+    (setf (mem :u32 (__errno_location)) 0)
+    (setf result-entry (readdir d))
+    (unless result-entry (setf error-code (mem :u32 (__errno_location))))
+    (setf (mem :u32 (__errno_location)) saved)
+    (when result-entry (memcpy entry result-entry 280))
+    (setf (mem :u64 out) (if result-entry entry 0))
+    error-code))
+(define-low telldir (d) (mem :u64 (+ d 8)))
+(define-low seekdir (d location)
+  (if (signed< location 0) (fail-with +einval+)
+      (progn (setf (mem :u64 (+ d 8)) location) 0)))
+
 (define-low readdir64 (d) (readdir d))
+(define-low rewinddir (d) (setf (mem :u64 (+ d 8)) 0) 0)
 
 (define-low closedir (d)
   (close (mem :u32 d))
@@ -432,13 +558,16 @@
       (setf v (the :u32 (+ (truncate v 36) (* template-counter 31)))))
     0))
 
-(define-low mkstemp (tp)
+(define-low mkostemp (tp (flags :u32))
+  ;; open applies CLOEXEC with descriptor creation, including in other worlds.
+  (when (logand flags (lognot (logior #o2000 #o2000000)))
+    (result (fail-with +einval+)))
   (let ((copy (malloc 4096)) (i 0) (fd 0))
     (while (< i 100)
       (strncpy copy tp 4095)
       (setf (mem :u8 (+ copy 4095)) 0)
       (fill-template copy)
-      (setf fd (sign-extend :u32 (open copy (logior 2 +o-creat+ #o200) #o600)))
+      (setf fd (sign-extend :u32 (open copy (logior 2 +o-creat+ #o200 flags) #o600)))
       (when (signed>= fd 0)
         (strcpy tp copy)
         (free copy)
@@ -449,6 +578,8 @@
       (incf i))
     (free copy)
     (- 0 1)))
+
+(define-low mkstemp (tp) (mkostemp tp 0))
 
 (define-low mkdtemp (tp)
   (let ((copy (malloc 4096)) (i 0))
@@ -473,3 +604,13 @@
   (cond ((console fd) 1)
         ((signed>= (sign-extend :u32 fd) 0) 0)
         (t (- 0 1))))
+
+;; The native service bounds path strings to PATH_MAX bytes. Check that the
+;; queried path exists instead of returning a limit for an invalid path.
+(define-low pathconf (path (name :u32))
+  (unless (= name 4) (result (fail-with +einval+)))
+  (let ((buf (malloc 144)))
+    (unless buf (result (fail-with +enomem+)))
+    (let ((r (stat path buf)))
+      (free buf)
+      (if (= r 0) 4096 r))))

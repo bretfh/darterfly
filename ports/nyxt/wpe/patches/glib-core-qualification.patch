@@ -1,0 +1,36 @@
+--- a/meson.options
++++ b/meson.options
+@@ -157,3 +157,5 @@
+        choices : ['auto', 'inotify', 'kqueue', 'libinotify-kqueue', 'win32'],
+        value : 'auto',
+        description : 'The name of the system API to use as a GFileMonitor backend')
++
++option('darterfly_core_only', type: 'boolean', value: false, description: 'Qualify GLib/GObject/GModule before porting GIO')
+--- a/meson.build
++++ b/meson.build
+@@ -2721,9 +2721,11 @@
+ subdir('gobject')
+ subdir('gthread')
+ subdir('gmodule')
+-subdir('gio')
+-subdir('girepository')
+-subdir('fuzzing')
++if not get_option('darterfly_core_only')
++  subdir('gio')
++  subdir('girepository')
++  subdir('fuzzing')
++endif
+ if get_option('tests')
+   subdir('tests')
+ endif
+@@ -2766,7 +2768,9 @@
+ rst2html5 = find_program('rst2html5', 'rst2html5.py', required: get_option('documentation'))
+ 
+ gnome = import('gnome')
+-subdir('docs/reference')
++if not get_option('darterfly_core_only')
++  subdir('docs/reference')
++endif
+ 
+ summary({
+   'host cpu' : host_machine.cpu_family(),

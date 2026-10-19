@@ -29,17 +29,25 @@
       (read-sequence bytes s)
       (darterfly/link:read-object bytes (namestring (pathname path)) :user))))
 
-(defun link-native-program (output objects)
-  "Link CRT0 and C objects with the one existing libsa; mark OUTPUT executable."
-  (let ((elf (darterfly/link:link-native
-              (cons (darterfly/link:read-object (darterfly/libsa:libsa-object)
-                                               "libsa.o" :user)
-                    (mapcar #'native-object objects)))))
+(defun link-native-program (output objects &key map-file)
+  "Link CRT0 and C objects with the shared libsa; optionally record symbols."
+  (multiple-value-bind (elf globals)
+      (darterfly/link:link-native
+       (cons (darterfly/link:read-object (darterfly/libsa:libsa-object)
+                                        "libsa.o" :user)
+             (mapcar #'native-object objects)))
     (ensure-directories-exist output)
     (with-open-file (s output :direction :output :if-exists :supersede
                              :element-type '(unsigned-byte 8))
       (write-sequence elf s))
     (sb-posix:chmod output #o755)
+    (when map-file
+      (ensure-directories-exist map-file)
+      (with-open-file (s map-file :direction :output :if-exists :supersede)
+        (dolist (entry (sort (loop for name being the hash-keys of globals
+                                   using (hash-value address)
+                                 collect (cons address name)) #'< :key #'car))
+          (format s "~16,'0x ~a~%" (car entry) (cdr entry)))))
     output))
 
 (defun build-native-tcc (output &key compiler verbose

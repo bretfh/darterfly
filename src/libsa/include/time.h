@@ -21,6 +21,7 @@ struct tm {
 #define CLOCK_BOOTTIME_ALARM 9
 #define CLOCK_TAI 11
 #define CLOCKS_PER_SEC 1000000l
+int clock_settime(clockid_t, const struct timespec *);
 int clock_gettime(clockid_t, struct timespec *);
 int clock_getres(clockid_t, struct timespec *);
 int nanosleep(const struct timespec *, struct timespec *);

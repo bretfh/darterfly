@@ -14,6 +14,10 @@
 #include <string>
 #include <sstream>
 #include <fstream>
+#include <filesystem>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <random>
 #include <locale.h>
 #include <wchar.h>
@@ -57,6 +61,58 @@ static int key_passes;
 static void key_dtor(void *) { if (++key_passes < 3) pthread_setspecific(key, &key); }
 static void report(const char *name) { printf("[CXX %s PASS]\n", name); }
 
+static void filesystem_probe() {
+    namespace fs=std::filesystem;
+    fs::path root=std::string(artifact)+".fs";
+    fs::path outside=std::string(artifact)+".outside";
+    assert(fs::create_directories(root/"a"/"b"));
+    assert(fs::create_directories(outside));
+    { std::ofstream f(root/"a"/"b"/"source");f<<"native filesystem";assert(f.good()); }
+    { std::ofstream f(outside/"keep");f<<"keep";assert(f.good()); }
+    assert(fs::file_size(root/"a"/"b"/"source")==17);
+    assert(pathconf(root.c_str(),_PC_PATH_MAX)==4096);
+    errno=0;assert(pathconf((root/"absent").c_str(),_PC_PATH_MAX)==-1 && errno==ENOENT);
+    errno=0;assert(pathconf(root.c_str(),-1)==-1 && errno==EINVAL);
+    char cwd[4096];assert(getcwd(cwd,sizeof cwd));
+    assert(fs::current_path()==fs::path(cwd));
+    unsigned seen=0;
+    for(const auto &entry:fs::directory_iterator(root/"a"/"b")) {
+        assert(entry.is_regular_file() && entry.file_size()==17);++seen;
+    }
+    assert(seen==1);
+    fs::copy(root/"a",root/"copy",fs::copy_options::recursive);
+    assert(fs::file_size(root/"copy"/"b"/"source")==17);
+    fs::rename(root/"copy"/"b"/"source",root/"copy"/"b"/"renamed");
+    fs::permissions(root/"copy"/"b"/"renamed",fs::perms::owner_read);
+    assert((fs::status(root/"copy"/"b"/"renamed").permissions()&fs::perms::all)==fs::perms::owner_read);
+    char before[4096],after[4096];assert(getcwd(before,sizeof before));
+    int directory=open((root/"a"/"b").c_str(),O_RDONLY|O_DIRECTORY);
+    assert(directory>=0);
+    int fd=openat(directory,"relative",O_CREAT|O_EXCL|O_RDWR|O_CLOEXEC,0600);
+    assert(fd>=0 && fcntl(fd,F_GETFD)==FD_CLOEXEC && write(fd,"fd",2)==2);
+    assert(fchmodat(directory,"relative",0400,0)==0);
+    struct stat st{};assert(fstat(fd,&st)==0 && (st.st_mode&0777)==0400);
+    errno=0;assert(fchmodat(directory,"relative",0600,0x8000)==-1 && errno==EINVAL);
+    assert(fchmodat(-1,(root/"a"/"b"/"relative").c_str(),0600,0)==0);
+    errno=0;assert(openat(directory,"",O_RDONLY)==-1 && errno==ENOENT);
+    errno=0;assert(unlinkat(directory,"relative",AT_REMOVEDIR)==-1 && errno==ENOTDIR);
+    assert(unlinkat(directory,"relative",0)==0);
+    assert(lseek(fd,0,SEEK_SET)==0);char bytes[2];assert(read(fd,bytes,2)==2 && bytes[0]=='f');
+    close(fd);close(directory);
+    assert(getcwd(after,sizeof after) && !strcmp(before,after));
+    fs::create_directory_symlink(outside,root/"escape");
+    fs::create_directory_symlink(root,root/"cycle");
+    assert(fs::is_symlink(fs::symlink_status(root/"escape")));
+    errno=0;assert(open((root/"escape").c_str(),O_RDONLY|O_DIRECTORY|O_NOFOLLOW)==-1 && errno==ELOOP);
+    errno=0;assert(open((root/"escape").c_str(),O_CREAT|O_EXCL|O_RDWR,0600)==-1 && errno==EEXIST);
+    std::error_code ec;
+    assert(fs::remove_all(root,ec)==9 && !ec);
+    assert(!fs::exists(root) && fs::file_size(outside/"keep")==4);
+    assert(fs::remove_all(outside,ec)==2 && !ec);
+    assert(fs::remove_all(root,ec)==0 && !ec);
+    report("FILESYSTEM");
+}
+
 int main(int argc, char **argv) {
     if (argc == 2 && !strcmp(argv[1], "terminate")) {
         std::set_terminate([] { _Exit(77); });
@@ -95,6 +151,7 @@ int main(int argc, char **argv) {
         assert(word == "darterfly" && version == 19 && !file.fail());
     }
     report("STREAMS-LOCALE");
+    filesystem_probe();
     std::vector<int> numbers{9, 3, 7, 1};
     numbers.reserve(128); std::sort(numbers.begin(), numbers.end());
     std::string text(100, 'x'); text.replace(3, 3, "abc");

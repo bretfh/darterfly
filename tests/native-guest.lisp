@@ -137,7 +137,7 @@
     (darterfly/worlds::with-octets (s stack)
       (flet ((cycle ()
                (let ((w (darterfly/worlds::machdep
-                         65 f (length file) s (length stack))))
+                         69 f (length file) s (length stack))))
                  (eql (ash 37 8)
                       (darterfly/worlds:wait-native w :timeout 5)))))
         (dotimes (i 10) (cycle))

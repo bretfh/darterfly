@@ -238,7 +238,7 @@
   :depends-on (#:darterfly/low)
   :serial t
   :pathname "src/libsa/"
-  :components ((:file "syscall") (:file "misc") (:file "string") (:file "stdlib") (:file "signal") (:file "pthread") (:file "time") (:file "unistd") (:file "vfs") (:file "message") (:file "dynamic") (:file "start") (:file "spawn") (:file "run") (:file "math") (:file "strtod") (:file "stdio") (:file "locale")))
+  :components ((:file "syscall") (:file "misc") (:file "string") (:file "stdlib") (:file "signal") (:file "pthread") (:file "time") (:file "unistd") (:file "vfs") (:file "resolver") (:file "inet") (:file "fnmatch") (:file "message") (:file "dynamic") (:file "start") (:file "spawn") (:file "run") (:file "math") (:file "fma") (:file "strtod") (:file "stdio") (:file "locale")))
 
 (asdf:defsystem #:darterfly/platform
   :description "Serial console"
@@ -314,6 +314,6 @@
   :depends-on (#:darterfly #:fiveam (:require #:sb-posix) (:require #:sb-md5) (:require #:sb-bsd-sockets))
   :serial t
   :pathname "tests/"
-  :components ((:file "suite") (:file "local-socket") (:file "native") (:file "native-ipc") (:file "native-tcc") (:file "native-cxx") (:file "native-clang") (:file "native-lld") (:file "native-dl") (:file "native-llvm-tools") (:file "native-tblgen-rebuild") (:file "mach") (:file "server") (:file "init") (:file "boot") (:file "apfs") (:file "net") (:file "wifi") (:file "power") (:file "install") (:file "onboarding") (:static-file "socketpair-probe.c") (:static-file "low-harness.c") (:file "low"))
+  :components ((:file "suite") (:file "local-socket") (:file "native") (:file "native-sleep") (:file "native-ipc") (:file "native-tcc") (:file "native-cxx") (:file "native-clang") (:file "native-lld") (:file "native-dl") (:file "native-llvm-tools") (:file "native-tblgen-rebuild") (:file "mach") (:file "server") (:file "init") (:file "boot") (:file "apfs") (:file "net") (:file "wifi") (:file "power") (:file "install") (:file "onboarding") (:static-file "socketpair-probe.c") (:static-file "low-harness.c") (:file "low"))
   :perform (asdf:test-op (o c)
              (uiop:symbol-call :darterfly/test :run-them)))

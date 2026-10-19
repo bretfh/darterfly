@@ -3,6 +3,7 @@
 extern "C" {
 #endif
 #include <sys/types.h>
+#include <limits.h>
 #include <time.h>
 struct stat {
   dev_t st_dev;
@@ -41,6 +42,9 @@ struct stat {
 #define S_IRUSR 0400
 #define S_IWUSR 0200
 #define S_IXUSR 0100
+#define S_IREAD S_IRUSR
+#define S_IWRITE S_IWUSR
+#define S_IEXEC S_IXUSR
 #define S_IRWXG 070
 #define S_IRGRP 040
 #define S_IWGRP 020
@@ -52,9 +56,11 @@ struct stat {
 int stat(const char *, struct stat *);
 int lstat(const char *, struct stat *);
 int fstat(int, struct stat *);
+int fstatat(int, const char *, struct stat *, int);
 int mkdir(const char *, mode_t);
 int chmod(const char *, mode_t);
 int fchmod(int, mode_t);
+int fchmodat(int, const char *, mode_t, int);
 mode_t umask(mode_t);
 int mkfifo(const char *, mode_t);
 #define S_ISUID 04000

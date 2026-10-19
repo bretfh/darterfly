@@ -21,6 +21,8 @@ extern "C" {
 #define _SC_PAGESIZE 30
 #define _SC_PAGE_SIZE _SC_PAGESIZE
 #define _SC_NPROCESSORS_ONLN 84
+/* Currently unsupported: sysconf returns -1/EINVAL, never a guessed size. */
+#define _SC_PHYS_PAGES 85
 #define _SC_CLK_TCK 2
 extern char **environ;
 ssize_t read(int, void *, size_t);
@@ -42,15 +44,24 @@ pid_t getsid(pid_t);
 pid_t tcgetpgrp(int);
 uid_t getuid(void);
 uid_t geteuid(void);
+int setuid(uid_t);
+int seteuid(uid_t);
 gid_t getgid(void);
 gid_t getegid(void);
+int setegid(gid_t);
+#define _CS_PATH 0
+size_t confstr(int, char *, size_t);
 long sysconf(int);
 int getpagesize(void);
 int access(const char *, int);
+#define _PC_PATH_MAX 4
+long pathconf(const char *, int);
 int unlink(const char *);
+int unlinkat(int, const char *, int);
 int rmdir(const char *);
 int chdir(const char *);
 char *getcwd(char *, size_t);
+ssize_t readlinkat(int, const char *, char *, size_t);
 ssize_t readlink(const char *, char *, size_t);
 int symlink(const char *, const char *);
 int link(const char *, const char *);
@@ -69,6 +80,7 @@ char *ttyname(int);
 int gethostname(char *, size_t);
 long syscall(long, ...);
 int fchown(int, uid_t, gid_t);
+int lchown(const char *, uid_t, gid_t);
 int chown(const char *, uid_t, gid_t);
 int fchdir(int);
 int close_range(unsigned, unsigned, int);

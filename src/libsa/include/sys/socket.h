@@ -15,6 +15,7 @@ struct linger { int l_onoff; int l_linger; };
 #define AF_UNIX 1
 #define AF_INET 2
 #define AF_INET6 10
+#define AF_KEY 15
 #define AF_NETLINK 16
 #define PF_UNSPEC 0
 #define PF_LOCAL 1
@@ -23,6 +24,7 @@ struct linger { int l_onoff; int l_linger; };
 #define PF_INET6 10
 #define SOCK_NONBLOCK 00004000
 #define SOCK_CLOEXEC 02000000
+#define SOMAXCONN 128
 #define SOCK_STREAM 1
 #define SOCK_DGRAM 2
 #define SOCK_RAW 3
@@ -49,6 +51,8 @@ struct linger { int l_onoff; int l_linger; };
 #define SO_RCVTIMEO 20
 #define SO_SNDTIMEO 21
 #define SO_BINDTODEVICE 25
+#define SO_TIMESTAMP 29
+#define SO_ACCEPTCONN 30
 #define SCM_RIGHTS 1
 #define MSG_CTRUNC 0x08
 #define MSG_CMSG_CLOEXEC 0x40000000
@@ -99,6 +103,12 @@ ssize_t recvmsg(int, struct msghdr *, int);
 
 int socketpair(int domain, int type, int protocol, int sv[2]);
 int shutdown(int fd, int how);
+int setsockopt(int, int, int, const void *, socklen_t);
+int getsockopt(int, int, int, void *, socklen_t *);
+ssize_t send(int, const void *, size_t, int);
+ssize_t recv(int, void *, size_t, int);
+ssize_t recvfrom(int, void *, size_t, int, struct sockaddr *, socklen_t *);
+ssize_t sendto(int, const void *, size_t, int, const struct sockaddr *, socklen_t);
 
 int socket(int domain, int type, int protocol);
 int bind(int fd, const struct sockaddr *addr, socklen_t len);

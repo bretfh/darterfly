@@ -325,7 +325,7 @@
   (setf (mem :u32 (+ fp 4)) 0)
   c)
 
-(define-low fgets (buf (n :u32) fp)
+(define-low fgets-bytewise (buf (n :u32) fp)
   (let ((i 0) (c 0) (going 1))
     (while (and going (signed< i (- (sign-extend :u32 n) 1)))
       (setf c (the :u32 (fgetc fp)))
@@ -334,6 +334,45 @@
           (progn (setf (mem :u8 (+ buf i)) c)
                  (incf i)
                  (when (= c 10) (setf going 0)))))
+    (when (= i 0) (result 0))
+    (setf (mem :u8 (+ buf i)) 0)
+    buf))
+
+;; Read lines in batches on seekable descriptors. OpenSSL's file BIO uses
+;; fgets for trust bundles; one native service request per byte is prohibitive.
+;; Return surplus bytes with a relative seek, so no hidden buffer changes the
+;; existing FILE layout, fgetc/fread behavior, or descriptor position. Pipes
+;; and terminals retain bytewise reads because their surplus cannot be sought.
+(define-low fgets (buf (n :u32) fp)
+  (when (signed<= (sign-extend :u32 n) 0) (result 0))
+  (when (= n 1) (setf (mem :u8 buf) 0) (result buf))
+  (let ((saved (mem :u32 (__errno_location)))
+        (fd (mem :u32 fp)) (i 0) (got 0) (j 0) (done 0))
+    (when (signed< (lseek fd 0 1) 0)
+      (setf (mem :u32 (__errno_location)) saved)
+      (result (fgets-bytewise buf n fp)))
+    (when (/= (mem :u32 (+ fp 12)) +eof+)
+      (setf (mem :u8 buf) (mem :u32 (+ fp 12)))
+      (setf (mem :u32 (+ fp 12)) +eof+)
+      (setf i 1)
+      (when (= (mem :u8 buf) 10) (setf done 1)))
+    (while (and (= done 0) (< i (- n 1)))
+      (setf got (read fd (+ buf i) (- n 1 i)))
+      (if (signed<= got 0)
+          (progn
+            (if (= got 0) (setf (mem :u32 (+ fp 4)) 1)
+                (setf (mem :u32 (+ fp 8)) 1))
+            (setf done 1))
+          (progn
+            (setf j 0)
+            (while (and (< j got) (= done 0))
+              (when (= (mem :u8 (+ buf i j)) 10) (setf done 1))
+              (incf j))
+            (when (< j got)
+              (when (signed< (lseek fd (- j got) 1) 0)
+                (setf (mem :u32 (+ fp 8)) 1)
+                (result 0)))
+            (incf i j))))
     (when (= i 0) (result 0))
     (setf (mem :u8 (+ buf i)) 0)
     buf))

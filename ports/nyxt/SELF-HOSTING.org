@@ -5,6 +5,27 @@
 
 See [[file:SBOM.org][Guix SBOM exports and the compiler/engine dependency plan]].
 
+Current engine recommendation: [[file:wpe/ASSESSMENT.org][bounded WPE qualification]].
+The CEF-specific direction below is historical. Shared runtime, loader
+and self-hosting evidence remain applicable. Real GLib and JavaScriptCore
+now pass [[file:wpe/QUALIFICATION.org][native isolated-world qualification]]. GIO and libsoup now
+pass [[file:wpe/NETWORK-QUALIFICATION.org][native HTTP/TLS qualification]], including a public HTTP/2 page and
+certificate rejection. WebCore, the display adapter and Nyxt integration
+remain ahead. Persistent browser databases still need record locking and
+durability qualification; these HTTP tests use in-memory cookies.
+
+The rendering libraries and upstream WPEPlatform now pass
+[[file:wpe/RENDER-QUALIFICATION.org][native software-buffer qualification]] using the shared runtime. WebCore
+compilation is underway; this is not a successful Nyxt launch yet.
+
+* Current milestone (2026-10-19)
+
+[[file:wpe/RENDER-QUALIFICATION.org][The full engine qualification]] now passes local, HTTP and HTTPS
+rendering, JavaScript, certificate rejection and process cleanup under
+normal init. Nyxt source compilation and its renderer extension remain
+active work. Older milestones below describe the historical progression;
+they do not supersede this measured state.
+
 * Decision
 
 Local rebuilding is a requirement of the browser architecture. An engine

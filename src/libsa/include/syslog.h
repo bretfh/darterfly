@@ -14,6 +14,7 @@ extern "C" {
 #define LOG_USER (1<<3)
 #define LOG_MAIL (2<<3)
 #define LOG_DAEMON (3<<3)
+#define LOG_AUTH (4<<3)
 #define LOG_SYSLOG (5<<3)
 #define LOG_LPR (6<<3)
 #define LOG_NEWS (7<<3)
@@ -35,6 +36,11 @@ extern "C" {
 #define LOG_NDELAY 0x08
 #define LOG_NOWAIT 0x10
 #define LOG_PERROR 0x20
+#include <stdarg.h>
+#define LOG_MASK(p) (1 << (p))
+#define LOG_UPTO(p) ((1 << ((p) + 1)) - 1)
+void vsyslog(int, const char *, va_list);
+int setlogmask(int);
 void openlog(const char *, int, int);
 void syslog(int, const char *, ...);
 void closelog(void);

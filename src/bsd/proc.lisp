@@ -32,6 +32,7 @@
    (bindings :initform nil :accessor proc-bindings)
    (closing :initform nil :accessor proc-closing)
    (world-owner :initform nil :accessor proc-world-owner)
+   (native-signals :initform nil :accessor proc-native-signals)
    (native-world :initform nil :accessor proc-native-world)
    (native-result :initform nil :accessor proc-native-result)
    (native-requests :initform nil :accessor proc-native-requests)))
@@ -69,6 +70,11 @@
   (logand (proc-pending proc) (logior (lognot (proc-mask proc)) +unmaskable+)))
 
 (defun deliver (proc)
+  ;; Native request workers share descriptors, but the lifecycle thread owns
+  ;; BSD stop/exit transitions and its CATCH. Native handlers run in-world.
+  (when (and (proc-native-world proc)
+             (not (eq sb-thread:*current-thread* (proc-thread proc))))
+    (return-from deliver nil))
   (let ((handled nil))
     (unless (eq proc *proc0*)
       (loop
@@ -107,6 +113,21 @@
 (defun post (proc signo)
   (when (and proc (not (eq (proc-state proc) :zombie)))
     (let ((name (signame signo)))
+      ;; Native dispositions live in that world's shared libsa/kernel state.
+      ;; Stop/continue/kill retain the BSD lifecycle and wait-status path.
+      (when (and (proc-native-world proc) (not (proc-native-result proc))
+                 (not (member name '(:sigkill :sigstop :sigtstp :sigttin
+                                     :sigttou :sigcont))))
+        (let ((native (aref #(0 1 2 3 4 5 6 6 8 9 7 11 31 13 14 15
+                             23 19 20 18 17 21 22 29 24 25 26 27 28 6 10 12)
+                           signo)))
+          (handler-case
+              (darterfly/worlds::signal-native (proc-native-world proc) native)
+            (darterfly/worlds:world-error (c)
+              ;; Exit may reap the world before its BSD waiter publishes it.
+              (unless (= (darterfly/worlds::world-error-code c) 3)
+                (error c)))))
+        (return-from post nil))
       (case name
         (:sigkill (when (eq (proc-state proc) :stop) (setf (proc-state proc) :run)))
         (:sigcont
@@ -251,6 +272,7 @@
     thread))
 
 (defun proc-exit (proc status)
+  (with-bsd (setf (proc-closing proc) t))
   (dolist (thread (with-bsd (shiftf (proc-threads proc) nil)))
     (unless (eq thread sb-thread:*current-thread*)
       (ignore-errors (sb-thread:terminate-thread thread))
@@ -260,10 +282,18 @@
           :when (aref (proc-fds proc) fd)
             :do (release-fd proc fd))
     (darterfly/mach:task-terminate (proc-task proc))
-    (let ((init (or (pfind 1) *proc0*)))
+    ;; PID 1 may itself be exiting (notably in a bare native-world session).
+    ;; Never reparent children to a dying process or back to their old parent.
+    (let* ((candidate (pfind 1))
+           (init (if (and candidate (not (eq candidate proc))
+                          (not (proc-closing candidate))
+                          (not (eq (proc-state candidate) :zombie)))
+                     candidate *proc0*)))
       (dolist (child (proc-children proc))
         (setf (proc-parent child) init)
-        (push child (proc-children init))))
+        (push child (proc-children init))
+        (when (eq (proc-state child) :zombie)
+          (post init (signo :sigchld)))))
     (setf (proc-children proc) nil
           (proc-state proc) :zombie
           (proc-status proc) status

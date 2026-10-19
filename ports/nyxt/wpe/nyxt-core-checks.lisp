@@ -1,0 +1,40 @@
+(in-package #:cl-user)
+(assert (= 4 (nyxt::version)))
+(assert (nyxt::find-command 'nyxt:execute-command))
+(let ((command (nyxt:lambda-command darterfly-build-check (n)
+                 "Exercise a live Nyxt Lisp command."
+                 (* n 6))))
+  (assert (= 42 (funcall command 7))))
+(format t "~&[NYXT CORE COMMAND PASS]~%")
+(finish-output)
+(when (equal "enabled"
+             (uiop:read-file-string "/Users/darterfly/nyxt-http-mode"))
+  (flet ((fetch (port)
+           (dex:get (format nil "https://10.0.2.2:~d/nyxt" port)
+                    :ca-path "/Users/darterfly/nyxt-ca.pem"
+                    :insecure nil :keep-alive nil :use-connection-pool nil
+                    :connect-timeout 10 :read-timeout 10)))
+    (multiple-value-bind (body status) (fetch 18766)
+      (assert (= 200 status))
+      (assert (equal body (format nil "DARTERFLY-GIO-HTTP~%"))))
+    (format t "~&[NYXT OCICL HTTPS PASS]~%")
+    (finish-output)
+    (loop for (port name) in '((18768 :expired) (18769 :future)
+                               (18770 :wrong-host) (18771 :untrusted))
+          do (let ((rejected nil))
+               (handler-case (fetch port)
+                 (pure-tls:tls-certificate-error (condition)
+                   (format t "~&[NYXT CERTIFICATE REJECTED ~a] ~a~%"
+                           name condition)
+                   (setf rejected t)))
+               (assert rejected)
+               (finish-output)))
+    (assert (equal (fetch 18766) (format nil "DARTERFLY-GIO-HTTP~%")))
+    (format t "~&[NYXT OCICL HTTPS RECOVERY PASS]~%")
+    ;; Repeated verified requests must work even after tickets were received.
+    ;; The package guard requires full certificate verification each time.
+    (dotimes (round 2)
+      (declare (ignore round))
+      (assert (equal (fetch 18772) (format nil "DARTERFLY-GIO-HTTP~%"))))
+    (format t "~&[NYXT OCICL HTTPS HRR PASS]~%")
+    (finish-output)))

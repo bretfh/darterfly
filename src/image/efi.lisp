@@ -111,9 +111,12 @@
           (loop :for (name path) :in objects
                 :collect (list :file (concatenate 'string "usr/lib/darterfly/objects/" name) (octets path))))))
 
+(defvar *sbcl-runtime-options* nil
+  "Additional SBCL runtime arguments for explicitly sized guest images.")
+
 (defun boot-conf (boot-args &optional root-image)
-  (format nil "kernel-flags=~a -- --core /System/Library/Kernels/darterfly.core~%ramdisk=/System/Library/RAMDisk/root.cpio~%~@[root-image=~a~%~]"
-          boot-args (and root-image "/System/Library/RAMDisk/root.img")))
+  (format nil "kernel-flags=~a -- ~{~a ~}--core /System/Library/Kernels/darterfly.core~%ramdisk=/System/Library/RAMDisk/root.cpio~%~@[root-image=~a~%~]"
+          boot-args *sbcl-runtime-options* (and root-image "/System/Library/RAMDisk/root.img")))
 
 (defun ramdisk ()
   (write-cpio (build-path "root.cpio") (list '(:dir "tmp") '(:dir "Users/darterfly"))))

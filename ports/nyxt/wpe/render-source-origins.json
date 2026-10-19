@@ -1,0 +1,64 @@
+{
+  "d7blq65m3f57j3sk2qzkp0za363ivl3k-harfbuzz-11.4.4.tar.xz": {
+    "guix_store_path": "/gnu/store/d7blq65m3f57j3sk2qzkp0za363ivl3k-harfbuzz-11.4.4.tar.xz",
+    "kind": "archive",
+    "sha256": "1053f17146ea587fafa9f56c9e4e0f4b3fefae4ba2569155d8bc9a35208f58c5"
+  },
+  "sjn5ckgcy91x91j5v3x7325jny4175ym-freetype-2.13.3.tar.xz": {
+    "guix_store_path": "/gnu/store/sjn5ckgcy91x91j5v3x7325jny4175ym-freetype-2.13.3.tar.xz",
+    "kind": "archive",
+    "sha256": "0550350666d427c74daeb85d5ac7bb353acba5f76956395995311a9c6f063289"
+  },
+  "8nc8by7cw4a3n5zsbcsfza0lhjizyzb3-libjpeg-turbo-3.1.2.tar.gz": {
+    "guix_store_path": "/gnu/store/8nc8by7cw4a3n5zsbcsfza0lhjizyzb3-libjpeg-turbo-3.1.2.tar.gz",
+    "kind": "archive",
+    "sha256": "8f0012234b464ce50890c490f18194f913a7b1f4e6a03d6644179fa0f867d0cf"
+  },
+  "d26x223zc8zringhnyvjl3idx65j5sbl-libpng-1.6.50.tar.xz": {
+    "guix_store_path": "/gnu/store/d26x223zc8zringhnyvjl3idx65j5sbl-libpng-1.6.50.tar.xz",
+    "kind": "archive",
+    "sha256": "4df396518620a7aa3651443e87d1b2862e4e88cad135a8b93423e01706232307"
+  },
+  "7a95v78d4k9bf775027mm56af6r6srwd-libwebp-1.3.2-checkout": {
+    "guix_store_path": "/gnu/store/7a95v78d4k9bf775027mm56af6r6srwd-libwebp-1.3.2-checkout",
+    "kind": "directory"
+  },
+  "bf8cwj3yb1kjabzv5bqq1c1a0cfyfwwh-libxml2-2.14.6.tar.zst": {
+    "guix_store_path": "/gnu/store/bf8cwj3yb1kjabzv5bqq1c1a0cfyfwwh-libxml2-2.14.6.tar.zst",
+    "kind": "archive",
+    "sha256": "f4a6c90a7e10ba1ecc3342d2ab1b67d987aba2c8fa1456d25a0a0c322fe537fa"
+  },
+  "rqlhj8xk7x34pnsq8y3gzf7dzwyn9flk-libepoxy-1.5.10-checkout": {
+    "guix_store_path": "/gnu/store/rqlhj8xk7x34pnsq8y3gzf7dzwyn9flk-libepoxy-1.5.10-checkout",
+    "kind": "directory"
+  },
+  "wgf87px44q7yccn0dwj04svynlacz1rz-libgcrypt-1.11.0.tar.bz2": {
+    "guix_store_path": "/gnu/store/wgf87px44q7yccn0dwj04svynlacz1rz-libgcrypt-1.11.0.tar.bz2",
+    "kind": "archive",
+    "sha256": "09120c9867ce7f2081d6aaa1775386b98c2f2f246135761aae47d81f58685b9c"
+  },
+  "l580wn1nngk0f9blspxad971m54drbwb-libgpg-error-1.51.tar.bz2": {
+    "guix_store_path": "/gnu/store/l580wn1nngk0f9blspxad971m54drbwb-libgpg-error-1.51.tar.bz2",
+    "kind": "archive",
+    "sha256": "be0f1b2db6b93eed55369cdf79f19f72750c8c7c39fc20b577e724545427e6b2"
+  },
+  "k5rr2ajzd92x0g6pcz3ciqjxng0rxcq4-libtasn1-4.21.0.tar.gz": {
+    "guix_store_path": "/gnu/store/k5rr2ajzd92x0g6pcz3ciqjxng0rxcq4-libtasn1-4.21.0.tar.gz",
+    "kind": "archive",
+    "sha256": "1d8a444a223cc5464240777346e125de51d8e6abf0b8bac742ac84609167dc87"
+  },
+  "96804jl88kh1a4lpgs52w0m53q0cskl4-libxkbcommon-1.13.1-checkout": {
+    "guix_store_path": "/gnu/store/96804jl88kh1a4lpgs52w0m53q0cskl4-libxkbcommon-1.13.1-checkout",
+    "kind": "directory"
+  },
+  "8jj0ygmdwk842pgjwbxnn505ka9fnh8m-fontconfig-2.16.0.tar.zst": {
+    "guix_store_path": "/gnu/store/8jj0ygmdwk842pgjwbxnn505ka9fnh8m-fontconfig-2.16.0.tar.zst",
+    "kind": "archive",
+    "sha256": "6db9ea2f49d1a2514161c7d74c535b22e1059155d06836c890011e28ef8bc6c1"
+  },
+  "czx0kfyn24ysimpb05vx3z13f4sfcp8w-expat-2.7.1.tar.xz": {
+    "guix_store_path": "/gnu/store/czx0kfyn24ysimpb05vx3z13f4sfcp8w-expat-2.7.1.tar.xz",
+    "kind": "archive",
+    "sha256": "354552544b8f99012e5062f7d570ec77f14b412a3ff5c7d8d0dae62c0d217c30"
+  }
+}

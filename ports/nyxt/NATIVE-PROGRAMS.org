@@ -108,18 +108,18 @@ runtime support remain open. ELF acceptance is not C++ ABI qualification.
 - [[file:../../src/kern/i386/native.lisp][Kernel ELF validation, segment loading and retained status slots]].
 - [[file:../../src/worlds/worlds.lisp][Lisp spawn-native, argument packing and wait-native interfaces]].
 - [[file:../../src/link/link.lisp][link-native, using the existing object relocation engine]].
-- [[file:../../src/bsd/dev/i386/systemcalls.lisp][Supervisor calls 65 through 67, and native exit handling]].
+- [[file:../../src/bsd/dev/i386/systemcalls.lisp][Supervisor calls 69 through 71, and native exit handling]].
 - [[file:../../src/kern/i386/trap.lisp][Fatal faults stop the world and record a signal]].
 
-Supervisor call 65 takes image address/length, stack address/length, and
-an optional receive-port name. It creates an unprivileged world. Call 66
+Supervisor call 69 takes image address/length, stack address/length, and
+an optional receive-port name. It creates an unprivileged world. Call 70
 reaps a completed native world and returns its status, or negative EAGAIN
-while it still exists. Call 67 validates an image without creating a
+while it still exists. Call 71 validates an image without creating a
 world. All three calls are restricted to the system world. They use the
 kernel's numeric error convention: EAGAIN is 11, unlike the
 BSD service layer's EAGAIN value of 35. Do not mix the two namespaces.
 
-wait-native currently retries call 66 at ten-millisecond intervals. This
+wait-native currently retries call 70 at ten-millisecond intervals. This
 is a polling supervisor interface, not a new blocking wait syscall.
 Cancellation uses the existing world-stop machinery and terminates all
 threads belonging to that world. Normal exit now retains its code;

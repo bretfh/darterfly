@@ -27,9 +27,26 @@ double exp(double), expm1(double), log(double), log10(double), log2(double), log
 double pow(double, double), sqrt(double), hypot(double, double), cbrt(double);
 double floor(double), ceil(double), trunc(double), round(double), fabs(double), fmod(double, double);
 double ldexp(double, int), frexp(double, int *), modf(double, double *), scalbn(double, int);
-long double ldexpl(long double, int);
+long double ldexpl(long double, int), frexpl(long double, int *);
+double fmin(double, double), fmax(double, double);
+float fminf(float, float), fmaxf(float, float);
 double copysign(double, double), nextafter(double, double), rint(double);
 long lrint(double);
+long long llround(double);
+double remainder(double, double);
+float erff(float), ldexpf(float, int), frexpf(float, int *);
+double fma(double, double, double);
+float fmodf(float, float), powf(float, float), copysignf(float, float);
+float acosf(float), asinf(float), log10f(float), log2f(float), cbrtf(float);
+float fmaf(float, float, float);
+long lrintf(float);
+long long llroundf(float);
+float tanhf(float), sinf(float), cosf(float), tanf(float), atanf(float), hypotf(float, float);
+float expf(float), exp2f(float), logf(float), remainderf(float, float);
+float atan2f(float, float);
+long double atan2l(long double, long double), hypotl(long double, long double);
+float nextafterf(float, float), roundf(float);
+long lroundf(float);
 float sqrtf(float), fabsf(float), floorf(float), ceilf(float), truncf(float);
 long double truncl(long double);
 

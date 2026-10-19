@@ -201,14 +201,14 @@
 
 ;; Native startup uses the SysV stack layout, with a minimal auxiliary vector.
 ;; This is the Darterfly trap/port ABI, not a Linux syscall ABI.
-(defun native-stack (argv envp)
+(defun native-stack (argv envp &optional signals)
   (let* ((strings (mapcar (lambda (s)
                             (check-type s string)
                             (when (find #\Null s) (error "NUL in argument"))
                             (sb-ext:string-to-octets s :external-format :utf-8
                                                      :null-terminate t))
                           (append argv envp)))
-         (words (+ 1 (length argv) 1 (length envp) 1 4))
+         (words (+ 1 (length argv) 1 (length envp) 1 (if signals 8 4)))
          (size (* 16 (ceiling (+ (* words 8)
                                 (reduce #'+ strings :key #'length
                                                     :initial-value 0)) 16))))
@@ -228,6 +228,13 @@
           (replace v s :start1 at)
           (incf at (length s))
           (incf word))
+        ;; Private auxiliary entries carry spawn signal state without
+        ;; changing argv/envp or embedding another runtime in the child.
+        (when signals
+          (put (- words 8) #xDF01)
+          (put (- words 7) (first signals))
+          (put (- words 6) #xDF02)
+          (put (- words 5) (second signals)))
         ;; AT_PAGESZ, AT_NULL. The calloc-like buffer supplies terminators.
         (put (- words 4) 6)
         (put (- words 3) 4096))
@@ -255,9 +262,9 @@
     (with-octets (f file) (machdep 71 f (length file)))
     file))
 
-(defun spawn-native-image (image &key argv envp port)
+(defun spawn-native-image (image &key argv envp port signals)
   "Start a previously read ELF image. The kernel revalidates it at launch."
-  (let ((stack (native-stack argv envp)))
+  (let ((stack (native-stack argv envp signals)))
     (with-octets (f image)
       (with-octets (s stack)
         (machdep 69 f (length image) s (length stack) (or port 0))))))
@@ -285,3 +292,5 @@ A second wait signals ECHILD. TIMEOUT never kills or reaps a live child."
                            (>= (get-internal-real-time) deadline)))
         (return nil))
       (sleep 0.01))))
+
+(defun signal-native (world signal) (machdep 73 world signal))

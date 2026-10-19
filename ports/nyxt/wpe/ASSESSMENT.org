@@ -1,0 +1,485 @@
+#+title: Native Nyxt through WPE WebKit: a bounded port
+#+date: 2026-10-18
+#+startup: overview
+#+options: toc:2 num:nil
+
+* Current milestone (2026-10-19)
+
+[[file:RENDER-QUALIFICATION.org][The full engine qualification]] now passes local, HTTP and HTTPS
+rendering, JavaScript, certificate rejection and process cleanup under
+normal init. Nyxt source compilation and its renderer extension remain
+active work. Older milestones below describe the historical progression;
+they do not supersede this measured state.
+
+* Qualification update
+
+See [[file:QUALIFICATION.org][current runtime and upstream-library qualification]].
+The original probes below record the pre-fix baseline. Real GLib and
+JavaScriptCore now pass their isolated-world execution probes. The
+complete browser still does not run. The follow-up
+[[file:NETWORK-QUALIFICATION.org][network qualification]] also passes GIO, upstream OpenSSL/GLib TLS and
+libsoup, including a public HTTPS fetch and invalid-certificate rejection.
+
+The [[file:RENDER-QUALIFICATION.org][rendering qualification]] now includes a complete native WebKit local
+page: real WebProcess, JavaScript/DOM, CSS, title and exact CPU pixels.
+The baseline assessment below is historical. The next gates are engine
+HTTPS, Darterfly window/input integration and Nyxt's renderer extension.
+
+* Original recommendation
+
+Qualify WPE WebKit 2.54.1 as the next engine candidate. It has the most
+credible bounded route found in this review: its existing Unix process
+launcher, GLib event loop, software rasterizer, and WPEPlatform display
+extension can meet Darterfly at interfaces that already mostly exist.
+
+This is a recommendation to qualify a source port, not a finding that
+WPE already runs here. Four small probes ran in actual Darterfly worlds:
+stack bounds worked; spawn signal attributes, monotonic condition waits,
+and sigsuspend did not. No WebKit or Nyxt code executed in those probes.
+
+The route is:
+
+#+begin_example
+Guix build host                      Darterfly at runtime
+----------------                     --------------------
+cross-build pinned sources  ------>  isolated Nyxt / SBCL world
+                                     Nyxt commands, buffers, modes
+                                      |
+                                     nyxt/wpe renderer extension
+                                      |
+                                     WPE WebKit UI API + GLib loop
+                                      |               |
+                       Unix sockets / descriptors     WPEPlatform module
+                              |                       |
+                 +------------+-----------+           pixels + input
+                 |                        |           |
+            WebProcess world       NetworkProcess    Darterfly compositor
+            WebCore + JSC          world / libsoup
+                 |                        |
+                 +-----------+------------+
+                             |
+                     the existing shared libsa
+                     allocator, pthreads, TLS, loader
+                             |
+                     Darterfly world / BSD services
+                             |
+                     Darterfly kernel and hardware
+#+end_example
+
+There is no Linux kernel, Linux userspace server, remote browser, or
+Linux binary ABI in this proposed runtime. Guix is the initial builder.
+Every target library must be compiled against the Darterfly ABI.
+
+Keeping upstream Nyxt entirely unchanged is plausible at the application
+core, but not by loading its existing GTK renderer verbatim. A new
+renderer extension is required. Keeping *every* existing renderer line
+unchanged would require GTK/GDK and their platform integration too.
+That would expand the port to avoid writing the smaller adapter.
+
+* What was actually reviewed
+
+- Darterfly worktree: /home/bfh/git/cl/darterfly-nyxt.
+- Branch: codex/nyxt-guix-engine.
+- HEAD: 5e258356e13743c6eb0027566ac65f5768c79614.
+- Pending D2 merge: 0548aa7cb51d3eb5a383f70848a2d93f85055189.
+- Runtime, native loader, process service, sockets, mappings, signals,
+  pthreads, compositor client/server, and existing guest fixtures.
+- Full official WPE WebKit 2.54.1 release source, especially the selected
+  platform, process, memory, rendering, JSC and dependency paths.
+- GLib 2.86.0 source, including spawn, child watch, wakeup and pthreads.
+- Nyxt checkout cfa068ea781fe4866ae435c2950c00c5ec51cfee, its renderer
+  protocol, GTK backend, ASDF renderer selection and dependency records.
+- Installed Guix recipe, build inventory and installed runtime closure.
+
+The review traces the relevant paths; it is not a claim to have audited
+all of WebKit. The working tree contains earlier work and an unfinished
+merge. This assessment does not commit that merge or change OS behavior.
+
+[[file:evidence.json][Evidence manifest]] records source pins, file hashes, raw guest results,
+and the exact inventory scope. The engine tarball SHA256 is:
+
+#+begin_example
+0de8bdfba011f9cd63ba9a9171fa6038dd2c08237894f4082abbb821f29d3fe9
+#+end_example
+
+The archive is about 44 MiB and unpacked files total about 441 MiB.
+The previous Chromium requirement of 100 GB free is not a measured WPE
+requirement. About 9.3 GiB remained after this assessment's downloads
+and guest run. A complete WPE build's disk peak has not been measured;
+plan storage before attempting it. Neither a small archive nor a
+successful package download proves the full source build will fit.
+
+* Darterfly: reuse and gaps
+
+| Facility | Existing implementation | WPE qualification still needed |
+|----------+-------------------------+--------------------------------|
+| Native execution | ELF executables in isolated worlds; exit, wait, faults | Real WebKit child entry points and crash/restart |
+| Process API | posix_spawn, fd actions, inherited descriptors, waitpid | Signal defaults, GLib child-watch notification, child kill |
+| Local IPC | Unix streams/seqpacket, SCM_RIGHTS, poll | WebKit message traffic, cancellation, pressure and EOF |
+| Shared memory | Coherent RAM-file mappings, descriptor transfer | shm_open/shm_unlink API, lifecycle and exact WPE patterns |
+| Threads | pthreads, locks, conditions, semaphores, thread signals | Monotonic waits; JSC suspend/resume; resource reclamation |
+| Stack metadata | Native main and worker stack bounds | GC register capture and stack scanning under stress |
+| Dynamic loading | Target DSOs, dynamic TLS, one runtime provider | Full GModule/WPE closure, C++ unwinding, module count/size |
+| Networking | Existing IP stack, DNS and BSD sockets | libsoup/GIO behavior, HTTPS backend, certificates, cancellation |
+| Graphics | Pixel layers, windows, damage and input | WPEPlatform adapter, native buffer transport, frame ownership |
+| Persistence | VFS and persistent filesystems | SQLite locking, flush and crash recovery, browser profile |
+| Toolchain | Native TCC, Clang cc1, LLD, ar, TableGen fixtures | Engine build generators and full compiler/engine rebuild |
+
+"Existing" describes implementation and earlier targeted tests. It does
+not mean arbitrary Unix applications are supported. Passing a compiler
+fixture does not establish WebKit's threading and signal contracts.
+
+** Measured runtime blockers
+
+[[file:runtime-contracts.c][The probe source]] links against the existing Low libsa, using the same
+native executable builder as other guest tests. Each case runs in its
+own world with a supervisor timeout. It makes no runtime modifications.
+
+| Contract | Raw wait status | Observation |
+|----------+-----------------+-------------|
+| Main-thread stack bounds contain a stack local | 0 | Passed |
+| Spawn signal-reset attributes | 256 | Exited 1: gap |
+| CLOCK_MONOTONIC condition timeout | 256 | Exited 1: gap |
+| sigsuspend waits with a temporary signal mask | 256 | Exited 1: gap |
+| Supervisor arithmetic after all four | 42 | Still responsive |
+
+A status of 256 is wait status for exit code 1, not signal 256. The
+harness completed successfully while reporting three contract failures.
+It is intentionally an assessment, not an all-green engine test suite.
+
+[[file:contracts-guest.log][Captured guest transcript]]; reproduce from the worktree root with:
+
+#+begin_src sh
+sh ports/nyxt/wpe/run-contracts.sh
+#+end_src
+
+The concrete source causes are:
+
+1. GLib gspawn-posix.c requests POSIX_SPAWN_SETSIGDEF and sets default
+   dispositions for selected signals. libsa/spawn.lisp rejects all
+   nonzero attribute flags and returns ENOTSUP for signal defaults.
+   Implement the attributes through the existing spawn service, with
+   correct inheritance/reset semantics. Do not silently ignore them.
+2. libsa/pthread.lisp accepts pthread_condattr_setclock but cond_init
+   discards it. Timed waits calculate against CLOCK_REALTIME. GLib's
+   pthread fallback uses CLOCK_MONOTONIC. Preserve the clock in each
+   condition variable and test real timeout/wakeup behavior.
+3. libsa/signal.lisp implements sigsuspend as immediate EINTR. JSC uses
+   it inside its suspension handler to keep a target thread stopped
+   until another signal resumes it. Implement atomic mask-and-sleep,
+   restoration, pending-signal handling, and nested delivery correctly.
+
+The last item is a correctness requirement for garbage collection.
+Turning the JIT off does not remove it. The simple probe does not qualify
+JSC's full handshake, register capture, or async-signal-safe sem_post.
+
+Further signal work must connect BSD child lifecycle to native SIGCHLD
+handlers used by GLib, and implement native child termination. Current
+libsa kill accepts only self-like values and rejects ordinary child PIDs.
+The service has process lifecycle machinery, but that does not establish
+the C signal notification path. BSD signal numbers and native header
+numbers differ; existing wait-status translation must remain consistent.
+
+** Memory and loader boundaries
+
+WebKit SharedMemoryUnix.cpp already falls back from Linux memfd to POSIX
+shm_open, ftruncate, mmap and shm_unlink. Darterfly has coherent RAM-file
+mappings and descriptor passing, but no shm_open/shm_unlink implementation
+was found in libsa. Supply these over the existing RAM-backed objects.
+There is no reason to implement Linux memfd just for this path.
+
+Test unlink-while-mapped, cross-world read-only and writable views,
+resize/truncation policy, receiver lifetime and cleanup after crashes.
+Current file mappings are bounded at 64 MiB per request. Disk-backed
+writable shared mapping is unsupported. Private file mappings read copies.
+
+The loader supports target-built DSOs, not arbitrary Guix Linux binaries.
+Keep one libsa provider and one compatible C++ runtime in each world.
+General/local dynamic TLS works in fixtures; initial-exec DSO TLS and
+IFUNC do not. Successful dlclose keeps mappings resident until exit.
+Current bounds are 64 modules, 512 MiB DSO input and 1 GiB virtual image.
+Measure the proposed closure against these before raising any limit.
+
+There is another explicit startup gap: dlopen support does not imply
+support for ordinary dynamically linked ELF executables with PT_INTERP.
+For the first WebKit children, prefer small native libsa executables that
+load the target engine and call its exported WebProcessMain or
+NetworkProcessMain entry point through a typed bridge. Those entry points
+already exist and are exported upstream; the normal Unix mains call them.
+Keep their argv and IPC contracts intact. This is a proposed bootstrap
+adapter, not a tested launcher, and it must track the pinned engine ABI.
+It avoids making a general ELF interpreter a prerequisite for first paint.
+
+** Graphics is a real opportunity, with a specific adapter
+
+WPE 2.54 makes WPEPlatform the normal embedding interface. WPEDisplay,
+WPEToplevel and WPEView are subclassable platform objects. WPEView accepts
+buffers with damage rectangles and explicit rendered/released callbacks.
+
+The source contains a genuine CPU path: AcceleratedSurface's SHM target
+creates a Skia bitmap surface when GL is not in use. The UI process wraps
+received bitmap memory as WPEBufferSHM; import_to_pixels exposes GBytes.
+This is stronger evidence than merely finding a screenshot API.
+
+Implement a small WPEPlatform module that advertises supported SHM
+formats and routes these buffers to Darterfly. The existing layer client
+accepts width, height and pixel arrays; the window server composites them.
+A bounded copy into a Lisp image layer is sufficient for first paint.
+Only optimize to shared surfaces after that path works.
+
+The native C-to-compositor transport is still new work. Do not assume a
+Lisp layer object is directly usable from a native WebProcess. Keep
+window ownership in the browser UI side, validate buffer dimensions,
+stride and length, and acknowledge/release buffers at the right time.
+Handle resize, focus, mouse, scroll, keyboard, text input and clipboard.
+
+The built-in headless backend drives frames but does not display them.
+Use it for engine tests; it does not replace the Darterfly display module.
+
+No hardware GPU driver is necessary for the first software-rendered page.
+However, current WPE CMake still requires libepoxy, and Skia includes GL
+code. A GPU-free runtime is not proof of a GL-library-free build. Verify
+that the selected configuration renders without EGL initialization; do
+not respond to this question by starting a Mesa/DRM port speculatively.
+
+* Nyxt integration: preserve the browser, supply its renderer
+
+Nyxt already separates renderer installation and FFI methods from browser
+commands and modes. Its GTK renderer is about 1,800 lines, but line count
+is not an estimate of the work. It mixes WebKit calls with GTK windows,
+containers, event dispatch and input methods. cl-webkit2 is not a ready
+WPE binding, and WPE 2.0 is not the same ABI as its WebKitGTK dependency.
+
+Add a separate nyxt/wpe ASDF system, initially outside Nyxt's core tree.
+Use a narrow CFFI/GObject binding and a typed C helper where callbacks or
+ownership need one. Reuse renderer-independent Lisp code. Do not build a
+GTK impersonation layer or recreate Nyxt's command system.
+
+| Nyxt behavior | WPE / Darterfly boundary | First usable slice |
+|---------------+-------------------------+--------------------|
+| Renderer scheduling | GLib main context, Lisp callback queue | Required |
+| Browser windows and layout | WPE views plus Darterfly windows | Required |
+| Content, prompt, status, messages | Multiple WebKitWebViews | Required |
+| Internal pages | Custom URI schemes and security policy | Required |
+| JavaScript interaction | Async evaluation, results, user scripts | Required |
+| Navigation | URL, title, load, policy, errors, back/forward | Required |
+| Key bindings and page input | Event interception, focus, text input | Required |
+| Profiles and sessions | Website data, cookies, filesystem state | Required |
+| Downloads | WebKit signals plus destination policy | Required |
+| Optional integration | Inspector, printing, notifications, extras | Later, explicit |
+
+Nyxt renders portions of its own interface as HTML. Showing one external
+page is not enough: prompt/status/message views must work, along with
+internal Lisp-backed schemes and JavaScript callbacks. These are early
+acceptance tests, not polishing after the browser is declared complete.
+
+The existing Nyxt source dependency tree and native dependencies still
+need guest qualification: SBCL/ASDF/CFFI, libfixposix, SQLite, OpenSSL and
+optional Enchant integration. The Guix Nyxt recipe currently selects
+Electron; its inventory must not be mistaken for a minimal nyxt/wpe
+closure. Do not port Electron or Node for this proposed renderer.
+
+Nyxt's Lisp files should compile, load and be editable inside Darterfly
+as soon as the renderer and dependency closure work. Initially building
+WebKit externally does not prevent that Lisp development loop.
+
+* Dependencies and the initial build profile
+
+[[file:guix-wpe-build.cdx.json][Guix's unmodified CycloneDX build inventory]] has 1,162 component entries.
+[[file:guix-wpe-build.dot.gz][The companion Guix bag graph]] retains dependency edges.
+[[file:guix-wpe-runtime.txt][The installed runtime closure]] has 208 store items.
+[[file:channels.scm][Channel pins]] and [[file:guix-wpe-show.txt][the recipe summary]] identify this reference.
+
+These are the installed Guix package's *2.50.3* inventories. They are not
+an SBOM for the proposed 2.54.1 Darterfly build. Counts include variants,
+build/bootstrap machinery and broad package choices; they are not porting
+task counts. The Guix exporter does not supply the full vendored-source
+inventory or dependency edges in its CycloneDX JSON. Keep the graph too.
+Regenerate the target inventory from the final target recipe and source
+selection; until that exists, no complete target SBOM is claimed.
+
+The reference exports used the recorded Guix channels:
+
+#+begin_src sh
+guix graph --type=bag --backend=cyclonedx-json wpewebkit \
+  > guix-wpe-build.cdx.json
+guix graph --type=bag wpewebkit > guix-wpe-build.dot
+guix build wpewebkit > guix-wpe-store-paths
+# Run gc --requisites against the installed main output recorded there.
+#+end_src
+
+The package was obtained for host reference only. It was not run as the
+engine in Darterfly. The graph includes the host build's optional choices.
+
+The 2.54.1 CMake source requires GLib/GObject/GIO/GModule, HarfBuzz/ICU,
+JPEG, libepoxy, libgcrypt, libsoup 3, libtasn1, libxkbcommon, libxml2,
+PNG, SQLite, WebP and zlib. Skia adds FreeType and Fontconfig. Their own
+closures add libraries such as libffi, PCRE2, libgpg-error and Expat.
+Retain WOFF2/Brotli for ordinary downloadable web fonts.
+
+HTTPS additionally needs a working GTlsBackend and certificate store.
+Guix supplies glib-networking with GnuTLS; it also documents an upstream
+OpenSSL backend. Qualify one supported backend, not a new TLS library.
+The runtime's thread-local storage and HTTPS encryption are unrelated
+uses of the acronym TLS. Real DNS, entropy, time, certificate validation,
+redirects and failed-certificate rejection belong in the network gate.
+
+Proposed first-proof choices, *not a tested CMake preset*:
+
+| Area | Initial selection |
+|------+-------------------|
+| API | WPE 2.0 / WPEPlatform; legacy libwpe API off |
+| Display | Headless for qualification; Darterfly module for display |
+| Rendering | Skia CPU; hardware acceleration disabled |
+| Desktop integration | Wayland, DRM, GBM, Qt, journald, sysprof off |
+| Optional web features | Video, audio, WebRTC, WebGL, gamepad, WebXR off |
+| Speech/media services | Speech synthesis and media-session integration off |
+| JS qualification | C-loop interpreter; JIT, DFG/FTL and Wasm off initially |
+| Allocation | Existing USE_SYSTEM_MALLOC option for the first qualification |
+| Documentation | Introspection/docs off; direct bindings initially |
+| Other optional deps | ATK, spellcheck, AVIF/JPEG XL, XSLT off initially |
+
+Resolve feature dependencies against CMake rather than assuming every
+combination above is supported. Some switches are private upstream
+options. C-loop is a diagnostic starting point; a slow interpreter-only
+build without Wasm/media/WebGL is not the eventual everyday browser.
+Do not disable core JavaScript, HTTPS, normal text, CSS or images merely
+to call a static page viewer a browser.
+
+No Rust toolchain requirement was found in this selected WPE build path.
+The build does need modern C++, CMake, Ninja or Make, Python, Perl, Ruby,
+gperf and dependency generators. Guix supplies the initial host tools.
+The existing native LLVM 19 work is useful, but current WebKit C++ usage,
+standard-library requirements and build generators still need checking.
+Do not make rebuilding the entire toolchain inside Darterfly a condition
+for the first native engine run.
+
+* Bounded execution plan and stop conditions
+
+** Gate 1: GLib/JSC contracts in actual worlds
+
+Fix the three measured runtime gaps in shared libsa and the existing
+process service. Add correct shared-memory names, child notification and
+termination. Prove GLib's real GSubprocess and child watch, poll/pipe wakeup,
+GCond deadlines, GModule loading and cross-process descriptor passing.
+GLib already has non-Linux pipe/poll/pthread paths; do not add epoll,
+pidfd or futex merely because they appear in its Linux configuration.
+
+Then run actual JSC in a native world: expressions, allocation/collection,
+worker threads, repeated suspend/resume, register/stack roots and clean
+shutdown. Inspect machine-context definitions; sys/ucontext.h currently
+contains no usable context structure. The engine's platform register
+adapter must match Darterfly's actual saved context, not Linux headers.
+
+Stop and reassess if this requires changing GC algorithms or broad
+engine internals. Correct OS contracts and a small platform register
+adapter are within scope. Passing the four probes alone is insufficient.
+
+** Gate 2: pinned host reference and a real target dependency closure
+
+Build the chosen 2.54.1 software configuration on Guix first. Capture
+local HTML/CSS/text/image paint, input, JavaScript and multiple views.
+The installed 2.50.3 Guix package is a comparison, not proof of this newer
+WPEPlatform configuration. Do not write the Nyxt adapter against an
+unqualified or mismatched engine ABI.
+
+Cross-build the selected libraries for an explicit Darterfly target and
+sysroot. Do not define Linux or FreeBSD to hide missing interfaces. Pin
+all target sources, export Guix's inventory, and record feature choices.
+Audit every configure success against implementations, since several
+libsa functions exist but are stubs. Qualify loader sizes, relocations,
+C++ exceptions and TLS using the real dependency objects.
+
+Stop if the software route needs a new full graphics stack, or the
+minimal closure requires widespread platform impersonation. Report the
+concrete failing dependency before broadening the project.
+
+** Gate 3: one real WebKit page in Darterfly
+
+Launch the actual UI harness, WebProcess and NetworkProcess in distinct
+worlds, using the same shared runtime source. Use WPEPlatform SHM buffers.
+Show a local test page in a Darterfly window; click a button, observe a
+pixel change, and obtain JavaScript result 42 through the real API.
+Also exercise a second view and a custom URI scheme for Nyxt's UI needs.
+
+Record process/world IDs, engine revision, actual painted pixels, input,
+JS result, child exit and supervisor liveness. Crash a renderer and prove
+it can be reaped/replaced. A fake renderer or a Linux guest does not pass.
+This is the decisive engine milestone, before porting an application suite.
+
+** Gate 4: useful network and storage behavior
+
+Load controlled HTTPS content with fonts/images and HTTP/2 where enabled.
+Reject bad certificates, test redirects, cancelled requests and downloads.
+Keep a cookie/profile across reboot. Run SQLite locking/recovery tests;
+flock and lockf currently return success without locking, and msync is a
+stub. Select supported database I/O modes and implement required semantics.
+No silent weakening of data integrity to get the browser to start.
+
+** Gate 5: Nyxt itself
+
+Load upstream Nyxt plus the separate renderer system in an isolated Lisp
+world. Prove prompt commands, completion, multiple tabs, history, custom
+schemes, Lisp-to-JavaScript calls, downloads and saved state. Recompile a
+Lisp command inside Darterfly and use it without an external rebuild.
+
+Use the existing renderer tests where applicable, plus the concrete
+multi-view/UI acceptance above. Only then call the result native Nyxt.
+
+** Gate 6: keep it usable and maintainable
+
+Add JIT/Wasm and media as separately qualified features; measure CPU
+rendering before undertaking GPU work. Address accessibility, Unicode
+input/IME, permissions, crash recovery and update delivery. Existing
+world address-space isolation is not a completed web-content sandbox:
+service authority, filesystem/network access and resource budgets still
+need enforcement before treating arbitrary web content as safely confined.
+
+Prove a subsequent upstream maintenance release applies with the same
+platform adapters. Keep a patch inventory with a purpose and test for
+each patch. Restrict engine patches to target detection, platform OS
+facilities and build/startup integration; keep layout, DOM, JS semantics
+and protocols upstream. If that boundary cannot hold, stop and revisit
+the choice rather than maintaining a divergent engine indefinitely.
+
+Native engine rebuilding is a later concrete milestone: build generators,
+compiler driver/toolchain, dependencies, engine, and Nyxt from source on
+Darterfly, then repeat the same browser acceptance tests. The initial
+external build is a bootstrap step, not the final self-hosting claim.
+
+* Why this route rather than the alternatives
+
+| Route | Assessment against today's implementation |
+|-------+-------------------------------------------|
+| WPE native source port | Preferred qualification: existing Unix launch, CPU path, explicit embedding API |
+| WebKitGTK + unchanged GTK renderer | Reuses more renderer code but adds GTK/GDK/window integration |
+| CEF native source port | Reuses current Nyxt backend but still needs Chromium platform/build work |
+| Linux ABI for packaged engines | Preserves Linux binaries; introduces a much broader runtime contract |
+| FreeBSD Linuxulator transplant | Requires FreeBSD kernel facilities Darterfly does not implement verbatim |
+
+Darterfly's BSD/Mach-shaped services are useful building blocks. They do
+not make it FreeBSD, Linux or macOS at the binary/kernel-internal boundary.
+A source port to the existing Unix-facing services is a better bounded
+experiment than importing an entire compatibility subsystem now.
+
+The meaningful maintenance bargain is one Nyxt renderer, one WPEPlatform
+module, and a small explicit OS/build patch set, with upstream doing the
+web engine work. That bargain remains a hypothesis until the gates above
+pass. There is no evidence for a zero-port modern browser path today.
+
+* Source references
+
+- [[https://wpewebkit.org/release/wpewebkit-2.54.1.html][Official release and checksum]]
+- [[https://wpewebkit.org/blog/2026-10-06-wpe-platform.html][WPEPlatform extension architecture]]
+- [[https://wpewebkit.org/blog/2026-09-16-wpewebkit-2.54.html][WPE 2.54 changes]]
+- [[https://wpewebkit.org/reference/2.54.1/][Versioned API documentation]]
+- [[file:../../../build/wpe-assessment/wpewebkit-2.54.1/Source/cmake/OptionsWPE.cmake][Actual release build options and dependencies]]
+- [[file:../../../build/wpe-assessment/wpewebkit-2.54.1/Source/WebKit/UIProcess/Launcher/glib/ProcessLauncherGLib.cpp][Existing process launcher]]
+- [[file:../../../build/wpe-assessment/wpewebkit-2.54.1/Source/WTF/wtf/posix/ThreadingPOSIX.cpp][JSC/WTF thread suspension]]
+- [[file:../../../build/wpe-assessment/wpewebkit-2.54.1/Source/WebCore/platform/unix/SharedMemoryUnix.cpp][POSIX shared-memory fallback]]
+- [[file:../../../build/wpe-assessment/wpewebkit-2.54.1/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/AcceleratedSurface.cpp][CPU Skia/SHM rendering path]]
+- [[file:../../../src/libsa/spawn.lisp][Shared spawn implementation]]
+- [[file:../../../src/libsa/pthread.lisp][Shared pthread implementation]]
+- [[file:../../../src/libsa/signal.lisp][Shared signal implementation]]
+- [[file:../../../src/layer/client.lisp][Darterfly image layers and windows]]
+- [[file:/home/bfh/git/cl/nyxt/source/renderer/gtk.lisp][Inspected Nyxt GTK renderer]]

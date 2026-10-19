@@ -42,13 +42,21 @@
   (logand (logior (mem :u64 (+ th +t-siglist+)) (mem :u64 (siglist-of (world-of th))))
           (lognot (logand (mem :u64 (+ th +t-sigmask+)) (lognot +unblockable+)))))
 
+(define-low signal-ignored (w (sig :u32))
+  (let ((handler (mem :u64 (sigact w sig))))
+    (or (= handler +sig-ign+)
+        (and (= handler 0)
+             (or (= sig 17) (= sig 18) (= sig 23) (= sig 28))))))
+
 (define-low psignal-thread (th (sig :u32))
   (when (or (= sig 0) (>= sig +nsig+)) (result 0))
+  (when (signal-ignored (world-of th) sig) (result 0))
   (setf (mem :u64 (+ th +t-siglist+)) (logior (mem :u64 (+ th +t-siglist+)) (sigmask sig)))
   (when (deliverable th) (thread-abort-safely th)))
 
 (define-low psignal (w (sig :u32))
   (when (or (= sig 0) (>= sig +nsig+)) (result 0))
+  (when (signal-ignored w sig) (result 0))
   (setf (mem :u64 (siglist-of w)) (logior (mem :u64 (siglist-of w)) (sigmask sig)))
   (let ((th all-threads))
     (while th
@@ -103,9 +111,9 @@
       (when sigtrace
         (kprintf "[ast: thread 0x%lx deliver %d at 0x%lx mask 0x%lx]
 " (mem :u64 (+ self +t-thread-id+)) sig (mem :u64 (+ regs +r-rip+)) (mem :u64 (+ self +t-sigmask+))))
-      (unless (= (mem :u64 (sigact (current-world) sig)) +sig-ign+)
-        (sendsig regs sig 0 0)
-        (result 0)))))
+      (unless (signal-ignored (current-world) sig)
+        (result (sendsig regs sig 0 0))))
+    0))
 
 (define-low tsleep (ready event deadline)
   (while 1
@@ -158,6 +166,16 @@
   (+ (rdtsc) (usec-to-tsc sec (truncate nsec 1000))))
 
 (define-low sendsig (regs (sig :u32) (code :u32) addr)
+  ;; Installing any disposition installs a world-wide trampoline. A default
+  ;; fatal signal must still report signal death, not exit(128 + signal).
+  (when (and (not (privileged))
+             (= (mem :u64 (sigact (current-world) sig)) 0)
+             (not (signal-ignored (current-world) sig)))
+    (native-exit (current-world)
+                 (cond ((= sig 7) 10) ((= sig 10) 30) ((= sig 12) 31)
+                       ((= sig 31) 12) ((= sig 29) 23)
+                       ((>= sig 30) 6) (t sig)))
+    (result 0))
   (unless (mem :u64 (+ (current-world) +w-sigtramp+)) (result 0))
   (let* ((sp (logand (- (mem :u64 (+ regs +r-rsp+)) 128 +ucontext-size+) (lognot 15)))
          (low (- (logand (- sp +siginfo-size+) (lognot 15)) 8))

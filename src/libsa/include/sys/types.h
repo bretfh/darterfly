@@ -3,12 +3,12 @@
 extern "C" {
 #endif
 #include <stddef.h>
-#include <stdint.h>
 typedef long ssize_t;
 typedef long off_t;
 typedef long off64_t;
 typedef unsigned long ino64_t;
 typedef int pid_t;
+typedef unsigned uint;
 typedef unsigned uid_t;
 typedef unsigned gid_t;
 typedef unsigned mode_t;

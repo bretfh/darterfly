@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-18",
+  "branch": "codex/nyxt-guix-engine",
+  "head": "5e258356e13743c6eb0027566ac65f5768c79614",
+  "pending_merge": "0548aa7cb51d3eb5a383f70848a2d93f85055189",
+  "worktree_dirty": true,
+  "wpe": {
+    "version": "2.54.1",
+    "url": "https://wpewebkit.org/releases/wpewebkit-2.54.1.tar.xz",
+    "sha256": "0de8bdfba011f9cd63ba9a9171fa6038dd2c08237894f4082abbb821f29d3fe9",
+    "target_configured": false,
+    "target_built": false,
+    "engine_executed_in_darterfly": false
+  },
+  "glib": {
+    "version": "2.86.0",
+    "source": "/gnu/store/rq8iz4c6n3i9p5s3jpssl1cz9cm283bh-glib-2.86.0.tar.zst"
+  },
+  "nyxt": {
+    "checkout": "/home/bfh/git/cl/nyxt",
+    "commit": "cfa068ea781fe4866ae435c2950c00c5ec51cfee",
+    "executed_in_darterfly_this_assessment": false
+  },
+  "guix_reference": {
+    "package": "wpewebkit",
+    "version": "2.50.3",
+    "store_outputs": [
+      "/gnu/store/zfxqcvwa9ahcra94pzzb46d5w1204n24-wpewebkit-2.50.3-doc",
+      "/gnu/store/5hxzn1qpg387fd2rv0xr31m0spr9bk1w-wpewebkit-2.50.3"
+    ],
+    "sbom_component_entries": 1162,
+    "runtime_store_items": 208,
+    "scope": "Guix Linux reference, not Darterfly 2.54.1 target closure"
+  },
+  "guest_probe": {
+    "command": "sh ports/nyxt/wpe/run-contracts.sh",
+    "raw_wait_status": {
+      "stack": 0,
+      "spawn": 256,
+      "cond": 256,
+      "suspend": 256
+    },
+    "supervisor_result": 42,
+    "contract_passes": 1,
+    "contract_gaps": 3,
+    "meaning": "Native runtime observations, not engine qualification"
+  },
+  "file_sha256": {
+    "src/libsa/spawn.lisp": "c5e988e0371fe4d0b615326dabf0014c1869e9c16d5436cbcc895124b520d1e8",
+    "src/libsa/pthread.lisp": "6e948879122b12034897e45d813434103c1696f75e101a469bec53c6e0357b64",
+    "src/libsa/signal.lisp": "f762ff19ab13de17130f2dcba404558e57587f48e08c9a2e17c4e7e01fb714df",
+    "src/libsa/start.lisp": "2cdb1050677e7bdcb237df73a4a776284f1fd6b1724325eb8703e28127077429",
+    "src/libsa/unistd.lisp": "015a3417b968faae2163e60b427231dedc26831f4268957814ae7fd76c7c0d74",
+    "src/bsd/native.lisp": "19832c26a32e619561a2f585049168a8f023c924691a72583a2f20b4cd19c686",
+    "src/layer/client.lisp": "eda630d5273f3017b15e37a0ad674950ceb26b10a239a1bf0f0a6c555abcc91c",
+    "ports/nyxt/wpe/runtime-contracts.c": "df650afbeece0477419faad6f6800c1734abcf2f574217c51fca00264038373a",
+    "ports/nyxt/wpe/contracts-guest.log": "5f9273358fdfe6bb555f247412d917303d98b9e256058592d25010d14067b923",
+    "build/wpe-assessment/wpewebkit-2.54.1/Source/cmake/OptionsWPE.cmake": "580b7144d3d7d364619795dfa08f2d8e1ef479ca3cd174778908378ff107cb38",
+    "build/wpe-assessment/wpewebkit-2.54.1/Source/WebKit/UIProcess/Launcher/glib/ProcessLauncherGLib.cpp": "a9d3ae65043e3d6a7871de71a125405b9cc13c9085d8804fd6bc4af7eef5f832",
+    "build/wpe-assessment/wpewebkit-2.54.1/Source/WTF/wtf/posix/ThreadingPOSIX.cpp": "e6ffd87856c75fcc657485e25352a189de9881609e891a2fa71b4dbb5b67fb24",
+    "build/wpe-assessment/wpewebkit-2.54.1/Source/WebCore/platform/unix/SharedMemoryUnix.cpp": "f22fcd5914b390f057db6d976543ca6d4d31467f8d350df70d234f7380197cf4",
+    "build/wpe-assessment/wpewebkit-2.54.1/Source/WebKit/WebProcess/WebPage/CoordinatedGraphics/AcceleratedSurface.cpp": "a49002e172b178fd84eb27e2d57f3c795669c1ec3095ed184bca52bf46f31e63",
+    "build/wpe-assessment/glib-2.86.0/glib/gspawn-posix.c": "f89484aaa09ac36378617f122f49a4f7fb541bfc0ab407f3b31eebc1a5bd10c4",
+    "build/wpe-assessment/glib-2.86.0/glib/gmain.c": "714534ff667890664542f915a874973aa8802e2d729af05477f47ebd2772af37",
+    "build/wpe-assessment/glib-2.86.0/glib/gthread-posix.c": "3b92968ac0c2f287e1ceb5056a367d1aa1d3aaa4d81d23d25c75447bc1f8216d",
+    "build/wpe-assessment/glib-2.86.0/glib/gwakeup.c": "95c72c24a0a51491ebb388a1772ee207d540038fbb548f6290dd0f33ced186d2"
+  }
+}

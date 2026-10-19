@@ -76,8 +76,9 @@
   (unless (and (<= 24 (length data) +native-io-limit+) (<= search 1))
     (fail :einval))
   (let ((at 24) (argc (request-u64 data 0))
-        (envc (request-u64 data 8)) (count (request-u64 data 16)))
-    (unless (and (<= argc 64) (<= envc 64) (<= count 64)) (fail :e2big))
+        (envc (request-u64 data 8)) (count (request-u64 data 16))
+        (signals nil) (cloexec-default nil))
+    (unless (and (<= argc 64) (<= envc 64) (<= count 65)) (fail :e2big))
     (labels ((string-next ()
                (let ((end (position 0 data :start at)))
                  (unless end (fail :einval))
@@ -106,9 +107,16 @@
                           (list :open (native-fd a) (string-next)
                                 (from-libsa-flags b) c))
                        (5 (list :chdir (string-next)))
+                       (6 (when (or signals (> c 1)) (fail :einval))
+                          (setf cloexec-default (= c 1))
+                          (setf signals (list a b))
+                          nil)
                        (t (fail :einval))))))))
         (unless (= at (length data)) (fail :einval))
-        (posix-spawn path argv envp :file-actions actions :native-only native-only
+        (when (> (length (remove nil actions)) 64) (fail :e2big))
+        (posix-spawn path argv envp :file-actions (remove nil actions)
+                     :native-only native-only :native-signals signals
+                     :cloexec-default cloexec-default
                      :search-path (when (= search 1) search-path))))))
 
 (defun native-wait-status (status)
@@ -135,41 +143,73 @@
     (values child (native-wait-status status))))
 
 (defun run-native-program (image argv envp)
-  (let ((proc *proc*) (world nil))
-    (unwind-protect
-         (progn
-           (with-bsd
-             (setf world (darterfly/worlds:spawn-native-image
-                          image :argv argv :envp envp :port (native-service-port))
-                   (proc-native-world proc) world
-                   (proc-native-result proc) nil
-                   (gethash world *native-processes*) proc))
-           (loop
-             (let ((request
-                     (with-bsd
-                       (deliver proc)
-                       (when (proc-native-result proc)
-                         (throw proc (proc-native-result proc)))
-                       (or (pop (proc-native-requests proc))
-                           (progn
-                             (sb-thread:condition-wait *changed* *bsd*
-                                                       :timeout 0.01)
-                             nil)))))
-               (when request
-                 (native-reply-token
-                  (car request)
-                  (with-bsd (serve-request proc (cdr request) (car request))))))))
-      (when world
-        (sb-sys:without-interrupts
+  ;; A blocking poll/read must not hold up a different native thread's write.
+  ;; Reuse bounded request workers; all mutations still use the BSD lock.
+  (let ((proc *proc*) (world nil) (workers nil) (busy 0) (closing nil))
+    (labels ((worker ()
+               (let ((*proc* proc) (darterfly/mach:*task* (proc-task proc)))
+                 (loop
+                   (let ((request
+                           (with-bsd
+                             (loop
+                               (when closing (return-from worker nil))
+                               (when (proc-native-requests proc)
+                                 (incf busy)
+                                 (return (pop (proc-native-requests proc))))
+                               (sb-thread:condition-wait *changed* *bsd*)))))
+                     (unwind-protect
+                          (native-reply-token
+                           (car request)
+                           (with-bsd
+                             (serve-request proc (cdr request) (car request))))
+                       (with-bsd (decf busy) (changed))))))))
+      (unwind-protect
+           (progn
+             (with-bsd
+               (setf world (darterfly/worlds:spawn-native-image
+                            image :argv argv :envp envp :port (native-service-port)
+                            :signals (proc-native-signals proc))
+                     (proc-native-world proc) world
+                     (proc-native-result proc) nil
+                     (gethash world *native-processes*) proc))
+             (loop
+               (with-bsd
+                 (deliver proc)
+                 (when (proc-native-result proc)
+                   (throw proc (proc-native-result proc)))
+                 (when (and (proc-native-requests proc)
+                            (= busy (length workers)))
+                   (if (< (length workers) 64)
+                       (push (sb-thread:make-thread #'worker
+                               :name "native request") workers)
+                       ;; Resource exhaustion must return an error instead
+                       ;; of deadlocking every caller behind blocked polls.
+                       (let ((request (pop (proc-native-requests proc))))
+                         (native-reply-token
+                          (car request)
+                          (reply-octets -11 '(0 0 0 0) #() '(0 0 0 0))))))
+                 (changed)
+                 (sb-thread:condition-wait *changed* *bsd* :timeout 0.01))))
+        (when world
           (with-bsd
+            (setf closing t)
             (remhash world *native-processes*)
             (unless (proc-native-result proc)
               (darterfly/worlds:stop world)
-              (darterfly/worlds:wait-native world))
+              (setf (proc-native-result proc)
+                    (darterfly/worlds:wait-native world)))
             (dolist (request (proc-native-requests proc))
-              (native-reply-token (car request) (reply-octets -4 '(0 0 0 0) #() '(0 0 0 0))))
-            (setf (proc-native-world proc) nil
-                  (proc-native-requests proc) nil)))))))
+              (native-reply-token
+               (car request) (reply-octets -4 '(0 0 0 0) #() '(0 0 0 0))))
+            (setf (proc-native-requests proc) nil)
+            (changed))
+          ;; Wake blocking operations before reclaiming descriptor tables.
+          (dolist (thread workers)
+            (unless (sb-thread:join-thread thread :default nil :timeout 1)
+              (when (sb-thread:thread-alive-p thread)
+                (sb-thread:terminate-thread thread)
+                (sb-thread:join-thread thread :default nil))))
+          (with-bsd (setf (proc-native-world proc) nil)))))))
 
 (defun reset-native-services ()
   ;; Kernel rights and thread handles from a saved Lisp image are not valid
@@ -179,3 +219,10 @@
         *native-processes* (make-hash-table)))
 
 (pushnew 'reset-native-services sb-ext:*init-hooks*)
+
+(defun native-kill (pid signal)
+  (unless (<= 0 signal 64) (fail :einval))
+  (let ((bsd (position signal #(0 1 2 3 4 5 6 nil 8 9 7 11 31 13 14 15
+                               23 19 20 18 17 21 22 29 24 25 26 27 28 nil 10 12))))
+    (unless bsd (fail :einval))
+    (kill pid bsd)))

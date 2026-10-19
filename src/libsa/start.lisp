@@ -95,9 +95,31 @@
 
 (define-global native-runtime :u64)
 
+(define-low native-signal-start (envp)
+  (let ((aux envp) (mask (calloc 1 128)) (sig 1) (ignored 0))
+    (unless mask (_exit 127))
+    (while (mem :u64 aux) (incf aux 8))
+    (incf aux 8)
+    (while (mem :u64 aux)
+      (cond ((= (mem :u64 aux) #xDF01)
+             (setf (mem :u64 mask) (mem :u64 (+ aux 8))))
+            ((= (mem :u64 aux) #xDF02)
+             (setf ignored (mem :u64 (+ aux 8)))))
+      (incf aux 16))
+    (while (< sig 65)
+      (when (logand ignored (shl 1 (- sig 1))) (signal sig 1))
+      (incf sig))
+    (pthread_sigmask 2 mask 0)
+    (free mask)))
+
 (define-low __libsa_native_start (argc argv envp)
+  ;; exec starts a fresh C floating-point environment. The launching Lisp
+  ;; thread may enable invalid/overflow traps; JavaScript uses quiet NaNs.
+  (fninit)
+  (set-mxcsr #x1f80)
   (setf native-runtime 1)
   (tls-init-stack (- #x00007ff000000000 (shl 8 20)) (shl 8 20))
+  (native-signal-start envp)
   ;; Keep writable capacity for setenv; the loader supplies a tight vector.
   (let ((i 0))
     (while (and (< i 64) (mem :u64 (+ envp (* i 8))))

@@ -1,7 +1,7 @@
 (defpackage #:darterfly/net
   (:use #:cl)
   (:export #:start-network #:*interface* #:ping #:udp-bind #:udp-close #:udp-send #:udp-receive #:udp-echo
-           #:ip-address #:address-string #:dhcp #:resolve-name
+           #:ip-address #:address-string #:dhcp #:resolve-name #:query-dns
            #:if-output #:net-error #:net-errno #:listener #:connection #:port
            #:tcp-listen #:tcp-unlisten #:tcp-peer #:tcp-reset-p #:tcp-accept #:tcp-connect #:tcp-send #:tcp-receive #:tcp-close #:tcp-echo))
 (in-package #:darterfly/net)

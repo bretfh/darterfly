@@ -1,0 +1,15 @@
+--- a/Source/cmake/OptionsWPE.cmake
++++ b/Source/cmake/OptionsWPE.cmake
+@@ -203,6 +203,12 @@
+ set(WTF_LIBRARY_TYPE OBJECT)
+ set(JavaScriptCore_LIBRARY_TYPE OBJECT)
+ set(WebCore_LIBRARY_TYPE OBJECT)
++if (CMAKE_SYSTEM_NAME STREQUAL "Darterfly")
++    # Cross-seed native executables with the existing shared libsa/CRT.
++    # Static engine linkage avoids requiring PIC versions of the closure;
++    # UI, Web and Network processes still run in separate native worlds.
++    set(WebKit_LIBRARY_TYPE STATIC)
++endif ()
+ 
+ # These are shared variables, but we special case their definition so that we can use the
+ # CMAKE_INSTALL_* variables that are populated by the GNUInstallDirs macro.

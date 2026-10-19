@@ -123,3 +123,10 @@ test-native-dl-guest:
 .PHONY: test-engine-boundary-guest
 test-engine-boundary-guest:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --load ports/nyxt/engine/run-guest.lisp'
+
+.PHONY: test-native-sleep-guest test-d2-devices-guest
+test-native-sleep-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(unless (fiveam:run! (quote darterfly/test::native-world-survives-s3)) (uiop:quit 1))"'
+
+test-d2-devices-guest:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(let ((ok t)) (dolist (name (quote (darterfly/test::the-system-sleeps-and-wakes darterfly/test::sound-plays-and-sleeps))) (unless (fiveam:run! name) (setf ok nil))) (unless ok (uiop:quit 1)))"'

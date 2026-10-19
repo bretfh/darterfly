@@ -24,6 +24,13 @@ extern "C" {
 #define PRIuPTR "lu"
 #define PRIxPTR "lx"
 #define PRIXPTR "lX"
+#define PRIdMAX "ld"
+#define PRIiMAX "li"
+#define PRIoMAX "lo"
+#define PRIuMAX "lu"
+#define PRIxMAX "lx"
+#define PRIXMAX "lX"
+static inline intmax_t imaxabs(intmax_t v) { return v < 0 ? -v : v; }
 #define SCNx64 "lx"
 #define SCNd64 "ld"
 #define SCNu64 "lu"

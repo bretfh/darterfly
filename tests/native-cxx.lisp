@@ -31,6 +31,28 @@
     (is (equalp data (darterfly/link::section-data section)))
     (is (eq :eh-frame (darterfly/link::classify ".eh_frame" #x70000001 2)))))
 
+(test got-preserves-distinct-local-symbol-identities
+  (let* ((data (darterfly/link::make-section :name ".data" :kind :data
+                 :size 16 :alignment 8
+                 :data (make-array 16 :element-type '(unsigned-byte 8)
+                                     :initial-element 0)))
+         (object (darterfly/link::make-object :sections (list data)))
+         (first (darterfly/link::make-sym :name "local" :binding 0
+                  :section data :value 0 :object object))
+         (second (darterfly/link::make-sym :name "local" :binding 0
+                   :section data :value 8 :object object)))
+    (setf (darterfly/link::object-symbols object) (vector first second)
+          (darterfly/link::section-relocations data)
+          (list (list 0 first 9 0) (list 4 second 9 0)))
+    (let* ((image (darterfly/link::lay-out :user #x400000 (list object)))
+           (got (darterfly/link::relocate image (make-hash-table :test 'equal)
+                                          image)))
+      (is (= 2 (hash-table-count (darterfly/link::image-got-slots image))))
+      (is (= (darterfly/link::section-address data)
+             (darterfly/link::u got 0 8)))
+      (is (= (+ 8 (darterfly/link::section-address data))
+             (darterfly/link::u got 8 8))))))
+
 (in-suite guest)
 
 (test native-cxx-runtime-on-darterfly
@@ -62,10 +84,11 @@
                (with-open-file (s (merge-pathnames "native-cxx-guest.log" image:*build*)
                                   :direction :output :if-exists :supersede)
                  (write-string output s))
-               (dolist (label '("CONSTRUCTORS" "STREAMS-LOCALE" "STL-ALLOCATION" "ALLOCATION-FAILURE" "RTTI" "EXCEPTIONS"
+               (dolist (label '("CONSTRUCTORS" "STREAMS-LOCALE" "FILESYSTEM" "STL-ALLOCATION" "ALLOCATION-FAILURE" "RTTI" "EXCEPTIONS"
                                 "GUARD-RETRY" "THREADS-TLS-GUARDS" "KEY-DESTRUCTORS"
                                 "FINALIZE" "CLOCK" "EXIT" "DESTRUCTION" "TERMINATE"
                                 "REPEAT" "ISOLATION" "CLEAN"))
                  (is (search (format nil "[CXX ~a PASS]" label) output)
                      "C++ runtime check ~a: ~a" label output))))
-        (image:finish c 5)))))
+        (image:finish c 5)
+        (when (probe-file disk) (delete-file disk))))))

@@ -1,0 +1,171 @@
+
+[ENGINE-WORLD NORMAL-INIT T]
+ENGINE PASS stdio-open
+ENGINE PASS stdio-write
+ENGINE PASS stdio-first-line
+ENGINE PASS stdio-next-byte
+ENGINE PASS stdio-pushback
+ENGINE PASS stdio-short-line
+ENGINE PASS stdio-seek-back
+ENGINE PASS stdio-next-line
+ENGINE PASS stdio-last-line
+ENGINE PASS stdio-eof
+ENGINE PASS stdio-rewind
+ENGINE PASS stdio-pipe
+ENGINE PASS stdio-fdopen
+ENGINE PASS stdio-pipe-first
+ENGINE PASS stdio-pipe-second
+ENGINE PASS stdio-pipe-eof
+ENGINE process-entry /usr/libexec/wpe-webkit-2.0/WPENetworkProcess pid=9 argc=3
+ENGINE PASS ephemeral-session
+ENGINE PASS display
+ENGINE PASS web-view
+ENGINE process-entry /usr/libexec/wpe-webkit-2.0/WPEWebProcess pid=10 argc=3
+ENGINE load-event=0 uri=about:blank
+ENGINE load-event=2 uri=about:blank
+ENGINE load-event=3 uri=about:blank
+ENGINE load-finished uri=about:blank title=(null)
+ENGINE PASS javascript-dom
+ENGINE frames=2
+ENGINE PASS load-finished
+ENGINE PASS document-title
+ENGINE PASS javascript-completed
+ENGINE PASS html-css-js-pixels
+ENGINE PASS local-page
+ENGINE PASS tls-policy-fail
+ENGINE load-event=0 uri=http://10.0.2.2:18765/page
+ENGINE load-event=2 uri=http://10.0.2.2:18765/page
+ENGINE load-event=3 uri=http://10.0.2.2:18765/page
+ENGINE load-finished uri=http://10.0.2.2:18765/page title=Loading
+ENGINE PASS javascript-dom
+ENGINE frames=3
+ENGINE PASS load-finished
+ENGINE PASS document-title
+ENGINE PASS javascript-completed
+ENGINE PASS html-css-js-pixels
+ENGINE PASS http-page
+ENGINE load-event=0 uri=https://10.0.2.2:18766/page
+ENGINE load-event=2 uri=https://10.0.2.2:18766/page
+ENGINE load-event=3 uri=https://10.0.2.2:18766/page
+ENGINE load-finished uri=https://10.0.2.2:18766/page title=Loading
+ENGINE PASS javascript-dom
+ENGINE frames=4
+ENGINE PASS load-finished
+ENGINE PASS document-title
+ENGINE PASS javascript-completed
+ENGINE PASS html-css-js-pixels
+ENGINE PASS https-verified
+ENGINE load-event=0 uri=https://10.0.2.2:18767/page
+ENGINE load-event=2 uri=https://10.0.2.2:18767/page
+ENGINE load-event=3 uri=https://10.0.2.2:18767/page
+ENGINE load-finished uri=https://10.0.2.2:18767/page title=Loading
+ENGINE PASS javascript-dom
+ENGINE frames=5
+ENGINE PASS load-finished
+ENGINE PASS document-title
+ENGINE PASS javascript-completed
+ENGINE PASS html-css-js-pixels
+ENGINE PASS https-verified
+ENGINE load-event=0 uri=https://10.0.2.2:18768/page
+ENGINE TLS rejection uri=https://10.0.2.2:18768/page flags=8 expected=8
+ENGINE PASS tls-rejection
+ENGINE load-event=3 uri=https://10.0.2.2:18767/page
+ENGINE PASS certificate-rejected
+ENGINE load-event=0 uri=https://10.0.2.2:18769/page
+ENGINE TLS rejection uri=https://10.0.2.2:18769/page flags=4 expected=4
+ENGINE PASS tls-rejection
+ENGINE load-event=3 uri=https://10.0.2.2:18767/page
+ENGINE PASS certificate-rejected
+ENGINE load-event=0 uri=https://10.0.2.2:18770/page
+ENGINE TLS rejection uri=https://10.0.2.2:18770/page flags=2 expected=2
+ENGINE PASS tls-rejection
+ENGINE load-event=3 uri=https://10.0.2.2:18767/page
+ENGINE PASS certificate-rejected
+ENGINE load-event=0 uri=https://10.0.2.2:18771/page
+ENGINE TLS rejection uri=https://10.0.2.2:18771/page flags=1 expected=1
+ENGINE PASS tls-rejection
+ENGINE load-event=3 uri=https://10.0.2.2:18767/page
+ENGINE PASS certificate-rejected
+ENGINE load-event=0 uri=https://10.0.2.2:18768/page
+ENGINE TLS rejection uri=https://10.0.2.2:18768/page flags=8 expected=8
+ENGINE PASS tls-rejection
+ENGINE load-event=3 uri=https://10.0.2.2:18767/page
+ENGINE PASS certificate-rejected
+ENGINE load-event=0 uri=https://10.0.2.2:18769/page
+ENGINE TLS rejection uri=https://10.0.2.2:18769/page flags=4 expected=4
+ENGINE PASS tls-rejection
+ENGINE load-event=3 uri=https://10.0.2.2:18767/page
+ENGINE PASS certificate-rejected
+ENGINE load-event=0 uri=https://10.0.2.2:18770/page
+ENGINE TLS rejection uri=https://10.0.2.2:18770/page flags=2 expected=2
+ENGINE PASS tls-rejection
+ENGINE load-event=3 uri=https://10.0.2.2:18767/page
+ENGINE PASS certificate-rejected
+ENGINE load-event=0 uri=https://10.0.2.2:18771/page
+ENGINE TLS rejection uri=https://10.0.2.2:18771/page flags=1 expected=1
+ENGINE PASS tls-rejection
+ENGINE load-event=3 uri=https://10.0.2.2:18767/page
+ENGINE PASS certificate-rejected
+ENGINE load-event=0 uri=https://10.0.2.2:18768/page
+ENGINE TLS rejection uri=https://10.0.2.2:18768/page flags=8 expected=8
+ENGINE PASS tls-rejection
+ENGINE load-event=3 uri=https://10.0.2.2:18767/page
+ENGINE PASS certificate-rejected
+ENGINE load-event=0 uri=https://10.0.2.2:18769/page
+ENGINE TLS rejection uri=https://10.0.2.2:18769/page flags=4 expected=4
+ENGINE PASS tls-rejection
+ENGINE load-event=3 uri=https://10.0.2.2:18767/page
+ENGINE PASS certificate-rejected
+ENGINE load-event=0 uri=https://10.0.2.2:18770/page
+ENGINE TLS rejection uri=https://10.0.2.2:18770/page flags=2 expected=2
+ENGINE PASS tls-rejection
+ENGINE load-event=3 uri=https://10.0.2.2:18767/page
+ENGINE PASS certificate-rejected
+ENGINE load-event=0 uri=https://10.0.2.2:18771/page
+ENGINE TLS rejection uri=https://10.0.2.2:18771/page flags=1 expected=1
+ENGINE PASS tls-rejection
+ENGINE load-event=3 uri=https://10.0.2.2:18767/page
+ENGINE PASS certificate-rejected
+ENGINE load-event=0 uri=https://10.0.2.2:18768/page
+ENGINE TLS rejection uri=https://10.0.2.2:18768/page flags=8 expected=8
+ENGINE PASS tls-rejection
+ENGINE load-event=3 uri=https://10.0.2.2:18767/page
+ENGINE PASS certificate-rejected
+ENGINE load-event=0 uri=https://10.0.2.2:18769/page
+ENGINE TLS rejection uri=https://10.0.2.2:18769/page flags=4 expected=4
+ENGINE PASS tls-rejection
+ENGINE load-event=3 uri=https://10.0.2.2:18767/page
+ENGINE PASS certificate-rejected
+ENGINE load-event=0 uri=https://10.0.2.2:18770/page
+ENGINE TLS rejection uri=https://10.0.2.2:18770/page flags=2 expected=2
+ENGINE PASS tls-rejection
+ENGINE load-event=3 uri=https://10.0.2.2:18767/page
+ENGINE PASS certificate-rejected
+ENGINE load-event=0 uri=https://10.0.2.2:18771/page
+ENGINE TLS rejection uri=https://10.0.2.2:18771/page flags=1 expected=1
+ENGINE PASS tls-rejection
+ENGINE load-event=3 uri=https://10.0.2.2:18767/page
+ENGINE PASS certificate-rejected
+ENGINE load-event=0 uri=https://10.0.2.2:18766/page
+ENGINE load-event=2 uri=https://10.0.2.2:18766/page
+ENGINE load-event=3 uri=https://10.0.2.2:18766/page
+ENGINE load-finished uri=https://10.0.2.2:18766/page title=Loading
+ENGINE PASS javascript-dom
+ENGINE frames=6
+ENGINE PASS load-finished
+ENGINE PASS document-title
+ENGINE PASS javascript-completed
+ENGINE PASS html-css-js-pixels
+ENGINE PASS https-verified
+ENGINE PASS https-recovery
+ENGINE PASS COMPLETE
+
+[ENGINE-WORLD CHILDREN-CLEAN T]
+
+[ENGINE-WORLD CHILDREN-REAPED T]
+
+[ENGINE-WORLD STATUS 0]
+
+[ENGINE-WORLD SUPERVISOR 42]
+
+[ENGINE-WORLD DONE]

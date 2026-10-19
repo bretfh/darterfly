@@ -2,6 +2,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#include <sys/types.h>
 #include <sys/time.h>
 struct rusage {
   struct timeval ru_utime, ru_stime;
@@ -13,6 +14,14 @@ struct rlimit { rlim_t rlim_cur, rlim_max; };
 #define RUSAGE_SELF 0
 #define RUSAGE_CHILDREN (-1)
 #define RUSAGE_THREAD 1
+#define PRIO_PROCESS 0
+#define PRIO_PGRP 1
+#define PRIO_USER 2
+#define RLIMIT_CPU 0
+#define RLIMIT_FSIZE 1
+#define RLIMIT_RSS 5
+#define RLIMIT_NPROC 6
+#define RLIMIT_MEMLOCK 8
 #define RLIMIT_CORE 4
 #define RLIMIT_DATA 2
 #define RLIMIT_STACK 3

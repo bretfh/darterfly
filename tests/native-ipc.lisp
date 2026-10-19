@@ -20,8 +20,9 @@
                                   :direction :output :if-exists :supersede)
                  (write-string output s))
                (dolist (label '("COMPILE" "OWN-WORLD" "STREAM-RIGHTS" "PACKET-RIGHTS"
-                                "FLAGS-AND-BOUNDS" "SHARED-PAGES" "RUN" "CLEAN" "ALIVE"
+                                "FLAGS-AND-BOUNDS" "SHM-NAMES" "SHARED-PAGES" "RUN" "CLEAN" "ALIVE"
                                 "LISP-WORLD" "OWNER-RELEASED" "ORPHAN-MAPPING" "ORPHAN-WRITE"))
                  (is (search (format nil "[NATIVE-IPC ~a PASS]" label) output)
                      "IPC check ~a: ~a" label output))))
-        (image:finish c 5)))))
+        (image:finish c 5)
+        (when (probe-file disk) (delete-file disk))))))

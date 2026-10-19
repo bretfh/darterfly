@@ -1,0 +1,266 @@
+#+title: Darterfly: WPE rendering and software-platform qualification
+#+date: 2026-10-19
+#+startup: overview
+#+options: toc:2 num:nil
+
+* What now runs
+
+The upstream WPEPlatform 2.54.1 library runs in an isolated native world
+with Darterfly's shared Low libsa, allocator, TLS and C++ runtime. Its
+software-buffer interface works without an EGL implementation, display
+server, Linux kernel or Linux userspace.
+
+The full WebKit engine now renders local and HTTP/HTTPS pages in native
+worlds. Its upstream WebProcess executes JavaScript, updates the DOM and
+title, and renders CSS into CPU pixel buffers with the expected colors.
+The real UI, Web and Network entry points link to the same runtime.
+This record covers the engine milestone. The subsequent
+[[file:NYXT-RENDERER.org][Nyxt browser qualification]] now includes native window
+presentation, keyboard/pointer input and Nyxt command navigation.
+
+The local-page test exits with status zero and leaves the Lisp supervisor
+responsive. It observes two frames, verifies the JavaScript DOM result,
+and checks exact background and element pixels. Title notification is
+asynchronous relative to load completion; the harness waits for it.
+The complete engine now also loads HTTP, TLS 1.2 and TLS 1.3 pages with
+external CSS and JavaScript. Four rounds reject expired, future-dated,
+wrong-host and untrusted certificates with their expected error flags.
+A valid HTTPS navigation then succeeds. The host origin independently
+confirms that no HTTP request reached any invalid-certificate server.
+Certificate validation remains enabled throughout.
+
+The integration harness now boots the normal init system. Init is PID 1;
+the browser is an ordinary native process with separate Web and Network
+worlds. All three terminate, init reaps the orphaned children, and the
+Lisp supervisor remains responsive. This is an engine test, not a Nyxt
+launch.
+
+The previous [[file:NETWORK-QUALIFICATION.org][network qualification]] established actual HTTPS,
+certificate rejection and HTTP/2 in native worlds. This step supplies
+real image, text, keyboard and platform libraries above that foundation.
+
+* Native-world evidence
+
+The rendering probe uses upstream libraries, not substitutes for them:
+
+- HarfBuzz shapes "office" into four glyphs using the DejaVu Sans font.
+  FreeType rasterizes them to 871 covered pixels, with a 5619-unit advance.
+- Fontconfig registers that font and resolves its actual file path.
+- PNG and lossless WebP encode and decode pixels exactly. JPEG encoding
+  and decoding preserve dimensions and colors within the stated tolerance.
+- libxml2 parses a document into its actual tree.
+- libgcrypt initializes its secure pool, passes SHA-256 and AES known-answer
+  vectors, and obtains random bytes from the existing runtime device.
+- libtasn1 encodes a DER length. libxkbcommon compiles a self-contained
+  keymap and translates a key to its symbol and UTF-8 text.
+
+The separate WPE platform probe initializes actual WPE objects and checks:
+
+- Display connection, view creation, sizing, mapping and focus.
+- An explicit, reported lack of EGL support.
+- Real upstream Skia CPU rasterization into ARGB8888 storage, with exact
+  interior colors and antialiased edges, without a GPU context.
+- ARGB8888 shared-memory buffers with the expected bytes and stride.
+- Submission and asynchronous frame completion through the GLib main loop.
+- Release of the previous buffer when the next frame completes.
+- Unmapping and object cleanup.
+
+Its display subclass is an offscreen test adapter. It uses upstream
+headless views and toplevels, but deliberately omits the EGL callback.
+The stock headless display probes surfaceless EGL; its name alone does
+not establish a working route without an EGL library. No GPU function is
+stubbed to claim success. No actual screen presentation is claimed here.
+
+Both probes must exit with status zero and leave the Lisp supervisor
+responsive. The guest harnesses reject GLib warnings and critical errors.
+
+* HTTPS failures resolved
+
+The CA bundle exposed a shared stdio bottleneck: fgets called read once
+per byte. The shared implementation now reads seekable files in chunks,
+restores the descriptor position after the newline, and retains bytewise
+behavior for pipes. Sixteen native checks cover position, pushback,
+short reads, seek, EOF and pipe behavior.
+
+A separate libsoup preconnection race hid certificate errors behind
+cancellation. WebKit rejected a speculative connection's certificate;
+before asynchronous completion, libsoup transferred that already-cancelled
+connection to the actual navigation. The small
+[[file:patches/libsoup-cancelled-preconnect.patch][libsoup guard]] refuses that transfer. Speculative connections remain
+enabled. The real request obtains its own connection and certificate
+decision. Sixteen repeated rejection navigations pass without tracing.
+
+An in-flight native write can outlive its world. Shared transfer handling
+now catches a failed memory copy within the existing libsa error boundary.
+The guest checks write, pwrite and sendto with an invalid world token.
+
+The bare-console test also exposed orphan handling when PID 1 exits.
+Children now go to a live init or the kernel process, and an already-dead
+child notifies its new reaper. Host checks cover live, closing, zombie and
+self-exiting init. The browser integration test uses normal init instead.
+
+* Changes to the shared runtime
+
+Epoxy requires RTLD_NOLOAD. The existing loader now implements it:
+look up a resident module, increase its reference count, optionally promote
+its symbol scope, and fail without loading an absent library. Existing
+module lifetime, allocator and TLS rules remain the same. The native
+loader regression tests absence, resident lookup, global promotion,
+constructors, TLS across threads, rollback and memory protections.
+
+Font and layout code exposed missing float math entry points. They live
+in shared libsa. Float nextafter steps by a float ULP, including signed
+zeros and subnormals. Rounding honors its specified mode. Float FMA uses
+an upstream-derived midpoint correction; rounding a double FMA result to
+float is not a sufficient implementation.
+
+Generated Low code is compared with host libm over 400000 random cases,
+1764 stepping/rounding edge cases and 37044 FMA edge cases in four rounding
+modes, plus 400000 random double remainder pairs and 1444 remainder
+edge cases. erff passes 1100001 inputs within two ULP of host libm;
+logf and exp2f pass 100021 inputs each within two ULP. These approximation
+checks use nearest rounding. Exact zero remainder signs follow the
+numerator even where host glibc returns a different zero sign. Min/max follows C99 missing-data NaN behavior; glibc's propagation
+of an original signaling NaN differs from Low's widening ABI.
+These tests compare numerical results; complete floating-point
+exception-flag behavior is not qualified.
+
+Skia's malloc_usable_size reads the existing allocator's size class,
+page allocation or aligned allocation owner. The guest checks usable
+capacity, full-capacity writes, realloc preservation and aligned blocks.
+There is no replacement allocator.
+
+POSIX shm_open and shm_unlink name objects in the existing /dev/shm RAM
+filesystem. The native IPC probe checks names, exclusivity, close-on-exec,
+unlink lifetime, descriptor passing and two-way shared pages across
+isolated worlds, including denied writes through read-only descriptors.
+All 14 IPC checks and 32 dynamic-loader checks pass in the actual OS.
+
+Other changes expose existing identity functions, add timeval and integer
+format definitions, and remove an unnecessary recursive header include.
+There is no second libc, TLS allocator or memory allocator.
+
+The shared C++ runtime now includes LLVM 19.1.7's filesystem sources and
+compiler-rt integer arithmetic helpers. The actual OS test passes all
+18 checks, including copying, renaming, permission changes, directory
+iteration, directory-relative operations, exceptions, thread-local state
+and concurrent isolated instances. Recursive removal does not follow an
+external directory symlink or a cycle; the outside file survives.
+
+Directory-relative openat, unlinkat and fchmodat use the existing BSD/VFS
+services. They do not change process cwd. The same path traversal, vnode
+operations and descriptors remain authoritative. O_NOFOLLOW rejects the
+final symlink, and O_CREAT|O_EXCL rejects an existing symlink. Invalid
+flags and empty paths return errors. The BSD host suite passes 54 checks.
+
+The engine also exposed a GOT lookup bug in the native linker. GOT slots
+now retain ELF symbol identity, rather than looking up the first matching
+name in an object. Distinct local symbols may share a spelling after a
+partial link. The regression covers that case and removes a repeated scan
+through the engine's roughly 696000-symbol table. All ten linker/runtime
+host checks pass.
+
+* Build boundary and patches
+
+Completed logs, source hashes and artifact hashes are recorded separately
+in [[file:render-evidence.json][render-evidence.json]]. The engine harness has a distinct result;
+compiling it does not count as a running page.
+
+Exact Guix source origins are recorded in render-source-origins.json and
+in guix-render-sources.txt / guix-render-extra-sources.txt. These identify
+the actual dependency sources used here; the earlier Guix SBOM describes
+the reference package closure.
+
+The rendering closure adds libpng, libjpeg-turbo, libwebp, libxml2,
+FreeType, HarfBuzz, Expat, Fontconfig, libgpg-error, libgcrypt, libtasn1,
+Epoxy and libxkbcommon. Khronos EGL declarations come from the recorded
+Guix Mesa headers. No host Mesa library is linked into a guest program.
+
+Small patches make upstream configure choices accurate: derive the mutex
+layout from a cross-compiled object, check Fontconfig's complete random
+state API, remove an unused Epoxy header, select Darterfly's Unix Skia
+path, and omit Linux-specific scheduler/memory telemetry sources.
+
+The initial WPE configuration uses the C-loop JavaScript interpreter,
+software rendering and system malloc. It disables GPU/WebGL, GStreamer
+media, Wayland/DRM, optional image formats and introspection. These are
+initial harness limits, not a claim of a complete browser feature set.
+
+The CPU-renderer patch also matters: WPE's CPU painting switch alone
+still initializes EGL and uses a GL compositor. The Darterfly selection
+uses upstream NonCompositedFrameRenderer, disables hardware acceleration
+and accelerated buffers, and avoids creating a GL platform display.
+The local HTML/CSS/JavaScript pixel test now qualifies that selection.
+The static engine directly initializes its built-in GLib injected bundle
+through the same upstream WebProcessExtensionManager. Explicit external
+bundles retain the module-loading path. A native symbol map supports
+fault diagnosis without changing the executable ABI.
+
+A small optional-DRM guard keeps snapshot code from requiring unavailable
+DMA-BUF format declarations in this shared-memory-only configuration.
+
+Skia's extended CPU dispatch is disabled until native context switching
+preserves the corresponding AVX state. The baseline upstream CPU raster
+and color-transform implementations remain selected.
+
+Host Python/Ruby/GLib generators and unifdef are build tools. Target
+libraries are compiled against the Darterfly headers and shared runtime.
+The final guest link regenerates libsa and uses the existing native CRT.
+
+* Reproduce
+
+First build the qualified GLib/JSC and HTTP/TLS prerequisites described
+in the linked qualifications. Keep the pinned Guix source paths available.
+The build scripts create RAM scratch under /dev/shm and record its path
+in build/wpe-assessment/render-build-root.txt. Scratch is disposable;
+installed archives, scripts and qualification logs remain on disk.
+
+#+begin_src sh
+python3 ports/nyxt/wpe/build-render-libraries.py \
+  libpng libjpeg-turbo libwebp libxml2 freetype expat \
+  harfbuzz fontconfig libgpg-error libgcrypt libtasn1 libepoxy libxkbcommon
+python3 ports/nyxt/wpe/build-render-probe.py
+sh ports/nyxt/wpe/run-render.sh
+sh tools/check-libsa-float.sh
+python3 ports/nyxt/wpe/build-webkit.py WPEPlatform WPEPlatformHeadless Skia
+python3 ports/nyxt/wpe/build-platform-probe.py
+sh ports/nyxt/wpe/run-platform.sh
+make test-native-ipc-guest
+make test-native-dl-guest
+make test-native-cxx-guest
+python3 ports/nyxt/wpe/build-webkit.py WebKit
+python3 ports/nyxt/wpe/build-engine-probe.py
+sh ports/nyxt/wpe/run-engine.sh
+#+end_src
+
+The local-page engine result is recorded in the qualification evidence.
+The expanded engine harness additionally checks HTTPS and certificate
+rejection; its result is tracked separately. The harness checks a JavaScript-updated DOM, title, CSS colors and actual WPE
+pixel buffers. It calls the upstream Web/Network process entry points,
+uses the existing native CRT and registers the static OpenSSL GIO module.
+
+Use TMPDIR on a roomy filesystem for the generic make guest tests. The
+engine's large executables and disposable root image use RAM scratch.
+
+Run guest harnesses sequentially: this worktree shares a boot-image and
+monitor namespace. Do not run two of its guest harnesses together.
+
+* Original next-step checklist
+
+See [[file:NYXT-RENDERER.org][the subsequent integration and remaining work]].
+
+1. Build Nyxt and its Lisp dependency closure in an isolated Lisp world.
+   The first source-build harness is now present; completion is not claimed.
+2. Show those buffers in a Darterfly window, deliver input and resize,
+   and exercise navigation and engine process shutdown/restart.
+3. Establish the small Lisp-to-engine control interface for navigation,
+   JavaScript results, title/load events and buffer lifetime.
+4. Connect the working engine through a small Nyxt renderer extension.
+   Preserve Nyxt's command, buffer and mode machinery upstream.
+5. Qualify persistent browser storage, recovery, permissions and shutdown.
+   SQLite record locking remains an identified gap. Add media, supported
+   accelerators and broader web compatibility after the basic browser.
+
+A native browser must eventually be rebuildable on Darterfly. The existing
+compiler/toolchain work remains relevant; it is not a prerequisite for
+this cross-seeded engine execution proof.

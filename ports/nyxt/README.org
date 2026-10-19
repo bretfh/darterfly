@@ -3,6 +3,44 @@
 
 See [[file:SBOM.org][Guix SBOM exports and the compiler/engine dependency plan]].
 
+* Current measured state (2026-10-19)
+
+Nyxt now runs natively with a WPE renderer extension in an isolated Lisp
+world. Its web view, status panel and URL prompt appear in an actual
+Darterfly window. The QEMU guest test passes verified HTTPS, JavaScript,
+real pointer/keyboard input, Ctrl-L URL entry and navigation, then engine,
+adapter and world shutdown with child reaping. The new integration changes
+no Nyxt application source and uses the existing shared libsa.
+
+See [[file:wpe/NYXT-RENDERER.org][the implementation, reproduction steps and remaining work]],
+[[file:wpe/browser-evidence.json][the browser qualification record]], and
+[[file:wpe/qualification-logs/nyxt-browser-input.png][the actual OS screenshot]].
+This is an experimental native browser milestone. Desktop packaging,
+persistent WebKit sessions, complete renderer APIs and broader site
+compatibility remain. The automated launcher closes after its checks.
+
+The separate [[file:wpe/NYXT-BUILD.org][Nyxt source-build qualification]] covers its Lisp
+dependency closure, native compiler helpers, IOLib, SQLite and OCICL TLS.
+[[file:wpe/RENDER-QUALIFICATION.org][The engine qualification]] covers TLS 1.2/1.3, external
+CSS/JavaScript, certificate rejection and recovery in native WPE worlds.
+
+* Earlier assessment: WPE qualification
+
+[[file:wpe/ASSESSMENT.org][The WPE assessment]] supersedes the CEF-first engine recommendation below.
+It recommends a bounded WPE source-port qualification, a separate Nyxt
+renderer extension, and the existing shared runtime. Real GLib and
+JavaScriptCore now pass [[file:wpe/QUALIFICATION.org][native isolated-world qualification]]. Native window
+presentation and Nyxt integration remain ahead. GIO and libsoup now pass
+[[file:wpe/NETWORK-QUALIFICATION.org][native HTTP/TLS qualification]], including public HTTPS and certificate
+rejection. The assessment retains the original baseline and browser stop
+gates.
+The rendering closure and WPEPlatform now pass
+[[file:wpe/RENDER-QUALIFICATION.org][native software-buffer and full local-page qualification]]. WebKit now
+launches its real WebProcess and renders HTML/CSS/JavaScript to CPU pixels.
+HTTPS through its NetworkProcess is being tested. The window/input adapter
+and Nyxt bridge remain.
+Earlier CEF work and its validation remain useful reference evidence.
+
 * Preservation policy
 
 Run upstream Nyxt and an existing backend as nearly unchanged as possible.
@@ -15,7 +53,9 @@ The host reference carries a focused cl-cef lifecycle patch; see
 Base: f11c970. Branch: codex/nyxt-compat. The original networking worktree
 is independent of this worktree.
 
-* Browser engine path
+* Earlier CEF engine path
+
+This section records the pre-WPE direction. The current path is above.
 
 The [[file:engine/ABI.org][native engine ABI and DSO loader]] reuse shared libsa for target-built
 libraries. Native Clang/LLD can build those DSOs inside Darterfly. The Guix

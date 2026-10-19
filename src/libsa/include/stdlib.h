@@ -50,11 +50,14 @@ long labs(long);
 long long llabs(long long);
 char *realpath(const char *, char *);
 int mkstemp(char *);
+int mkostemp(char *, int);
+char *mkdtemp(char *);
 int rand(void);
 void srand(unsigned);
 long random(void);
 void srandom(unsigned);
 int system(const char *);
+int posix_openpt(int);
 
 #ifdef __cplusplus
 }

@@ -50,5 +50,6 @@
   "bridge_patch": {
     "path": "patches/cl-cef-quit-on-ui-thread.patch",
     "sha256": "71f12cbfb1ecab15bf1a85ab948ea05725a3ab2dea4ddff7eaebba72598b7600"
-  }
+  },
+  "chromium_commit": "022a5605792996d967e05acda7091c2bd9b915db"
 }

@@ -154,7 +154,9 @@
 (defun section-kind-of (s) (section-kind s))
 
 (defun got-key (symbol type)
-  (list (sym-name symbol) (sym-object symbol) (if (= type 22) :tls :address)))
+  ;; Local symbols may share a spelling in a partially linked object. Keep
+  ;; their ELF symbol identity, and avoid rescanning the entire symbol table.
+  (list symbol (if (= type 22) :tls :address)))
 
 (defun define (table name value)
   (setf (gethash name table) value))
@@ -191,9 +193,8 @@
 (defun relocate (image globals tls-image)
   (let ((got (octets (* 8 (hash-table-count (image-got-slots image))))))
     (maphash (lambda (key slot)
-               (destructuring-bind (name object kind) key
-                 (let* ((sym (find name (object-symbols object) :key #'sym-name :test #'string=))
-                        (address (symbol-address sym globals)))
+               (destructuring-bind (sym kind) key
+                 (let ((address (symbol-address sym globals)))
                    (put got (* 8 slot) (ldb (byte 64 0) (if (eq kind :tls) (tpoff address tls-image) address)) 8))))
              (image-got-slots image))
     (dolist (s (image-sections image))
@@ -394,4 +395,4 @@ Uses the existing relocation engine and static TLS layout."
           (put out (+ h 24) va 8) (put out (+ h 32) (length bytes) 8)
           (put out (+ h 40) memsz 8) (put out (+ h 48) 4096 8)
           (replace out bytes :start1 off))
-        out))))
+        (values out globals)))))

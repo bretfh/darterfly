@@ -1,0 +1,15 @@
+--- a/Source/ThirdParty/skia/CMakeLists.txt
++++ b/Source/ThirdParty/skia/CMakeLists.txt
+@@ -1124,7 +1124,11 @@
+     -mavx512vl
+ )
+ 
+-if (WTF_CPU_X86 OR WTF_CPU_X86_64)
++if (CMAKE_SYSTEM_NAME STREQUAL "Darterfly")
++    # Native world switching currently preserves FXSAVE state, not AVX state.
++    # Keep upstream's baseline raster pipeline and color transform paths.
++    target_compile_definitions(Skia PRIVATE SK_ENABLE_OPTIMIZE_SIZE)
++elseif (WTF_CPU_X86 OR WTF_CPU_X86_64)
+     target_compile_definitions(Skia PRIVATE SK_ENABLE_AVX512_OPTS)
+ 
+     WEBKIT_CHECK_COMPILER_FLAGS(CXX Skia_SkCMS_HSW_OPTS ${Skia_SkCMS_HSW_FLAGS})

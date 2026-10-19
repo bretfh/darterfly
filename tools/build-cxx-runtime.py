@@ -62,12 +62,20 @@ def main():
              system_error error_category future call_once random hash shared_mutex regex locale ios ios.instantiations iostream strstream'''.split()
     sources = [SOURCE / 'libcxxabi/src' / (x + '.cpp') for x in abi]
     sources += [SOURCE / 'libcxx/src' / (x + '.cpp') for x in cxx]
+    sources += sorted((SOURCE / 'libcxx/src/filesystem').glob('*.cpp'))
+    # Filesystem duration arithmetic and engine code use 128-bit operations.
+    # Keep their upstream compiler helpers in this same runtime object.
+    sources += [SOURCE / 'compiler-rt/lib/builtins' / (name + '.c')
+                for name in ['fixdfti', 'floattidf', 'divti3', 'modti3',
+                             'udivti3', 'umodti3', 'udivmodti4', 'clzti2']]
     sources += [SOURCE / 'libunwind/src' / x for x in
                 ['libunwind.cpp', 'UnwindLevel1.c', 'UnwindLevel1-gcc-ext.c',
                  'UnwindRegistersRestore.S', 'UnwindRegistersSave.S']]
     objects = []
     for src in sources:
-        obj = OUT / (src.parent.parent.name + '-' + src.stem + '.o')
+        prefix = ('libcxx-filesystem' if src.parent.name == 'filesystem' else
+                  'compiler-rt' if src.parent.name == 'builtins' else src.parent.parent.name)
+        obj = OUT / (prefix + '-' + src.stem + '.o')
         print(src.name, flush=True)
         flags = ['-std=c++20'] if src.suffix == '.cpp' else []
         if src.parent.parent.name == 'libunwind' and src.suffix == '.cpp':

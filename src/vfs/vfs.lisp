@@ -6,7 +6,7 @@
    #:vnop-lookup #:vnop-readdir #:vnop-read #:vnop-write #:vnop-getattr #:vnop-readlink
    #:vnop-create #:vnop-mkdir #:vnop-symlink #:vnop-remove #:vnop-rmdir #:vnop-rename #:vnop-setattr #:vnop-truncate
    #:vattr #:make-vattr #:vattr-mode #:vattr-uid #:vattr-gid #:vattr-size #:vattr-nlink #:vattr-mtime #:vattr-rdev
-   #:namei #:vfs-open #:vfs-close #:vfs-read #:vfs-write #:vfs-stat #:vfs-readdir #:vfs-readlink #:vfs-mkdir
+   #:namei #:namei-at #:vfs-open-at #:vfs-remove-at #:vfs-open #:vfs-close #:vfs-read #:vfs-write #:vfs-stat #:vfs-readdir #:vfs-readlink #:vfs-mkdir
    #:vfs-unlink #:vfs-rename #:vfs-chdir #:vfs-getcwd #:*root*
    #:vfs-symlink #:vfs-remove #:vfs-lseek #:vfs-fstat #:vfs-realpath #:make-ram-node
    #:make-devfs #:make-kernel-dir #:vfs-mkdirs #:vfs-start #:make-procfs #:make-host-root #:fd-vnode #:*umask* #:errno-code #:*syncers* #:vfs-sync))
@@ -156,12 +156,16 @@
 
 (defun vfs-open (path flags mode)
   (with-vfs
-    (let ((vnode (lookup-or-nil path)))
+    (let ((vnode (lookup-or-nil path :follow
+                   (not (or (getf flags :nofollow)
+                            (and (getf flags :creat) (getf flags :excl)))))))
       (when (and vnode (getf flags :creat) (getf flags :excl)) (fail :eexist))
       (unless vnode
         (unless (getf flags :creat) (fail :enoent))
         (multiple-value-bind (parent leaf) (namei-parent path)
           (setf vnode (vnop-create parent leaf (logand mode #o7777 (lognot *umask*))))))
+      (when (and (getf flags :nofollow) (eq (vnode-type vnode) :vlnk))
+        (fail :eloop))
       (when (eq (vnode-type vnode) :vsock) (fail :enxio))
     (when (and (getf flags :directory) (not (eq (vnode-type vnode) :vdir))) (fail :enotdir))
       (when (and (eq (vnode-type vnode) :vdir) (not (eq (getf flags :access) :rdonly)))
@@ -311,3 +315,27 @@
       (when (< new +first-fd+) (fail :ebadf))
       (unless (= fd new) (setf (gethash new *files*) f))
       new)))
+
+(defun namei-at (fd path &key (follow t))
+  "Resolve relative to an open directory without changing process cwd."
+  (with-vfs
+    (let* ((file (fd-file fd)) (stack (file-stack file)))
+      (unless (eq (vnode-type (file-vnode file)) :vdir) (fail :enotdir))
+      (cdr (first (walk stack (split-path path) follow 0))))))
+
+(defun directory-stack (fd)
+  (let ((file (fd-file fd)))
+    (unless (eq (vnode-type (file-vnode file)) :vdir) (fail :enotdir))
+    (file-stack file)))
+
+(defun vfs-open-at (fd path flags mode)
+  "Open relative to a directory vnode without changing process cwd."
+  (with-vfs
+    (let ((*cwd* (directory-stack fd)))
+      (vfs-open path flags mode))))
+
+(defun vfs-remove-at (fd path directory)
+  "Remove a directory entry relative to an open directory vnode."
+  (with-vfs
+    (let ((*cwd* (directory-stack fd)))
+      (vfs-remove path directory))))

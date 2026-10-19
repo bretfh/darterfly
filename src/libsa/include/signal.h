@@ -57,6 +57,7 @@ typedef struct {
 #define si_uid __u.__kill.si_uid
 #define si_status __u.__kill.si_status
 typedef void (*sighandler_t)(int);
+#define SIG_HOLD ((sighandler_t)2)
 #define SIG_DFL ((sighandler_t)0)
 #define SIG_IGN ((sighandler_t)1)
 #define SIG_ERR ((sighandler_t)-1)

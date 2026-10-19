@@ -1,0 +1,34 @@
+--- a/gio/gunixmounts.c
++++ b/gio/gunixmounts.c
+@@ -1114,7 +1114,7 @@
+ }
+ 
+ /* QNX {{{2 */
+-#elif defined (HAVE_QNX)
++#elif defined (HAVE_QNX) || defined (__darterfly__)
+ 
+ static char *
+ get_mtab_monitor_file (void)
+@@ -1758,6 +1758,22 @@
+   return NULL;
+ }
+ 
++/* Darterfly has no fstab or mtab ABI. Volume discovery remains in its VFS. */
++#elif defined (__darterfly__)
++static GList *
++_g_get_unix_mount_points (void)
++{
++  return NULL;
++}
++static GUnixMountPoint **
++_g_unix_mount_points_get_from_file (const char *path, uint64_t *time,
++                                    size_t *count)
++{
++  (void)path;
++  if (time) *time = 0;
++  if (count) *count = 0;
++  return NULL;
++}
+ /* Common code {{{2 */
+ #else
+ #error No g_get_mount_table() implementation for system

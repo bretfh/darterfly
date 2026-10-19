@@ -28,6 +28,8 @@ extern "C" {
 #define F_SETLKW 7
 #define FD_CLOEXEC 1
 #define AT_FDCWD (-100)
+#define AT_SYMLINK_NOFOLLOW 0x100
+#define AT_REMOVEDIR 0x200
 int open(const char *, int, ...);
 int openat(int, const char *, int, ...);
 int creat(const char *, mode_t);

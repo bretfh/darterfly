@@ -1,0 +1,27 @@
+--- a/Source/WebKit/WebProcess/InjectedBundle/glib/InjectedBundleGlib.cpp
++++ b/Source/WebKit/WebProcess/InjectedBundle/glib/InjectedBundleGlib.cpp
+@@ -29,6 +29,9 @@
+ 
+ #include "WKBundleAPICast.h"
+ #include "WKBundleInitialize.h"
++#if OS(DARTERFLY)
++#include "WebProcessExtensionManager.h"
++#endif
+ #include <wtf/FileSystem.h>
+ #include <wtf/text/CString.h>
+ 
+@@ -36,6 +39,14 @@
+ 
+ bool InjectedBundle::initialize(const WebProcessCreationParameters&, RefPtr<API::Object>&& initializationUserData)
+ {
++#if OS(DARTERFLY)
++    // The framework's built-in bundle is part of the static engine. Keep
++    // explicit application bundles on the ordinary module-loading path.
++    if (m_path == PKGLIBDIR "/injected-bundle/libWPEInjectedBundle.so"_s) {
++        WebProcessExtensionManager::singleton().initialize(this, initializationUserData.get());
++        return true;
++    }
++#endif
+     m_platformBundle = g_module_open(FileSystem::fileSystemRepresentation(m_path).data(), G_MODULE_BIND_LOCAL);
+     if (!m_platformBundle) {
+         g_warning("Error loading the injected bundle (%s): %s", m_path.utf8().data(), g_module_error());

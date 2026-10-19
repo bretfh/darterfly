@@ -1,0 +1,22 @@
+--- a/src/fccompat.c
++++ b/src/fccompat.c
+@@ -209,7 +209,7 @@
+ #else
+     random_r (&fcrandbuf, &result);
+ #endif
+-#elif HAVE_RANDOM
++#elif HAVE_RANDOM && HAVE_INITSTATE && HAVE_SETSTATE
+     static char statebuf[256];
+     char *state;
+     static FcBool initialized = FcFalse;
+--- a/meson.build
++++ b/meson.build
+@@ -117,6 +117,8 @@
+   ['getexecname'],
+   ['rand'],
+   ['random'],
++  ['initstate'],
++  ['setstate'],
+   ['lrand48'],
+   ['random_r'],
+   ['rand_r'],

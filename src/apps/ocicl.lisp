@@ -2,10 +2,14 @@
 
 (defparameter *ocicl-source* "/usr/src/ocicl/")
 
+(defun register-ocicl-sources ()
+  "Make the packaged source closure available without loading the OCICL CLI."
+  (dolist (asd (directory (concatenate 'string *ocicl-source* "**/*.asd")))
+    (pushnew (directory-namestring asd) asdf:*central-registry* :test #'equal)))
+
 (defun load-ocicl ()
   (unless (find-package "OCICL")
-    (dolist (asd (directory (concatenate 'string *ocicl-source* "**/*.asd")))
-      (pushnew (directory-namestring asd) asdf:*central-registry* :test #'equal))
+    (register-ocicl-sources)
     (pushnew "SB-ACLREPL" *modules* :test #'string=)
     (let ((*standard-output* (make-broadcast-stream)) (*error-output* (make-broadcast-stream)))
       (handler-bind ((warning #'muffle-warning))

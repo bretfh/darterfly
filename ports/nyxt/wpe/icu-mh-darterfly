@@ -1,0 +1,17 @@
+# Darterfly static ELF build rules. Runtime APIs come from libsa.
+GEN_DEPS.c = $(CC) -E -MM $(DEFS) $(CPPFLAGS)
+GEN_DEPS.cc = $(CXX) -E -MM $(DEFS) $(CPPFLAGS) $(CXXFLAGS)
+THREADSCPPFLAGS = -D_REENTRANT
+SO = so
+STATIC_O = ao
+STATIC_PREFIX =
+STATIC_PREFIX_WHEN_USED =
+GENCCODE_ASSEMBLY = -a gcc
+%.$(STATIC_O): $(srcdir)/%.c
+	$(call SILENT_COMPILE,$(strip $(COMPILE.c) $(STATICCPPFLAGS) $(STATICCFLAGS)) -o $@ $<)
+%.$(STATIC_O): $(srcdir)/%.cpp
+	$(call SILENT_COMPILE,$(strip $(COMPILE.cc) $(STATICCPPFLAGS) $(STATICCXXFLAGS)) -o $@ $<)
+%.d: $(srcdir)/%.c
+	@$(GEN_DEPS.c) $< > $@
+%.d: $(srcdir)/%.cpp
+	@$(GEN_DEPS.cc) $< > $@

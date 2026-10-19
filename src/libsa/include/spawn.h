@@ -11,6 +11,8 @@ typedef struct { int n; void *actions; } posix_spawn_file_actions_t;
 #define POSIX_SPAWN_SETSIGDEF 4
 #define POSIX_SPAWN_SETSIGMASK 8
 #define POSIX_SPAWN_SETSID 0x80
+/* Close inherited descriptors >=3 unless a file action explicitly preserves them. */
+#define POSIX_SPAWN_CLOEXEC_DEFAULT 0x4000
 int posix_spawn(pid_t *, const char *, const posix_spawn_file_actions_t *, const posix_spawnattr_t *,
                 char *const[], char *const[]);
 int posix_spawnp(pid_t *, const char *, const posix_spawn_file_actions_t *, const posix_spawnattr_t *,

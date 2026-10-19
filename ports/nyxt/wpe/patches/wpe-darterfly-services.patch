@@ -1,0 +1,32 @@
+--- a/Source/WTF/wtf/PlatformWPE.cmake
++++ b/Source/WTF/wtf/PlatformWPE.cmake
+@@ -20,9 +20,6 @@
+     glib/TimeZoneGLib.cpp
+     glib/URLGLib.cpp
+ 
+-    linux/CurrentProcessMemoryStatus.cpp
+-    linux/HighPriorityThreads.cpp
+-
+     posix/CPUTimePOSIX.cpp
+     posix/FileHandlePOSIX.cpp
+     posix/FileSystemPOSIX.cpp
+@@ -37,13 +34,18 @@
+     unix/UniStdExtrasUnix.cpp
+ )
+ 
+-if (ANDROID)
++if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
++    list(APPEND WTF_SOURCES linux/HighPriorityThreads.cpp)
++endif ()
++
++if (ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "Darterfly")
+     list(APPEND WTF_SOURCES
+         generic/MemoryFootprintGeneric.cpp
+         generic/MemoryPressureHandlerGeneric.cpp
+     )
+ else ()
+     list(APPEND WTF_SOURCES
++        linux/CurrentProcessMemoryStatus.cpp
+         linux/MemoryFootprintLinux.cpp
+ 
+         unix/MemoryPressureHandlerUnix.cpp

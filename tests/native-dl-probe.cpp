@@ -67,8 +67,13 @@ int main(int argc, char **argv) {
     check("STATIC-TLS-REJECTED", rejected("/tmp/static-tls.so","unsupported relocation"));
     check("WX-REJECTED", rejected("/tmp/wx.so","W+X load segment"));
     check("MISSING-DEPENDENCY", rejected("/tmp/missing/libroot.so","path unavailable"));
+    check("NOLOAD-ABSENT", !dlopen("/tmp/libroot.so", RTLD_NOW|RTLD_NOLOAD));
+    const char *absent = dlerror();
+    check("NOLOAD-ERROR", absent && strstr(absent, "not loaded") && !dlerror());
     void *h = dlopen("/tmp/libroot.so", RTLD_NOW);
     check("LOAD", h);
+    void *resident = dlopen("/tmp/libroot.so", RTLD_NOW|RTLD_NOLOAD);
+    check("NOLOAD-RESIDENT", resident == h && !dlclose(resident));
     int (*value)() = (int(*)())dlsym(h,"root_value");
     check("CONSTRUCTORS", value && value() == 19);
     check("CONSTRUCTOR-THREAD", *(int*)dlsym(h,"root_tls_destroyed") == 1);
@@ -98,7 +103,7 @@ int main(int argc, char **argv) {
     check("TLS-NEW-THREAD", (uintptr_t)result == 1 && *main_tls == 99);
     const char *main_error = dlerror();
     check("THREAD-ERRORS", main_error && strstr(main_error,"dlsym:"));
-    void *again = dlopen("/tmp/libroot.so", RTLD_NOW|RTLD_GLOBAL);
+    void *again = dlopen("/tmp/libroot.so", RTLD_NOW|RTLD_NOLOAD|RTLD_GLOBAL);
     check("REOPEN-GLOBAL", again == h && dlsym(RTLD_DEFAULT,"root_value") == (void*)value && value()==19 &&
           *(int*)dlsym(again,"root_constructions") == 1);
     check("TLS-DESTRUCTORS", *(int*)dlsym(h,"root_tls_destroyed") == 3);

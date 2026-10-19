@@ -1,0 +1,19 @@
+SOUP upstream 3.6.5 native world
+SOUP public suffix and ICU domain handling PASS
+SOUP HTTP PASS http://10.0.2.2:18765/ bytes=19 async=0 http-version=1
+SOUP HTTP PASS https://10.0.2.2:18766/redirect bytes=11 async=1 http-version=1
+SOUP HTTP PASS https://10.0.2.2:18767/gzip bytes=14 async=1 http-version=1
+SOUP HTTP PASS https://10.0.2.2:18766/chunked bytes=9 async=0 http-version=1
+SOUP HTTP PASS https://10.0.2.2:18766/post bytes=25 async=1 http-version=1
+SOUP certificate rejection PASS https://10.0.2.2:18768/ flags=8
+SOUP certificate rejection PASS https://10.0.2.2:18769/ flags=4
+SOUP certificate rejection PASS https://10.0.2.2:18766/ flags=1
+SOUP controlled HTTP HTTPS redirects cookies gzip chunked POST validation PASS
+SOUP HTTP PASS https://example.com/ bytes=577 async=1 http-version=2
+SOUP PASS native HTTPS public web validated certificates async HTTP
+
+[SOUP-WORLD STATUS 0]
+
+[SOUP-WORLD SUPERVISOR 42]
+
+[SOUP-WORLD DONE]
