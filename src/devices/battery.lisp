@@ -47,6 +47,10 @@
 
 (defvar *battery* :unknown)
 
+(pushnew 'forget-battery sb-ext:*save-hooks*)
+
+(defun forget-battery () (setf *battery* :unknown))
+
 (defun innermost-device (v at)
   (first (sort (remove-if-not (lambda (b) (< (second b) at (third b))) (aml-blocks v :devices-only t))
                #'< :key (lambda (b) (- (third b) (second b))))))

@@ -156,6 +156,10 @@
 
 (defvar *i2c-hid-devices* :unknown)
 
+(pushnew 'forget-i2c-hid-devices sb-ext:*save-hooks*)
+
+(defun forget-i2c-hid-devices () (setf *i2c-hid-devices* :unknown))
+
 (defun i2c-hid-devices ()
   (when (eq *i2c-hid-devices* :unknown)
     (setf *i2c-hid-devices*

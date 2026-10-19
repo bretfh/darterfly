@@ -31,7 +31,7 @@
 
 (pushnew 'forget-flips sb-ext:*save-hooks*)
 
-(defun forget-flips () (setf *flips-armed* nil))
+(defun forget-flips () (setf *flips-armed* nil *flip-vector* nil))
 
 (defun arm-flips ()
   (or *flips-armed*

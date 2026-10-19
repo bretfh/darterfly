@@ -919,6 +919,26 @@
                      "a part that worked in the good generation and doesn't now keeps it from being confirmed: ~a" seen)))
           (image:finish c 5))))))
 
+(test a-saved-world-forgets-what-belongs-to-the-old-machine
+  (let ((esp (merge-pathnames "esp-forget.img" (darterfly-file "build/")))
+        (state "(list :flip darterfly/display::*flip-vector* :sleeping darterfly/display::*sleeping* :battery darterfly/devices::*battery* :pads darterfly/devices::*i2c-hid-devices* :listener (and (gethash 4999 darterfly/net::*listeners*) t))"))
+    (uiop:delete-file-if-exists esp)
+    (let ((c (image:bare-console :boot-args "init" :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 300)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "init: pid 1" :timeout 120))
+               (settled c)
+               (ask "(setf darterfly/display::*flip-vector* 99 darterfly/display::*sleeping* t darterfly/devices::*battery* (list :old) darterfly/devices::*i2c-hid-devices* (list :old) (gethash 4999 darterfly/net::*listeners*) :old)")
+               (image:send c "(darterfly/install:save-generation)")
+               (is (image:expect c "restart: core " :timeout 300))
+               (is (image:expect c "init: pid 1" :timeout 120))
+               (settled c)
+               (let ((seen (ask state)))
+                 (is (search "(:FLIP NIL :SLEEPING NIL :BATTERY :UNKNOWN :PADS :UNKNOWN :LISTENER NIL)" (remove #\Newline seen))
+                     "interrupt vectors, sleep state, ACPI findings and TCP state start over: ~a" seen)))
+          (image:finish c 5))))))
+
 (test stats-see-what-the-system-does
   (let ((c (image:bare-console)))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
