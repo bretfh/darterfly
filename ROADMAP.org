@@ -40,6 +40,11 @@ bit-for-bit reproducibility is a separately measured property. Physical support
 claims require dated results tied to the tested generation and machine.
 
 * 2. Complete the world/application boundary
+Superseded in part, 2026-10-19 (RECOVERY-PLAN.org, ARCHITECTURE.org): a world
+is a generic concept, any tree of objects for any purpose. "Make isolated worlds
+the ordinary application launch path" is withdrawn. Placement and authority are
+explicit policy; the resource, cancellation and audit work below still stands.
+
 Specify the trusted system world and per-application filesystem, network,
 device, and debugging authority. Make isolated worlds the ordinary application
 launch path. Bound memory, threads, ports, descriptors, requests, and queues.

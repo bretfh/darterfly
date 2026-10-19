@@ -2,7 +2,7 @@
   (:use #:cl)
   (:local-nicknames (#:devices #:darterfly/devices) (#:worlds #:darterfly/worlds) (#:run #:darterfly/run))
   (:export #:grant-device #:attach-controller #:serve-requests #:serve-network #:remote-network
-           #:start-network-world #:start-driver-worlds #:*in-own-world*))
+           #:start-network-world #:start-driver-worlds #:*driver-placement*))
 (in-package #:darterfly/drivers)
 
 (defun pci-address (node)
@@ -227,17 +227,12 @@
   (let ((world (run:start-world core (run::world-argv "(loop (sleep 60))") :cwd "/" :disk t :attach t :name name)))
     (values world (attach-network-world world node))))
 
-(defvar *in-own-world* (list (cons #x020000 'attach-network-world)))
+(defvar *driver-placement* nil)
 
 (defparameter *driver-memory* 256)
 
 (defun attach-of (node)
-  (cdr (assoc (devices::pci-class node) *in-own-world*)))
-
-(defun own-world-p (node)
-  (and (attach-of node) t))
-
-(pushnew 'own-world-p devices::*reservations*)
+  (cdr (assoc (devices::pci-class node) *driver-placement*)))
 
 (defun driver-job (node)
   (let ((attach (attach-of node)))
@@ -264,13 +259,12 @@
 (defun init-running-p ()
   (ignore-errors (darterfly/init:jobs)))
 
-(defun start-driver-worlds ()
-  (when (devices:boot-arg "init")
-    (loop :repeat 300 :until (init-running-p) :do (sleep 0.1)))
-  (dolist (node (devices:find-entries 'devices:pci-node))
-    (when (and (own-world-p node)
-               (not (devices::reserved-by-boot-p node))
-               (null (devices:entry-children node)))
-      (if (init-running-p)
-          (darterfly/init:submit (driver-job node))
-          (drive-here node)))))
+(defun start-driver-worlds (nodes)
+  (dolist (node nodes)
+    (unless (attach-of node)
+      (error "no driver placement for ~a; *driver-placement* names none for its class" (devices::pci-location node)))
+    (when (devices:entry-children node)
+      (error "~a is already driven here" (devices::pci-location node)))
+    (if (init-running-p)
+        (darterfly/init:submit (driver-job node))
+        (drive-here node))))

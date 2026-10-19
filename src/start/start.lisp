@@ -109,7 +109,6 @@
     (sb-thread:make-thread
      (lambda ()
        (attempt "network start" #'darterfly/net:start-network)
-       (attempt "driver worlds" #'darterfly/drivers:start-driver-worlds)
        (in-thread "wifi start" #'darterfly/wifi:start-wifi)
        (when (stringp (darterfly/devices:boot-arg "nrepl-key"))
          (attempt "nrepl start" #'darterfly/nrepl:start)))

@@ -1,0 +1,44 @@
+#+title: Darterfly: the terms that must stay distinct
+#+date: 2026-10-19
+
+The plan that set these out is RECOVERY-PLAN.org (2026-10-19).
+
+* World
+A world is a generic concept: any tree of objects, for any purpose (bfh,
+2026-10-19). Its purpose is not part of its definition. An application, a set
+of applications, development state, a service or an experiment may each be a
+use of a world. None of them is the unit a world must be allocated for.
+
+* Kernel world
+The kernel's address space, threads, rights and ports (src/kern/i386/world.lisp,
+src/worlds/). It runs a Lisp image or native code. It is one mechanism a world
+can be placed on, and it does not decide the user-facing object model.
+
+* Lisp image
+A heap, its definitions, its collector and its threads. Objects inside one image
+are shared directly. Copying bytes between kernel worlds is a different thing.
+
+* Process and task
+Execution bookkeeping: descriptors, signals, process bindings and a port
+namespace (src/bsd/, src/mach/). Lisp processes share an image. Their separate
+bookkeeping is not memory protection against arbitrary Lisp or foreign access.
+
+* Native child
+A program compiled against darterfly's runtime and run in its own kernel world,
+for compatibility and isolation (the WebKit and Nyxt dependencies). This is an
+explicit use, not a default for anything else.
+
+* Generation
+A bootable persistent version, with its selection, confirmation and fallback
+records (src/install/). It is not a process, and not an arbitrary subtree
+checkpoint.
+
+* Init
+The one lifecycle and service supervisor (src/init/). Anything that runs in a
+kernel world is supervised through it, not through a second supervisor.
+
+* Placement and authority
+Where something runs, what it shares and which rights it holds are explicit
+policy, chosen by whoever starts it. No application name, device class or
+default variable moves anything into its own kernel world by itself. Neither
+"everything in one heap" nor "a new core per application" is a rule.

@@ -1905,10 +1905,10 @@
                  "a key typed into an app world's window reaches that world")
              (ask "(darterfly/run:stop-world *keys*)" 60)
              (let ((before (until "t")))
-               (ask "(darterfly/apps::open-application \"/Applications/Hello.app/Contents/Programs/Hello\")")
+               (ask "(darterfly/apps::open-application \"/Applications/Hello.app/Contents/Programs/Hello\" :world '(:memory 512))")
                (let ((opened (until (format nil "(> (length darterfly/windowserver::*windows*) ~d)" (first before))))
                      (job (ask "(let ((j (find \"Hello\" (darterfly/init:jobs) :key (lambda (j) (getf j :label)) :test (function equal)))) (format nil \"[~a ~a]\" (getf j :state) (and (getf j :world) t)))")))
-                 (is (> (first opened) (first before)) "opening Hello starts it in its own world: ~a" opened)
+                 (is (> (first opened) (first before)) "opening Hello with an explicit world starts it there: ~a" opened)
                  (is (search "[RUNNING T]" job) "as an init job: ~a" job))
                (ask "(darterfly/init:remove-job \"Hello\")")
                (let ((left (until (format nil "(= (length darterfly/windowserver::*clients*) ~d)" (second before)))))
@@ -1953,8 +1953,14 @@
         (image:*network-device* "usb-net,netdev=net0,bus=xhci.0"))
     (network-world-check "0:b.0")))
 
-(test the-network-driver-world-starts-at-boot-comes-back-and-falls-back
-  (let ((c (image:bare-console :boot-args "init")))
+(defparameter *placed-network-device* "virtio-net-pci,netdev=net0,romfile=,addr=0xa")
+
+(defparameter *place-network*
+  "(progn (darterfly/net:start-network) (setf darterfly/drivers:*driver-placement* (list (cons #x020000 'darterfly/drivers::attach-network-world))) (darterfly/drivers:start-driver-worlds (list (find-if (lambda (d) (string-equal (darterfly/devices::pci-location d) \"0:a.0\")) (darterfly/devices:find-entries 'darterfly/devices:pci-node)))) :placed)")
+
+(test a-network-driver-placed-in-a-world-comes-back-and-falls-back
+  (let* ((image::*network-device* *placed-network-device*)
+         (c (image:bare-console :boot-args "init reserve=0:a.0")))
     (labels ((ask (form &optional (timeout 120))
                (image:send c form)
                (image:expect c (format nil "~%* ") :timeout timeout))
@@ -1970,8 +1976,10 @@
       (unwind-protect
            (progn
              (image:expect c "init: pid 1" :timeout 120)
+             (ask "(progn (sleep 5) t)")
+             (ask *place-network*)
              (let ((first (state)))
-               (is (search "REMOTE-NETWORK T RUNNING" first) "at boot the network controller is driven from its own world, kept by init: ~a" first))
+               (is (search "REMOTE-NETWORK T RUNNING" first) "a network controller placed explicitly is driven from its own world, kept by init: ~a" first))
              (stop-driver)
              (is (image:expect c "init: driver" :timeout 30))
              (let ((again (state)))
@@ -2998,9 +3006,13 @@
          (image:*extra-qemu* (list "-global" "ICH9-LPC.disable_s3=0"))
          (image::*expected* '(:log :network :disk))
          (label "vm-world-check")
-         (c (image:bare-console :boot-args "init" :forwards (list (list :tcp port 4011)))))
+         (image::*network-device* *placed-network-device*)
+         (c (image:bare-console :boot-args "init reserve=0:a.0" :forwards (list (list :tcp port 4011)))))
     (unwind-protect
          (progn
+           (image:expect c "init: pid 1" :timeout 120)
+           (image:send c "(progn (sleep 5) t)")
+           (image:send c *place-network*)
            (image:expect c "init: driver" :timeout 120)
            (image:expect c "running" :timeout 120)
            (image:send c (format nil "(progn (loop :repeat 120 :until (ignore-errors (darterfly/net:ping \"10.0.2.2\")) :do (sleep 1)) (darterfly/nrepl:start :key ~s) :up)" (image::nrepl-key)))

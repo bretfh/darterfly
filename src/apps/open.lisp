@@ -1,9 +1,5 @@
 (in-package #:darterfly/apps)
 
-(defparameter *in-own-world* '("Hello" "Terminal" "Editor"))
-
-(defparameter *app-memory* 512)
-
 (defun program-name (path)
   (subseq path (1+ (or (position #\/ path :from-end t) -1))))
 
@@ -19,15 +15,17 @@
         :unless (active-label-p label)
           :return label))
 
-(defun world-job (path)
+(defun world-job (path world)
   (list :label (fresh-label (program-name path))
-        :world (list :core "/System/Library/Kernels/darterfly.core"
-                     :memory *app-memory*
-                     :evals (list (format nil "(progn (darterfly/bsd:wait4 (darterfly/bsd:posix-spawn ~s (list ~s) nil)) (sb-ext:exit))"
-                                          path path)))
+        :world (list* :core (getf world :core "/System/Library/Kernels/darterfly.core")
+                      :evals (list (format nil "(progn (darterfly/bsd:wait4 (darterfly/bsd:posix-spawn ~s (list ~s) nil)) (sb-ext:exit))"
+                                           path path))
+                      (loop :for (key value) :on world :by #'cddr
+                            :unless (member key '(:core :evals))
+                              :append (list key value)))
         :run-at-load t))
 
-(defun open-application (path)
-  (if (member (program-name path) *in-own-world* :test #'string=)
-      (darterfly/init:submit (world-job path))
+(defun open-application (path &key world)
+  (if world
+      (darterfly/init:submit (world-job path world))
       (bsd:posix-spawn path (list path) nil)))
