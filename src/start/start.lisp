@@ -75,13 +75,6 @@
    (sb-debug:print-backtrace :stream *error-output* :count 30)
    (finish-output *error-output*)))
 
-(defun note-world-0-restart ()
-  (multiple-value-bind (restarts why) (ignore-errors (darterfly/worlds:world-0-restarts))
-    (when (and restarts (plusp restarts))
-      (let ((forms (length (darterfly/journal:forms-since-save))))
-        (format *error-output* "~&boot: world 0 was restarted (~(~a~), ~d in 10 minutes); ~d form~:p since the last save are in the journal, (darterfly/journal:replay) brings them back~%"
-                why restarts forms)))))
-
 (defun boot ()
   (handler-bind ((error #'report-boot-failure))
     (if (darterfly/run:in-world-p)
@@ -102,7 +95,6 @@
     (attempt "log" #'darterfly/log:start-log)
     (setf darterfly/bsd:*safe* (and (darterfly/devices:boot-arg "safe") t))
     (format *error-output* "~&boot: generation ~a~:[~;, safe~]~%" (ignore-errors (darterfly/install:current)) darterfly/bsd:*safe*)
-    (attempt "world 0 restarted" #'note-world-0-restart)
     (unless darterfly/bsd:*safe*
       (in-thread "confirm" (lambda () (sleep darterfly/install:*stable-after*) (confirm-when-healthy)))
       (in-thread "saved generation" #'darterfly/install:install-saved-generation))

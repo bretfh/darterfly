@@ -1,7 +1,7 @@
 (defpackage #:darterfly/worlds
   (:use #:cl)
   (:export #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages #:spawn-record #:receive-into #:copy-from #:copy-into
-           #:heartbeat #:*watchdog-limit* #:quiet-watchdog #:pause #:resume #:checkpoint #:restore #:grant-memory #:grant-vectors #:port-into #:grant-rights #:*rights* #:worlds #:inspect-world #:peek #:no-reply #:restart-world-0 #:world-0-restarts))
+           #:heartbeat #:*watchdog-limit* #:quiet-watchdog #:pause #:resume #:checkpoint #:restore #:grant-memory #:grant-vectors #:port-into #:grant-rights #:*rights* #:worlds #:inspect-world #:peek #:no-reply))
 (in-package #:darterfly/worlds)
 
 (define-condition world-error (error)
@@ -338,11 +338,3 @@
                               :rsp (octets-u64 describe (+ state +saved-rsp+))
                               :rbp rbp
                               :returns (return-addresses world rbp))))))
-
-(defun restart-world-0 () (machdep 79))
-
-(defun world-0-restarts ()
-  (let ((out (make-array 2 :element-type '(unsigned-byte 64))))
-    (with-octets (o out) (machdep 80 o))
-    (values (aref out 0)
-            (case (aref out 1) (1 :silent) (2 :asked) (t nil)))))
