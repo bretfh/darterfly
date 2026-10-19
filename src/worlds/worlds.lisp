@@ -38,8 +38,6 @@
 
 (defconstant +eintr+ 4)
 (defconstant +etimedout+ 110)
-(defconstant +enosys+ 38)
-(defconstant +eperm+ 1)
 
 (defun machdep-raw (n &optional (a 0) (b 0) (c 0) (d 0) (e 0))
   (sb-alien:alien-funcall
@@ -63,10 +61,6 @@
     (unwind-protect
          (with-octets (ms m)
            (let ((started (machdep-raw 76 port ms (length m))))
-             (when (member started (list (- +enosys+) (- +eperm+)))
-               (return-from call
-                 (with-octets (rs r)
-                   (subseq r 0 (machdep 41 port ms (length m) rs (length r))))))
              (when (< -4096 started 0)
                (error 'world-error :code (- started)))
              (setf token (ldb (byte 64 0) started)))

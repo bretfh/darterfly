@@ -1768,7 +1768,7 @@
                  (is (search "small" refused) "which says what is using the memory")))
           (image:finish c 5))))))
 
-(test init-keeps-world-jobs-alive-backs-off-and-quarantines
+(test init-keeps-world-jobs-alive-and-quarantines
   (let ((disk (merge-pathnames "world-jobs.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists disk)
     (darterfly/image::root-disk disk (* 256 1048576)
@@ -1802,8 +1802,7 @@
                (let ((hog (ask (until "hog" :quarantined 30))))
                  (is (search ":QUARANTINED" hog) "a world growing past its share is quarantined: ~a" hog)
                  (is (search "resident" hog) "with why"))
-               (let ((inside (ask "(let ((i (darterfly/init:inspect-job \"hog\"))) (list (search \"SLEEP\" (getf i :backtraces)) (length (getf (getf i :inside) :threads)) (every (lambda (th) (plusp (getf th :rip))) (getf (getf i :inside) :threads)) (some (lambda (th) (getf th :returns)) (getf (getf i :inside) :threads))))")))
-                 (is (not (search "(NIL" inside)) "init took its Lisp backtraces before pausing it: ~a" inside)
+               (let ((inside (ask "(let ((i (darterfly/init:inspect-job \"hog\"))) (list (length (getf (getf i :inside) :threads)) (every (lambda (th) (plusp (getf th :rip))) (getf (getf i :inside) :threads)) (some (lambda (th) (getf th :returns)) (getf (getf i :inside) :threads))))")))
                  (is (not (search " 0 " inside)) "and the paused world's threads can be read from outside: ~a" inside)
                  (is (not (search "NIL)" inside)) "with their registers and return addresses: ~a" inside))
                (sleep 8)

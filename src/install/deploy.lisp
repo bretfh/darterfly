@@ -100,6 +100,25 @@
              (kernel-constant-p (cell-error-name condition)))
     (continue condition)))
 
+(defun only-read-p (symbol)
+  (not (or (boundp symbol)
+           (fboundp symbol)
+           (symbol-plist symbol)
+           (find-class symbol nil))))
+
+(defun take-exported-symbol (condition)
+  (when (and (typep condition 'sb-ext:name-conflict)
+             (eq (sb-ext:name-conflict-function condition) 'export)
+             (let ((incoming (let ((datum (sb-ext:name-conflict-datum condition)))
+                               (if (listp datum) datum (list datum)))))
+               (every (lambda (symbol)
+                        (or (member symbol incoming)
+                            (only-read-p symbol)))
+                      (sb-ext:name-conflict-symbols condition))))
+    (let ((take (find 'sb-impl::take-new (compute-restarts condition) :key #'restart-name)))
+      (when take
+        (invoke-restart take)))))
+
 (defun form-hazard (form)
   (when (consp form)
     (case (first form)
@@ -159,6 +178,7 @@
   (let ((t0 (get-internal-real-time))
         (problems nil))
     (handler-bind ((error #'take-kernel-constant)
+                   (sb-ext:name-conflict #'take-exported-symbol)
                    (warning (lambda (w)
                               (unless (typep w 'style-warning) (push (princ-to-string w) problems))
                               (muffle-warning w))))

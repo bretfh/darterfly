@@ -26,8 +26,7 @@
    (reason :initform nil :accessor reason)
    (exits :initform nil :accessor exits)
    (cpu :initform nil :accessor cpu)
-   (removing :initform nil :accessor removing)
-   (backtraces :initform nil :accessor backtraces)))
+   (removing :initform nil :accessor removing)))
 
 (defclass service ()
   ((name :initarg :name :reader name)
@@ -127,13 +126,9 @@
                (exits job))))
 
 (defun throttle (job)
-  (let* ((interval (key (job-plist job) :throttle 10))
-         (recent (length (recent-exits job)))
-         (doubled (* interval
-                     (expt 2 (max 0 (1- recent)))))
-         (wait (min doubled (key (job-plist job) :most-throttle 60)))
-         (ran (/ (- (get-internal-real-time) (started job)) internal-time-units-per-second)))
-    (max 0 (- wait ran))))
+  (let ((interval (key (job-plist job) :throttle 10))
+        (ran (/ (- (get-internal-real-time) (started job)) internal-time-units-per-second)))
+    (max 0 (- interval ran))))
 
 (defun note (job state reason)
   (setf (state job) state
@@ -241,27 +236,7 @@
                               (and (plusp seconds)
                                    (/ (- cpu (cdr last)) seconds))))))))
 
-(defparameter *backtraces-form*
-  "(let ((out nil) (lock (sb-thread:make-mutex)))
-     (dolist (th (sb-thread:list-all-threads))
-       (unless (eq th sb-thread:*current-thread*)
-         (ignore-errors
-          (sb-thread:interrupt-thread
-           th
-           (lambda ()
-             (let ((trace (with-output-to-string (s) (sb-debug:print-backtrace :count 20 :stream s))))
-               (sb-thread:with-mutex (lock)
-                 (push (list (sb-thread:thread-name sb-thread:*current-thread*) trace) out))))))))
-     (sleep 1)
-     (prin1-to-string out))")
-
-(defun take-backtraces (job)
-  (setf (backtraces job)
-        (handler-case (darterfly/run:world-eval (world job) *backtraces-form* :timeout 5)
-          (error (e) (format nil "no backtraces: ~a" e)))))
-
 (defun quarantine (job why)
-  (take-backtraces job)
   (darterfly/worlds:pause (darterfly/run:world-id (world job)))
   (note job :quarantined why))
 
@@ -275,7 +250,6 @@
             :reason (reason job)
             :exits (reverse (exits job))
             :world id
-            :backtraces (backtraces job)
             :inside (and id
                          (eq (state job) :quarantined)
                          (darterfly/worlds:inspect-world id))))))
