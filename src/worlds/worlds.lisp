@@ -143,10 +143,12 @@
   '((:console . 2) (:hardware . 4) (:power . 8) (:worlds . 16) (:stats . 32) (:boot . 64) (:log . 128)))
 
 (defun rights-mask (rights)
-  (loop for right in rights
+  (loop with mask = 0
+        for right in rights
         for bit = (or (cdr (assoc right *rights*))
                       (error "no right ~s; the rights are ~{~s~^ ~}" right (mapcar #'car *rights*)))
-        sum bit))
+        do (setf mask (logior mask bit))
+        finally (return mask)))
 
 (defun rights-named (mask)
   (loop for (right . bit) in *rights*
