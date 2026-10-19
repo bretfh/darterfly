@@ -72,6 +72,7 @@
 (defconstant +receive+ 2)
 (defconstant +suspend+ 3)
 (defconstant +wake+ 4)
+(defconstant +status+ 5)
 (defconstant +receive-wait+ 0.1)
 
 (defvar *nic* nil)
@@ -147,6 +148,8 @@
           ((= op +wake+)
            (wake-devices)
            (octets 0))
+          ((= op +status+)
+           (octets 1))
           (t (octets 0)))))
 
 (defparameter *appear-within* 30)
@@ -239,7 +242,7 @@
     (list :label (format nil "driver ~(~a~)" (devices::pci-location node))
           :world (list :core "/System/Library/Kernels/darterfly.core" :memory *driver-memory*)
           :keep-alive t :throttle 2 :most-exits 3 :window 120
-          :healthy #'network-healthy-p :check-every 10 :unhealthy-for 60
+          :healthy (lambda () (driver-answers-p node)) :check-every 10 :unhealthy-for 60
           :after-start (lambda (world) (funcall attach world node))
           :when-failed (lambda () (drive-here node)))))
 
@@ -248,13 +251,10 @@
   (dolist (controller (devices:find-entries 'devices:ethernet-controller node))
     (devices::announce :added controller)))
 
-(defun network-healthy-p ()
-  (let* ((interface darterfly/net:*interface*)
-         (gateway (and interface (darterfly/net::interface-gateway interface))))
-    (or (null gateway)
-        (zerop gateway)
-        (darterfly/net:ping gateway :timeout 2)
-        (darterfly/net:ping gateway :timeout 2))))
+(defun driver-answers-p (node)
+  (let ((net (find-if (lambda (entry) (typep entry 'remote-network)) (devices:entry-children node))))
+    (and net
+         (= 1 (u64 (worlds:call (remote-port net) (octets +status+ 0 0) :timeout 5) 0)))))
 
 (defun init-running-p ()
   (ignore-errors (darterfly/init:jobs)))
