@@ -77,6 +77,7 @@
 
 (defvar *installing* (sb-thread:make-mutex :name "installing"))
 (defvar *save-token* nil)
+(defvar *saving* nil)
 
 (defparameter *deployments-dir* "/Library/Settings/deployments/")
 (defvar *deployment* nil)
@@ -116,6 +117,7 @@
 (defun save-failed (condition)
   (format *error-output* "~&save failed: ~a~%save: the world carries on unsaved~%" condition)
   (end-deployment :save-failed (princ-to-string condition))
+  (setf *saving* nil)
   (handler-case (delete-file *pending-generation*)
     (error (e) (format *error-output* "~&save: pending generation: ~a~%" e)))
   (handler-case (darterfly/journal::unsave)
@@ -131,6 +133,7 @@
       (progn
         (let ((left (stop-threads)))
           (when left (error "threads still running: ~a" left)))
+        (setf *saving* nil)
         (sb-ext:save-lisp-and-die "/System/Library/Kernels/saved.core"))
     (error (e) (save-failed e) nil)))
 
@@ -162,7 +165,18 @@
   (let ((errors (heap-errors)))
     (when (null errors) (format *error-output* "~&save: this runtime can't check the heap; saving unchecked~%"))
     (when (and errors (plusp errors)) (error 'bad-world :errors errors)))
-  (sb-thread:with-mutex (*installing*))
+  (sb-thread:with-mutex (*installing*)
+    (when *saving*
+      (error "a save is already under way"))
+    (setf *saving* t))
+  (let ((begun nil))
+    (unwind-protect
+         (multiple-value-prog1 (begin-save kernel loader boot-conf restart then)
+           (setf begun t))
+      (unless begun
+        (setf *saving* nil)))))
+
+(defun begin-save (kernel loader boot-conf restart then)
   (darterfly/journal:note-save)
   (ensure-directories-exist *pending-generation*)
   (with-open-file (s *pending-generation* :direction :output :if-exists :supersede)
@@ -177,7 +191,7 @@
   (handler-case (darterfly/power:flush-disks)
     (darterfly/power:flush-failed (e)
       (save-failed e)
-      (return-from save-generation nil)))
+      (return-from begin-save nil)))
   (if (eq sb-thread:*current-thread* (sb-thread:main-thread))
       (save)
       (sb-thread:interrupt-thread (sb-thread:main-thread) #'save)))

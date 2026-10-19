@@ -872,6 +872,29 @@
                (is (search "3" (ask "cl-user::*saves*")) "the world carried every save"))
           (image:finish c 5))))))
 
+(test two-saves-at-once-save-once
+  (let ((esp (merge-pathnames "esp-two-saves.img" (darterfly-file "build/"))))
+    (uiop:delete-file-if-exists esp)
+    (let ((c (image:bare-console :boot-args "init" :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 300)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "init: pid 1" :timeout 120))
+               (settled c)
+               (ask "(defvar cl-user::*kept* 42)")
+               (image:send c "(dotimes (i 2) (sb-thread:make-thread (lambda () (handler-case (darterfly/install:save-generation) (error (e) (format *error-output* \"~&other save: ~a~%\" e)))) :name \"saver\"))")
+               (is (image:expect c "other save: a save is already under way" :timeout 120) "the second save is refused while the first is under way")
+               (is (image:expect c "restart: core " :timeout 300) "the first saves")
+               (is (image:expect c "init: pid 1" :timeout 120))
+               (settled c)
+               (is (search "42" (ask "cl-user::*kept*")))
+               (is (search "NIL" (ask "darterfly/install::*saving*")) "the saved world isn't left thinking it is saving")
+               (sleep 30)
+               (is (= 1 (count-restarts c)) "and the world restarted once")
+               (image:send c "(darterfly/install:save-generation)")
+               (is (image:expect c "restart: core " :timeout 300) "the next save works"))
+          (image:finish c 5))))))
+
 (test a-failed-save-leaves-the-world-running
   (let ((esp (merge-pathnames "esp-failed-save.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists esp)
