@@ -1,6 +1,7 @@
 (in-package #:darterfly/bsd)
 
 (defparameter *keep-stopped-for* 600)
+(defparameter *answer-stopped-within* 30)
 
 (defparameter *system-locks*
   '(("DARTERFLY/BSD" "*BSD*")
@@ -17,7 +18,9 @@
   thread
   condition
   text
+  restarts
   time
+  (gone nil)
   (requests nil)
   (lock (sb-thread:make-mutex :name "stopped thread"))
   (changed (sb-thread:make-waitqueue)))
@@ -43,8 +46,7 @@
           collect (list :id (stop-id stop)
                         :thread (sb-thread:thread-name (stop-thread stop))
                         :error (stop-text stop)
-                        :restarts (mapcar #'restart-description
-                                          (compute-restarts (stop-condition stop)))
+                        :restarts (stop-restarts stop)
                         :seconds (- (get-universal-time) (stop-time stop))))))
 
 (defun find-stop (id)
@@ -52,15 +54,22 @@
     (or (find id *stops* :key #'stop-id)
         (error "no stopped thread ~a" id))))
 
-(defun ask-stopped (id request)
+(defun ask-stopped (id request &key (within *answer-stopped-within*))
   (let ((stop (find-stop id))
-        (answer (list :waiting)))
+        (answer (list :waiting))
+        (deadline (+ (get-internal-real-time) (* within internal-time-units-per-second))))
     (sb-thread:with-mutex ((stop-lock stop))
+      (when (stop-gone stop)
+        (error "stopped thread ~a has gone on" id))
       (setf (stop-requests stop)
             (append (stop-requests stop) (list (cons request answer))))
       (sb-thread:condition-broadcast (stop-changed stop))
       (loop while (eq (first answer) :waiting)
-            do (sb-thread:condition-wait (stop-changed stop) (stop-lock stop))))
+            do (let ((left (/ (- deadline (get-internal-real-time)) internal-time-units-per-second)))
+                 (when (<= left 0)
+                   (setf (stop-requests stop) (remove answer (stop-requests stop) :key #'cdr))
+                   (error "stopped thread ~a didn't answer in ~a s" id within))
+                 (wait-on stop left))))
     (destructuring-bind (how value) answer
       (if (eq how :error)
           (error "in the stopped thread: ~a" value)
@@ -77,6 +86,10 @@
 (defun stopped-restart (id restart &rest values)
   (ask-stopped id (list :restart restart values)))
 
+(defun wait-on (stop seconds)
+  (unless (sb-thread:condition-wait (stop-changed stop) (stop-lock stop) :timeout seconds)
+    (sb-thread:grab-mutex (stop-lock stop))))
+
 (defun answer (stop answer how value)
   (sb-thread:with-mutex ((stop-lock stop))
     (setf (first answer) how
@@ -89,8 +102,7 @@
                     (> (get-internal-real-time) deadline))
           do (let ((left (/ (- deadline (get-internal-real-time))
                             internal-time-units-per-second)))
-               (sb-thread:condition-wait (stop-changed stop) (stop-lock stop)
-                                         :timeout (max 0.01 left))))
+               (wait-on stop (max 0.01 left))))
     (pop (stop-requests stop))))
 
 (defun choose-restart (condition restart)
@@ -120,11 +132,21 @@
                        (apply #'invoke-restart chosen values))
                      (answer stop answer :error (format nil "no restart ~a" restart))))))))))))
 
+(defun settle (stop)
+  (sb-thread:with-mutex ((stop-lock stop))
+    (setf (stop-gone stop) t)
+    (loop for (nil . answer) in (shiftf (stop-requests stop) nil)
+          when (eq (first answer) :waiting)
+            do (setf (first answer) :error
+                     (rest answer) (list "the stopped thread went on before answering")))
+    (sb-thread:condition-broadcast (stop-changed stop))))
+
 (defun stop-here (condition)
   (let ((stop (make-stop :id (sb-thread:with-mutex (*stops-lock*) (incf *next-stop*))
                          :thread sb-thread:*current-thread*
                          :condition condition
                          :text (or (ignore-errors (princ-to-string condition)) "?")
+                         :restarts (mapcar #'restart-description (compute-restarts condition))
                          :time (get-universal-time))))
     (sb-thread:with-mutex (*stops-lock*)
       (push stop *stops*))
@@ -132,8 +154,9 @@
             (stop-id stop)
             (sb-thread:thread-name sb-thread:*current-thread*)
             (stop-text stop)
-            (mapcar #'restart-description (compute-restarts condition))
+            (stop-restarts stop)
             *keep-stopped-for*)
     (unwind-protect (serve-stop stop)
+      (settle stop)
       (sb-thread:with-mutex (*stops-lock*)
         (setf *stops* (remove stop *stops*))))))
