@@ -137,6 +137,33 @@ Code examined:
 - [[file:../../../src/libsa/unistd.lisp][dlopen, mmap and syscall shim]]
 - [[file:../../../src/libsa/include/sys/socket.h][Current socket C interface]]
 
+* Pinned source inspection
+
+The [[file:source-audit.json][source audit record]] pins the inspected CEF build file and Chromium
+platform files by URL and SHA-256. This is not a full source build.
+
+Chromium's default toolchain selection rejects an unknown target_os;
+Darterfly is not an existing target there. Declaring a target triple alone
+will not supply a platform backend. The POSIX shared-memory implementation
+uses temporary files, descriptor duplication and access-mode checks; Mojo
+uses socket helpers for descriptor transfer. Those are specific existing
+interfaces to adapt and test, rather than reasons to invent another IPC
+system for the browser.
+
+CEF's cef_use_gtk switch controls its cefclient sample's GTK integration.
+It is not proof that this switch removes every GTK/GLib dependency from
+libcef. Reducing the engine dependency closure still needs a real build
+configuration and link result. The host probe only proves that a running
+display server and D-Bus services are unnecessary for this local fixture.
+
+The existing cl-cef bridge sets windowless_rendering_enabled to false and
+uses CefWindow/CefBrowserView. The CPU-pixel harness therefore does not
+prove unchanged cl-cef already supports Darterfly display surfaces.
+The intended adaptation point is a small cl-cef platform/display layer
+preserving the existing Lisp API and Nyxt renderer. It must compose the
+page, status and prompt views, route input and preserve custom-scheme and
+JavaScript callbacks. This adapter has not yet been implemented.
+
 * Next gate
 
 Pause expansion of compiler-source rebuild coverage while establishing
