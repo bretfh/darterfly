@@ -69,10 +69,17 @@
     (unless (uiop:string-prefix-p "darterfly" system)
       (asdf:register-immutable-system system))))
 
+(defun report-boot-failure (condition)
+  (ignore-errors
+   (format *error-output* "~&boot failed: ~a~%" condition)
+   (sb-debug:print-backtrace :stream *error-output* :count 30)
+   (finish-output *error-output*)))
+
 (defun boot ()
-  (if (darterfly/run:in-world-p)
-      (world-boot)
-      (system-boot)))
+  (handler-bind ((error #'report-boot-failure))
+    (if (darterfly/run:in-world-p)
+        (world-boot)
+        (system-boot))))
 
 (defun world-boot ()
   (setf sb-sys::*sbcl-homedir-pathname* (sb-impl::%sbcl-homedir-pathname))
