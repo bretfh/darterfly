@@ -224,7 +224,7 @@
         ((or (= n 44) (= n 45) (= n 46) (= n 48) (= n 53) (= n 54) (= n 55) (= n 56) (= n 57)
              (= n 58) (= n 59) (= n 60) (= n 62) (= n 63) (= n 64) (= n 74))
          +right-worlds+)
-        ((or (= n 25) (= n 28) (= n 29) (= n 47))
+        ((or (= n 25) (= n 28) (= n 29) (= n 47) (= n 75))
          +right-stats+)
         ((or (= n 7) (= n 8) (= n 19) (= n 52))
          +right-boot+)
@@ -265,6 +265,7 @@
       ((= n 69) (ok regs (log-read a b (if b (reg regs +r-rdx+) 0))))
       ((= n 70) (ok regs (log-started)))
       ((= n 74) (ok regs (grant-rights a b)))
+      ((= n 75) (ok regs (list-worlds a b)))
       ((= n 71) (ok regs (log-drained a)))
       ((= n 72) (ok regs (log-previous-read a b)))
       ((= n 73) (panic "requested by world 0
