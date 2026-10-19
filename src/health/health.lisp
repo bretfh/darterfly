@@ -20,8 +20,11 @@
 
 (define-check :errors
   (let ((errors darterfly/bsd:*background-errors*))
-    (list :ok :count (length errors)
-              :latest (and errors (list (getf (first errors) :thread) (getf (first errors) :error))))))
+    (list :ok
+          :count (length errors)
+          :latest (and errors (list (getf (first errors) :thread) (getf (first errors) :error)))
+          :stopped (mapcar (lambda (stop) (list (getf stop :id) (getf stop :thread)))
+                           (darterfly/bsd:stopped)))))
 
 (define-check :network
   (let ((i darterfly/net:*interface*))

@@ -166,6 +166,10 @@
     (ignore-errors
      (format *error-output* "~&~a: ~a~%" (sb-thread:thread-name sb-thread:*current-thread*) condition)
      (sb-debug:print-backtrace :stream *error-output* :count 15))
+    (let ((held (system-locks-held)))
+      (if held
+          (format *error-output* "~&not stopped, it holds ~{~a~^, ~}~%" held)
+          (stop-here condition)))
     (abort)))
 
 (sb-ext:without-package-locks

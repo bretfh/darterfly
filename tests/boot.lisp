@@ -1048,7 +1048,7 @@
         (unwind-protect
              (progn
                (image:expect c "* " :timeout 120)
-               (ask "(sb-thread:join-thread (sb-thread:make-thread (lambda () (error \"broken on purpose\")) :name \"breaker\") :default nil)")
+               (ask "(sb-thread:join-thread (sb-thread:make-thread (lambda () (error \"broken on purpose\")) :name \"breaker\") :default nil :timeout 2)")
                (let ((tail (ask "(progn (sleep 3) (darterfly/log:tail 400))")))
                  (is (search "darterfly Kernel Version" tail) "the kernel's own lines are in the log")
                  (is (search "boot: generation" tail) "the boot says where it starts")
@@ -1083,6 +1083,33 @@
                (let ((seen (ask "(progn (sleep 3) (let ((text (uiop:read-file-string darterfly/log:*system-log*))) (list :ended (and (search (concatenate 'string \"log: the last boot\" \" ended\") text) t) :panic (and (search (concatenate 'string \"| panic(cpu 0\" \" caller\") text) t) :why (and (search (concatenate 'string \"): requested by\" \" world 0\") text) t))))")))
                  (is (search "(:ENDED T :PANIC T :WHY T)" seen) "the panic is in the log after the restart: ~a" seen)))
           (image:finish c 5))))))
+
+(test a-failing-thread-stops-with-its-restarts
+  (let ((c (image:bare-console :boot-args "init")))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
+      (unwind-protect
+           (progn
+             (is (image:expect c "init: pid 1" :timeout 120))
+             (settled c)
+             (ask "(defvar cl-user::*mood* :calm)")
+             (ask "(defvar cl-user::*asker* (sb-thread:make-thread (lambda () (let ((cl-user::*mood* :curious)) (restart-case (error \"needs a value\") (use-value (v) v)))) :name \"asker\"))")
+             (let ((seen (ask "(loop :repeat 100 :until (darterfly/bsd:stopped) :do (sleep 0.1) :finally (return (darterfly/bsd:stopped)))")))
+               (is (search "\"asker\"" seen) "the failing thread is listed: ~a" seen)
+               (is (search "needs a value" seen))
+               (is (search "use-value" seen) "with its restarts"))
+             (let ((backtrace (ask "(darterfly/bsd:stopped-backtrace (getf (first (darterfly/bsd:stopped)) :id))")))
+               (is (and (search "needs a value" backtrace) (search "STOP-HERE" backtrace))
+                   "its backtrace still holds the error: ~a" backtrace))
+             (is (search ":CURIOUS" (ask "(darterfly/bsd:stopped-eval (getf (first (darterfly/bsd:stopped)) :id) 'cl-user::*mood*)"))
+                 "code runs inside it, with its own bindings")
+             (ask "(darterfly/bsd:stopped-restart (getf (first (darterfly/bsd:stopped)) :id) \"use-value\" 42)")
+             (is (search "(42 NIL)" (ask "(list (sb-thread:join-thread cl-user::*asker* :default :gone :timeout 10) (darterfly/bsd:stopped))"))
+                 "a chosen restart carries the thread on")
+             (ask "(setf darterfly/bsd:*keep-stopped-for* 2)")
+             (ask "(defvar cl-user::*quitter* (sb-thread:make-thread (lambda () (error \"nobody comes\")) :name \"quitter\"))")
+             (is (search "(:ENDED NIL)" (ask "(list (sb-thread:join-thread cl-user::*quitter* :default :ended :timeout 30) (darterfly/bsd:stopped))"))
+                 "left alone, a stopped thread gives up and unwinds"))
+        (image:finish c 5)))))
 
 (test a-program-that-quits-ends-only-its-own-process
   (let ((c (image:bare-console :boot-args "init")))
