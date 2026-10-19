@@ -92,6 +92,14 @@
                         (if (stringp (first slots)) (rest slots) slots))))
       (append (and (consp include) (struct-slot-names (second include))) own))))
 
+(defun kernel-constant-p (name)
+  (eq (symbol-package name) (find-package "DARTERFLY/KERN")))
+
+(defun take-kernel-constant (condition)
+  (when (and (typep condition 'sb-ext:defconstant-uneql)
+             (kernel-constant-p (cell-error-name condition)))
+    (continue condition)))
+
 (defun form-hazard (form)
   (when (consp form)
     (case (first form)
@@ -109,7 +117,8 @@
            (format nil "~s is a struct in the running world; a class can't take its name live" (second form)))))
       (defconstant
        (let ((name (second form)) (value (third form)))
-         (when (and (symbolp name) (boundp name) (constantp name) (constantp value))
+         (when (and (symbolp name) (boundp name) (constantp name) (constantp value)
+                    (not (kernel-constant-p name)))
            (let ((new (ignore-errors (eval value))))
              (unless (equalp new (symbol-value name))
                (format nil "the constant ~s changes from ~s to ~s" name (symbol-value name) new)))))))))
@@ -149,7 +158,8 @@
       (return-from reload-systems (list :refused hazards))))
   (let ((t0 (get-internal-real-time))
         (problems nil))
-    (handler-bind ((warning (lambda (w)
+    (handler-bind ((error #'take-kernel-constant)
+                   (warning (lambda (w)
                               (unless (typep w 'style-warning) (push (princ-to-string w) problems))
                               (muffle-warning w))))
       (unwind-protect

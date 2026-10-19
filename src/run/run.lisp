@@ -232,7 +232,7 @@
   (let ((at (or (position "--eval" argv :test #'string=) (position "--quit" argv :test #'string=) (length argv))))
     (append (subseq argv 0 at) (list "--eval" *attach-prelude*) (subseq argv at))))
 
-(defstruct (world (:constructor make-world)) id inward thread name core stopping restarts command cwd disk base every memory)
+(defstruct (running-world (:conc-name world-) (:constructor make-world)) id inward thread name core stopping restarts command cwd disk base every memory)
 
 (defvar *worlds* nil)
 (defvar *worlds-lock* (sb-thread:make-mutex :name "worlds"))

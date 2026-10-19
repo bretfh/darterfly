@@ -23,6 +23,15 @@
   (is (search "a struct can't take its name" (first (hazards-of "(defstruct reload-class x)"))))
   (is (search "changes from 3 to 4" (first (hazards-of "(defconstant +reload-constant+ 4)")))))
 
+(test a-kernel-layout-constant-goes-through-a-deploy
+  (let ((name (intern "+DEPLOY-PROBE+" "DARTERFLY/KERN")))
+    (unless (boundp name) (eval `(defconstant ,name 1)))
+    (is (null (darterfly/install::form-hazard `(defconstant ,name 2))) "the new kernel comes with it, so it isn't a hazard")
+    (handler-bind ((error #'darterfly/install::take-kernel-constant))
+      (eval `(defconstant ,name 2)))
+    (is (= 2 (symbol-value name)) "and the reload takes the new value")
+    (eval `(handler-bind ((error #'darterfly/install::take-kernel-constant)) (defconstant ,name 1)))))
+
 (test forms-typed-since-the-last-save-are-kept-and-replayable
   (let ((darterfly/journal:*journal* (namestring (merge-pathnames "forms" (scratch)))))
     (uiop:delete-file-if-exists darterfly/journal:*journal*)
