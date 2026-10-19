@@ -1,7 +1,7 @@
 (defpackage #:darterfly/run
   (:use #:cl)
   (:export #:run-core #:run-world #:start-world #:finish-world #:stop-world #:world-eval #:attach #:world-id #:world-name
-           #:new-world #:list-worlds #:find-world #:save-world #:restart-world #:checkpoint-world #:restore-world #:restore-worlds #:*worlds-dir* #:collect #:tree-files #:in-run-p #:in-world-p #:no-room #:memory-use #:*system-reserve-mb*))
+           #:new-world #:list-worlds #:find-world #:save-world #:restart-world #:checkpoint-world #:restore-world #:restore-worlds #:*worlds-dir* #:collect #:tree-files #:in-run-p #:in-world-p #:no-room #:no-answer #:memory-use #:*system-reserve-mb*))
 (in-package #:darterfly/run)
 
 (defconstant +magic+ #x4e555248434e4946)
@@ -450,11 +450,24 @@
                      :key (lambda (w) (getf w :id)))))
     (eq (getf entry :state) :paused)))
 
-(defun world-eval (world form)
+(define-condition no-answer (error)
+  ((world :initarg :world :reader no-answer-world)
+   (seconds :initarg :seconds :reader no-answer-seconds))
+  (:report (lambda (c s)
+             (format s "world ~d didn't answer in ~a s" (no-answer-world c) (no-answer-seconds c)))))
+
+(defun world-eval (world form &key timeout)
   (when (world-paused-p world)
     (error "world ~d is paused" (world-id world)))
-  (sb-ext:octets-to-string (darterfly/worlds:call (world-inward world) (if (stringp form) form (prin1-to-string form)))
-                           :external-format :utf-8))
+  (let ((text (if (stringp form) form (prin1-to-string form))))
+    (flet ((ask ()
+             (sb-ext:octets-to-string (darterfly/worlds:call (world-inward world) text)
+                                      :external-format :utf-8)))
+      (if timeout
+          (handler-case (sb-ext:with-timeout timeout (ask))
+            (sb-ext:timeout ()
+              (error 'no-answer :world (world-id world) :seconds timeout)))
+          (ask)))))
 
 (defun attach (world &key (input *standard-input*) (output *standard-output*))
   (loop

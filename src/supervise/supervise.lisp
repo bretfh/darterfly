@@ -87,7 +87,7 @@
 
 (defun answering (world)
   (loop repeat 300
-        when (ignore-errors (darterfly/run:world-eval world "t"))
+        when (ignore-errors (darterfly/run:world-eval world "t" :timeout 5))
           return t
         do (sleep 0.1)))
 
@@ -97,7 +97,7 @@
           (supervised-cpu supervised) nil)
     (let ((seconds (policy-heartbeat (supervised-policy supervised))))
       (when (and seconds (answering world))
-        (darterfly/run:world-eval world (beat-form seconds))))
+        (darterfly/run:world-eval world (beat-form seconds) :timeout 30)))
     world))
 
 (defun sample (supervised)
