@@ -1787,7 +1787,25 @@
                  (is (search "(2 (:STATS) (:CONSOLE :HARDWARE :POWER :WORLDS :STATS :BOOT :LOG))" (remove #\Newline listed))
                      "the kernel lists both worlds with what each may do: ~a" listed))
                (let ((seen (ask (in-world 26 0 0))))
-                 (is (search "\"-1\"" seen) "and still nothing else, such as resetting the machine: ~a" seen)))
+                 (is (search "\"-1\"" seen) "and still nothing else, such as resetting the machine: ~a" seen))
+               (let ((seen (ask (in-world 74 1 32))))
+                 (is (search "\"-1\"" seen) "without the worlds right it can't pass even its own rights on: ~a" seen))
+               (ask (format nil "(defparameter *v* (darterfly/run:start-world \"/usr/lib/sbcl/sbcl.core\" '~s :cwd \"/\" :attach t))"
+                            (list "/System/Library/Kernels/kernel" "--core" "/System/Library/Kernels/darterfly.core"
+                                  "--no-sysinit" "--no-userinit" "--disable-debugger" "--eval" "(loop (sleep 1))")))
+               (ask "(loop :repeat 100 :until (ignore-errors (darterfly/run:world-eval *v* \"(+ 1 2)\")) :do (sleep 0.1))")
+               (ask "(darterfly/worlds:grant-rights (darterfly/run:world-id *w*) :worlds)")
+               (flet ((grant-v (mask)
+                        (ask (format nil "(darterfly/run:world-eval *w* (format nil ~s 74 (darterfly/run:world-id *v*) ~d))" machdep mask))))
+                 (let ((seen (grant-v 8)))
+                   (is (search "\"-1\"" seen) "with it, a world still can't grant a right it doesn't hold: ~a" seen))
+                 (let ((once (grant-v 32)) (twice (grant-v 32)))
+                   (is (and (search "\"32\"" once) (search "\"32\"" twice))
+                       "it can pass on one it holds, and passing it twice gives no more: ~a ~a" once twice)))
+               (let ((seen (ask (format nil "(darterfly/run:world-eval *w* (format nil ~s 74 (darterfly/run:world-id *w*) 32))" machdep))))
+                 (is (search "\"-22\"" seen) "and it can't grant to itself: ~a" seen))
+               (let ((listed (ask "(getf (find (darterfly/run:world-id *v*) (darterfly/worlds:worlds) :key (lambda (w) (getf w :id))) :rights)")))
+                 (is (search "(:STATS)" listed) "the second world ends up with exactly what it was given: ~a" listed)))
           (image:finish c 5))))))
 
 (test a-silent-world-is-stopped-and-the-rest-keep-going
