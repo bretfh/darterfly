@@ -1876,6 +1876,13 @@
                  (ask "(progn (darterfly/shell:spawn \"/Applications/Hello.app/Contents/Programs/Hello\") t)")
                  (let ((again (until (format nil "(= (length darterfly/windowserver::*windows*) ~d)" (first opened)))))
                    (is (equal opened again) "and the same app started in the first world opens the same windows: ~a" again))))
+             (ask "(defparameter *files* (darterfly/run:new-world \"files\" :core \"/Volumes/EFI/EFI/darterfly/gen-1/darterfly.core\" :memory 512))" 300)
+             (ask "(loop :repeat 300 :until (ignore-errors (darterfly/run:world-eval *files* \"t\")) :do (sleep 0.1))" 120)
+             (let ((seen (ask "(darterfly/run:world-eval *files* \"(darterfly/bsd::first-line \\\"/Applications/Hello.app/Contents/Programs/Hello\\\")\")")))
+               (is (search "#!darterfly Hello" seen) "a world sees the system's files through its own BSD: ~a" seen))
+             (ask "(darterfly/run:world-eval *files* \"(let ((fd (darterfly/vfs:vfs-open \\\"/tmp/from-a-world\\\" (list :access :wronly :creat t :trunc t) #o644))) (darterfly/vfs:vfs-write fd (sb-ext:string-to-octets \\\"written in a world\\\")) (darterfly/vfs:vfs-close fd))\")")
+             (let ((back (ask "(ignore-errors (let ((fd (darterfly/vfs:vfs-open \"/tmp/from-a-world\" (list :access :rdonly) 0))) (prog1 (sb-ext:octets-to-string (darterfly/vfs:vfs-read fd 100)) (darterfly/vfs:vfs-close fd))))")))
+               (is (search "written in a world" back) "and what it writes, the system reads: ~a" back))
              (ask "(defparameter *keys* (darterfly/run:new-world \"keys\" :core \"/Volumes/EFI/EFI/darterfly/gen-1/darterfly.core\" :memory 512))" 300)
              (ask "(loop :repeat 300 :until (ignore-errors (darterfly/run:world-eval *keys* \"t\")) :do (sleep 0.1))" 120)
              (image:send c (format nil "(darterfly/run:world-eval *keys* ~s :timeout 90)"

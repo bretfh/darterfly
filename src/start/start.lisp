@@ -83,6 +83,7 @@
 
 (defun world-boot ()
   (setf sb-sys::*sbcl-homedir-pathname* (sb-impl::%sbcl-homedir-pathname))
+  (attempt "files" #'darterfly/storage:mount-system-files)
   (register-sources))
 
 (defun system-boot ()
