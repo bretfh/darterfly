@@ -1850,12 +1850,15 @@
                (image:send c form)
                (image:expect c (format nil "~%* ") :timeout timeout))
              (counts (text)
-               (let ((at (position #\[ text :from-end t)))
-                 (list (parse-integer text :start (1+ at) :junk-allowed t)
-                       (parse-integer text :start (1+ (position #\Space text :start at)) :junk-allowed t))))
+               (let ((at (search "[COUNTS " text :from-end t)))
+                 (and at
+                      (with-input-from-string (s (substitute #\Space #\] text) :start (+ at 8))
+                        (list (read s) (read s))))))
              (until (test)
-               (counts (ask (format nil "(loop :repeat 120 :until ~a :do (sleep 0.5) :finally (progn (sleep 3) (return (format nil \"[~~a ~~a]\" (length darterfly/windowserver::*windows*) (length darterfly/windowserver::*clients*)))))"
-                                    test)))))
+               (loop :repeat 3
+                     :for found := (counts (ask (format nil "(loop :repeat 120 :until ~a :do (sleep 0.5) :finally (progn (sleep 3) (return (format nil \"[COUNTS ~~a ~~a]\" (length darterfly/windowserver::*windows*) (length darterfly/windowserver::*clients*)))))"
+                                                        test)))
+                     :when found :return found)))
       (unwind-protect
            (progn
              (image:expect c "init: pid 1" :timeout 120)
@@ -1872,7 +1875,16 @@
                    (is (equal before left) "when its world ends, its windows and its connection go with it: ~a" left))
                  (ask "(progn (darterfly/shell:spawn \"/Applications/Hello.app/Contents/Programs/Hello\") t)")
                  (let ((again (until (format nil "(= (length darterfly/windowserver::*windows*) ~d)" (first opened)))))
-                   (is (equal opened again) "and the same app started in the first world opens the same windows: ~a" again)))))
+                   (is (equal opened again) "and the same app started in the first world opens the same windows: ~a" again))))
+             (ask "(defparameter *keys* (darterfly/run:new-world \"keys\" :core \"/Volumes/EFI/EFI/darterfly/gen-1/darterfly.core\" :memory 512))" 300)
+             (ask "(loop :repeat 300 :until (ignore-errors (darterfly/run:world-eval *keys* \"t\")) :do (sleep 0.1))" 120)
+             (image:send c (format nil "(darterfly/run:world-eval *keys* ~s :timeout 90)"
+                                   "(let* ((context (darterfly/layer:context-create)) (root (darterfly/layer:make-layer :background-color #(0.2 0.4 0.8 1.0)))) (setf (darterfly/layer:context-layer context) root (darterfly/layer:layer-frame root) #(0 0 300 200)) (darterfly/layer:commit context) (darterfly/layer:window-create context 400 300 300 200) (loop (let ((event (darterfly/mach:msgh-body (darterfly/mach:mach-msg-receive (darterfly/layer:context-events context) :timeout 60000)))) (when (eq (getf event :type) :key-down) (return (list :got (getf event :character)))))))"))
+             (sleep 8)
+             (image:send-keys "q")
+             (image:expect c "(:GOT" :timeout 60)
+             (is (search "#\\\\q)" (image:expect c (format nil "~%* ") :timeout 30))
+                 "a key typed into an app world's window reaches that world"))
         (image:finish c 5)))))
 
 (test a-world-uses-the-network
