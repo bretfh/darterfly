@@ -66,6 +66,39 @@
     (sb-thread:join-thread server :default nil :timeout 5)
     result))
 
+(defparameter *deploy-within* 1200)
+
+(defun deployment-stages (host id nrepl-port)
+  (let ((answer (ignore-errors
+                 (read-answer (device-eval host (format nil "(darterfly/install::deployment-record ~s)" id)
+                                           :timeout 30 :nrepl-port nrepl-port)))))
+    (and (listp answer) answer)))
+
+(defun deploy-outcome (host id &key (within *deploy-within*) (nrepl-port 4011))
+  (let ((deadline (+ (get-universal-time) within))
+        (seen nil))
+    (loop
+      (let ((stages (or (deployment-stages host id nrepl-port) seen)))
+        (loop for entry in (nthcdr (length seen) stages)
+              do (format t "~&deploy ~a: ~(~a~)~@[ ~s~]~%" id (first entry) (cddr entry)))
+        (setf seen stages)
+        (let ((last (first (car (last stages)))))
+          (when (member last darterfly/install::*final-stages*)
+            (return (values last stages))))
+        (when (> (get-universal-time) deadline)
+          (format t "~&deploy ~a: no final stage in ~d s, last ~(~a~)~%" id within (first (car (last stages))))
+          (return (values :timed-out stages)))
+        (sleep 10)))))
+
+(defun deploy-and-wait (host &rest keys &key (nrepl-port 4011) &allow-other-keys)
+  (let* ((result (apply #'deploy host keys))
+         (at (search ":DEPLOYMENT \"" result))
+         (id (and at (subseq result (+ at 13) (position #\" result :start (+ at 13))))))
+    (format t "~&~a~%" (string-trim '(#\Newline #\Space) result))
+    (if id
+        (eq :healthy (deploy-outcome host id :nrepl-port nrepl-port))
+        (progn (format t "~&deploy: the device gave no deployment id~%") nil))))
+
 (defun deploy (host &key (from (address-toward host)) (port 47100) (nrepl-port 4011) (reload nil) (restart nil))
   (let* ((entries (deployment :generation (not reload)))
          (server (serve-deployment entries port))

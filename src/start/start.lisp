@@ -46,12 +46,14 @@
                      (with-standard-io-syntax (let ((*print-readably* nil)) (prin1 now s))))
                    (darterfly/install:confirm)
                    (format *error-output* "~&confirm: ~a is good~%" name)
+                   (darterfly/install::end-deployment :healthy name)
                    (return name))
                  (progn
                    (format *error-output* "~&confirm: ~a isn't good yet: ~{~(~a~)~^, ~}~%" name bad)
                    (sleep every)))
           finally (format *error-output* "~&confirm: ~a never became good; the next boot goes back to ~a~%"
-                          name (darterfly/install::link "good")))))
+                          name (darterfly/install::link "good"))
+                  (darterfly/install::end-deployment :unhealthy name (unhealthy (darterfly/health:check) before)))))
 
 (defun sources ()
   (or (probe-file "/Users/darterfly/src/darterfly/darterfly.asd")
@@ -98,6 +100,7 @@
     (attempt "log" #'darterfly/log:start-log)
     (setf darterfly/bsd:*safe* (and (darterfly/devices:boot-arg "safe") t))
     (format *error-output* "~&boot: generation ~a~:[~;, safe~]~%" (ignore-errors (darterfly/install:current)) darterfly/bsd:*safe*)
+    (attempt "deployment" (lambda () (darterfly/install::note-deployment darterfly/install::*deployment* :booted (darterfly/install:current))))
     (unless darterfly/bsd:*safe*
       (in-thread "confirm" (lambda () (sleep darterfly/install:*stable-after*) (confirm-when-healthy)))
       (in-thread "saved generation" #'darterfly/install:install-saved-generation))

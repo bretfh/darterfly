@@ -78,8 +78,44 @@
 (defvar *installing* (sb-thread:make-mutex :name "installing"))
 (defvar *save-token* nil)
 
+(defparameter *deployments-dir* "/Library/Settings/deployments/")
+(defvar *deployment* nil)
+(defparameter *final-stages* '(:refused :reload-failed :save-failed :lost :healthy :unhealthy))
+
+(defun deployment-path (id)
+  (format nil "~a~a" *deployments-dir* id))
+
+(defun note-deployment (id stage &rest detail)
+  (when id
+    (handler-case
+        (progn
+          (ensure-directories-exist (deployment-path id))
+          (with-open-file (s (deployment-path id) :direction :output :if-exists :append :if-does-not-exist :create)
+            (with-standard-io-syntax
+              (let ((*print-readably* nil))
+                (prin1 (list* stage (get-universal-time) detail) s)
+                (terpri s))))
+          (darterfly/vfs:vfs-sync))
+      (error (e) (format *error-output* "~&deployment ~a: can't record ~(~a~): ~a~%" id stage e))))
+  stage)
+
+(defun deployment-record (id)
+  (with-open-file (s (deployment-path id) :if-does-not-exist nil)
+    (when s
+      (with-standard-io-syntax
+        (let ((*read-eval* nil))
+          (loop for entry = (handler-case (read s nil s) (error () s))
+                until (eq entry s)
+                collect entry))))))
+
+(defun end-deployment (stage &rest detail)
+  (when *deployment*
+    (apply #'note-deployment *deployment* stage detail)
+    (setf *deployment* nil)))
+
 (defun save-failed (condition)
   (format *error-output* "~&save failed: ~a~%save: the world carries on unsaved~%" condition)
+  (end-deployment :save-failed (princ-to-string condition))
   (handler-case (delete-file *pending-generation*)
     (error (e) (format *error-output* "~&save: pending generation: ~a~%" e)))
   (handler-case (darterfly/journal::unsave)
@@ -132,7 +168,7 @@
   (with-open-file (s *pending-generation* :direction :output :if-exists :supersede)
     (with-standard-io-syntax
       (prin1 (list :token (setf *save-token* (format nil "~36r" (random (expt 2 64) (make-random-state t))))
-                   :kernel kernel :loader loader :boot-conf boot-conf
+                   :kernel kernel :loader loader :boot-conf boot-conf :deployment *deployment*
                    :restart (or restart (eq then :restart)) :shut-down (eq then :shut-down))
              s)))
   (darterfly/bsd:suspend-processes)
@@ -156,6 +192,7 @@
                                     (with-standard-io-syntax (let ((*read-eval* nil)) (read s)))))))
       (unless (and pending (equal (getf pending :token) *save-token*))
         (format *error-output* "~&install: the pending save never came back (power lost before it was installed); keeping ~a~%" (current))
+        (note-deployment (and pending (getf pending :deployment)) :lost)
         (delete-file *pending-generation*)
         (darterfly/journal::unsave)
         (darterfly/power:flush-disks)
@@ -163,6 +200,7 @@
       (prog1 (install (or (getf pending :kernel) "/System/Library/Kernels/kernel")
                       "/System/Library/Kernels/darterfly.core"
                       :loader (getf pending :loader))
+        (note-deployment (getf pending :deployment) :installed (current))
         (delete-file *pending-generation*)
         (ignore-errors (darterfly/journal:trim))
         (when (getf pending :boot-conf)
