@@ -15,6 +15,64 @@ static int eq(const char *a, const char *b) {
     return *a == *b;
 }
 #define CHECK(x, n) do { if (!(x)) return n; } while (0)
+/* A buffered FILE must keep one logical position across every read API.
+   Exercise real shared-libsa streams in an isolated native world. */
+static int stdio_check(void) {
+    FILE *f;
+    char b[80], userbuf[7], block[8192];
+    int pipes[2], i, lines = 0;
+    f = fopen("/tmp/stdio-buffer", "w+");
+    CHECK(f && fwrite("one\ntwo\nlast", 1, 12, f) == 12, 180);
+    CHECK(fseek(f, 0, SEEK_SET) == 0, 181);
+    CHECK(fgets(b, sizeof b, f) == b && eq(b, "one\n"), 182);
+    CHECK(ftell(f) == 4 && fgetc(f) == 't', 183);
+    CHECK(ungetc('T', f) == 'T' && ftello(f) == 4, 184);
+    CHECK(fread(b, 2, 2, f) == 2 && b[0] == 'T' && b[3] == '\n', 185);
+    CHECK(fseeko(f, -4, SEEK_CUR) == 0 && fgetc(f) == 't', 186);
+    CHECK(fflush(f) == 0 && lseek(fileno(f), 0, SEEK_CUR) == 5, 187);
+    CHECK(fgets(b, 2, f) == b && eq(b, "w") && ftell(f) == 6, 188);
+    CHECK(fseek(f, 0, SEEK_CUR) == 0 && fputc('X', f) == 'X', 189);
+    CHECK(fseek(f, 4, SEEK_SET) == 0 && fgets(b, sizeof b, f) && eq(b, "twX\n"), 190);
+    CHECK(fread(b, 3, 2, f) == 1 && b[0] == 'l' && b[3] == 't' && feof(f), 191);
+    CHECK(ungetc('!', f) == '!' && !feof(f) && fgetc(f) == '!', 192);
+    CHECK(fgetc(f) == EOF && feof(f), 193);
+    rewind(f);
+    CHECK(!feof(f) && !ferror(f) && ftell(f) == 0, 194);
+    CHECK(setvbuf(f, userbuf, _IOFBF, sizeof userbuf) == 0, 195);
+    CHECK(fgets(b, sizeof b, f) && eq(b, "one\n"), 196);
+    CHECK(fgets(b, sizeof b, f) && eq(b, "twX\n"), 197);
+    CHECK(freopen("/tmp/shared-runtime", "r", f) == f, 198);
+    CHECK(fread(b, 1, 5, f) == 5 && b[0] == 'l' && b[4] == 'a', 199);
+    CHECK(fclose(f) == 0, 200); /* userbuf must never be freed. */
+    CHECK(pipe(pipes) == 0 && write(pipes[1], "ab\ncd", 5) == 5, 201);
+    close(pipes[1]);
+    f = fdopen(pipes[0], "r");
+    CHECK(f && fgets(b, sizeof b, f) && eq(b, "ab\n"), 202);
+    CHECK(fseek(f, 0, SEEK_SET) == -1 && fgetc(f) == 'c', 203);
+    CHECK(fread(b, 1, 2, f) == 1 && b[0] == 'd' && feof(f), 204);
+    CHECK(fclose(f) == 0, 205);
+    f = fopen("/tmp/shared-runtime", "r");
+    CHECK(f && setvbuf(f, 0, _IONBF, 0) == 0 && fgetc(f) == 'l', 206);
+    CHECK(lseek(fileno(f), 0, SEEK_CUR) == 1, 207);
+    CHECK(fread(b, 0, (size_t)-1, f) == 0 && !feof(f) && !ferror(f), 208);
+    CHECK(fgets(b, 1, f) == b && b[0] == 0 && ftell(f) == 1, 209);
+    CHECK(fclose(f) == 0, 210);
+    f = fopen("/tmp/stdio-lines", "w");
+    CHECK(f, 211);
+    for (i = 0; i < sizeof block; ++i) block[i] = i % 64 == 63 ? '\n' : 'x';
+    for (i = 0; i < 32; ++i) CHECK(fwrite(block, 1, sizeof block, f) == sizeof block, 212);
+    CHECK(fclose(f) == 0, 213);
+    f = fopen("/tmp/stdio-lines", "r");
+    CHECK(f, 214);
+    while (fgets(b, sizeof b, f)) {
+        CHECK(b[0] == 'x' && b[62] == 'x' && b[63] == '\n' && b[64] == 0, 215);
+        ++lines;
+    }
+    CHECK(lines == 4096 && feof(f) && !ferror(f) && ftell(f) == 262144, 216);
+    CHECK(fclose(f) == 0, 217);
+    return 0;
+}
+
 static int runtime_check(void) {
     size_t i;
     unsigned char *p = calloc(4096, 1);
@@ -55,7 +113,7 @@ static int runtime_check(void) {
     text[5] = 0;
     CHECK(eq(text, "libsa"), 170);
     CHECK(stat("/tmp/shared-runtime", &st) == 0 && st.st_size == 5, 171);
-    return 0;
+    return stdio_check();
 }
 
 static int child_driver(char *path) {
