@@ -76,6 +76,7 @@
 (defparameter *pending-generation* "/Library/Settings/pending-generation")
 
 (defvar *installing* (sb-thread:make-mutex :name "installing"))
+(defvar *save-token* nil)
 
 (defun save-failed (condition)
   (format *error-output* "~&save failed: ~a~%save: the world carries on unsaved~%" condition)
@@ -130,7 +131,8 @@
   (ensure-directories-exist *pending-generation*)
   (with-open-file (s *pending-generation* :direction :output :if-exists :supersede)
     (with-standard-io-syntax
-      (prin1 (list :kernel kernel :loader loader :boot-conf boot-conf
+      (prin1 (list :token (setf *save-token* (format nil "~36r" (random (expt 2 64) (make-random-state t))))
+                   :kernel kernel :loader loader :boot-conf boot-conf
                    :restart (or restart (eq then :restart)) :shut-down (eq then :shut-down))
              s)))
   (darterfly/bsd:suspend-processes)
@@ -149,6 +151,12 @@
   (when (probe-file *pending-generation*)
     (let ((pending (ignore-errors (with-open-file (s *pending-generation*)
                                     (with-standard-io-syntax (let ((*read-eval* nil)) (read s)))))))
+      (unless (and pending (equal (getf pending :token) *save-token*))
+        (format *error-output* "~&install: the pending save never came back (power lost before it was installed); keeping ~a~%" (current))
+        (delete-file *pending-generation*)
+        (darterfly/journal::unsave)
+        (darterfly/power:flush-disks)
+        (return-from install-pending nil))
       (prog1 (install (or (getf pending :kernel) "/System/Library/Kernels/kernel")
                       "/System/Library/Kernels/darterfly.core"
                       :loader (getf pending :loader))

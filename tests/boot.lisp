@@ -883,6 +883,22 @@
                (is (search "42" (ask "cl-user::*kept*"))))
           (image:finish c 5))))))
 
+(test a-save-lost-to-a-power-cut-is-not-installed
+  (let ((esp (merge-pathnames "esp-lost-save.img" (darterfly-file "build/"))))
+    (uiop:delete-file-if-exists esp)
+    (let ((c (image:bare-console :boot-args "init" :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 300)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "init: pid 1" :timeout 120))
+               (settled c)
+               (ask "(progn (darterfly/journal:note-form \"(defvar *lost* 1)\") (darterfly/journal:note-save) (ensure-directories-exist darterfly/install::*pending-generation*) (with-open-file (s darterfly/install::*pending-generation* :direction :output :if-exists :supersede) (prin1 (list :token \"from-a-save-that-never-came-back\" :kernel \"/System/Library/Kernels/kernel\") s)) :written)")
+               (ask "(darterfly/install:install-saved-generation)")
+               (let ((seen (ask "(list :current (darterfly/install:current) :pending (and (probe-file darterfly/install::*pending-generation*) t) :lost (length (darterfly/journal:forms-since-save)))")))
+                 (is (search "(:CURRENT \"gen-1\" :PENDING NIL :LOST 1)" (remove #\Newline seen))
+                     "the old core isn't installed as a new generation, and the journal still holds the lost form: ~a" seen)))
+          (image:finish c 5))))))
+
 (test stats-see-what-the-system-does
   (let ((c (image:bare-console)))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 120)))
