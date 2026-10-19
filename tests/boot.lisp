@@ -1796,7 +1796,14 @@
                (is (search "3" (ask "(+ 1 2)")) "and the system carries on")
                (let ((refused (ask "(handler-case (darterfly/run:new-world \"huge\" :memory 8000) (darterfly/run:no-room (e) (princ-to-string e)))")))
                  (is (search "no room for a world of 8000 MB" refused) "a world that doesn't fit gets a plain no: ~a" refused)
-                 (is (search "small" refused) "which says what is using the memory")))
+                 (is (search "small" refused) "which says what is using the memory"))
+               (let ((twins (ask "(let* ((free (round (* 4096 (darterfly/worlds:free-pages)) 1048576)) (promised (loop :for w :in (darterfly/run:memory-use) :sum (max 0 (- (or (getf w :memory) 0) (getf w :resident))))) (each (floor (* 2 (- free promised darterfly/run:*system-reserve-mb*)) 3)) (threads (loop :for name :in '(\"twin-a\" \"twin-b\") :collect (let ((name name)) (sb-thread:make-thread (lambda () (handler-case (progn (darterfly/run:new-world name :memory each) :started) (darterfly/run:no-room () :refused)))))))) (sort (mapcar (function sb-thread:join-thread) threads) (function string<)))" 300)))
+                 (is (search "(:REFUSED :STARTED)" twins) "two worlds that fit only one at a time, asked for at once, get one yes and one no: ~a" twins))
+               (ask "(dolist (name '(\"twin-a\" \"twin-b\")) (let ((w (darterfly/run:find-world name))) (when w (darterfly/run:stop-world w))))" 120)
+               (let ((after (ask "(list (length darterfly/run::*admitted*) (length darterfly/run::*bases*))")))
+                 (is (search "(0 1)" after) "nothing is left promised once they are gone, and only small's slot is taken: ~a" after))
+               (let ((refused (ask "(handler-case (darterfly/run:start-world \"/no/such.core\" (list \"x\") :memory 64) (error (e) (list :refused (length darterfly/run::*admitted*) (length darterfly/run::*bases*))))")))
+                 (is (search "(:REFUSED 0 1)" refused) "a start that fails gives back what it was promised: ~a" refused)))
           (image:finish c 5))))))
 
 (test init-keeps-world-jobs-alive-and-quarantines
