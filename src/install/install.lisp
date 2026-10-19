@@ -81,7 +81,7 @@
 
 (defparameter *deployments-dir* "/Library/Settings/deployments/")
 (defvar *deployment* nil)
-(defparameter *final-stages* '(:refused :reload-failed :save-failed :lost :healthy :unhealthy))
+(defparameter *final-stages* '(:refused :reload-failed :save-failed :install-failed :lost :healthy :unhealthy))
 
 (defun deployment-path (id)
   (format nil "~a~a" *deployments-dir* id))
@@ -198,7 +198,12 @@
 
 (defun install-saved-generation ()
   (sb-thread:with-mutex (*installing*)
-    (install-pending)))
+    (handler-case (install-pending)
+      (error (e)
+        (format *error-output* "~&install: the saved world is running, but it couldn't be installed as a generation: ~a; a cold boot starts ~a~%"
+                e (current))
+        (end-deployment :install-failed (princ-to-string e))
+        nil))))
 
 (defun install-pending ()
   (when (probe-file *pending-generation*)

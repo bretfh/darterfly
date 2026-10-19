@@ -895,6 +895,31 @@
                (is (image:expect c "restart: core " :timeout 300) "the next save works"))
           (image:finish c 5))))))
 
+(test a-saved-world-with-no-room-to-install-says-so-and-installs-later
+  (let ((esp (merge-pathnames "esp-full.img" (darterfly-file "build/"))))
+    (uiop:delete-file-if-exists esp)
+    (let ((c (image:bare-console :boot-args "init" :esp esp)))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
+        (unwind-protect
+             (progn
+               (is (image:expect c "init: pid 1" :timeout 120))
+               (settled c)
+               (ask "(defvar cl-user::*kept* 42)")
+               (ask "(darterfly/install::esp)")
+               (let ((filled (ask "(let ((fd (darterfly/vfs:vfs-open \"/Volumes/EFI/filler\" (list :access :wronly :creat t :trunc t) #o644)) (chunk (make-array (* 4 1048576) :element-type '(unsigned-byte 8))) (n 0)) (unwind-protect (handler-case (loop (darterfly/vfs:vfs-write fd chunk) (incf n)) (error (e) (format nil \"[filled ~d MB: ~a]\" (* 4 n) e))) (darterfly/vfs:vfs-close fd)))")))
+                 (is (search "[filled" filled) "the ESP fills up: ~a" filled))
+               (image:send c "(darterfly/install:save-generation)")
+               (is (image:expect c "restart: core " :timeout 300) "the save restarts the world")
+               (is (image:expect c "couldn't be installed" :timeout 300) "and the install that finds no room says so")
+               (settled c)
+               (let ((seen (ask "(list :kept cl-user::*kept* :current (darterfly/install:current) :pending (and (probe-file darterfly/install::*pending-generation*) t))")))
+                 (is (search "(:KEPT 42 :CURRENT \"gen-1\" :PENDING T)" (remove #\Newline seen))
+                     "the world runs, the cold boot is still the old generation, and the save is kept for a later install: ~a" seen))
+               (ask "(darterfly/vfs:vfs-unlink \"/Volumes/EFI/filler\")")
+               (let ((later (ask "(darterfly/install:install-saved-generation)")))
+                 (is (search "gen-2" later) "with room again it installs: ~a" later)))
+          (image:finish c 5))))))
+
 (test a-failed-save-leaves-the-world-running
   (let ((esp (merge-pathnames "esp-failed-save.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists esp)
