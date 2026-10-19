@@ -2163,6 +2163,27 @@
                  (is (search "STOPPED 0" left) "a job whose start fails leaves no world running: ~a" left)))
           (image:finish c 5))))))
 
+(test a-long-reply-reaches-a-caller-on-any-thread
+  (let ((disk (merge-pathnames "world-long-reply.img" (darterfly-file "build/"))))
+    (uiop:delete-file-if-exists disk)
+    (darterfly/image::root-disk disk (* 256 1048576)
+                                (append (darterfly/image::root-entries)
+                                        (list (list :file "usr/lib/sbcl/sbcl.core" (image::octets (darterfly-file "build/sbcl-mt/output/sbcl.core"))))))
+    (let ((c (image:bare-console :root disk)))
+      (flet ((ask (form &optional (timeout 120))
+               (image:send c form)
+               (image:expect c (format nil "~%* ") :timeout timeout)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 90)
+               (ask "(defparameter *long* (darterfly/run:new-world \"long\"))" 120)
+               (ask "(darterfly/run:await-answer *long* :within 60)" 90)
+               (let ((here (ask "(length (darterfly/run:world-eval *long* \"(make-string 10000 :initial-element #\\\\x)\"))")))
+                 (is (search "10002" here) "a long reply reaches the main thread whole: ~a" here))
+               (let ((there (ask "(sb-thread:join-thread (sb-thread:make-thread (lambda () (length (darterfly/run:world-eval *long* \"(make-string 10000 :initial-element #\\\\x)\")))))")))
+                 (is (search "10002" there) "and any other thread: ~a" there)))
+          (image:finish c 5))))))
+
 (test a-disk-that-fails-to-flush-stops-a-shutdown
   (let ((c (image:bare-console)))
     (labels ((ask (form &optional (timeout 120))

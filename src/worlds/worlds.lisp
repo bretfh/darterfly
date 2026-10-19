@@ -53,7 +53,7 @@
   (let ((m (octets message))
         (r (if (eq sb-thread:*current-thread* (sb-thread:main-thread))
                (reply-buffer)
-               (make-array 4096 :element-type '(unsigned-byte 8))))
+               (make-array +max-message+ :element-type '(unsigned-byte 8))))
         (deadline (and timeout
                        (+ (get-internal-real-time)
                           (round (* timeout internal-time-units-per-second)))))
