@@ -41,19 +41,29 @@
   (while 1 (cli) (hlt)))
 
 (define-global interrupt-pending :u64)
+(define-global vector-events :u64 :count 64)
+
+(define-low vector-event (mask)
+  (if (and mask (= (logand mask (- mask 1)) 0))
+      (let ((i 0))
+        (while (= (logand mask (shl 1 i)) 0) (incf i))
+        (+ (address vector-events) (* 8 i)))
+      (address interrupt-pending)))
 
 (define-low |platform_incoming_interrupt| ((vector :u32))
   (setf interrupt-pending (logior interrupt-pending (shl 1 (- vector #x30))))
+  (thread-wakeup (+ (address vector-events) (* 8 (- vector #x30))) 1)
   (thread-wakeup (address interrupt-pending) 1))
 
 (define-low |platform_interrupt_wait| (mask deadline)
-  (while 1
-    (let ((fired (logand interrupt-pending mask)))
-      (when fired
-        (setf interrupt-pending (logand interrupt-pending (lognot fired)))
-        (result fired))
-      (when (/= (the :u32 (thread-wait (address interrupt-pending) deadline)) 0)
-        (result 0)))))
+  (let ((event (vector-event mask)))
+    (while 1
+      (let ((fired (logand interrupt-pending mask)))
+        (when fired
+          (setf interrupt-pending (logand interrupt-pending (lognot fired)))
+          (result fired))
+        (when (/= (the :u32 (thread-wait event deadline)) 0)
+          (result 0))))))
 
 (defun platform-object ()
   (package-object "DARTERFLY/PLATFORM"))

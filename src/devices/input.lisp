@@ -27,19 +27,26 @@
     (sb-thread:barrier (:write))
     (ml-phys-write-16 (+ (virtqueue-avail q) 2) (ldb (byte 16 0) (1+ idx)))))
 
+(defun post-buffers (q address length)
+  (dotimes (i (virtqueue-size q))
+    (let ((at (+ (virtqueue-desc q) (* 16 i))))
+      (ml-phys-write-64 at (funcall address i))
+      (ml-phys-write-32 (+ at 8) length)
+      (ml-phys-write-16 (+ at 12) 2)
+      (ml-phys-write-16 (+ at 14) 0))
+    (post-event-buffer q i))
+  (setf (virtqueue-free q) nil))
+
+(defun post-input-buffers (in)
+  (post-buffers (queue in) (lambda (i) (+ (event-page in) (* 8 i))) 8))
+
 (defmethod start ((in virtio-input) (tr virtio-transport))
   (setf (transport in) tr)
   (when (and (logtest (device-features tr) (ash 1 32)) (set-driver-features tr (ash 1 32)))
     (let ((q (setup-queue tr 0 +input-buffers+))
           (page (vm-page-grab)))
       (setf (queue in) q (event-page in) page)
-      (dotimes (i (virtqueue-size q))
-        (let ((at (+ (virtqueue-desc q) (* 16 i))))
-          (ml-phys-write-64 at (+ page (* 8 i)))
-          (ml-phys-write-32 (+ at 8) 8)
-          (ml-phys-write-16 (+ at 12) 2)
-          (ml-phys-write-16 (+ at 14) 0))
-        (post-event-buffer q i))
+      (post-input-buffers in)
       (driver-ok tr)
       (mmio-write (virtqueue-notify q) 16 0)
       (let* ((name (input-config tr 1 0))
@@ -71,6 +78,17 @@
                  (post-event-buffer q id)))
       (when events (mmio-write (virtqueue-notify q) 16 0))
       (nreverse events))))
+
+(defmethod suspend ((in virtio-input)) (sb-thread:grab-mutex (input-lock in)))
+
+(defmethod wake ((in virtio-input))
+  (when (sb-thread:holding-mutex-p (input-lock in))
+    (unwind-protect
+         (progn (restart-transport (transport in))
+                (post-input-buffers in)
+                (driver-ok (transport in))
+                (mmio-write (virtqueue-notify (queue in)) 16 0))
+      (sb-thread:release-mutex (input-lock in)))))
 
 (defun input-abs-range (in axis) (gethash axis (abs-ranges in)))
 

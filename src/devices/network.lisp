@@ -35,14 +35,7 @@
             (pages (loop repeat +receive-buffers+ collect (vm-page-grab))))
         (setf (receive-queue net) rx (transmit-queue net) tx (receive-pages net) (coerce pages 'vector)
               (send-page net) (vm-page-grab))
-        (dotimes (i (virtqueue-size rx))
-          (let ((at (+ (virtqueue-desc rx) (* 16 i))))
-            (ml-phys-write-64 at (aref (receive-pages net) i))
-            (ml-phys-write-32 (+ at 8) 4096)
-            (ml-phys-write-16 (+ at 12) 2)
-            (ml-phys-write-16 (+ at 14) 0))
-          (post-event-buffer rx i))
-        (setf (virtqueue-free rx) nil)
+        (post-buffers rx (lambda (i) (aref (receive-pages net) i)) 4096)
         (driver-ok tr)
         (mmio-write (virtqueue-notify rx) 16 0)
         (setf (network-mac net) (coerce (loop for i below 6 collect (device-config-read tr i 8)) '(vector (unsigned-byte 8))))
@@ -84,6 +77,18 @@
                  (post-event-buffer q id)))
       (when frames (mmio-write (virtqueue-notify q) 16 0))
       (nreverse frames))))
+
+(defmethod suspend ((net virtio-network)) (sb-thread:grab-mutex (network-lock net)))
+
+(defmethod wake ((net virtio-network))
+  (when (sb-thread:holding-mutex-p (network-lock net))
+    (unwind-protect
+         (let ((rx (receive-queue net)))
+           (restart-transport (transport net))
+           (post-buffers rx (lambda (i) (aref (receive-pages net) i)) 4096)
+           (driver-ok (transport net))
+           (mmio-write (virtqueue-notify rx) 16 0))
+      (sb-thread:release-mutex (network-lock net)))))
 
 (defmethod interrupt-vector ((net virtio-network)) (virtqueue-vector (receive-queue net)))
 

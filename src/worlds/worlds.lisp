@@ -252,7 +252,7 @@
                     (unless (= (read-sequence v s) size)
                       (error "Short executable read"))
                     v)))))
-    (with-octets (f file) (machdep 67 f (length file)))
+    (with-octets (f file) (machdep 71 f (length file)))
     file))
 
 (defun spawn-native-image (image &key argv envp port)
@@ -260,7 +260,7 @@
   (let ((stack (native-stack argv envp)))
     (with-octets (f image)
       (with-octets (s stack)
-        (machdep 65 f (length image) s (length stack) (or port 0))))))
+        (machdep 69 f (length image) s (length stack) (or port 0))))))
 
 (defun spawn-native (path &key argv envp port)
   "Load a static ELF64 executable into a fresh isolated world.
@@ -278,7 +278,7 @@ A second wait signals ECHILD. TIMEOUT never kills or reaps a live child."
                     (+ (get-internal-real-time)
                        (* timeout internal-time-units-per-second)))))
     (loop
-      (handler-case (return (machdep 66 world))
+      (handler-case (return (machdep 70 world))
         (world-error (c)
           (unless (= (world-error-code c) 11) (error c))))
       (when (or nohang (and deadline

@@ -1,6 +1,6 @@
 (defpackage #:darterfly/power
   (:use #:cl)
-  (:export #:flush-disks #:restart #:shut-down #:restart-soon #:save-system #:*save-system*
+  (:export #:flush-disks #:restart #:shut-down #:suspend #:restart-soon #:save-system #:*save-system*
            #:note-activity #:dim-when-idle #:*dim-after* #:*dim-to*)
   (:shadow #:restart))
 (in-package #:darterfly/power)
@@ -42,14 +42,68 @@
     (#x0a (values (aref v (1+ at)) 2))
     (#x0b (values (logior (aref v (1+ at)) (ash (aref v (+ at 2)) 8)) 3))))
 
-(defun s5-sleep-type ()
+(defun sleep-type (state)
   (loop for v in (darterfly/devices::definition-blocks)
-        for at = (search #(8 95 83 53 95 18) v)
+        for at = (search (vector 8 95 83 (+ 48 state) 95 18) v)
         when at
           return (let ((p (+ at 6)))
                    (multiple-value-bind (length used) (darterfly/devices::aml-pkg-length v p)
                      (declare (ignore length))
                      (package-integer v (+ p used 1))))))
+
+(defun s5-sleep-type () (sleep-type 5))
+
+(defun suspend (&key check)
+  (let* ((fadt (darterfly/devices::acpi-table "FACP"))
+         (length (and fadt (darterfly/devices::ml-phys-read-32 (+ fadt 4))))
+         (control (and fadt (darterfly/devices::ml-phys-read-32 (+ fadt 64))))
+         (event (and fadt (darterfly/devices::ml-phys-read-32 (+ fadt 56))))
+         (facs (and fadt (let ((x (and (>= length 140) (darterfly/devices::ml-phys-read-64 (+ fadt 132)))))
+                           (if (and x (plusp x)) x (darterfly/devices::ml-phys-read-32 (+ fadt 36))))))
+         (type (sleep-type 3)))
+    (unless (and control (plusp control) event (plusp event) facs (plusp facs) type)
+      (error "suspend: the firmware offers no S3"))
+    (flush-disks)
+    (darterfly/devices::suspend-devices)
+    (let ((enables (quiet-gpes fadt)))
+      (unwind-protect (darterfly/devices:machdep 66 (logior control (ash event 16) (ash type 32) (if check (ash 1 35) 0)) facs)
+        (restore-gpes fadt enables)
+        (darterfly/devices::wake-devices)))))
+
+(defun changed-memory ()
+  (let ((buffer (make-array 4098 :element-type '(unsigned-byte 64))))
+    (sb-sys:with-pinned-objects (buffer)
+      (let* ((n (min 4096 (darterfly/devices:machdep 68 (sb-sys:sap-int (sb-sys:vector-sap buffer)) 4096)))
+             (chunks (sort (coerce (subseq buffer 2 (+ 2 n)) 'list) #'<)))
+        (loop with runs = nil
+              for pa in chunks
+              do (if (and runs (= pa (cdr (first runs))))
+                     (setf (cdr (first runs)) (+ pa #x10000))
+                     (push (cons pa (+ pa #x10000)) runs))
+              finally (return (list :ms (list (aref buffer 0) (aref buffer 1))
+                                    :ranges (mapcar (lambda (r) (list (format nil "~x" (car r)) (format nil "~x" (cdr r)) (floor (- (cdr r) (car r)) 1024)))
+                                                    (nreverse runs)))))))))
+
+(defun gpe-block (fadt)
+  (let ((port (darterfly/devices::ml-phys-read-32 (+ fadt 80)))
+        (length (darterfly/devices::ml-phys-read-8 (+ fadt 92))))
+    (and (plusp port) (plusp length) (values port (floor length 2)))))
+
+(defun quiet-gpes (fadt)
+  (multiple-value-bind (port half) (gpe-block fadt)
+    (when port
+      (loop for i below half
+            collect (prog1 (darterfly/devices::port-read-8 (+ port half i))
+                      (darterfly/devices::port-write-8 (+ port half i) 0)
+                      (darterfly/devices::port-write-8 (+ port i) #xFF))))))
+
+(defun restore-gpes (fadt enables)
+  (multiple-value-bind (port half) (gpe-block fadt)
+    (when port
+      (loop for i below half
+            for enable in enables
+            do (darterfly/devices::port-write-8 (+ port i) #xFF)
+               (darterfly/devices::port-write-8 (+ port half i) enable)))))
 
 (defun shut-down ()
   (let* ((fadt (darterfly/devices::acpi-table "FACP"))

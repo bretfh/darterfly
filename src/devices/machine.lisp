@@ -5,7 +5,7 @@
    #:start-devices #:device-tree #:*registry-root*
    #:entry #:entry-name #:entry-location #:entry-parent #:entry-children
    #:get-property #:set-property #:find-entries
-   #:device #:start #:register-service #:*personalities*
+   #:device #:start #:register-service #:*personalities* #:suspend #:wake #:suspend-devices #:wake-devices
    #:pci-node #:config-read-8 #:config-read-16 #:config-read-32
    #:config-write-8 #:config-write-16 #:config-write-32 #:find-pci-capability
    #:map-device-memory-with-index #:memory-map #:map-virtual-address #:map-physical-address #:map-length
@@ -13,7 +13,7 @@
    #:virtio-block-storage-device #:block-count #:block-size #:read-blocks #:write-blocks
    #:block-device #:media #:media-read #:media-write #:media-flush #:media-size #:gpt-scheme #:crc32
    #:acpi-table #:vm-page-grab #:vm-pages-grab #:phys-sap #:mmio-read #:mmio-write #:pci-primary-id #:ml-io-map #:ml-io-map-wcomb #:boot-arg #:kernel-flags #:boot-video
-   #:wait-for-interrupt #:interrupt-vector #:enable-msi-x #:allocate-vector #:set-msi-x-vector
+   #:port-read-8 #:port-write-8 #:wait-for-interrupt #:interrupt-vector #:enable-msi-x #:allocate-vector #:set-msi-x-vector
    #:virtio-input #:input-events #:input-abs-range
    #:virtio-network #:ethernet-controller #:ecm-status #:battery #:ethernet-interface #:network-send #:network-receive #:network-mac
    #:define-device-class #:add-personality #:personality #:publish-media #:partition-scheme
@@ -28,6 +28,8 @@
    n a b))
 
 (defun boot-args () (machdep 8))
+(defun port-read-8 (port) (machdep 67 port 0))
+(defun port-write-8 (port value) (machdep 67 port (logior #x100 (logand value #xFF))))
 (defun vm-page-grab () (machdep 9))
 (defun vm-pages-grab (n) (machdep 30 n))
 (defun ml-io-map (pa size) (machdep 10 pa size))

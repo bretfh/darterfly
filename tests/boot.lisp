@@ -2419,6 +2419,59 @@
         (image:*network-device* "usb-net,netdev=net0,bus=xhci.0"))
     (nrepl-check :status t)))
 
+(test the-system-sleeps-and-wakes
+  (let* ((nvme (namestring (merge-pathnames "sleep-nvme.img" image:*build*)))
+         (image:*extra-qemu* (list "-global" "ICH9-LPC.disable_s3=0"
+                                   "-drive" (format nil "file=~a,if=none,format=raw,id=nv" nvme)
+                                   "-device" "nvme,drive=nv,serial=sleep"))
+         (image:*input-devices* '("qemu-xhci,id=xhci" "usb-kbd,bus=xhci.0" "virtio-keyboard-pci" "virtio-tablet-pci"))
+         (c (progn (with-open-file (s nvme :direction :output :if-exists :supersede :element-type '(unsigned-byte 8))
+                     (file-position s (1- (* 1024 1024))) (write-byte 0 s))
+                   (image:bare-console))))
+    (unwind-protect
+         (progn
+           (image:expect c "* " :timeout 90)
+           (image:send c "(progn (darterfly/net:start-network) (defvar *before* (get-universal-time)) (list :slept (darterfly/power:suspend)))")
+           (is (loop :repeat 60
+                     :thereis (equal "suspended" (gethash "status" (image:qmp "query-status")))
+                     :do (sleep 0.5))
+               "the machine goes into S3")
+           (sleep 3)
+           (image:qmp "system_wakeup")
+           (is (search "(:SLEPT 1)" (image:expect c (format nil "~%* ") :timeout 60))
+               "it wakes and the suspend call returns")
+           (image:send c "(list :alive (+ 1 2) :slept (>= (- (get-universal-time) *before*) 3))")
+           (is (search "(:ALIVE 3 :SLEPT T)" (image:expect c (format nil "~%* ") :timeout 30))
+               "the Lisp carries on and the wall clock counted the sleep")
+           (image:send c "(length (darterfly/devices:read-blocks (first (darterfly/devices:find-entries 'darterfly/devices:virtio-block-storage-device)) 0 8))")
+           (is (search "4096" (image:expect c (format nil "~%* ") :timeout 30)) "the disk answers after waking")
+           (image:send c "(let ((n (first (darterfly/devices:find-entries 'darterfly/devices::nvme-disk)))) (darterfly/devices:write-blocks n 8 (make-array 512 :element-type '(unsigned-byte 8) :initial-element 42)) (list :nvme (aref (darterfly/devices:read-blocks n 8 1) 511)))")
+           (is (search "(:NVME 42)" (image:expect c (format nil "~%* ") :timeout 30)) "the NVMe disk answers after waking")
+           (image:send c "(list :usb (mapcar #'darterfly/devices:entry-name (darterfly/devices:find-entries 'darterfly/devices::usb-hid-device)))")
+           (is (search "(:USB (\"Keyboard\"))" (image:expect c (format nil "~%* ") :timeout 30)) "the USB keyboard is back after waking")
+           (image:send c "(darterfly/net:ping \"10.0.2.2\")")
+           (is (not (search "NIL" (image:expect c (format nil "~%* ") :timeout 30))) "the network answers after waking"))
+      (image:finish c 5))))
+
+(test sound-plays-and-sleeps
+  (let* ((image:*input-devices* '("virtio-keyboard-pci" "virtio-tablet-pci" "intel-hda" "hda-duplex"))
+         (c (image:bare-console)))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 90)
+             (is (search "AUDIO-DEVICE" (ask "(progn (darterfly/audio:start-audio) (if (darterfly/audio:audio-devices) 'audio-device 'none))"))
+                 "the HD Audio controller is matched and started")
+             (is (search "(\"" (ask "(getf (first (getf (darterfly/audio:audio-status) :devices)) :codecs)"))
+                 "it found a codec")
+             (is (search "[T]" (ask "(progn (darterfly/audio:play-tone :seconds 0.3 :level 0.1) (sleep 1) (let ((o (first (getf (first (getf (darterfly/audio:audio-status) :devices)) :outputs)))) (format nil \"[~a]\" (and o (> (getf o :played) 50000)))))"))
+                 "a tone plays: the stream's position moves")
+             (is (search "[T]" (ask "(progn (sleep 7) (format nil \"[~a]\" (getf (first (getf (darterfly/audio:audio-status) :devices)) :suspended)))"))
+                 "the controller sleeps once it has been quiet")
+             (is (search "[T T NIL]" (ask "(progn (darterfly/audio:play-tone :seconds 0.3 :level 0.1) (sleep 0.6) (let* ((d (first (getf (darterfly/audio:audio-status) :devices))) (o (first (getf d :outputs)))) (sleep 1.5) (let ((after (first (getf (first (getf (darterfly/audio:audio-status) :devices)) :outputs)))) (format nil \"[~a ~a ~a]\" (not (getf d :suspended)) (> (getf o :played) 20000) (getf after :running)))))"))
+                 "after sleeping it wakes, plays and stops again"))
+        (image:finish c 5)))))
+
 (test usb-ethernet-plugged-in-later
   (let* ((image:*input-devices* '("qemu-xhci,id=xhci" "virtio-keyboard-pci" "virtio-tablet-pci"))
          (image:*network-device* nil)

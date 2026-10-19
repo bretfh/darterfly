@@ -18,7 +18,11 @@
 
 (defun external (name) (sb-c:make-fixup name :foreign))
 
-(defmacro in (size) `(inst byte ,(ecase size (:byte #xEC) (:dword #xED))))
+(defmacro in (size)
+  (ecase size
+    (:byte `(inst byte #xEC))
+    (:word `(progn (inst byte #x66) (inst byte #xED)))
+    (:dword `(inst byte #xED))))
 
 (defmacro out (size)
   (ecase size

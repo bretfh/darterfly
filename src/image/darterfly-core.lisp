@@ -40,6 +40,7 @@
       (sb-thread:make-thread (lambda () (ignore-errors (darterfly/install:install-saved-generation))) :name "saved generation"))
     (sb-thread:make-thread (lambda () (ignore-errors (darterfly/devices:start-devices) (darterfly/devices:restore-brightness))) :name "brightness")
     (sb-thread:make-thread (lambda () (ignore-errors (darterfly/display:start-display))) :name "display start")
+    (sb-thread:make-thread (lambda () (ignore-errors (darterfly/audio:start-audio))) :name "audio start")
     (when (ignore-errors (darterfly/generation:pending-build))
       (darterfly/generation:resume-build))
     (sb-thread:make-thread

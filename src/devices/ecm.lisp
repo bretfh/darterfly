@@ -1,7 +1,7 @@
 (in-package #:darterfly/devices)
 
 (defconstant +ecm-receive-pages+ 16)
-(defconstant +ecm-send-pages+ 16)
+(defconstant +ecm-send-pages+ 64)
 
 (define-device-class usb-cdc-ecm "USBCDCECMData" (ethernet-controller)
   ((controller :initarg :controller :reader ecm-controller)
@@ -114,7 +114,7 @@
           while (>= (ecm-in-flight e) (1- +ecm-send-pages+))
           do (process-events c)
              (when (>= (ecm-in-flight e) (1- +ecm-send-pages+))
-               (sleep 0.0005)))
+               (wait-for-interrupt (list (xhci-vector c)) 0.002)))
     (sb-thread:with-recursive-lock ((xhci-lock c))
       (let ((page (aref (ecm-send-pages e) (ecm-send-next e)))
             (zlp (zerop (mod n (ecm-mps e)))))

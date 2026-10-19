@@ -62,7 +62,7 @@
   (let ((pseudo (if (ip6-p dst)
                     (octets src dst (be (length data) 4) (be 0 3) (be protocol 1))
                     (octets (be src 4) (be dst 4) (be protocol 2) (be (length data) 2)))))
-    (let ((sum (checksum (octets pseudo data))))
+    (let ((sum (fold16 (sum16 data 0 (length data) (sum16 pseudo 0 (length pseudo) 0)))))
       (if (and (= protocol 17) (zerop sum)) #xffff sum))))
 
 (defun on-link-6-p (dst)

@@ -90,7 +90,7 @@
 
 (asdf:defsystem #:darterfly/apps
   :description "Applications"
-  :depends-on (#:darterfly/layer #:darterfly/server #:darterfly/bsd #:darterfly/text #:darterfly/imageio #:darterfly/kit #:darterfly/edit #:darterfly/install #:darterfly/generation #:darterfly/devices #:darterfly/net #:darterfly/wifi #:darterfly/display #:darterfly/journal #:darterfly/worlds #:darterfly/storage)
+  :depends-on (#:darterfly/layer #:darterfly/server #:darterfly/bsd #:darterfly/text #:darterfly/imageio #:darterfly/kit #:darterfly/edit #:darterfly/install #:darterfly/generation #:darterfly/devices #:darterfly/net #:darterfly/wifi #:darterfly/display #:darterfly/audio #:darterfly/journal #:darterfly/worlds #:darterfly/storage)
   :serial t
   :pathname "src/apps/"
   :components ((:file "hello") (:file "terminal") (:file "listener") (:file "forcequit") (:file "editor") (:file "generations") (:file "onboarding") (:file "session") (:file "fetch") (:file "install") (:file "ocicl")))
@@ -100,7 +100,7 @@
   :depends-on (#:uiop)
   :serial t
   :pathname "src/devices/"
-  :components ((:file "machine") (:file "registry") (:file "acpi") (:file "pci") (:file "interrupt") (:file "virtio") (:file "storage") (:file "block") (:file "nvme") (:file "ramdisk") (:file "xhci") (:file "i2c") (:file "input") (:file "network") (:file "ecm") (:file "battery") (:file "backlight")))
+  :components ((:file "machine") (:file "registry") (:file "acpi") (:file "pci") (:file "sleep") (:file "interrupt") (:file "virtio") (:file "storage") (:file "block") (:file "nvme") (:file "ramdisk") (:file "xhci") (:file "i2c") (:file "input") (:file "network") (:file "ecm") (:file "battery") (:file "backlight")))
 
 (asdf:defsystem #:darterfly/crypto
   :description "Hashes and ciphers"
@@ -115,12 +115,19 @@
   :pathname "src/wifi/"
   :components ((:file "eapol") (:file "firmware") (:file "ax210") (:file "join")))
 
+(asdf:defsystem #:darterfly/audio
+  :description "HD Audio"
+  :depends-on (#:darterfly/devices)
+  :serial t
+  :pathname "src/audio/"
+  :components ((:file "protocol") (:file "hda") (:file "codec") (:file "stream") (:file "mixer")))
+
 (asdf:defsystem #:darterfly/display
   :description "The display engine"
   :depends-on (#:darterfly/devices)
   :serial t
   :pathname "src/display/"
-  :components ((:file "dmc") (:file "power") (:file "aux") (:file "vbt") (:file "edid") (:file "psr") (:file "state") (:file "modeset") (:file "surface") (:file "events")))
+  :components ((:file "dmc") (:file "power") (:file "aux") (:file "vbt") (:file "edid") (:file "psr") (:file "state") (:file "modeset") (:file "surface") (:file "events") (:file "sleep")))
 
 (asdf:defsystem #:darterfly/storage
   :description "Disks served by a world"
@@ -246,7 +253,7 @@
   :serial t
   :pathname "src/kern/i386/"
   :components ((:file "mtrr") (:file "power") (:file "printf") (:file "rtclock") (:file "vm-map") (:file "pmap") (:file "lapic") (:file "sched")
-               (:file "signal" :pathname "../../bsd/kern/signal") (:file "trap") (:file "mp")
+               (:file "signal" :pathname "../../bsd/kern/signal") (:file "trap") (:file "mp") (:file "sleep")
                (:file "systemcalls" :pathname "../../bsd/dev/i386/systemcalls") (:file "world") (:file "native")
                (:file "start" :pathname "../x86_64/start") (:file "init") (:file "stubs" :pathname "../x86_64/stubs") (:file "mp-desc") (:file "memory")))
 
