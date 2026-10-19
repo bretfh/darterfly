@@ -13,7 +13,7 @@
     ("DARTERFLY/DEVICES" "*INTERRUPTS-LOCK*")
     ("DARTERFLY/NET" "*TCP-LOCK*")))
 
-(defstruct stop
+(defstruct (stopped-thread (:conc-name stop-) (:constructor make-stop))
   id
   thread
   condition
