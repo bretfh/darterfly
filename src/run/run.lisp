@@ -252,8 +252,6 @@
                 "--no-sysinit" "--no-userinit" "--disable-debugger")
           (loop :for e :in evals :append (list "--eval" e))))
 
-(defun failed-p (result) (not (eql 0 (getf result :exit))))
-
 (defparameter *system-reserve-mb* 256)
 
 (define-condition no-room (error)
@@ -294,24 +292,13 @@
       (list* (first argv) "--dynamic-space-size" (format nil "~dMB" memory) (rest argv))
       argv))
 
-(defun new-world (name &key (core "/usr/lib/sbcl/sbcl.core") (cwd "/") (evals (list "(loop (sleep 60))")) restart (restarts nil) checkpoint memory)
+(defun new-world (name &key (core "/usr/lib/sbcl/sbcl.core") (cwd "/") (evals (list "(loop (sleep 60))")) checkpoint memory)
   (when (find-world name) (error "a world named ~a is already running" name))
   (let ((world (start-world core (apply #'world-argv evals) :cwd cwd :disk t :attach t :name name :memory memory)))
-    (setf (world-restarts world) restarts)
     (when checkpoint
       (setf (world-every world) checkpoint)
       (ensure-directories-exist *worlds-dir*)
       (keep-checkpointed world))
-    (when restart
-      (sb-thread:make-thread
-       (lambda ()
-         (let ((result (finish-world world))
-               (recent (remove-if (lambda (time) (< time (- (get-universal-time) 60))) restarts)))
-           (when (and (not (world-stopping world)) (failed-p result) (< (length recent) 5))
-             (sleep (if recent 2 0))
-             (new-world name :core core :cwd cwd :evals evals :restart restart :memory memory
-                             :restarts (cons (get-universal-time) recent)))))
-       :name (format nil "supervise ~a" name)))
     world))
 
 (defun save-world (world path)
@@ -458,7 +445,14 @@
   (declare (ignore files cwd stdin disk timeout))
   (finish-world (apply #'start-world core argv keys)))
 
+(defun world-paused-p (world)
+  (let ((entry (find (world-id world) (darterfly/worlds:worlds)
+                     :key (lambda (w) (getf w :id)))))
+    (eq (getf entry :state) :paused)))
+
 (defun world-eval (world form)
+  (when (world-paused-p world)
+    (error "world ~d is paused" (world-id world)))
   (sb-ext:octets-to-string (darterfly/worlds:call (world-inward world) (if (stringp form) form (prin1-to-string form)))
                            :external-format :utf-8))
 

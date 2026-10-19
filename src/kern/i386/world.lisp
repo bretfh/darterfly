@@ -403,8 +403,9 @@
     0))
 
 (define-low world-watchdog-deadline (w)
-  (let ((limit (mem :u64 (+ w +w-beat-limit+))))
-    (if limit
+  (let ((limit (mem :u64 (+ w +w-beat-limit+)))
+        (paused (logand (mem :u64 (+ w +w-flags+)) +paused+)))
+    (if (and limit (not paused))
         (+ (mem :u64 (+ w +w-beat-at+))
            (* limit (if (mem :u64 (+ w +w-beat-warned+)) 2 1)))
         0)))
@@ -433,7 +434,10 @@
   (let ((limit (mem :u64 (+ w +w-beat-limit+)))
         (at (mem :u64 (+ w +w-beat-at+)))
         (id (mem :u64 (+ w +w-id+)))
+        (paused (logand (mem :u64 (+ w +w-flags+)) +paused+))
         (now (rdtsc)))
+    (when paused
+      (result 0))
     (unless (and limit (> now (+ at limit)))
       (result 0))
     (cond ((not (mem :u64 (+ w +w-beat-warned+)))
@@ -503,6 +507,8 @@
 (define-low world-resume ((id :u64))
   (let ((w (world-by-id id)))
     (unless w (result (- 0 +einval+)))
+    (setf (mem :u64 (+ w +w-beat-at+)) (rdtsc))
+    (setf (mem :u64 (+ w +w-beat-warned+)) 0)
     (setf (mem :u64 (+ w +w-flags+)) (logand (mem :u64 (+ w +w-flags+)) (lognot +paused+)))
     (thread-wakeup (+ w +w-flags+) 1)
     0))
