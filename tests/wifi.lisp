@@ -382,3 +382,90 @@
            (is (null sent-while-rejoining) "clear rejoining before DHCP can transmit"))
       (dolist (name '(darterfly/wifi::rejoin darterfly/net:dhcp sb-thread:make-thread))
         (sb-int:unencapsulate name 'address-retry)))))
+
+(test tx-completion-progress-is-bounded-by-published-descriptors
+  (let* ((w (make-instance 'darterfly/wifi::wireless-card))
+         (state (darterfly/wifi::make-wifi-tx-state :read 65530 :write 4))
+         (p (make-array 48 :element-type '(unsigned-byte 8) :initial-element 0)))
+    (setf (gethash 2 (darterfly/wifi::card-tx-queues w)) state
+          (aref p 0) 1 (aref p 36) 2 (aref p 44) 2)
+    (darterfly/wifi::wifi-tx-notification w (list :code 28 :payload p))
+    (is (= 8 (darterfly/wifi::wifi-tx-state-completed state)))
+    (is (= 2 (darterfly/wifi::wifi-tx-pending state)))
+    (darterfly/wifi::wifi-tx-notification w (list :code 28 :payload p))
+    (is (= 8 (darterfly/wifi::wifi-tx-state-completed state)) "duplicate completion cannot release more DMA")
+    (setf (aref p 44) 5)
+    (darterfly/wifi::wifi-tx-notification w (list :code 28 :payload p))
+    (is (= 2 (darterfly/wifi::wifi-tx-pending state)))
+    (is (= 1 (darterfly/wifi::wifi-tx-state-invalid state)))
+    (dotimes (length 48)
+      (finishes (darterfly/wifi::wifi-tx-notification w (list :code 28 :payload (subseq p 0 length)))))
+    (is (= 2 (darterfly/wifi::wifi-tx-pending state)))
+    (setf (aref p 44) 4)
+    (darterfly/wifi::wifi-tx-notification w (list :code 28 :payload p))
+    (is (zerop (darterfly/wifi::wifi-tx-pending state)))))
+
+(test compressed-block-ack-completions-validate-the-entire-record-array
+  (let* ((w (make-instance 'darterfly/wifi::wireless-card))
+         (state (darterfly/wifi::make-wifi-tx-state :read 1 :write 20))
+         (p (make-array 40 :element-type '(unsigned-byte 8) :initial-element 0)))
+    (setf (gethash 2 (darterfly/wifi::card-tx-queues w)) state
+          (aref p 28) 2 (aref p 32) 2 (aref p 34) 20)
+    (darterfly/wifi::wifi-tx-notification w (list :code 197 :payload p))
+    (is (= 19 (darterfly/wifi::wifi-tx-pending state)))
+    (setf (aref p 28) 1)
+    (darterfly/wifi::wifi-tx-notification w (list :code 197 :payload p))
+    (is (zerop (darterfly/wifi::wifi-tx-pending state)))))
+
+(test a-full-wifi-transmit-ring-never-reuses-a-live-buffer
+  (let* ((w (make-instance 'darterfly/wifi::wireless-card))
+         (q (darterfly/wifi::make-txq :qid 2))
+         (l (make-instance 'darterfly/wifi::link :card w))
+         (state (darterfly/wifi::make-wifi-tx-state :write 255)))
+    (setf (darterfly/wifi::link-mgmt l) q (gethash 2 (darterfly/wifi::card-tx-queues w)) state)
+    (sb-int:encapsulate 'darterfly/wifi::pump 'saturated-ring (lambda (&rest args) (declare (ignore args)) nil))
+    (unwind-protect
+         (progn
+           ;; No DMA fields are initialized: touching one before capacity is
+           ;; available would raise an unbound-slot/type error.
+           (is (null (darterfly/wifi::transmit l #(0))))
+           (is (= 255 (darterfly/wifi::wifi-tx-pending state)))
+           (is (= 1 (darterfly/wifi::wifi-tx-state-backpressure state))))
+      (sb-int:unencapsulate 'darterfly/wifi::pump 'saturated-ring))))
+
+(test wifi-fallback-resolves-reenumerated-adapter
+  (let* ((old (make-instance 'darterfly/devices:ethernet-controller))
+         (replacement (make-instance 'darterfly/devices:ethernet-controller))
+         (wifi (make-instance 'darterfly/wifi::wireless-interface :link (offline-link)))
+         (trial (list wifi))
+         (darterfly/wifi::*wifi-trial* trial)
+         (darterfly/wifi::*wifi-confirmed* nil)
+         (darterfly/net:*interface* (darterfly/net::make-interface :device wifi))
+         (registered (list replacement)) (attached nil))
+    (sb-int:encapsulate 'darterfly/devices:find-entries 'fallback-test
+      (lambda (&rest args) (declare (ignore args)) registered))
+    (sb-int:encapsulate 'darterfly/devices:network-mac 'fallback-test
+      (lambda (&rest args) (declare (ignore args)) #(0 64 76 105 35 134)))
+    (sb-int:encapsulate 'darterfly/net::interface-attach 'fallback-test
+      (lambda (f device) (declare (ignore f)) (push device attached)))
+    (unwind-protect
+         (progn
+           (darterfly/wifi::wifi-fallback trial old)
+           (is (equal (list replacement) attached))
+           (is (null (darterfly/net::interface-device darterfly/net:*interface*)))
+           ;; No replacement: preserve Wi-Fi, instead of installing dead USB.
+           (setf attached nil registered nil
+                 (darterfly/net::interface-device darterfly/net:*interface*) wifi)
+           (darterfly/wifi::wifi-fallback trial old)
+           (is (null attached))
+           (is (eq wifi (darterfly/net::interface-device darterfly/net:*interface*)))
+           ;; An older timer cannot undo a later choice, even of the same radio.
+           (setf registered (list replacement) darterfly/wifi::*wifi-trial* (list wifi))
+           (darterfly/wifi::wifi-fallback trial old)
+           (is (null attached))
+           (setf darterfly/wifi::*wifi-trial* trial darterfly/wifi::*wifi-confirmed* t)
+           (darterfly/wifi::wifi-fallback trial old)
+           (is (null attached)))
+      (dolist (name '(darterfly/devices:find-entries darterfly/devices:network-mac
+                      darterfly/net::interface-attach))
+        (sb-int:unencapsulate name 'fallback-test)))))

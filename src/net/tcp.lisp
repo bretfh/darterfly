@@ -23,6 +23,16 @@
 (defvar *tcp-timer* nil)
 (defvar *acks-due* nil)
 
+(defmacro with-tcp-state (&body body)
+  ;; Nested protocol operations contribute to the same batch. Device waits
+  ;; belong outside TCP's state mutex, including on the receive/timer paths.
+  `(if *output-batch*
+       (sb-thread:with-recursive-lock (*tcp-lock*) ,@body)
+       (let ((*output-batch* (list nil)))
+         (multiple-value-prog1
+             (sb-thread:with-recursive-lock (*tcp-lock*) ,@body)
+           (flush-output-batch)))))
+
 (defstruct (connection (:conc-name tcp-))
   local-port remote-ip remote-port (state :closed) (maxseg +mss+)
   iss snd-una snd-nxt (snd-wnd +window+) irs rcv-nxt
@@ -57,7 +67,7 @@
           ;; Data/SYN/FIN already live in UNACKED. Standalone ACKs also need a
           ;; timer retry after discovery; reset packets remain best effort.
           (when (and (= flags +ack+) (zerop (length data)))
-            (sb-thread:with-recursive-lock (*tcp-lock*)
+            (with-tcp-state
               (setf (tcp-ack-pending c) t)
               (pushnew c *acks-due*)))
           nil)))))
@@ -192,7 +202,7 @@
          (data (subseq packet offset))
          (shift (and (logtest flags +syn+) (window-shift-offered packet offset)))
          (key (tcp-key dst-port src src-port)))
-    (sb-thread:with-recursive-lock (*tcp-lock*)
+    (with-tcp-state
       (let ((c (gethash key *connections*)))
         (cond
           ((and (null c) (logtest flags +syn+) (not (logtest flags +ack+)) (gethash dst-port *listeners*))
@@ -247,7 +257,7 @@
 
 (defun flush-acks ()
   (when *acks-due*
-    (sb-thread:with-recursive-lock (*tcp-lock*)
+    (with-tcp-state
       (dolist (c (shiftf *acks-due* nil))
         (when (tcp-ack-pending c)
           (setf (tcp-ack-pending c) nil)
@@ -293,7 +303,7 @@
       (error (e) (format *error-output* "~&tcp timer: ~a~%" e)))))
 
 (defun tcp-tick ()
-  (sb-thread:with-recursive-lock (*tcp-lock*)
+  (with-tcp-state
       (let ((now (get-internal-real-time)) (dead nil))
         (maphash (lambda (key c)
                    (let ((s (oldest-unacked c)))
@@ -314,44 +324,50 @@
         (flush-acks))))
 
 (defun ensure-tcp-timer ()
-  (sb-thread:with-recursive-lock (*tcp-lock*)
+  (with-tcp-state
     (unless (and *tcp-timer* (sb-thread:thread-alive-p *tcp-timer*))
       (sb-sys:without-interrupts
         (setf *tcp-timer* (sb-thread:make-thread #'tcp-timer :name "tcp timer"))))))
 
 (defun tcp-wait (predicate timeout)
   (let ((deadline (and timeout (+ (get-internal-real-time) (* timeout internal-time-units-per-second)))))
-    (loop until (funcall predicate)
-          do (let ((left (and deadline (/ (- deadline (get-internal-real-time)) internal-time-units-per-second))))
-               (when (and left (<= left 0)) (return nil))
-               (sb-thread:condition-wait *tcp-changed* *tcp-lock* :timeout (or left 1))
-               (unless (sb-thread:holding-mutex-p *tcp-lock*) (sb-thread:grab-mutex *tcp-lock*)))
-          finally (return t))))
+    (loop
+      ;; A connect or full send buffer must publish its batch before waiting
+      ;; for replies. Recheck the predicate after reacquiring the state lock.
+      (when (and *output-batch* (car *output-batch*))
+        (sb-thread:release-mutex *tcp-lock*)
+        (unwind-protect (flush-output-batch)
+          (sb-thread:grab-mutex *tcp-lock*)))
+      (when (funcall predicate) (return t))
+      (let ((left (and deadline (/ (- deadline (get-internal-real-time)) internal-time-units-per-second))))
+        (when (and left (<= left 0)) (return nil))
+        (sb-thread:condition-wait *tcp-changed* *tcp-lock* :timeout (or left 1))
+        (unless (sb-thread:holding-mutex-p *tcp-lock*) (sb-thread:grab-mutex *tcp-lock*))))))
 
 (defun tcp-listen (port)
   (ensure-tcp-timer)
-  (sb-thread:with-recursive-lock (*tcp-lock*)
+  (with-tcp-state
     (setf (gethash port *listeners*) (make-listener :port port))))
 
 (defun tcp-unlisten (listener)
-  (sb-thread:with-recursive-lock (*tcp-lock*)
+  (with-tcp-state
     (when (eq (gethash (listener-port listener) *listeners*) listener)
       (remhash (listener-port listener) *listeners*))))
 
 (defun tcp-accept (listener &key timeout)
-  (sb-thread:with-recursive-lock (*tcp-lock*)
+  (with-tcp-state
     (when (tcp-wait (lambda () (listener-pending listener)) timeout)
       (pop (listener-pending listener)))))
 
 (defun tcp-connect (address port &key (timeout 10) (wait t))
   (ensure-tcp-timer)
   (let* ((ip (if (stringp address) (ip-address address) address))
-         (local (sb-thread:with-recursive-lock (*tcp-lock*) (prog1 *next-port* (incf *next-port*))))
+         (local (with-tcp-state (prog1 *next-port* (incf *next-port*))))
          (iss (new-iss))
          (c (make-connection :local-port local :remote-ip ip :remote-port port :state :syn-sent
                              :maxseg (maxseg-for ip) :snd-cwnd (* +cwnd-init-pkts+ (maxseg-for ip))
                              :iss iss :snd-una iss :snd-nxt iss)))
-    (sb-thread:with-recursive-lock (*tcp-lock*)
+    (with-tcp-state
       (setf (gethash (tcp-key local ip port) *connections*) c)
       (queue-segment c +syn+ #())
       (when wait
@@ -362,7 +378,7 @@
 
 (defun tcp-send (c data)
   (let ((data (coerce data '(simple-array (unsigned-byte 8) (*)))))
-    (sb-thread:with-recursive-lock (*tcp-lock*)
+    (with-tcp-state
       (loop for start from 0 below (length data) by +sndbuf+
             do (tcp-wait (lambda () (or (tcp-reset c) (< (unsent c) +sndbuf+))) nil)
                (when (tcp-reset c) (net-fail :econnreset "tcp: connection reset"))
@@ -371,7 +387,7 @@
     (length data)))
 
 (defun tcp-receive (c &key timeout)
-  (sb-thread:with-recursive-lock (*tcp-lock*)
+  (with-tcp-state
     (tcp-wait (lambda () (or (plusp (length (tcp-received c))) (tcp-eof c) (tcp-reset c))) timeout)
     (cond ((plusp (length (tcp-received c)))
            (let ((closing (> (length (tcp-received c)) (floor +rcvbuf+ 2))))
@@ -387,7 +403,7 @@
 (defun tcp-reset-p (c) (and (tcp-reset c) t))
 
 (defun tcp-close (c)
-  (sb-thread:with-recursive-lock (*tcp-lock*)
+  (with-tcp-state
     (tcp-wait (lambda () (or (tcp-reset c) (zerop (unsent c)))) 30)
     (case (tcp-state c)
       ((:established :syn-received) (setf (tcp-state c) :fin-wait-1) (queue-segment c (logior +fin+ +ack+) #()))

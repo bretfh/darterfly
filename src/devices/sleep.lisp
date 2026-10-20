@@ -36,7 +36,10 @@
                (error (c)
                  (setf *device-transition* (append *device-transition* (list :failed t))
                        *device-last-failure* *device-transition*)
-                 (format *error-output* "~&device ~a: ~a~%" (entry-name e) c)))))
+                 (format *error-output* "~&device ~a: ~a~%" (entry-name e) c)
+                 ;; Suspending after a failed drain can leave live DMA across
+                 ;; reset. PERFORM-SUSPEND unwinds through WAKE-DEVICES.
+                 (when (eq order :children-first) (error c))))))
     (when root (walk root))))
 
 (defun suspend-devices ()

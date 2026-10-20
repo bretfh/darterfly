@@ -42,6 +42,7 @@
         for i below 8
         collect (list :name (darterfly/devices:entry-name n)
                       :lock (lock-state (darterfly/devices::nvme-lock n))
+                      :io (darterfly/devices::nvme-io-status n)
                       :queues (loop for slot in '(darterfly/devices::admin darterfly/devices::io)
                                     when (slot-boundp n slot)
                                     collect (let ((q (slot-value n slot)))
@@ -74,6 +75,7 @@
             :ip (darterfly/net:address-string (darterfly/net::interface-ip i))
             :gateway (darterfly/net:address-string (darterfly/net::interface-gateway i))
             :attachment darterfly/net::*interface-epoch*
+            :io (and device (darterfly/devices::network-io-status device))
             :input-thread (thread-name thread)
             :input-alive (and thread (sb-thread:thread-alive-p thread))
             :lock (lock-state (darterfly/net::interface-lock i))))))
