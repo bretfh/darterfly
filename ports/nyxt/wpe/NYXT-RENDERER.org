@@ -28,6 +28,11 @@ The earlier [[file:browser-evidence.json][browser record]] retains the pre-appli
 milestone. The [[file:nyxt-build-evidence.json][core-build record]] describes the separate clean-disk
 source build. Neither is relabeled as the current normal-app result.
 
+The subsequent [[file:dispatch-evidence.json][combined dispatch/recovery qualification]] repeats normal
+browsing and the full crash sequence in one guest after adding bounded
+queues, frame coalescing and fixed workers. See [[file:DISPATCH.org][its exact scope and limits]].
+The supported-browser merge gates remain open.
+
 * Architecture
 
 #+begin_example
@@ -56,16 +61,18 @@ Presentation runs inside the Nyxt app world. Its Layer client uses the same
 world-facing WindowServer service as other isolated applications. The old
 Nyxt Windows broker and its second socket have been removed.
 
-WPE owns its GLib loop on one native thread. Lisp callbacks run separately
-from the engine reply reader, allowing synchronous JavaScript requests
-inside Nyxt callbacks. Writes are serialized. The asynchronous evaluation
+WPE owns its GLib loop and bounded outbox on one native thread. Four fixed
+Lisp workers handle ordered events, scheme requests and presentation
+separately from the engine reply reader. Nyxt callbacks can make synchronous
+JavaScript requests without blocking that reader. Writes are serialized. The asynchronous evaluation
 API discards return values, including Promises, while reporting errors.
 Synchronous results use Nyxt's JSON representation, including hash tables.
 
 Frames are copied from WPE's premultiplied BGRA buffers, converted to RGBA
 and committed as ordinary layers. This is an initial transport with full
-frame copies. Shared surfaces, damage tracking and frame coalescing remain
-performance work.
+frame copies. Pending frames now coalesce by view in bounded native and
+Lisp queues. Shared surfaces, damage tracking and hidden-view throttling
+remain performance work. See [[file:DISPATCH.org][dispatch ownership and bounds]].
 
 * Runtime fixes exposed by the browser
 

@@ -18,8 +18,11 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include "nyxt-outbox.hpp"
 extern "C" void darter_register_openssl(void);
-struct Header { uint32_t op,id,seq,a,b,n; };
+using NyxtWire::Header;
+static NyxtWire::Outbox outbox;
+static unsigned pendingJavaScript=0;
 static constexpr unsigned limit=16*1024*1024;
 static int connection=-1;
 static bool running=true;
@@ -34,24 +37,13 @@ static ssize_t wireIO(bool writing,void* data,size_t size) {
     auto n=writing?write(connection,data,size):read(connection,data,size);
     error=errno;pthread_sigmask(SIG_SETMASK,&previous,nullptr);errno=error;return n;
 }
-static void transfer(const void* data,size_t size,gint64 deadline) {
-    auto p=static_cast<const char*>(data);
-    while(size && running) {
-        if(g_get_monotonic_time()>=deadline){failed=true;running=false;return;}
-        auto n=wireIO(true,const_cast<char*>(p),size>32768?32768:size);
-        if(n<0 && errno==EINTR)continue;
-        if(n<0 && errno==EAGAIN){usleep(1000);continue;}
-        if(n<=0){failed=true;running=false;return;} p+=n;size-=n; }
-}
 static void send(unsigned op,unsigned id,unsigned seq=0,unsigned a=0,unsigned b=0,
                  const void* bytes=nullptr,size_t size=0) {
-    static bool sending=false;
-    if(sending){fprintf(stderr,"NYXT REENTRANT SEND op=%u\n",op);abort();}
-    sending=true;
-    Header h{op,id,seq,a,b,static_cast<uint32_t>(size)};
-    if(trace)fprintf(stderr,"NYXT send %u id=%u seq=%u bytes=%zu\n",op,id,seq,size);
-    const auto deadline=g_get_monotonic_time()+10*G_USEC_PER_SEC;
-    transfer(&h,sizeof h,deadline);if(size)transfer(bytes,size,deadline);sending=false;
+    if(!running)return;
+    if(size>limit || !outbox.push(Header{op,id,seq,a,b,static_cast<uint32_t>(size)},bytes,g_get_monotonic_time())) {
+        fprintf(stderr,"NYXT output queue full op=%u bytes=%zu\n",op,size);
+        failed=true;running=false;
+    }
 }
 static void text(unsigned op,unsigned id,unsigned seq,const char* s) {
     if(!s)s="";send(op,id,seq,0,0,s,strlen(s));
@@ -97,13 +89,20 @@ static void frame(WPEView*,WPEBuffer* buffer,gpointer data) {
     send(1100,p->id,0,w,h,packed.data(),packed.size());
 }
 static void destroy(Page* p) {
+    outbox.discardFrames(p->id);
+    for(auto it=requests.begin();it!=requests.end();){
+        if(webkit_uri_scheme_request_get_web_view(it->second)!=p->web){++it;continue;}
+        auto e=g_error_new_literal(G_IO_ERROR,G_IO_ERROR_CANCELLED,"View deleted");
+        webkit_uri_scheme_request_finish_error(it->second,e);g_error_free(e);
+        g_object_unref(it->second);it=requests.erase(it);
+    }
     g_signal_handlers_disconnect_by_data(p->web,p);
     auto view=webkit_web_view_get_wpe_view(p->web);
     g_signal_handlers_disconnect_by_data(view,p);wpe_view_set_toplevel(view,nullptr);
     g_object_unref(p->web);g_object_unref(p->top);delete p;
 }
 static Page* create(unsigned id,unsigned w,unsigned h,bool chrome) {
-    if(!id||pages.count(id)||!w||!h||w>2048||h>2048)return nullptr;
+    if(!id||pages.count(id)||pages.size()>=64||!w||!h||w>2048||h>2048)return nullptr;
     WebKitWebView* related=nullptr;
     if(chrome)for(auto pair:pages)if(pair.second->chrome){related=pair.second->web;break;}
     auto web=related?WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW,
@@ -140,6 +139,17 @@ static void command(Header h,char* data) {
     if(h.op==1){if(trace)fprintf(stderr,"NYXT create view %u %ux%u\n",h.id,h.a,h.b);if(!create(h.id,h.a,h.b,h.n&&data[0]==1)){text(1001,h.id,h.seq,"Invalid view");return;}}
     else if(h.op==9){running=false;}
     else if(h.op==18){ /* Application liveness probe; no page/URL required. */ }
+    else if(h.op==19){
+        char stats[768];snprintf(stats,sizeof stats,
+            "{\"frames\":%zu,\"frameBytes\":%zu,\"peakFrames\":%u,\"peakFrameBytes\":%zu,"
+            "\"coalesced\":%llu,\"evicted\":%llu,\"sentFrames\":%llu,\"blocked\":%llu,"
+            "\"controls\":%u,\"controlBytes\":%zu,\"schemeRequests\":%zu,\"javascript\":%u}",
+            outbox.pendingFrames(),outbox.frameBytes,outbox.peakFrames,outbox.peakFrameBytes,
+            (unsigned long long)outbox.coalesced,(unsigned long long)outbox.evicted,
+            (unsigned long long)outbox.sentFrames,(unsigned long long)outbox.blocked,
+            outbox.controlCount,outbox.controlBytes,requests.size(),pendingJavaScript);
+        text(1000,0,h.seq,stats);return;
+    }
     else if(h.op==11){
         // Match upstream Nyxt's WebKit scheme policy. Marking every scheme
         // local prevents the UI from fetching its own Lisp callback URLs.
@@ -151,6 +161,10 @@ static void command(Header h,char* data) {
         else if(!strcmp(data,"view-source"))
             webkit_security_manager_register_uri_scheme_as_no_access(security,data);
         webkit_web_context_register_uri_scheme(context,data,+[](WebKitURISchemeRequest*r,gpointer){
+            if(requests.size()>=128){
+                auto e=g_error_new_literal(G_IO_ERROR,G_IO_ERROR_NO_SPACE,"Too many scheme requests");
+                webkit_uri_scheme_request_finish_error(r,e);g_error_free(e);return;
+            }
             auto n=++nextRequest;requests[n]=WEBKIT_URI_SCHEME_REQUEST(g_object_ref(r));
             auto web=webkit_uri_scheme_request_get_web_view(r);unsigned id=0;
             for(auto pair:pages)if(pair.second->web==web)id=pair.first;
@@ -171,13 +185,15 @@ static void command(Header h,char* data) {
         switch(h.op) {
         case 2:webkit_web_view_load_uri(p->web,data);break;
         case 3:webkit_web_view_load_html(p->web,data,"nyxt:blank");break;
-        case 4:{auto token=new Header(h);
+        case 4:{
+            if(pendingJavaScript>=128){text(1001,h.id,h.seq,"Too many JavaScript requests");return;}
+            ++pendingJavaScript;auto token=new Header(h);
             std::string script(data,h.n);
             // Fire-and-forget evaluation must not serialize a Promise or DOM
             // object as a result. JavaScript exceptions still reach the caller.
             if(!h.seq)script+="\n;void 0;";
             webkit_web_view_evaluate_javascript(p->web,script.c_str(),script.size(),nullptr,nullptr,nullptr,
-                +[](GObject*o,GAsyncResult*r,gpointer d){auto h=static_cast<Header*>(d);GError*e=nullptr;
+                +[](GObject*o,GAsyncResult*r,gpointer d){--pendingJavaScript;auto h=static_cast<Header*>(d);GError*e=nullptr;
                     auto v=webkit_web_view_evaluate_javascript_finish(WEBKIT_WEB_VIEW(o),r,&e);
                     if(e){text(1001,h->id,h->seq,e->message);g_error_free(e);}
                     else {auto json=v?jsc_value_to_json(v,0):nullptr;text(1000,h->id,h->seq,json?json:"null");g_free(json);}
@@ -217,7 +233,7 @@ int main(int argc,char**argv) {
     context=webkit_web_context_new();session=webkit_network_session_new_ephemeral();
     display=WPE_DISPLAY(g_object_new(nyxt_display_get_type(),nullptr));
     GError* error=nullptr;if(!wpe_display_connect(display,&error))return 5;
-    std::vector<char> input;send(1000,0);
+    std::vector<char> input;gint64 inputBegan=0;send(1000,0);
     while(running){
         // Interleave commands with every GLib turn. Animated UI panels may
         // keep the context continuously ready; draining dozens of turns first
@@ -226,23 +242,37 @@ int main(int argc,char**argv) {
         // Read only when ready: the shared socket API does not implement
         // per-call MSG_DONTWAIT. Never park GLib's event loop in recv().
         pollfd ready{connection,POLLIN,0};
-        if(poll(&ready,1,0)>0){
+        bool complete=false;
+        if(input.size()>=sizeof(Header)){
+            Header h;memcpy(&h,input.data(),sizeof h);
+            if(h.n>limit){failed=true;break;}
+            complete=input.size()>=sizeof h+h.n;
+        }
+        if(!complete && poll(&ready,1,0)>0){
             char chunk[16384];auto n=wireIO(false,chunk,sizeof chunk);
             if(n==0)break;
             if(n<0&&errno!=EAGAIN&&errno!=EINTR)break;
-            if(n>0)input.insert(input.end(),chunk,chunk+n);
+            if(n>0){
+                if(input.empty())inputBegan=g_get_monotonic_time();
+                input.insert(input.end(),chunk,chunk+n);
+            }
         }
-        while(input.size()>=sizeof(Header)){
+        for(unsigned commands=0;running && commands<32 && input.size()>=sizeof(Header);++commands){
             Header h;memcpy(&h,input.data(),sizeof h);
             if(h.n>limit){running=false;break;}
             if(input.size()<sizeof h+h.n)break;
             std::vector<char> body(input.begin()+sizeof h,input.begin()+sizeof h+h.n);body.push_back(0);
-            input.erase(input.begin(),input.begin()+sizeof h+h.n);command(h,body.data());
+            input.erase(input.begin(),input.begin()+sizeof h+h.n);inputBegan=g_get_monotonic_time();command(h,body.data());
+        }
+        if(!input.empty() && g_get_monotonic_time()-inputBegan>=10*G_USEC_PER_SEC){failed=true;running=false;}
+        if(running && !outbox.pump(g_get_monotonic_time(),[](char* p,size_t n){return wireIO(true,p,n);})){
+            fprintf(stderr,"NYXT output stalled or disconnected\n");failed=true;running=false;
         }
         usleep(1000);
     }
     for(auto pair:requests){auto e=g_error_new_literal(G_IO_ERROR,G_IO_ERROR_CANCELLED,"Browser closed");
         webkit_uri_scheme_request_finish_error(pair.second,e);g_error_free(e);g_object_unref(pair.second);}
+    requests.clear();
     for(auto pair:pages)destroy(pair.second);
     g_object_unref(session);g_object_unref(context);g_object_unref(display);close(connection);
     puts("NYXT ENGINE EXIT");return failed?1:0;

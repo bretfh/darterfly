@@ -19,8 +19,10 @@
 (defvar *socket-path* nil)
 (defvar *next-id* 0)
 (defvar *serial* 0)
-(defvar *buffers* (make-hash-table))
-(defvar *native-windows* (make-hash-table))
+(defvar *buffers* (make-hash-table :synchronized t))
+(defvar *native-windows* (make-hash-table :synchronized t))
+(defvar *registry-lock* (bt:make-lock "Nyxt IDs"))
+(defun next-id () (bt:with-lock-held (*registry-lock*) (incf *next-id*)))
 (defvar *replies* (make-hash-table))
 (defvar *reply-lock* (bt:make-lock "WPE replies"))
 (defvar *failure* nil)
@@ -29,6 +31,10 @@
 (defvar *event-count* 0)
 (defvar *engine-thread* nil)
 (defvar *input-thread* nil)
+(defvar *dispatch-threads* nil)
+(defvar *event-queue* nil)
+(defvar *scheme-queue* nil)
+(defvar *frame-queue* nil)
 (defvar *shutdown-complete* nil)
 (defvar *shutdown-lock* (sb-thread:make-mutex :name "Nyxt shutdown"))
 (defun window-call (op id &rest keys)
@@ -50,6 +56,8 @@
       (apply #'engine-send op (native-id buffer) keys))))
 (defun rpc (op id &rest keys)
   (let ((seq (bt:with-lock-held (*reply-lock*)
+               (when (>= (hash-table-count *replies*) 128)
+                 (error "Too many pending WPE requests"))
                (setf (gethash (incf *serial*) *replies*) :pending) *serial*)))
     (unwind-protect
         (progn
@@ -66,12 +74,42 @@
           (setf *failure* (format nil "WPE operation ~d timed out" op))
           (error "~a" *failure*))
       (bt:with-lock-held (*reply-lock*) (remhash seq *replies*)))))
-(defun callback-thread (thunk)
-  (bt:make-thread
-    (lambda () (handler-case (funcall thunk)
-      (error (e) (unless *closing*
-                   (format t "~&[NYXT WPE CALLBACK ERROR] ~a~%" e)
-                   (finish-output) (setf *failure* e))))) :name "Nyxt WPE callback"))
+(defun dispatch-worker (queue)
+  (loop for thunk = (darterfly/nyxt-work:take queue) while thunk do
+    (unless *closing*
+      (handler-case (funcall thunk)
+        (error (e) (unless *closing*
+                     (format t "~&[NYXT WPE CALLBACK ERROR] ~a~%" e)
+                     (finish-output) (setf *failure* e)))))))
+(defun start-dispatch ()
+  (setf *event-queue* (darterfly/nyxt-work:make-queue)
+        *scheme-queue* (darterfly/nyxt-work:make-queue :limit 64)
+        *frame-queue* (darterfly/nyxt-work:make-queue
+                       :limit 64 :byte-limit (* 64 1024 1024) :coalesce t)
+        *dispatch-threads*
+        (loop for (queue name) in
+          (list (list *event-queue* "Nyxt ordered events")
+                (list *scheme-queue* "Nyxt schemes 1")
+                (list *scheme-queue* "Nyxt schemes 2")
+                (list *frame-queue* "Nyxt presentation"))
+          collect (let ((q queue)) (app-thread (lambda () (dispatch-worker q)) name)))))
+(defun callback-thread (id buffer thunk bytes)
+  ;; One FIFO worker preserves event order. It may make synchronous engine
+  ;; calls: the reply reader and scheme workers never wait on this queue.
+  (darterfly/nyxt-work:enqueue *event-queue* id
+    (lambda () (when (and (not *closing*) (eql id (native-id buffer)))
+                 (funcall thunk))) bytes))
+(defun queue-frame (id buffer width height pixels)
+  (unless (and (<= 1 width 2048) (<= 1 height 2048)
+               (= (length pixels) (* width height 4)))
+    (error "Invalid WPE frame"))
+  (darterfly/nyxt-work:enqueue *frame-queue* id
+    (lambda ()
+      ;; A queued frame must not recreate a deleted view's cached pixels.
+      (bt:with-lock-held ((native-lock buffer))
+        (when (and (not *closing*) (eql id (native-id buffer)))
+          (window-call 104 id :a width :b height :data pixels)
+          (incf (native-frame-count buffer))))) (length pixels)))
 (defun scheme-request (id seq uri)
   (handler-case
     (let* ((*read-eval* nil) (parsed (quri:uri uri))
@@ -110,14 +148,13 @@
                            (darterfly/nyxt-wire:text data)))))
             (1100
              (when (and buffer (native-id buffer) (not *closing*))
-               (incf (native-frame-count buffer))
-               (window-call 104 id :a a :b b :data data)))
+               (queue-frame id buffer a b data)))
             (1101
              (when buffer
                (let ((uri (quri:uri (darterfly/nyxt-wire:text data))))
                  (when (= a 3) (setf (native-ready buffer) t))
                  (when (and (web-buffer-p buffer) (native-navigation buffer))
-                   (callback-thread
+                   (callback-thread id buffer
                      (lambda ()
                        (setf (url buffer) uri)
                        (case a
@@ -127,19 +164,23 @@
                          (2 (on-signal-load-committed buffer uri))
                          (3 (setf (nyxt::status buffer) :finished)
                             (on-signal-load-finished buffer uri
-                              (native-title buffer))))))))))
-            (1102 (when buffer (setf (native-title buffer) (darterfly/nyxt-wire:text data))
-                    (when (web-buffer-p buffer)
-                      (callback-thread (lambda ()
-                        (on-signal-notify-title buffer (native-title buffer)))))))
+                              (native-title buffer))))) (length data))))))
+            (1102 (when buffer
+                    (let ((title (darterfly/nyxt-wire:text data)))
+                      (setf (native-title buffer) title)
+                      (when (web-buffer-p buffer)
+                        (callback-thread id buffer
+                          (lambda () (on-signal-notify-title buffer title)) (length data))))))
             (1103 (when buffer (setf (native-url buffer) (darterfly/nyxt-wire:text data))))
             (1104 (let ((uri (darterfly/nyxt-wire:text data)))
-                    (callback-thread (lambda () (scheme-request id seq uri)))))
+                    (darterfly/nyxt-work:enqueue *scheme-queue* id
+                      (lambda () (scheme-request id seq uri)) (length data))))
             (1106 (unless *closing*
                     (setf *failure* (darterfly/nyxt-wire:text data))))
             (1105 (format t "~&[NYXT PAGE ERROR] ~a~%" (darterfly/nyxt-wire:text data))
                   (when (and buffer (web-buffer-p buffer))
-                    (setf (nyxt::status buffer) :failed)))))))
+                    (callback-thread id buffer
+                      (lambda () (setf (nyxt::status buffer) :failed)) (length data))))))))
     (error (e) (unless *closing* (setf *failure* e)
                  (format t "~&[NYXT ENGINE CONNECTION ERROR] ~a~%" e)))))
 (declaim (ftype function input-loop))
@@ -156,6 +197,7 @@
       :output "/tmp/nyxt-engine.log" :error-output :output
       :if-output-exists :append))
   (setf *engine* (darterfly/nyxt-wire:connect-local *socket-path*))
+  (start-dispatch)
   (setf *engine-thread* (app-thread #'engine-loop "WPE events")
         *input-thread* (app-thread #'input-loop "Darterfly window input"))
   (maphash (lambda (name callbacks) (declare (ignore callbacks))
@@ -190,6 +232,8 @@
   (sb-thread:with-mutex (*shutdown-lock* :timeout 1)
     (unless *shutdown-complete*
       (setf *closing* t)
+      (dolist (queue (list *event-queue* *scheme-queue* *frame-queue*))
+        (when queue (darterfly/nyxt-work:close-queue queue)))
       (when *engine*
         (let ((darterfly/nyxt-wire:*io-timeout* 1))
           (ignore-errors (engine-send 9 0))))
@@ -201,7 +245,7 @@
         (format t "~&[NYXT ENGINE WAIT ~s]~%" (uiop:wait-process *engine-process*)))
       (when *engine* (darterfly/nyxt-wire:cancel-connection *engine*))
       (when *windows* (ignore-errors (window-call 109 0)))
-      (dolist (thread (list *engine-thread* *input-thread*))
+      (dolist (thread (append (list *engine-thread* *input-thread*) *dispatch-threads*))
         (when (and thread (not (eq thread (bt:current-thread))))
           (sb-thread:join-thread thread :timeout 2 :default nil)))
       ;; All remaining callbacks belong to this app world. Its exit reclaims
@@ -233,7 +277,7 @@
   (ffi-buffer-initialize-foreign-object buffer))
 (defmethod ffi-buffer-initialize-foreign-object ((buffer wpe-buffer))
   (unless (native-id buffer)
-    (setf (native-id buffer) (incf *next-id*)
+    (setf (native-id buffer) (next-id)
           (gethash (native-id buffer) *buffers*) buffer)
     (rpc 1 (native-id buffer) :a (native-width buffer) :b (native-height buffer)
       :data (vector (if (web-buffer-p buffer) 0 1)))
@@ -280,6 +324,9 @@
           (declare (ignore key))
           (setf (native-layout window)
                 (remove buffer (native-layout window) :key #'first))) *native-windows*)
+        (darterfly/nyxt-work:discard *frame-queue* id)
+        (darterfly/nyxt-work:discard *event-queue* id)
+        (darterfly/nyxt-work:discard *scheme-queue* id)
         (window-call 108 id)
         (engine-send 8 id) (remhash id *buffers*)
         (setf (native-id buffer) nil)))))
@@ -309,7 +356,7 @@
     (place window message (+ height sh) mh)
     (when prompt (place window prompt (+ height sh mh) ph))))
 (defmethod initialize-instance :after ((window wpe-window) &key &allow-other-keys)
-  (setf (native-id window) (incf *next-id*)
+  (setf (native-id window) (next-id)
         (gethash (native-id window) *native-windows*) window
         (native-height (status-buffer window)) 32
         (native-height (message-buffer window)) 24)

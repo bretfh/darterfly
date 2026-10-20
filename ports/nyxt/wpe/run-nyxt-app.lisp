@@ -41,6 +41,9 @@
           (append (image::root-entries) (image::nyxt-application-entries root)
             (list (list :file "Users/darterfly/nyxt-browser-checks.lisp"
                     (image::octets (darterfly-file "ports/nyxt/wpe/nyxt-browser-checks.lisp"))))
+            (when (uiop:getenv "DARTERFLY_NYXT_DISPATCH")
+              (list (list :file "Users/darterfly/nyxt-dispatch-checks.lisp"
+                      (image::octets (darterfly-file "ports/nyxt/wpe/nyxt-dispatch-checks.lisp")))))
             ;; Only the test disk trusts this fixture CA. Installed app code
             ;; and package entries use the regular system trust store.
             (when (uiop:getenv "DARTER_HTTP_FIXTURE_DIR")
@@ -117,6 +120,10 @@
         (nyxt-app-await c "/tmp/nyxt-app-checks.log" "[NYXT BROWSER SCREENSHOT READY]")
         (nyxt-app-shot "page")
         (nyxt-app-await c "/tmp/nyxt-app-checks.log" "[NYXT BROWSER QUALIFICATION PASS]")
+        (when (uiop:getenv "DARTERFLY_NYXT_DISPATCH")
+          (nyxt-app-ask c
+            "(unwind-protect (nyxt-eval *nyxt-app* \"(with-open-file (s \\\"/tmp/nyxt-dispatch-checks.log\\\" :direction :output :if-exists :supersede) (let ((*standard-output* s) (*error-output* s)) (load \\\"/Users/darterfly/nyxt-dispatch-checks.lisp\\\")))\" :timeout 180) (write-string (uiop:read-file-string \"/tmp/nyxt-dispatch-checks.log\")) (finish-output))" 200)
+          (format t "~&[NYXT DISPATCH QUALIFICATION PASS]~%"))
         (image:send-keys (string (code-char 17)))
         (nyxt-app-ask c
           "(progn (loop repeat 300 until (and (eq :stopped (getf (darterfly/init:inspect-job \"Nyxt\") :state)) (null (darterfly/run:find-world \"Nyxt\")) (zerop (hash-table-count darterfly/bsd::*native-processes*)) (null (gethash (darterfly/run:world-id *nyxt-app*) darterfly/layer::*world-clients*))) do (sleep .1))
@@ -145,7 +152,17 @@
         (format t "~&[NYXT APP QUALIFICATION PASS]~%"))
         (when (uiop:getenv "DARTERFLY_NYXT_RECOVERY")
           (load (darterfly-file "ports/nyxt/wpe/nyxt-crash-checks.lisp"))
-          (nyxt-crash-checks c)))
+          (nyxt-crash-checks c))
+        ;; An app cleanup marker must not hide a stopped supervisor worker.
+        (let ((transcript (image:transcript c)))
+          (when (or (search "panic(" transcript)
+                    (search "debugger invoked" transcript)
+                    (search (format nil "~%stopped ") transcript))
+            (error "Browser run left a kernel/supervisor failure; inspect guest transcript")))
+        (when (and (uiop:getenv "DARTERFLY_NYXT_DISPATCH")
+                   (uiop:getenv "DARTERFLY_NYXT_RECOVERY")
+                   (not (uiop:getenv "DARTERFLY_NYXT_RECOVERY_ONLY")))
+          (format t "~&[NYXT COMBINED QUALIFICATION PASS]~%")))
       (ignore-errors
         (nyxt-app-ask c
           "(progn (write-string (or (ignore-errors (uiop:read-file-string \"/tmp/nyxt-application.log\")) \"\")) (finish-output))" 20))

@@ -64,6 +64,7 @@
       (loop for (source target) in
         '(("ports/nyxt/wpe/nyxt-wire.lisp" "Users/darterfly/nyxt-wire.lisp")
           ("ports/nyxt/wpe/nyxt-windows.lisp" "Users/darterfly/nyxt-windows.lisp")
+          ("ports/nyxt/wpe/nyxt-work.lisp" "Users/darterfly/nyxt-work.lisp")
           ("ports/nyxt/wpe/nyxt-renderer.lisp" "Users/darterfly/nyxt-renderer.lisp")
           ("ports/nyxt/wpe/nyxt-browser-checks.lisp" "Users/darterfly/nyxt-browser-checks.lisp")
           ("build/lld/ld.lld" "usr/bin/ld.lld")

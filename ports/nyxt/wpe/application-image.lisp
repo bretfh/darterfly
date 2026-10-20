@@ -35,7 +35,7 @@
       (tree-entries (merge-pathnames "nyxt-native/root/usr/" root) "usr")
       (tree-entries (merge-pathnames "nyxt-source/" root) "usr/src/nyxt")
       (loop for name in '("nyxt-application" "nyxt-load" "nyxt-toolchain"
-                         "nyxt-wire" "nyxt-windows" "nyxt-renderer")
+                         "nyxt-wire" "nyxt-work" "nyxt-windows" "nyxt-renderer")
         collect (list :file (format nil "usr/lib/nyxt/~a.lisp" name)
                       (octets (source (format nil "ports/nyxt/wpe/~a.lisp" name)))))
       (list (list :file "usr/lib/nyxt/crt0.o" (octets (build-path "cxx/crt0.o")))

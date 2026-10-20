@@ -93,6 +93,7 @@
                 (sb-posix:setenv "SSL_CERT_FILE" "/Users/darterfly/nyxt-ca.pem" 1)
                 (sb-posix:setenv "GIO_USE_TLS" "openssl" 1)
                 (load "/Users/darterfly/nyxt-wire.lisp")
+                (load "/Users/darterfly/nyxt-work.lisp")
                 (load "/Users/darterfly/nyxt-windows.lisp")
                 (load "/Users/darterfly/nyxt-renderer.lisp")
                 (load "/Users/darterfly/nyxt-browser-checks.lisp")))

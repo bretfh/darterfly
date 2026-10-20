@@ -17,6 +17,11 @@ The accompanying regressions passed 88 host checks and 133 actual-OS checks
 (47 native process checks plus 86 runtime, world and dynamic-loading checks).
 The pinned Nyxt closure remains unchanged across all 5,615 source files.
 
+The later [[file:dispatch-evidence.json][combined dispatch/recovery run]] repeats the entire sequence
+after bounded queues and two kernel late-reply lifetime fixes. Its guest
+transcript also rejects stopped supervisor workers; [[file:DISPATCH.org][the dispatch notes]]
+describe those additional failures and regression coverage.
+
 * Ownership and policy
 
 The normal Dock entry still submits Nyxt to init. Nyxt owns the Lisp renderer
@@ -62,14 +67,16 @@ on completion, error or timeout. Late replies are discarded.
 Transport writers, including writer-lock acquisition, have a ten-second
 budget. A partial header/body shares a ten-second deadline. An idle event
 reader may wait until an event arrives, but cancellation wakes it. The native
-engine also stops retrying a blocked output after ten seconds. This bounds a
-stall; it does not yet provide asynchronous frame queues or frame coalescing.
+engine now uses bounded nonblocking output with frame coalescing; a stalled
+active packet or expired control packet fails the session. See
+[[file:DISPATCH.org][the subsequent dispatch changes and combined-run qualification]].
 
 Shutdown tolerates partial startup and repeated calls. It tries a graceful
 engine stop with a one-second send budget, polls for exit for two seconds,
 then uses the existing UIOP/BSD urgent termination path and polls for two more
 seconds. It calls wait-process only after a nonblocking status check says the
-process is dead. Reader/input joins are limited to two seconds each. The
+process is dead. Reader/input and fixed dispatch-worker joins are limited
+to two seconds each. The
 engine socket pathname includes the owning startup thread's kernel TID.
 
 Normal renderer shutdown also drains existing NFiles writers, with a

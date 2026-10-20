@@ -3,6 +3,7 @@
 (defvar *nyxt-runtime-load* nil)
 (let ((*nyxt-runtime-load* t)) (load "/usr/lib/nyxt/nyxt-load.lisp"))
 (load "/usr/lib/nyxt/nyxt-wire.lisp")
+(load "/usr/lib/nyxt/nyxt-work.lisp")
 (load "/usr/lib/nyxt/nyxt-windows.lisp")
 (load "/usr/lib/nyxt/nyxt-renderer.lisp")
 (defpackage #:darterfly/nyxt-application

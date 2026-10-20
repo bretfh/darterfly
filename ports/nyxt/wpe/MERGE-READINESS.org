@@ -13,6 +13,37 @@ This document separates measured milestones from remaining acceptance gates.
 The original browser record is historical. The current integration also uses
 a resumed source-build disk; it does not qualify a clean installation.
 
+* Overall status
+
+Native browser bring-up is working. Upstream Nyxt runs in an isolated Lisp
+world; WPE provides HTML/CSS/JavaScript and HTTPS, with native windows and
+basic input through the normal Dock/init/WindowServer path. There is no
+Linux runtime, and the pinned Nyxt source remains unchanged. WPE and its
+dependencies still have target-port patches and are cross-built.
+
+This is a working native browser under qualification, not yet a supported
+browser for daily use. The remaining work is application reliability and
+completion: lifecycle stress, scrolling/clipboard/window interaction,
+durable profiles and database locks, authority review, and a reproducible
+clean install. Broader site coverage and resource measurements are also
+unqualified. Passing an individual test below does not close those gates.
+
+The current dispatch changes remove blocking native output and unbounded
+callback creation. The complete single-guest browser/dispatch/recovery run
+passes after both late-reply cleanup fixes. See [[file:DISPATCH.org][the dispatch notes]] and
+[[file:dispatch-evidence.json][the exact revision and evidence]]. This closes the blocked-frame-consumer
+gate, not the remaining lifecycle, interaction or persistence gates.
+
+Master has advanced beyond the integrated 54ef189 baseline. Review against
+facd54d found a concrete ABI collision: master uses operation 85 for
+=calls-live=, while this branch uses it for native process signals. Resolve
+that collision and rebuild affected native runtime consumers before merge.
+Master also now requires explicit world placement for applications, bounds
+service dispatch, and changes world-call reclamation. Preserve Nyxt's
+explicit isolated-world launch and both sets of call-lifetime fixes, then
+qualify the integrated revision. This branch's guest result does not qualify
+an assumed future merge result.
+
 * Proven baseline
 
 The recorded actual-OS run starts upstream Nyxt in an isolated Lisp world,
@@ -119,21 +150,21 @@ regression checks. The separate host checks pass 88 assertions. See
 
 ** Event ordering and backpressure
 
-The native send path now fails a blocked transfer after ten seconds, allowing
-session recovery. It still occupies the GLib thread during that interval.
-The Lisp engine reader still presents full frames synchronously through the
-Layer service. RPC replies compete with pixels. =callback-thread= creates a fresh thread per
-callback; independent load callbacks can finish out of order. Several global
-tables have multiple readers/writers with no explicit ownership rule.
+The native GLib loop now queues output and pumps bounded batches without
+waiting for a blocked socket. Pending frames coalesce by view; partial
+packets finish intact and control replies retain FIFO order. Both pending
+frame queues have count/byte caps. Requests and control output are bounded.
 
-Keep the GLib thread nonblocking. Bound outbound queues and pending requests;
-coalesce obsolete frames per view while preserving control replies. RPC
-entries now have scoped lifetimes and late replies are discarded; a hard
-limit on concurrent callers is still needed. Give Lisp events explicit
-ownership and ordered dispatch, with a bounded callback executor for work that can call synchronous engine RPC. Do not introduce a
-single callback thread that deadlocks waiting for a reply it must itself
-dispatch. Cancel requests on view/session destruction and ignore late replies
-safely.
+The Lisp reader resolves RPC replies independently of presentation. Four
+fixed workers replace per-event threads: one FIFO event worker, two scheme
+workers and one presentation worker. View deletion drops queued work and
+cancels native scheme requests. Shutdown closes the queues and wakes their
+workers. See [[file:DISPATCH.org][ownership, exact limits and qualification procedure]].
+
+This does not serialize every upstream command or layout mutation. Stress
+navigation generations, deletion, GC and signal interruption before claiming
+complete event-lifetime correctness. Hidden-view throttling, damage tracking
+and reducing frame copies remain efficiency work.
 
 ** Persistence
 
@@ -235,8 +266,9 @@ actionable browser state, not an unbounded wait.
 - [ ] Close actual OS sockets mid-header and mid-frame. Host transport tests
   cover partial packets and blocked writers; guest truncation injection is
   still required.
-- [ ] Pause the frame consumer while the page animates. Queues remain within
-  configured limits and resume without replaying a backlog of obsolete frames.
+- [X] Pause presentation and the real engine socket reader while the page
+  animates. Queues stay within configured limits, RPC/input processing
+  continues, and the presentation cache converges to the final frame.
 - [ ] Stress navigation, buffer deletion and GC/signal interruption. No lost
   bytes, stale callbacks, use-after-delete or reply-table growth.
 
@@ -315,9 +347,9 @@ engine port/build, Nyxt renderer, desktop integration and qualification.
   Include a manual desktop session and host-independent launch.
 - [ ] Validate the final integrated revision, not just earlier screenshots.
   Record skipped features, warnings and measured resource requirements.
-- [ ] Resolve the pending merge, review staged/untracked files, and check that
-  generated disks, caches and transient build products are excluded. Keep
-  compact evidence and runnable tests.
+- [ ] Review the final integration and staged/untracked files; keep generated
+  disks, caches and transient build products excluded. Preserve compact
+  evidence and runnable tests. The earlier pending D2 merge is resolved.
 - [ ] Merge the validated branch into master and repeat installed-OS smoke
   tests on the resulting merge revision. Keep the previous boot generation
   available for rollback.
@@ -338,8 +370,12 @@ facilities.
 
 * Immediate next change
 
-Normal-app and bounded crash-recovery qualification are recorded. Next,
-make frame output nonblocking, coalesce obsolete frames and bound/serialize
-callback work without blocking RPC replies. Then qualify lifecycle stress
-and finish persistence, broader input and fresh-install reproducibility.
+The combined browser, bounded-dispatch and full crash-recovery run is now
+recorded. First reconcile newer master, including the operation-85 collision,
+explicit app-world placement and overlapping call-lifetime fixes. Rerun the
+combined qualification on that integrated revision.
+
+Then qualify socket truncation, navigation/deletion/GC interruption and the
+20-cycle lifecycle test. Follow with durable profiles and database locks,
+complete interaction, authority review and fresh-install reproducibility.
 The branch remains under qualification for daily use and final merge.
