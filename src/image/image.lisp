@@ -8,11 +8,11 @@
 (defvar *build* (asdf:system-relative-pathname :darterfly "build/"))
 
 (defun asset (name)
-  "Locate external artwork and fonts, shared with the Org workspace."
+  "Locate runtime artwork and fonts, optionally overridden by a build input."
   (merge-pathnames name
     (uiop:ensure-directory-pathname
       (or (uiop:getenv "DARTERFLY_ASSET_ROOT")
-          (merge-pathnames "org/darterfly/assets/" (user-homedir-pathname))))))
+          (asdf:system-relative-pathname :darterfly "assets/")))))
 
 (defun build-path (name)
   (merge-pathnames name (ensure-directories-exist *build*)))
