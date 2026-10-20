@@ -236,3 +236,74 @@
       (is (equal (format nil "on a big disk~%") (file-text v "/a.txt")))
       (is (= 300000 (length (file-text v "/b.txt")))))
     (delete-file image)))
+
+(in-suite apfs)
+
+(test repeated-directories-survive-edit-and-remount
+  (let* ((image (merge-pathnames "duplicate-directories.img" (scratch)))
+         (darterfly/vfs:*root* nil) (darterfly/vfs:*mounts* nil))
+    (apfs:newfs image :entries (list '(:dir "tree") '(:dir "/tree/")
+                                   (list :file "tree/child" (text "kept"))))
+    (darterfly/vfs:vfs-mount (darterfly/vfs:make-ram-node :vdir #o755) "/")
+    (darterfly/vfs:vfs-mkdir "/mnt" #o755)
+    (multiple-value-bind (r w) (apfs:file-store image)
+      (let* ((volume (apfs:mount-writable r w "/mnt"))
+             (tree (apfs::nx-fs-tree (apfs::wvolume-nx volume)))
+             (keys (loop for leaf across (apfs::tree-leaves tree)
+                         append (coerce (apfs::leaf-keys leaf) 'list))))
+        (is (= (length keys) (length (remove-duplicates keys :test #'equalp))))))
+    (darterfly/vfs:vfs-unlink "/mnt/tree/child")
+    (darterfly/vfs:vfs-remove "/mnt/tree" t)
+    (multiple-value-bind (r w) (apfs:file-store image)
+      (let ((volume (apfs::make-wvolume (apfs::open-writable r w))))
+        (is (null (apfs::wlookup volume apfs::+root-dir-ino-num+ "tree")))))))
+
+(test older-images-with-repeated-directories-remain-editable
+  (let* ((image (merge-pathnames "legacy-directories.img" (scratch)))
+         (darterfly/vfs:*root* nil) (darterfly/vfs:*mounts* nil))
+    (sb-int:encapsulate 'apfs::unique-entries 'legacy-image
+                        (lambda (original entries) (declare (ignore original)) entries))
+    (unwind-protect
+         (apfs:newfs image :entries (list '(:dir "tree") '(:dir "tree")
+                                        (list :file "tree/child" (text "kept"))))
+      (sb-int:unencapsulate 'apfs::unique-entries 'legacy-image))
+    (darterfly/vfs:vfs-mount (darterfly/vfs:make-ram-node :vdir #o755) "/")
+    (darterfly/vfs:vfs-mkdir "/mnt" #o755)
+    (multiple-value-bind (r w) (apfs:file-store image) (apfs:mount-writable r w "/mnt"))
+    (darterfly/vfs:vfs-unlink "/mnt/tree/child")
+    (darterfly/vfs:vfs-remove "/mnt/tree" t)
+    (multiple-value-bind (r w) (apfs:file-store image)
+      (let* ((nx (apfs::open-writable r w))
+             (keys (mapcar #'car (apfs::nx-fs-records nx))))
+        (is (= (length keys) (length (remove-duplicates keys :test #'equalp))))
+        (is (null (apfs::wlookup (apfs::make-wvolume nx) apfs::+root-dir-ino-num+ "tree")))))))
+
+(test duplicate-files-are-refused-before-formatting
+  (signals error
+    (apfs::unique-entries '((:file "a" #(1)) (:file "/a/" #(2)))))
+  (signals error (apfs::unique-entries '((:dir "a") (:file "a" #(1)))))
+  (signals error (apfs::record-table (list (cons #(1) #(2)) (cons #(1) #(3))))))
+
+(test legacy-duplicate-keys-across-leaves-are-rewritten-together
+  (let* ((image (merge-pathnames "legacy-large-directories.img" (scratch)))
+         (darterfly/vfs:*root* nil) (darterfly/vfs:*mounts* nil))
+    (sb-int:encapsulate 'apfs::unique-entries 'legacy-image
+                        (lambda (original entries) (declare (ignore original)) entries))
+    (unwind-protect
+         (apfs:newfs image :entries
+                     (loop for i below 200 for dir = (format nil "dir~d" i)
+                           append (list (list :dir dir) (list :dir dir)
+                                        (list :file (concatenate 'string dir "/child") (text "kept")))))
+      (sb-int:unencapsulate 'apfs::unique-entries 'legacy-image))
+    (darterfly/vfs:vfs-mount (darterfly/vfs:make-ram-node :vdir #o755) "/")
+    (darterfly/vfs:vfs-mkdir "/mnt" #o755)
+    (multiple-value-bind (r w) (apfs:file-store image) (apfs:mount-writable r w "/mnt"))
+    (darterfly/vfs:vfs-unlink "/mnt/dir100/child")
+    (darterfly/vfs:vfs-remove "/mnt/dir100" t)
+    (multiple-value-bind (r w) (apfs:file-store image)
+      (let* ((nx (apfs::open-writable r w))
+             (keys (mapcar #'car (apfs::nx-fs-records nx)))
+             (volume (apfs::make-wvolume nx)))
+        (is (= (length keys) (length (remove-duplicates keys :test #'equalp))))
+        (is (= 199 (length (apfs::wentries volume apfs::+root-dir-ino-num+))))
+        (is (null (apfs::wlookup volume apfs::+root-dir-ino-num+ "dir100")))))))

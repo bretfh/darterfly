@@ -29,7 +29,11 @@
 
 (defun record-table (records)
   (let ((h (make-hash-table :test 'equalp)))
-    (dolist (r records h) (setf (gethash (car r) h) (cdr r)))))
+    (dolist (r records h)
+      (multiple-value-bind (previous present) (gethash (car r) h)
+        (when (and present (not (equalp previous (cdr r))))
+          (fail "conflicting duplicate metadata key ~s" (car r))))
+      (setf (gethash (car r) h) (cdr r)))))
 
 (defun make-wvolume (nx)
   (let ((w (%make-wvolume :nx nx :records (record-table (nx-fs-records nx)) :extents (record-table (nx-extent-records nx))
@@ -44,6 +48,8 @@
     (setf (tree-table (nx-fs-tree nx)) (wvolume-records w)
           (tree-table (nx-extent-tree nx)) (wvolume-extents w)
           (nx-fs-records nx) nil (nx-extent-records nx) nil)
+    (normalize-tree-keys (nx-fs-tree nx))
+    (normalize-tree-keys (nx-extent-tree nx))
     w))
 
 (defun wvolume-sb (w) (nx-vol-sb (wvolume-nx w)))
