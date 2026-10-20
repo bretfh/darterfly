@@ -69,3 +69,21 @@
         (when fd (bsd:close fd))
         (when (and writer (sb-thread:thread-alive-p writer))
           (sb-thread:terminate-thread writer))))))
+
+(test native-pcm-reports-pending-frames-and-live-latency-budget
+  (with-pcm-test
+    (let ((fd (open-test-pcm)))
+      (unwind-protect
+           (progn
+             (is (eq :einval (local-errno (lambda () (bsd:read fd 3)))))
+             (is (equalp #(0 0 0 0) (bsd:read fd 4)))
+             (bsd:write fd (make-array 4096 :initial-element 0))
+             (let ((status (bsd:read fd 8)))
+               (is (= 8 (length status)))
+               (is (= 1024 (apfs::u32 status 0)))
+               (is (= 25600 (apfs::u32 status 4))))
+             ;; Removing data from the queue does not make it played: the
+             ;; mixer still owns the in-flight period until hardware submit.
+             (darterfly/audio::mix-period)
+             (is (= 1024 (apfs::u32 (bsd:read fd 4) 0))))
+        (bsd:close fd)))))

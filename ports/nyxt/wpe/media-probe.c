@@ -15,6 +15,21 @@ static void video_frame(GstElement *sink, GstBuffer *buffer, GstPad *pad, void *
 int main(int argc, char **argv) {
     (void)argv;
     darter_register_media();
+    GstDeviceMonitor *monitor = gst_device_monitor_new();
+    GstCaps *caps = gst_caps_new_empty_simple("audio/x-raw");
+    gst_device_monitor_add_filter(monitor, "Audio/Sink", caps);
+    gst_caps_unref(caps);
+    if (!gst_device_monitor_start(monitor)) return 2;
+    GList *devices = gst_device_monitor_get_devices(monitor);
+    if (g_list_length(devices) != 1) return 3;
+    caps = gst_device_get_caps(devices->data);
+    int channels = 0;
+    gst_structure_get_int(gst_caps_get_structure(caps, 0), "channels", &channels);
+    gst_caps_unref(caps);
+    g_list_free_full(devices, gst_object_unref);
+    gst_device_monitor_stop(monitor); gst_object_unref(monitor);
+    if (channels != 2) return 4;
+    puts("NATIVE AUDIO DEVICE PASS channels=2");
     GError *error = NULL;
     GstElement *pipeline = gst_parse_launch(
         "filesrc name=source location=/Users/darterfly/media.webm ! decodebin name=d "

@@ -44,9 +44,12 @@
               (darterfly/bsd::sleep-until #'write-some))))))
 
 (defmethod darterfly/bsd::file-read ((file native-output) count)
-  ;; Query pending PCM frames. Four bytes, little endian; no blocking.
+  ;; Query pending PCM frames; an eight-byte read also returns the maximum
+  ;; buffering budget. Both are unsigned 32-bit little endian, nonblocking.
+  ;; Live producers need this budget to schedule ahead of the hardware.
   (when (< count 4) (darterfly/bsd::fail :einval))
-  (let ((result (make-array 4 :element-type '(unsigned-byte 8)))
+  (let ((result (make-array (if (>= count 8) 8 4)
+                            :element-type '(unsigned-byte 8)))
         (bytes 0) (end 0) (generation 0))
     (sb-thread:with-mutex (*mixer-lock*)
       (let ((s (native-stream file)))
@@ -61,6 +64,12 @@
             ;; Other applications may keep the device busy after this stream
             ;; ends. Its clock counts only through its own last submitted frame.
             (incf bytes (max 0 (- end (output-played o))))))))
+    (when (>= count 8)
+      ;; Include one mixer period between the per-open queue and HDA ring.
+      (let ((budget (floor (+ +pcm-capacity+ +ring-bytes+
+                             (* 4 +mix-frames+)) 4)))
+        (dotimes (i 4)
+          (setf (aref result (+ 4 i)) (ldb (byte 8 (* i 8)) budget)))))
     (dotimes (i 4 result)
       (setf (aref result i) (ldb (byte 8 (* i 8)) (floor bytes 4))))))
 

@@ -109,6 +109,9 @@ static Page* create(unsigned id,unsigned w,unsigned h,bool chrome) {
         "related-view",related,nullptr)):
         WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW,"web-context",context,
         "network-session",session,"display",display,nullptr));
+    if(getenv("DARTER_NYXT_PAGE_DIAGNOSTICS"))
+        webkit_settings_set_enable_write_console_messages_to_stdout(
+            webkit_web_view_get_settings(web), TRUE);
     auto top=wpe_display_create_toplevel(display,1);
     auto p=new Page{id,web,top,chrome};pages[id]=p;
     auto view=webkit_web_view_get_wpe_view(web);
@@ -219,6 +222,8 @@ static void command(Header h,char* data) {
                 deltas[0],deltas[1],FALSE,FALSE,h.a,h.b);
             wpe_view_event(view,e);wpe_event_unref(e);break;}
         case 21:webkit_web_view_execute_editing_command_with_argument(p->web,"InsertText",data);break;
+        case 23:webkit_settings_set_enable_write_console_messages_to_stdout(
+            webkit_web_view_get_settings(p->web),h.a!=0);break;
         case 22:webkit_web_view_execute_editing_command(p->web,"Delete");break;
         case 8:destroy(p);pages.erase(h.id);break;
         case 12:webkit_web_view_reload(p->web);break;
@@ -244,6 +249,14 @@ int main(int argc,char**argv) {
     auto dataPath=g_build_filename(home,".local","share","nyxt","wpe",nullptr);
     auto cachePath=g_build_filename(home,".cache","nyxt","wpe",nullptr);
     if(g_mkdir_with_parents(dataPath,0700)||g_mkdir_with_parents(cachePath,0700))return 6;
+    // WPE defaults its media download spool to /var/tmp. Keep it with the
+    // application's existing cache, and honor an explicit user override.
+    if(!g_getenv("WPE_SHELL_MEDIA_DISK_CACHE_PATH")) {
+        auto mediaPath=g_build_filename(cachePath,"media",nullptr);
+        if(g_mkdir_with_parents(mediaPath,0700)) { g_free(mediaPath); return 6; }
+        g_setenv("WPE_SHELL_MEDIA_DISK_CACHE_PATH",mediaPath,TRUE);
+        g_free(mediaPath);
+    }
     session=webkit_network_session_new(dataPath,cachePath);
     auto cookies=g_build_filename(dataPath,"cookies.sqlite",nullptr);
     webkit_cookie_manager_set_persistent_storage(

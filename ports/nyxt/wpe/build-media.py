@@ -82,7 +82,7 @@ if __name__ == '__main__':
                  'rawparse', 'subparse', 'typefind', 'videoconvertscale',
                  'videotestsrc', 'volume', 'ogg', 'opus', 'vorbis']])
         elif name == 'gst-plugins-bad':
-            meson(name, ['videoparsers=enabled'])
+            meson(name, ['videoparsers=enabled', 'opus=enabled', 'subenc=enabled'])
         elif name == 'gst-plugins-good':
             meson(name, [x+'=enabled' for x in
                 ['autodetect', 'matroska', 'isomp4', 'vpx', 'wavparse',

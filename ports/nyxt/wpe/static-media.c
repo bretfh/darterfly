@@ -40,12 +40,20 @@ static gboolean audio_close(GstAudioSink *sink) {
     return TRUE;
 }
 static gboolean audio_prepare(GstAudioSink *sink, GstAudioRingBufferSpec *spec) {
-    (void)sink;
+    DarterAudioSink *s = (DarterAudioSink *)sink;
     if (GST_AUDIO_INFO_FORMAT(&spec->info) != GST_AUDIO_FORMAT_S16LE ||
         GST_AUDIO_INFO_RATE(&spec->info) != 48000 ||
         GST_AUDIO_INFO_CHANNELS(&spec->info) != 2) return FALSE;
+    /* Live sources must schedule ahead of ALL device buffering, including
+     * the shared PCM queue and the HDA ring. Under-reporting this latency
+     * makes the ringbuffer discard valid live samples as already played. */
+    unsigned char status[8];
+    if (read(s->fd, status, sizeof status) != sizeof status) return FALSE;
+    guint max_frames = status[4] | (status[5]<<8) | (status[6]<<16) |
+                       ((guint)status[7]<<24);
+    if (!max_frames || max_frames > 48000) return FALSE;
     spec->segsize = 4096;
-    spec->segtotal = 4;
+    spec->segtotal = (max_frames * 4 + spec->segsize - 1) / spec->segsize + 2;
     return TRUE;
 }
 static gboolean audio_unprepare(GstAudioSink *sink) { (void)sink; return TRUE; }
@@ -110,12 +118,48 @@ static void darter_audio_sink_init(DarterAudioSink *s) {
     s->fd=-1; s->epoch=0; g_mutex_init(&s->lock);
 }
 
+/* Web Audio asks GstDeviceMonitor for channel capabilities. Advertise the
+ * actual native output only when the shared audio service can open it. */
+typedef GstDevice DarterAudioDevice;
+typedef GstDeviceClass DarterAudioDeviceClass;
+G_DEFINE_TYPE(DarterAudioDevice, darter_audio_device, GST_TYPE_DEVICE)
+static GstElement *device_element(GstDevice *device, const gchar *name) {
+    (void)device;
+    return gst_element_factory_make("darteraudiosink", name);
+}
+static void darter_audio_device_class_init(DarterAudioDeviceClass *klass) {
+    klass->create_element = device_element;
+}
+static void darter_audio_device_init(DarterAudioDevice *device) { (void)device; }
+
+typedef GstDeviceProvider DarterAudioProvider;
+typedef GstDeviceProviderClass DarterAudioProviderClass;
+G_DEFINE_TYPE(DarterAudioProvider, darter_audio_provider, GST_TYPE_DEVICE_PROVIDER)
+static GList *audio_devices(GstDeviceProvider *provider) {
+    (void)provider;
+    int fd = open("/dev/audio", O_RDWR | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0) return NULL;
+    close(fd);
+    GstCaps *caps = gst_static_caps_get(&pcm_pad.static_caps);
+    GstDevice *device = g_object_new(darter_audio_device_get_type(),
+        "display-name", "Darterfly default output", "device-class", "Audio/Sink",
+        "caps", caps, NULL);
+    gst_caps_unref(caps);
+    return g_list_append(NULL, device);
+}
+static void darter_audio_provider_class_init(DarterAudioProviderClass *klass) {
+    klass->probe = audio_devices;
+    gst_device_provider_class_set_static_metadata(klass, "Darterfly audio",
+        "Audio/Sink", "Shared native audio output", "Darterfly");
+}
+static void darter_audio_provider_init(DarterAudioProvider *provider) { (void)provider; }
+
 #define PLUGINS(X) \
     X(coreelements) X(app) X(audioconvert) X(audioresample) X(audiotestsrc) \
     X(playback) X(rawparse) X(subparse) X(typefindfunctions) \
     X(videoconvertscale) X(videotestsrc) X(volume) X(ogg) X(opus) X(vorbis) \
     X(autodetect) X(matroska) X(isomp4) X(vpx) X(wavparse) X(audioparsers) \
-    X(videoparsersbad) X(interleave) X(audiofx)
+    X(videoparsersbad) X(opusparse) X(subenc) X(interleave) X(audiofx)
 #define DECLARE(name) GST_PLUGIN_STATIC_DECLARE(name);
 PLUGINS(DECLARE)
 void darter_register_media(void) {
@@ -124,4 +168,6 @@ void darter_register_media(void) {
     PLUGINS(REGISTER)
     gst_element_register(NULL, "darteraudiosink", GST_RANK_PRIMARY + 100,
                          darter_audio_sink_get_type());
+    gst_device_provider_register(NULL, "darteraudiodeviceprovider", GST_RANK_PRIMARY,
+                                 darter_audio_provider_get_type());
 }

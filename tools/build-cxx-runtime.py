@@ -63,11 +63,13 @@ def main():
     sources = [SOURCE / 'libcxxabi/src' / (x + '.cpp') for x in abi]
     sources += [SOURCE / 'libcxx/src' / (x + '.cpp') for x in cxx]
     sources += sorted((SOURCE / 'libcxx/src/filesystem').glob('*.cpp'))
-    # Filesystem duration arithmetic and engine code use 128-bit operations.
-    # Keep their upstream compiler helpers in this same runtime object.
+    # Filesystem arithmetic uses 128-bit operations; Web Audio uses complex
+    # arithmetic for its filters. Keep the upstream compiler helpers in this
+    # same runtime object.
     sources += [SOURCE / 'compiler-rt/lib/builtins' / (name + '.c')
                 for name in ['fixdfti', 'floattidf', 'divti3', 'modti3',
-                             'udivti3', 'umodti3', 'udivmodti4', 'clzti2']]
+                             'udivti3', 'umodti3', 'udivmodti4', 'clzti2',
+                             'divdc3', 'muldc3']]
     sources += [SOURCE / 'libunwind/src' / x for x in
                 ['libunwind.cpp', 'UnwindLevel1.c', 'UnwindLevel1-gcc-ext.c',
                  'UnwindRegistersRestore.S', 'UnwindRegistersSave.S']]

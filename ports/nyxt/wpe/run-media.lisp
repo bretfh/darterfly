@@ -1,0 +1,158 @@
+(require :asdf)
+(asdf:load-system :darterfly/test)
+(load (asdf:system-relative-pathname :darterfly "ports/nyxt/wpe/application-image.lisp"))
+(in-package #:darterfly/test)
+(setf *print-length* 16 *print-level* 6)
+(load "ports/nyxt/wpe/app-test-support.lisp")
+
+(let* ((root (uiop:ensure-directory-pathname
+              (string-trim '(#\Newline #\Return #\Space)
+                (uiop:read-file-string (darterfly-file "build/wpe-assessment/render-build-root.txt")))))
+       (dir (merge-pathnames "nyxt-build/" root))
+       (disk (if (uiop:getenv "DARTERFLY_NYXT_APP_DISK")
+                 (pathname (uiop:getenv "DARTERFLY_NYXT_APP_DISK"))
+                 (merge-pathnames "nyxt-media.img" dir))))
+  (when (and (probe-file disk) (image::in-use-p disk)) (error "App disk is in use"))
+  ;; Seed the qualified source closure once; never overwrite it on a retry.
+  (unless (probe-file disk)
+    (uiop:copy-file (merge-pathnames "nyxt-browser.img" dir) disk))
+  (let ((entries
+          (append (image::root-entries) (image::nyxt-application-entries root)
+            (list (list :file "Users/darterfly/nyxt-browser-checks.lisp"
+                    (image::octets (darterfly-file "ports/nyxt/wpe/nyxt-browser-checks.lisp"))))
+            (when (uiop:getenv "DARTERFLY_NYXT_DISPATCH")
+              (list (list :file "Users/darterfly/nyxt-dispatch-checks.lisp"
+                      (image::octets (darterfly-file "ports/nyxt/wpe/nyxt-dispatch-checks.lisp")))))
+            ;; Only the test disk trusts this fixture CA. Installed app code
+            ;; and package entries use the regular system trust store.
+            (when (uiop:getenv "DARTER_HTTP_FIXTURE_DIR")
+              (list (list :file "etc/ssl/certs/ca-certificates.crt"
+                (concatenate '(vector (unsigned-byte 8))
+                  (third (first (image::certificates)))
+                  (image::octets (merge-pathnames "ca.pem"
+                    (uiop:ensure-directory-pathname (uiop:getenv "DARTER_HTTP_FIXTURE_DIR")))))))))))
+    (when (uiop:getenv "DARTER_MEDIA_DEBUG")
+      (let ((entry (find "usr/lib/nyxt/nyxt-application.lisp" entries
+                         :key #'second :test #'equal)))
+        (setf (third entry)
+          (concatenate '(vector (unsigned-byte 8))
+            (image::text (format nil "(sb-posix:setenv ~s ~s 1)~%(sb-posix:setenv ~s ~s 1)~%"
+              "GST_DEBUG" (uiop:getenv "DARTER_MEDIA_DEBUG") "GST_DEBUG_NO_COLOR" "1"))
+            (third entry)))))
+    (image::update-root disk (image::with-entry-directories entries)))
+  (let* ((image::*sbcl-runtime-options* '("--dynamic-space-size" "2048"))
+         (image:*input-devices* '("virtio-keyboard-pci" "virtio-tablet-pci"
+                                  "intel-hda" "hda-duplex,audiodev=media"))
+         (image:*extra-qemu* (append (list "-m" "8192" "-audiodev" (format nil "wav,id=media,path=~a" (image::build-path "wpe-assessment/media-output.wav"))) image:*extra-qemu*))
+         (image::*console-log-directory*
+           (merge-pathnames (format nil "app-console-~d-~d/" (get-universal-time) (sb-posix:getpid)) dir))
+         ;; The image was updated above. BARE-CONSOLE would update it again
+         ;; and replace the test trust store with the unmodified system bundle.
+         (c (image:console :args
+              (image::bare-qemu
+                (image::esp :boot-args (image::root-boot-args "init" disk))
+                nil (cons :keep disk) nil))))
+    (unwind-protect
+      (progn
+        (image:expect c "init: pid 1" :timeout 180)
+        (nyxt-app-ask c "(progn (sleep 8) (defparameter *nyxt-log-at* 0)
+          (setf darterfly/layer::*connection* (make-instance 'darterfly/layer::connection))
+          (defun nyxt-eval (world form &key (timeout 30))
+            (let ((reply (darterfly/run:world-eval world form :timeout timeout)))
+              (format t \"~&[NYXT EVAL] ~a~%\" reply)
+              (assert (not (search \"error: \" reply))) reply)) :app-test-ready)")
+        (when (uiop:getenv "DARTER_HTTP_FIXTURE_DIR")
+          (nyxt-app-ask c
+            (format nil "(progn (assert (search ~s (uiop:read-file-string \"/etc/ssl/certs/ca-certificates.crt\"))) (format t \"~&[NYXT APP TEST TRUST STORE PASS]~%\"))"
+              (uiop:read-file-string (merge-pathnames "ca.pem"
+                (uiop:ensure-directory-pathname (uiop:getenv "DARTER_HTTP_FIXTURE_DIR")))))))
+        (nyxt-app-dock c)
+        (nyxt-app-await c "/tmp/nyxt-application.log" "[NYXT APPLICATION READY]" 600)
+        (nyxt-app-ask c "(defparameter *nyxt-app* (darterfly/run:find-world \"Nyxt\"))")
+        (labels ((evaluate (form)
+                   (nyxt-app-ask c (format nil "(nyxt-eval *nyxt-app* ~s)" form) 45))
+                 (js (script)
+                   (evaluate (format nil "(nyxt:ffi-buffer-evaluate-javascript (nyxt:current-buffer) ~s)" script)))
+                 (until-js (script &optional (seconds 45))
+                   (nyxt-app-until c
+                     (format nil "(or (nyxt:ffi-buffer-evaluate-javascript (nyxt:current-buffer) ~s) (when (nyxt:ffi-buffer-evaluate-javascript (nyxt:current-buffer) ~s) (error ~s)))"
+                       script "!!(window.v && v.error)" "HTML media error; see captured diagnostics")
+                     seconds)))
+          (evaluate "(nyxt/renderer/wpe::rpc 23 (nyxt/renderer/wpe::native-id (nyxt:current-buffer)) :a 1)")
+          (evaluate "(nyxt:ffi-buffer-evaluate-javascript (nyxt:current-buffer) \"JSON.stringify({video:typeof HTMLVideoElement, mse:typeof MediaSource, audio:typeof AudioContext, wasm:typeof WebAssembly})\")")
+          (when (uiop:getenv "DARTER_HTTP_FIXTURE_DIR")
+            (evaluate "(nyxt:ffi-buffer-load (nyxt:current-buffer) (quri:uri \"https://10.0.2.2:18766/media\"))")
+            (until-js "document.title==='Darterfly media' && !!window.v")
+            (unless (uiop:getenv "DARTER_MEDIA_SKIP_DOWNLOAD")
+              (until-js "v.readyState>=2")
+            (js "JSON.stringify({vp8:v.canPlayType('video/webm; codecs=\\\"vp8,opus\\\"'),vp9:v.canPlayType('video/webm; codecs=\\\"vp9,opus\\\"'),duration:v.duration,width:v.videoWidth,height:v.videoHeight,mse:MediaSource.isTypeSupported('video/webm; codecs=\\\"vp8,opus\\\"')})")
+            (js "v.play().then(()=>window.started=true).catch(e=>window.playError=String(e));true")
+            (until-js "v.currentTime>0.3 && !v.paused && v.videoWidth===320 && v.videoHeight===180")
+            (js "window.frameHash=()=>{let c=document.createElement('canvas');c.width=80;c.height=45;let g=c.getContext('2d');g.drawImage(v,0,0,80,45);let a=g.getImageData(0,0,80,45).data,h=2166136261;for(let i=0;i<a.length;i++)h=Math.imul(h^a[i],16777619);return h>>>0};window.firstFrameHash=frameHash();true")
+            (nyxt-app-shot "native-video-playing")
+            (js "v.pause();window.pausedAt=v.currentTime;true")
+            (sleep .5)
+            (js "JSON.stringify({paused:v.paused,before:pausedAt,after:v.currentTime,frames:window.videoFrames})")
+            (until-js "v.paused && Math.abs(v.currentTime-pausedAt)<0.1")
+            (js "v.currentTime=1;true")
+            (until-js "!v.seeking && Math.abs(v.currentTime-1)<0.15")
+            (js "v.play();true")
+            (until-js "v.currentTime>1.5 && frameHash()!==firstFrameHash")
+            (nyxt-app-shot "native-video-later-frame")
+            (until-js "v.ended")
+            (js "JSON.stringify({events:window.events,frames:window.videoFrames,quality:{total:v.getVideoPlaybackQuality().totalVideoFrames,dropped:v.getVideoPlaybackQuality().droppedVideoFrames},width:v.videoWidth,height:v.videoHeight})")
+            (format t "~&[WPE VIDEO PAUSE SEEK EOS PASS]~%"))
+            (js "v.removeAttribute('src');v.load();true")
+            (js "window.ms=new MediaSource();v.src=URL.createObjectURL(ms);ms.addEventListener('sourceopen',async()=>{try{let s=ms.addSourceBuffer('video/webm; codecs=\\\"vp8,opus\\\"');s.addEventListener('updateend',()=>{ms.endOfStream();v.play();window.mseStarted=true},{once:true});s.appendBuffer(await (await fetch('/media.webm')).arrayBuffer())}catch(e){window.mseError=String(e)}});true")
+            (until-js "window.mseStarted && v.currentTime>0.3 && v.videoWidth===320 && v.videoHeight===180")
+            (js "window.firstMseFrameHash=frameHash();true")
+            (until-js "v.currentTime>1.5 && frameHash()!==firstMseFrameHash")
+            (nyxt-app-shot "native-mse-playing")
+            (until-js "v.ended")
+            (js "v.currentTime=0;v.play();true")
+            (until-js "v.currentTime>0.3 && !v.ended")
+            (until-js "v.ended")
+            (format t "~&[WPE MEDIA SOURCE REPLAY PASS]~%")
+            (js "window.ac=new AudioContext();window.osc=ac.createOscillator();window.gain=ac.createGain();osc.frequency.value=990;gain.gain.value=0.06;window.an=ac.createAnalyser();osc.connect(gain).connect(an).connect(ac.destination);window.peak=0;window.am=setInterval(()=>{let a=new Float32Array(an.fftSize);an.getFloatTimeDomainData(a);window.peak=Math.max(window.peak,...a)},50);osc.onended=()=>window.webAudioDone=true;ac.resume().then(()=>{osc.start();osc.stop(ac.currentTime+2)}).catch(e=>window.webAudioError=String(e));true")
+            (until-js "window.webAudioDone===true")
+            ;; Render completion precedes physical output by the audio queue.
+            ;; Closing the context immediately discards those queued samples.
+            (sleep 2)
+            (js "JSON.stringify({peak:window.peak,time:ac.currentTime,rate:ac.sampleRate,state:ac.state,latency:ac.baseLatency})")
+            (until-js "window.peak>0.04")
+            (js "ac.close();clearInterval(am);true")
+            (js "window.ac48=new AudioContext({sampleRate:48000});window.osc48=ac48.createOscillator();window.gain48=ac48.createGain();osc48.frequency.value=1320;gain48.gain.value=0.06;osc48.connect(gain48).connect(ac48.destination);osc48.onended=()=>window.webAudio48Done=true;ac48.resume().then(()=>{osc48.start();osc48.stop(ac48.currentTime+2)});true")
+            (until-js "window.webAudio48Done===true")
+            (sleep 2)
+            (js "ac48.close();true")
+            (format t "~&[WPE WEB AUDIO API PASS]~%")
+            (js "JSON.stringify({events:window.events,frames:window.videoFrames,mse:window.mseError||'ok'})"))
+          (when (uiop:getenv "DARTER_YOUTUBE_VIDEO")
+            (evaluate (format nil "(nyxt:ffi-buffer-load (nyxt:current-buffer) (quri:uri ~s))"
+              (uiop:getenv "DARTER_YOUTUBE_VIDEO")))
+            (until-js "(()=>{let v=document.querySelector('video');if(!v)return false;if(v.readyState>=2&&v.paused&&!v.ended){v.muted=false;v.play().catch(e=>window.ytPlayError=String(e))}return v.currentTime>0.5&&!v.paused&&v.videoWidth>0&&v.getVideoPlaybackQuality().totalVideoFrames>5})()" 120)
+            (js "window.ytAt=document.querySelector('video').currentTime;true")
+            (nyxt-app-shot "youtube-playing")
+            (until-js "document.querySelector('video').currentTime>ytAt+2" 30)
+            (nyxt-app-shot "youtube-later-frame")
+            (js "(()=>{let v=document.querySelector('video');return JSON.stringify({title:document.title,time:v.currentTime,duration:v.duration,paused:v.paused,muted:v.muted,width:v.videoWidth,height:v.videoHeight,frames:v.getVideoPlaybackQuality().totalVideoFrames,stats:(()=>{let s=document.querySelector('#movie_player')?.getStatsForNerds?.();return s&&{videoFormat:s.fmt,audioFormat:s.afmt,dropped:s.dvf,total:s.tvf}})()})})()")
+            (when (uiop:getenv "DARTER_YOUTUBE_EXPECT_END")
+              (until-js "document.querySelector('video').ended" 120)
+              (js "(()=>{let v=document.querySelector('video');return JSON.stringify({ended:v.ended,time:v.currentTime,duration:v.duration,frames:v.getVideoPlaybackQuality().totalVideoFrames})})()")
+              (format t "~&[WPE YOUTUBE END OF STREAM PASS]~%"))
+            (format t "~&[WPE YOUTUBE PLAYBACK ADVANCES PASS]~%")))
+        (image:send-keys (string (code-char 17)))
+        (nyxt-app-ask c "(progn (assert (loop repeat 600 when (and (null (darterfly/run:find-world \"Nyxt\")) (zerop (hash-table-count darterfly/bsd::*native-processes*))) return t do (sleep .1))) (assert (null darterfly/audio::*pcm-streams*)) (format t \"~&[WPE MEDIA CLEAN QUIT PASS]~%\"))" 90)
+        (format t "~&[MEDIA DIAGNOSTICS COMPLETE]~%"))
+      (ignore-errors
+        (nyxt-app-ask c
+          (format nil "(when (darterfly/run:find-world \"Nyxt\") (nyxt-eval *nyxt-app* ~s))"
+            (format nil "(nyxt:ffi-buffer-evaluate-javascript (nyxt:current-buffer) ~s)"
+              "JSON.stringify({title:document.title,events:window.events,started:window.started,playError:window.playError,mseError:window.mseError,webAudioError:window.webAudioError,video:window.v&&{ready:v.readyState,network:v.networkState,time:v.currentTime,duration:v.duration,error:v.error&&{code:v.error.code,message:v.error.message},width:v.videoWidth,height:v.videoHeight},text:document.body.innerText.slice(0,1500)})")) 30))
+      (ignore-errors
+        (nyxt-app-ask c "(progn (dolist (p '(\"/tmp/nyxt-engine.log\" \"/tmp/nyxt-application.log\")) (format t \"~&LOG ~a~%\" p) (when (probe-file p) (write-string (uiop:read-file-string p)))) (finish-output))" 30))
+      (with-open-file (s (image::build-path "wpe-assessment/nyxt-media-guest.log")
+                        :direction :output :if-exists :supersede)
+        (write-string (image:transcript c) s))
+      (ignore-errors (image:qmp "quit"))
+      (image:finish c 5))))
