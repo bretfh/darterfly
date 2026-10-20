@@ -104,7 +104,7 @@
                     (nconc (buffer-controls b)
                            (list (list (buffer-write-position b)
                                        (+ (buffer-write-position b) n) files)))))
-            (loop for i below n do (vector-push-extend (aref data i) (octets b)))
+            (append-pipe-octets b data 0 n)
             (incf (buffer-write-position b) n)))
       (when (or packet files) (setf (gethash b *control-buffers*) t))
       (note-control-files files 1)

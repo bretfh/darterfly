@@ -50,6 +50,23 @@
               (let ((n (raw-io c v start end writep)))
                 (values n (if (minusp n) (sb-alien:get-errno) 0)))
             (mask 2 (sb-alien:alien-sap previous) (sb-sys:int-sap 0))))))))
+(defun wait-ready (c writep)
+  ;; Readiness wakes as soon as the peer transfers data. A fixed sleep on
+  ;; EAGAIN adds that delay repeatedly to every large software video frame.
+  ;; Poll consumes no bytes, so signal interruption is safe here.
+  (let ((events (if writep 4 1)))
+    (if (connection-root c)
+        (darterfly/bsd::poll-fds (list (list (connection-fd c) events)) 10)
+        (let ((fds (words (connection-fd c) events)))
+          (sb-sys:with-pinned-objects (fds)
+            (let ((n (sb-alien:alien-funcall
+                       (sb-alien:extern-alien "poll"
+                         (function sb-alien:int sb-sys:system-area-pointer
+                                   sb-alien:unsigned-long sb-alien:int))
+                       (sb-sys:vector-sap fds) 1 10)))
+              (when (and (minusp n) (/= (sb-alien:get-errno) 4))
+                (error "Nyxt readiness poll failed: errno ~d"
+                       (sb-alien:get-errno)))))))))
 (defun deadline ()
   (+ (get-internal-real-time) (* *io-timeout* internal-time-units-per-second)))
 (defun transfer (c v writep &optional until expires)
@@ -62,8 +79,8 @@
       (error "Nyxt transport cancelled or timed out"))
     (multiple-value-bind (n errno)
         (if (connection-root c)
-            (raw-io c v at (min (length v) (+ at 32768)) writep)
-            (world-io c v at (min (length v) (+ at 32768)) writep))
+            (raw-io c v at (min (length v) (+ at 65536)) writep)
+            (world-io c v at (min (length v) (+ at 65536)) writep))
       (cond ((plusp n)
              (setf until (deadline))
              (unless expires
@@ -71,7 +88,7 @@
                                 (* 6 *io-timeout* internal-time-units-per-second))))
              (incf at n))
             ((and (minusp n) (= errno 4)) nil)
-            ((and (minusp n) (= errno 11)) (sleep .005))
+            ((and (minusp n) (= errno 11)) (wait-ready c writep))
             (t (error "Nyxt fd ~d ~a failed: result ~d errno ~s"
                       (connection-fd c) (if writep "write" "read") n errno)))))
   (values v until expires))

@@ -100,6 +100,19 @@
    (readers :initform 1 :accessor readers)
    (writers :initform 1 :accessor writers)))
 
+(defun append-pipe-octets (buffer data start end)
+  ;; Callers reserve space under the BSD lock. Copy whole byte ranges rather
+  ;; than dispatching VECTOR-PUSH-EXTEND once per byte of a video frame.
+  (let* ((bytes (octets buffer)) (at (length bytes))
+         (needed (+ at (- end start))))
+    (assert (<= needed +pipe-size+))
+    (when (> needed (array-total-size bytes))
+      (setf bytes (adjust-array bytes
+                    (min +pipe-size+ (max needed (* 2 (array-total-size bytes)))))
+            (octets buffer) bytes))
+    (setf (fill-pointer bytes) needed)
+    (replace bytes data :start1 at :end1 needed :start2 start :end2 end)))
+
 (defclass pipe-end (file)
   ((buffer :initarg :buffer :reader buffer)))
 
@@ -158,8 +171,7 @@
                        (if (zerop written) (broken-pipe) (return)))
                       ((and (plusp room) (or (> left +pipe-buf+) (>= room left)))
                        (let ((n (min room left)))
-                         (loop :for i :from written :below (+ written n)
-                               :do (vector-push-extend (aref octets i) (octets buffer)))
+                         (append-pipe-octets buffer octets written (+ written n))
                          (incf written n)
                          (changed)))
                       ((nonblocking-p file)

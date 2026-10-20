@@ -2,7 +2,8 @@
 (asdf:load-system :darterfly/test)
 (load "ports/nyxt/wpe/nyxt-wire.lisp")
 (in-package #:darterfly/nyxt-wire)
-(let ((original (symbol-function 'raw-io)) (*io-timeout* .1)
+(let ((original (symbol-function 'raw-io))
+      (original-wait (symbol-function 'wait-ready)) (*io-timeout* .1)
       (c (make-connection :fd 0 :root t)))
   (unwind-protect
       (progn
@@ -14,6 +15,8 @@
         (assert (handler-case
                     (progn (transfer c (make-array 128) t (deadline)) nil)
                   (error () t)))
+        (setf (symbol-function 'wait-ready)
+              (lambda (&rest args) (declare (ignore args)) (sleep .005)))
         (setf (symbol-function 'raw-io)
               (lambda (&rest args) (declare (ignore args)) (values -1 11)))
         (assert (handler-case
@@ -30,4 +33,5 @@
           (assert (eql absolute
             (nth-value 2 (transfer c (make-array 1) t idle absolute)))))
         (format t "~&[NYXT WIRE PROGRESS AND DEADLINES PASS]~%"))
-    (setf (symbol-function 'raw-io) original)))
+    (setf (symbol-function 'raw-io) original
+          (symbol-function 'wait-ready) original-wait)))

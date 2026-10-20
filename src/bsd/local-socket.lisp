@@ -157,8 +157,7 @@
                     ((< (length (octets buffer)) +pipe-size+)
                      (let ((end (+ written (min (- +pipe-size+ (length (octets buffer)))
                                                (- (length data) written)))))
-                       (loop :for i :from written :below end
-                             :do (vector-push-extend (aref data i) (octets buffer)))
+                       (append-pipe-octets buffer data written end)
                        (incf (buffer-write-position buffer) (- end written))
                        (setf written end)
                        (changed)))

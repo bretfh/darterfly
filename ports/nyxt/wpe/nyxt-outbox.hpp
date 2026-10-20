@@ -62,7 +62,7 @@ public:
     }
     template<class Writer> bool pump(int64_t now,Writer write) {
         // Give GLib and input a turn even while the socket is writable.
-        size_t budget=128*1024;
+        size_t budget=256*1024;
         for(unsigned calls=0;calls<16 && budget;++calls){
             if(!active){
                 bool control=!controls.empty() && (frames.empty() || controlBurst<8);
@@ -79,7 +79,7 @@ public:
             // frame making progress must not fail after ten seconds total.
             if(now-active->progress>=10000000){failureReason="idle";return false;}
             if(now-active->born>=60000000){failureReason="deadline";return false;}
-            size_t size=std::min({size_t(32768),budget,active->bytes.size()-active->at});
+            size_t size=std::min({size_t(65536),budget,active->bytes.size()-active->at});
             ++writeCalls;auto n=write(active->bytes.data()+active->at,size);
             if(n<0 && (errno==EAGAIN || errno==EINTR)){++blocked;return true;}
             if(n<=0){failureReason=n ? "write-error" : "closed";return false;}
