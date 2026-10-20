@@ -105,6 +105,9 @@
               (daily-check-js c "localStorage.getItem('darter-daily')==='survives-reboot' && document.cookie.includes('darter_daily=survives')")
               (daily-eval c "(nyxt/mode/bookmark:persist-bookmark (quri:uri \"https://example.com/darter-profile-check\") :title \"Darter profile check\" :tags '(\"darter\"))")
               (daily-eval c "(let ((path (files:expand nyxt::*config-file*))) (ensure-directories-exist path) (with-open-file (s path :direction :output :if-exists :supersede) (write-line \"(defparameter cl-user::*daily-config-loaded* :from-profile)\" s)))")
+              ;; A URL never visited on boot 1 distinguishes restored history
+              ;; from the current page being added to a fresh history store.
+              (daily-navigate c "https://10.0.2.2:18766/browser?history=before-reboot")
               (sleep 5)
               (nyxt-app-shot "daily-before-reboot"))
             (progn
@@ -113,7 +116,7 @@
               (daily-check-js c "document.cookie.includes('darter_daily=survives')")
               (daily-eval c "(assert (eq :from-profile (symbol-value (find-symbol \"*DAILY-CONFIG-LOADED*\" :cl-user))))")
               (daily-eval c "(assert (find \"Darter profile check\" (files:content (nyxt/mode/bookmark:bookmarks-file (nyxt:current-buffer))) :key #'nyxt:title :test #'equal))")
-              (daily-eval c "(assert (find-if (lambda (entry) (search \"10.0.2.2:18766/browser\" (quri:render-uri (nyxt:url entry)))) (nyxt::history-vector nyxt:*browser*)))")
+              (daily-eval c "(assert (find-if (lambda (entry) (search \"10.0.2.2:18766/browser?history=before-reboot\" (quri:render-uri (nyxt:url entry)))) (nyxt::history-vector nyxt:*browser*)))")
               (format t "~&[DAILY PROFILE REBOOT PASS]~%")
               (dotimes (i 20)
                 (daily-navigate c (format nil "https://10.0.2.2:18766/browser?stress=~d" i))
