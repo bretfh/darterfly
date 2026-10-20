@@ -1,7 +1,28 @@
 (in-package #:darterfly/image)
 
-(defun source-entries ()
-  (tree-entries (asdf:system-relative-pathname :darterfly "") "usr/src/darterfly" :skip '(".git" "build")))
+(defun source-entries (&optional (root (asdf:system-relative-pathname :darterfly "")))
+  ;; Include local source edits, but never sweep ignored VM disks, evidence or
+  ;; compiler caches into the installed source tree. Source archives have no
+  ;; Git metadata and retain the ordinary tree-copy path.
+  (if (probe-file (merge-pathnames ".git" root))
+      (loop for name in (uiop:split-string
+                         (uiop:run-program
+                           '("git" "ls-files" "--cached" "--others"
+                             "--exclude-standard" "--deduplicate" "-z")
+                           :directory root :output :string)
+                         :separator (string #\Null))
+            unless (or (zerop (length name)) (uiop:string-prefix-p "build/" name))
+              append
+              (let ((file (probe-file (merge-pathnames name root))))
+                ;; A locally deleted tracked file must stay deleted.
+                (when (and file (not (uiop:directory-pathname-p file)))
+                  (list (list :file (concatenate 'string "usr/src/darterfly/" name)
+                              (octets file)
+                              (if (logtest #o111 (sb-posix:stat-mode
+                                                  (sb-posix:stat (namestring file))))
+                                  #o755 #o644)
+                              (file-time file))))))
+      (tree-entries root "usr/src/darterfly" :skip '(".git" "build"))))
 
 (defun deployment (&key (generation t))
   (append (loop for entry in (if generation (root-entries) (source-entries))

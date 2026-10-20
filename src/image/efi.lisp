@@ -205,8 +205,7 @@
                        (library-entries)
                        (object-entries)
                        (compiler-entries)
-                       (tree-entries (asdf:system-relative-pathname :darterfly "") "usr/src/darterfly"
-                                     :skip '(".git" "build"))))
+                       (source-entries)))
         (dirs (list "tmp" "Users" "Users/darterfly" "dev" "Volumes" "System" "System/Library" "System/Library/Kernels")))
     (dolist (f files)
       (let ((path (second f)))

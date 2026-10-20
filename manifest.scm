@@ -87,6 +87,7 @@
              "clang"
              "gcc-toolchain"
              "make"
+             "git-minimal"
              "lld"
              "llvm"
              "python"
