@@ -31,7 +31,7 @@
                           (setf (proc-native-requests proc)
                                 (nconc (proc-native-requests proc)
                                        (list (cons token message))))
-                          (changed)
+                          (sb-thread:condition-broadcast (proc-native-work proc))
                           t)))))
               (unless queued (native-reply-token token (reply-octets -4 '(0 0 0 0) #() '(0 0 0 0))))))
         (darterfly/worlds:world-error (e)
@@ -46,6 +46,7 @@
              (let ((status (darterfly/worlds:wait-native world :nohang t)))
                (when status
                  (setf (proc-native-result proc) status)
+                 (sb-thread:condition-broadcast (proc-native-work proc))
                  (changed)))))
          *native-processes*)))))
 
@@ -156,13 +157,13 @@
                                (when (proc-native-requests proc)
                                  (incf busy)
                                  (return (pop (proc-native-requests proc))))
-                               (sb-thread:condition-wait *changed* *bsd*)))))
+                               (sb-thread:condition-wait (proc-native-work proc) *bsd*)))))
                      (unwind-protect
                           (native-reply-token
                            (car request)
                            (with-bsd
                              (serve-request proc (cdr request) (car request))))
-                       (with-bsd (decf busy) (changed))))))))
+                       (with-bsd (decf busy))))))))
       (unwind-protect
            (progn
              (with-bsd
@@ -193,11 +194,15 @@
                          (native-reply-token
                           (car request)
                           (reply-octets -11 '(0 0 0 0) #() '(0 0 0 0))))))
-                 (changed)
-                 (sb-thread:condition-wait *changed* *bsd* :timeout 0.01))))
+                 ;; Work notification is process-local. Do not wake every
+                 ;; descriptor waiter for request bookkeeping, or broadcast
+                 ;; merely because this supervisor was itself awakened.
+                 (sb-thread:condition-wait (proc-native-work proc) *bsd*
+                                           :timeout 0.01))))
         (when world
           (with-bsd
             (setf closing t)
+            (sb-thread:condition-broadcast (proc-native-work proc))
             (remhash world *native-processes*)
             (unless (proc-native-result proc)
               (darterfly/worlds:stop world)

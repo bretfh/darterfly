@@ -29,6 +29,8 @@
            width height) 30))
        (snapshot (label)
          (format t "~&[YOUTUBE STRESS ~a]~%" label)
+         (when (uiop:getenv "DARTER_YOUTUBE_CPU")
+           (nyxt-app-ask c "(darterfly/stats:top 1)" 15))
          (js "(()=>{let v=document.querySelector('video'),p=document.querySelector('#movie_player'),q=v?.getVideoPlaybackQuality();return JSON.stringify({url:location.href,title:document.title,ready:document.readyState,state:p?.getPlayerState?.(),quality:p?.getPlaybackQuality?.(),available:p?.getAvailableQualityLevels?.(),time:v?.currentTime,duration:v?.duration,paused:v?.paused,width:v?.videoWidth,height:v?.videoHeight,readyState:v?.readyState,network:v?.networkState,total:q?.totalVideoFrames,dropped:q?.droppedVideoFrames,error:v?.error&&{code:v.error.code,message:v.error.message},callbacks:window.darterVideoFrames,lastFrameTime:window.darterLastFrame,stats:(()=>{let s=p?.getStatsForNerds?.();return s&&{codecs:s.codecs,resolution:s.resolution,buffer:s.buffer_health_seconds,bandwidth:s.bandwidth_kbps,frames:s.dims_and_frames}})()})})()")))
     (unwind-protect
       (progn
@@ -52,9 +54,11 @@
         (until-js "!document.querySelector('video').paused && document.querySelector('video').currentTime>0.5")
         (resize 640 480 1120 640)
         (js "window.darterVideoFrames=0;window.darterLastFrame=0;window.darterFrameObserver=(now,meta)=>{window.darterVideoFrames++;window.darterLastFrame=meta.mediaTime;document.querySelector('video').requestVideoFrameCallback(window.darterFrameObserver)};document.querySelector('video').requestVideoFrameCallback(window.darterFrameObserver);true")
-        (loop for quality in '("medium" "large" "hd720" "hd1080")
-              for height in '(360 480 720 1080)
-              for target in '(0 60 120 180)
+        (loop for (quality height target) in
+                '(("medium" 360 0) ("large" 480 60)
+                  ("hd720" 720 120) ("hd1080" 1080 180))
+              when (or (null (uiop:getenv "DARTER_YOUTUBE_QUALITY"))
+                       (equal quality (uiop:getenv "DARTER_YOUTUBE_QUALITY")))
               do
           (js (format nil "(()=>{let p=document.querySelector('#movie_player');p.setPlaybackQualityRange(~s,~s);p.setPlaybackQuality(~s);return true})()" quality quality quality))
           (until-js (format nil "document.querySelector('video').videoHeight===~d" height) 90)

@@ -140,6 +140,33 @@
           (dolist (fd (list rd wr ready-r ready-w))
             (when fd (ignore-errors (darterfly/bsd:close fd)))))))))
 
+;; Several idle clients must block without supervisors waking each other.
+;; Closing the shared pipe then checks that real state changes still wake all.
+(multiple-value-bind (rd wr) (darterfly/bsd:pipe)
+  (multiple-value-bind (ready-r ready-w) (darterfly/bsd:pipe)
+    (let ((children nil))
+      (unwind-protect
+           (progn
+             (dotimes (i 3)
+               (push (bsd-start "poll" `((:dup2 ,rd 0) (:dup2 ,ready-w 2)
+                                         (:closefrom 3))) children)
+               (assert (equalp #(114 101 97 100 121)
+                               (darterfly/bsd:read ready-r 5))))
+             (sleep .1)
+             (let ((sample (darterfly/stats:sample 1)))
+               (darterfly/stats:print-sample sample)
+               (bsd-check "IDLE-CLIENTS-BLOCK"
+                          (< (getf sample :wakeups-per-s) 10000)))
+             (darterfly/bsd:close wr) (setf wr nil)
+             (bsd-check "IDLE-CLIENTS-WAKE"
+                        (every #'zerop (mapcar #'bsd-wait children)))
+             (setf children nil))
+        (dolist (pid children)
+          (ignore-errors (darterfly/bsd:kill pid :sigkill))
+          (ignore-errors (bsd-wait pid)))
+        (dolist (fd (list rd wr ready-r ready-w))
+          (when fd (ignore-errors (darterfly/bsd:close fd))))))))
+
 (let ((pid (bsd-start "loop")))
   (unwind-protect
        (progn

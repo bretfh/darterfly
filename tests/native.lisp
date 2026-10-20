@@ -215,6 +215,7 @@
                                 "BAD-ELF" "BAD-ACTION" "NO-CHILD-LEAK"
                                 "FAULT" "MALFORMED" "SOCKET" "EOF"
                                 "KILL-READ" "KILL-POLL" "KILL-CONSOLE" "NOHANG"
+                                "IDLE-CLIENTS-BLOCK" "IDLE-CLIENTS-WAKE"
                                 "STOP" "CONTINUE" "KILL-LOOP"
                                 "KILL-PAUSED-THREADS" "KILL-CHURN-THREADS" "MAP-COALESCE-EXHAUSTION" "PTHREAD-RECLAIM"
                                 "REBUILD" "REBUILT-RUN" "RUN-PROGRAM" "REPEAT" "ALIVE"

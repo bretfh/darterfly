@@ -46,7 +46,9 @@
    (native-signals :initform nil :accessor proc-native-signals)
    (native-world :initform nil :accessor proc-native-world)
    (native-result :initform nil :accessor proc-native-result)
-   (native-requests :initform nil :accessor proc-native-requests)))
+   (native-requests :initform nil :accessor proc-native-requests)
+   (native-work :initform (sb-thread:make-waitqueue :name "native work")
+                :reader proc-native-work)))
 
 (defmethod print-object ((proc proc) stream)
   (print-unreadable-object (proc stream :type t)
