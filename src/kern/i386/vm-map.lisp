@@ -95,6 +95,32 @@
       (incf j)))
   (setf (mem :u64 (+ m +w-nentries+)) (- (count-of m) 1)))
 
+;; Protection changes and shared-file grants split ranges. Recombine only
+;; identical metadata, including the shared/read-only authority bits.
+(define-low coalesce-map (m)
+  (let ((i 0))
+    (while (< (+ i 1) (count-of m))
+      (let ((a (entry m i)) (b (entry m (+ i 1))))
+        (if (and (= (mem :u64 (+ a 8)) (mem :u64 b))
+                 (= (mem :u64 (+ a 16)) (mem :u64 (+ b 16))))
+            (progn (setf (mem :u64 (+ a 8)) (mem :u64 (+ b 8)))
+                   (delete-at m (+ i 1)))
+            (incf i))))))
+
+;; Reserve all temporary splits before changing mappings. Exhaustion is an
+;; allocation failure for the caller, never a panic or a partially applied map.
+(define-low map-room (m start end extra)
+  (coalesce-map m)
+  (let ((needed (+ (count-of m) extra)) (i 0))
+    (while (< i (count-of m))
+      (let ((x (entry m i)))
+        (when (and (< (mem :u64 x) start) (< start (mem :u64 (+ x 8))))
+          (incf needed))
+        (when (and (/= start end) (< (mem :u64 x) end) (< end (mem :u64 (+ x 8))))
+          (incf needed)))
+      (incf i))
+    (<= needed +max-entries+)))
+
 (define-low clip (m at)
   (let ((i 0))
     (while (< i (count-of m))
@@ -110,6 +136,7 @@
         (s (page-down start))
         (e (page-up (+ start len)))
         (i 0))
+    (unless (map-room m s e 0) (result 0))
     (clip m s)
     (clip m e)
     (while (< i (count-of m))
@@ -118,7 +145,8 @@
             (progn
               (pmap-remove (mem :u64 x) (- (mem :u64 (+ x 8)) (mem :u64 x)))
               (delete-at m i))
-            (incf i))))))
+            (incf i))))
+    1))
 
 (define-low vm-map-reset (keep len)
   (let ((m (current-world))
@@ -140,9 +168,11 @@
         (s (page-down start))
         (e (page-up (+ start len)))
         (i 0))
+    (unless (map-room m s e 1) (result 0))
     (vm-map-remove s (- e s))
     (while (and (< i (count-of m)) (< (mem :u64 (entry m i)) s)) (incf i))
     (insert-at m i s e prot)
+    (coalesce-map m)
     1))
 
 (define-low vm-map-protection-allowed (start len prot)
@@ -165,6 +195,7 @@
         (s (page-down start))
         (e (page-up (+ start len)))
         (i 0))
+    (unless (map-room m s e 0) (result 0))
     (clip m s)
     (clip m e)
     (while (< i (count-of m))
@@ -173,7 +204,9 @@
           (setf (mem :u64 (+ x 16))
                 (logior prot (logand (mem :u64 (+ x 16)) #x300)))))
       (incf i))
-    (pmap-protect s (- e s) prot)))
+    (coalesce-map m)
+    (pmap-protect s (- e s) prot)
+    1))
 
 (define-low vm-map-find-space (len)
   (let* ((m (current-world))

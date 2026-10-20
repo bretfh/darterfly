@@ -216,6 +216,7 @@
                                 "FAULT" "MALFORMED" "SOCKET" "EOF"
                                 "KILL-READ" "KILL-POLL" "KILL-CONSOLE" "NOHANG"
                                 "STOP" "CONTINUE" "KILL-LOOP"
+                                "KILL-PAUSED-THREADS" "KILL-CHURN-THREADS" "MAP-COALESCE-EXHAUSTION"
                                 "REBUILD" "REBUILT-RUN" "RUN-PROGRAM" "REPEAT" "ALIVE"
                                 "NATIVE-CHILDREN" "REBUILT-CHILDREN"
                                 "LISP-CHILDREN" "LISP-ARTIFACT" "LISP-FAULT"

@@ -161,6 +161,39 @@
          (bsd-check "KILL-LOOP" (= 9 (bsd-wait pid))))
     (ignore-errors (darterfly/bsd:kill pid :sigkill))))
 
+(bsd-check "MAP-COALESCE-EXHAUSTION" (= 0 (bsd-wait (bsd-start "map-churn"))))
+
+;; Killing a paused multi-threaded world used to return from sched-ast to
+;; user code, where the consumed termination wakeup left it blocked forever.
+(dolist (mode '("stop-threads" "churn-threads"))
+  (let ((ok t))
+    (dotimes (iteration 12)
+      (multiple-value-bind (rd wr) (darterfly/bsd:pipe)
+        (let ((pid nil) (world nil))
+          (unwind-protect
+               (progn
+                 (setf pid (bsd-start mode `((:dup2 ,wr 2) (:closefrom 3))))
+                 (darterfly/bsd:close wr) (setf wr nil)
+                 (assert (equalp #(114 101 97 100 121)
+                                 (darterfly/bsd:read rd 5)))
+                 (setf world (darterfly/bsd::proc-native-world
+                              (darterfly/bsd:pfind pid)))
+                 (when (evenp iteration)
+                   (darterfly/bsd:kill pid :sigstop)
+                   (darterfly/bsd:wait4 pid :untraced t))
+                 (sleep (* 0.001 (1+ iteration)))
+                 (darterfly/bsd:kill pid :sigkill)
+                 (unless (and (= 9 (bsd-wait pid))
+                              (not (find world (darterfly/worlds:worlds)
+                                         :key (lambda (w) (getf w :id)))))
+                   (setf ok nil))
+                 (setf pid nil))
+            (when pid (ignore-errors (darterfly/bsd:kill pid :sigkill)))
+            (dolist (fd (list rd wr))
+              (when fd (ignore-errors (darterfly/bsd:close fd))))))))
+    (bsd-check (if (string= mode "stop-threads")
+                   "KILL-PAUSED-THREADS" "KILL-CHURN-THREADS") ok)))
+
 ;; Rebuild libsa with Low and the C client with target TCC, then spawn it.
 (bsd-check
  "REBUILD"

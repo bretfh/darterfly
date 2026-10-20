@@ -111,6 +111,12 @@ Fault CR2: 0x%016lx, Error code: 0x%016lx, Fault CPU: 0x0
         (bsd-ast regs))
       (result 0))
     (when user
+      ;; A syscall can already be waiting for the funnel when another CPU
+      ;; stops this world. Do not dispatch it (and possibly create or block
+      ;; a thread) after stop has visited the world's existing threads.
+      (when (or (terminating)
+                (logand (mem :u64 (+ (current-world) +w-flags+)) +stopped+))
+        (thread-terminate-self))
       (user-trap regs)
       (sched-ast)
       (bsd-ast regs)

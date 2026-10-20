@@ -460,7 +460,10 @@
     (thread-terminate-self))
   (when (logand (mem :u64 (+ (current-world) +w-flags+)) +paused+) (park))
   (when (and sleep-request (/= (cpu-number) 0)) (setf (mem :u32 (+ (cpu-data) +c-pending-ast+)) 1))
-  (unless (mem :u32 (+ (cpu-data) +c-pending-ast+)) (result 0))
-  (setf (mem :u32 (+ (cpu-data) +c-pending-ast+)) 0)
-  (thread-block)
-  (when (logand (mem :u64 (+ (current-world) +w-flags+)) +paused+) (park)))
+  (when (mem :u32 (+ (cpu-data) +c-pending-ast+))
+    (setf (mem :u32 (+ (cpu-data) +c-pending-ast+)) 0)
+    (thread-block)
+    (when (logand (mem :u64 (+ (current-world) +w-flags+)) +paused+) (park)))
+  ;; Stop can wake a parked thread, or arrive while thread-block runs another
+  ;; world. Never return that thread to user code after consuming its wakeup.
+  (when (terminating) (thread-terminate-self)))

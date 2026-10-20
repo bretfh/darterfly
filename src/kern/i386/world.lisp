@@ -435,7 +435,7 @@
                      (not (logand (mem :u64 (+ x 16)) +prot-shared+)))
           (result (- 0 14))))
       (incf off +page-size+))
-    (when (> (+ (count-of w) 2) +max-entries+) (result (- 0 12)))
+    (unless (map-room w dst (+ dst len) 0) (result (- 0 12)))
     (clip w dst)
     (clip w (+ dst len))
     (setf off 0)
@@ -457,6 +457,8 @@
         (pmap-flush-tlbs)
         (when (logand old +pte-frame+) (vm-page-free (logand old +pte-pfn+))))
       (incf off +page-size+))
+    (coalesce-map w)
+    (unless (= w (current-world)) (coalesce-map (current-world)))
     0))
 
 (define-low map-shared (dst src (len :u64))

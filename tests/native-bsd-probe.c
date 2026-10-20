@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/stat.h>
+#include <pthread.h>
+#include <sys/mman.h>
 
 extern long native_call(unsigned long, const void *, unsigned long,
                         void *, unsigned long);
@@ -189,11 +191,68 @@ static int child_driver(char *path) {
     return 0;
 }
 
+/* Repeated protection changes must not consume permanent map entries.
+   A genuinely full map must fail atomically instead of panicking the OS. */
+static int map_churn(void) {
+    const size_t size = 4096 * 4096;
+    unsigned char *p = mmap(0, size, PROT_READ | PROT_WRITE,
+                            MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    void *maps[2048];
+    int count = 0, i;
+    CHECK(p != MAP_FAILED, 225);
+    for (i = 0; i < 4096; ++i) {
+        p[i * 4096] = 73;
+        CHECK(!mprotect(p + i * 4096, 4096, PROT_READ), 226);
+        CHECK(p[i * 4096] == 73, 227);
+        CHECK(!mprotect(p + i * 4096, 4096, PROT_READ | PROT_WRITE), 228);
+    }
+    while (count < 2048) {
+        void *m = mmap(0, 4096, PROT_READ | PROT_WRITE,
+                       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (m == MAP_FAILED) break;
+        maps[count++] = m;
+    }
+    CHECK(count > 0 && count < 2048 && errno == ENOMEM, 229);
+    CHECK(mprotect(p + 4096, 4096, PROT_READ) == -1 && errno == ENOMEM, 230);
+    p[4096] = 91; /* Failed protection must leave the old mapping writable. */
+    CHECK(p[4096] == 91, 231);
+    for (i = 0; i < count; ++i) CHECK(!munmap(maps[i], 4096), 232);
+    CHECK(!munmap(p, size), 233);
+    p = mmap(0, 4096, PROT_READ | PROT_WRITE,
+             MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    CHECK(p != MAP_FAILED && !munmap(p, 4096), 234);
+    return 0;
+}
+
+/* Stop must also reap threads returning from a scheduler park, and syscalls
+   already queued at the kernel funnel. Exercise waits and thread creation. */
+static void *sleeping_worker(void *unused) {
+    (void)unused;
+    for (;;) usleep(1000);
+    return 0;
+}
+static void *short_worker(void *unused) { return unused; }
+static int stop_threads(int churn) {
+    pthread_t a, b;
+    CHECK(!pthread_create(&a, 0, sleeping_worker, 0), 220);
+    CHECK(!pthread_create(&b, 0, sleeping_worker, 0), 221);
+    CHECK(write(2, "ready", 5) == 5, 222);
+    if (!churn) return pthread_join(a, 0);
+    for (;;) {
+        pthread_t child;
+        CHECK(!pthread_create(&child, 0, short_worker, 0), 223);
+        CHECK(!pthread_join(child, 0), 224);
+    }
+}
+
 int main(int argc, char **argv, char **envp) {
     char data[32], cwd[256];
     int fd, copy, pipes[2];
     struct pollfd p;
     CHECK(argc >= 2 && envp == environ, 90);
+    if (eq(argv[1], "stop-threads")) return stop_threads(0);
+    if (eq(argv[1], "churn-threads")) return stop_threads(1);
+    if (eq(argv[1], "map-churn")) return map_churn();
     if (eq(argv[1], "runtime")) return runtime_check();
     if (eq(argv[1], "children")) return child_driver(argv[0]);
     if (eq(argv[1], "child-check")) {
