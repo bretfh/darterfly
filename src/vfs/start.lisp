@@ -76,7 +76,15 @@
       (setf at (format nil "~a/~a" at part))
       (unless (lookup-or-nil at) (vfs-mkdir at #o755)))))
 
+(defun reset-filesystem-session ()
+  ;; SBCL invalidates saved FD streams and drops their finalizers; a normal OS
+  ;; closes those process descriptors on exit. Our VFS table lives in the heap,
+  ;; so discard its old descriptors and mounts before establishing this boot's
+  ;; filesystem. Never close them through devices belonging to the previous boot.
+  (setf *files* (make-hash-table) *mounts* nil *root* nil *cwd* nil *syncers* nil))
+
 (defun vfs-start ()
+  (reset-filesystem-session)
   (let ((root (make-ram-node :vdir #o755)))
     (vfs-mount root "/")
     (add-child root "dev" (make-devfs))

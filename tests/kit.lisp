@@ -787,3 +787,30 @@
             (darterfly/kit:first-responder (darterfly/kit::panel-window panel))))
     (is (darterfly/kit:focused-p (darterfly/kit::panel-input panel)))
     (is (eq :enabled (darterfly/kit:choice-selected session)))))
+
+
+(test retained-layer-connection-does-not-reuse-another-tasks-port
+  (let ((layer::*connection* (make-instance 'layer::connection))
+        (lookups 0))
+    (sb-int:encapsulate 'init:bootstrap-look-up 'test-retained-layer-connection
+      (lambda (original name)
+        (declare (ignore original))
+        (assert (equal name "windowserver"))
+        (incf lookups)
+        (port)))
+    (unwind-protect
+         (let ((old (in-task ()
+                      (let ((name (layer::window-server)))
+                        (is (= name (layer::window-server)))
+                        (is (= 1 lookups))
+                        name))))
+           (in-task ()
+             ;; The saved number can be a valid right to an unrelated object.
+             (let* ((unrelated (port)) (server (layer::window-server)))
+               (is (= old unrelated))
+               (is (/= unrelated server))
+               (is (= 2 lookups))
+               (layer::local-request '(:retained-window))
+               (is (equal '(:retained-window)
+                          (mach:msgh-body (mach:mach-msg-receive server :timeout 100)))))))
+      (sb-int:unencapsulate 'init:bootstrap-look-up 'test-retained-layer-connection))))

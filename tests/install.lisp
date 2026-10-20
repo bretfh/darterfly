@@ -255,3 +255,14 @@
       (with-open-file (s file :direction :output :if-exists :supersede)
         (write-string "(define-low example () 2)" s))
       (signals error (image:kernel-file)))))
+
+
+(in-suite install)
+(test old-descriptor-lifetimes-are-not-silently-reloaded
+  (let ((darterfly/vfs::*file-lifetime-version* 1))
+    (is (search "quiesced adoption"
+                (darterfly/install::form-hazard
+                 '(defvar darterfly/vfs::*file-lifetime-version* 2)))))
+  (let ((darterfly/vfs::*file-lifetime-version* 2))
+    (is (null (darterfly/install::form-hazard
+               '(defvar darterfly/vfs::*file-lifetime-version* 2))))))

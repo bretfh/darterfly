@@ -250,9 +250,14 @@
   (sb-int:encapsulate 'sb-thread:make-thread 'user-threads #'record-user-thread))
 
 (defun suspend-threads ()
-  (setf *threads-to-resume*
-        (loop for thread being the hash-keys of *user-threads* using (hash-value how)
-              when (sb-thread:thread-alive-p thread) collect how)))
+  ;; A Listener-launched process can also be recorded by MAKE-THREAD. Its
+  ;; process bindings belong to RESUME-PROCESSES; replaying PROC-MAIN would
+  ;; resurrect the old task and descriptors alongside the restored process.
+  (let ((process-threads (mapcar #'proc-thread (procs))))
+    (setf *threads-to-resume*
+          (loop for thread being the hash-keys of *user-threads* using (hash-value how)
+                when (and (sb-thread:thread-alive-p thread)
+                          (not (member thread process-threads))) collect how))))
 
 (defun resume-activities ()
   (when *safe* (return-from resume-activities nil))

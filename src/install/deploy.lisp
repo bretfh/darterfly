@@ -160,6 +160,11 @@
 (defun form-hazard (form)
   (when (consp form)
     (case (first form)
+      (defvar
+       (when (and (eq (second form) 'darterfly/vfs::*file-lifetime-version*)
+                  (not (and (boundp 'darterfly/vfs::*file-lifetime-version*)
+                            (eql darterfly/vfs::*file-lifetime-version* (third form)))))
+         "VFS descriptor lifetimes require quiesced adoption before reload"))
       (defstruct
        (let* ((name (let ((n (second form))) (if (consp n) (first n) n)))
               (live (find-class name nil)))
