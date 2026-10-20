@@ -1,0 +1,11 @@
+--- a/libavutil/thread.h
++++ b/libavutil/thread.h
+@@ -217,7 +217,7 @@
+ {
+     int ret = 0;
+ 
+-#if HAVE_PRCTL
++#if HAVE_PRCTL && defined(PR_SET_NAME)
+     ret = AVERROR(prctl(PR_SET_NAME, name));
+ #elif HAVE_PTHREAD_SETNAME_NP
+ #if defined(__APPLE__)

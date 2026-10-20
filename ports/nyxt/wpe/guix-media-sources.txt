@@ -6,3 +6,5 @@
 /gnu/store/lphpga2vbrxw0akmb573qycrq7hscvzz-opus-1.6.1.tar.gz
 /gnu/store/pdbrp3f21w40f9dzr7l4xh77zvy00zcw-libogg-1.3.6.tar.xz
 /gnu/store/sygidwqjr9yiljl9nwfpzbagabkza0kn-libvorbis-1.3.7.tar.xz
+/gnu/store/q3yxk7rb440kwhwx7awkk6qjpn98306l-ffmpeg-8.1.1.tar.xz
+/gnu/store/kiajmrgvl506lryrzzjfxi90wwdf0s15-gst-libav-1.28.1.tar.xz

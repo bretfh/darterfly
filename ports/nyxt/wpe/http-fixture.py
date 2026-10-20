@@ -23,8 +23,9 @@ class Handler(BaseHTTPRequestHandler):
             print("TLS-SESSION", self.server.server_port,
                   "resumed=" + str(self.connection.session_reused), flush=True)
         route = self.path.split('?')[0]
-        if route == '/media.webm':
-            media = Path(__file__).resolve().parents[3]/'build/wpe-assessment/media.webm'
+        if route in ('/media.webm', '/media-h264.mp4', '/media-fragmented.mp4',
+                     '/media-aac.m4a'):
+            media = Path(__file__).resolve().parents[3]/'build/wpe-assessment'/route[1:]
             body = media.read_bytes()
             start, end = 0, len(body)-1
             requested = self.headers.get('Range', '')
@@ -38,7 +39,8 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.send_response(200)
             body = body[start:end+1]
-            self.send_header('Content-Type', 'video/webm')
+            self.send_header('Content-Type', 'video/webm' if route.endswith('.webm')
+                             else 'audio/mp4' if route.endswith('.m4a') else 'video/mp4')
             self.send_header('Accept-Ranges', 'bytes')
             self.send_header('Content-Length', str(len(body)))
             self.send_header('Connection', 'close')

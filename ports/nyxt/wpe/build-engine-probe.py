@@ -92,7 +92,8 @@ if media:
     archives += sorted((p/'lib/gstreamer-1.0').glob('*.a'))
     archives += sorted((p/'lib').glob('libgst*.a'))
     archives += [p/'lib'/('lib'+name+'.a') for name in
-                 ['vpx', 'opus', 'vorbis', 'vorbisenc', 'ogg']]
+                 ['avcodec', 'avformat', 'avfilter', 'avutil', 'swresample', 'swscale',
+                  'vpx', 'opus', 'vorbis', 'vorbisenc', 'ogg']]
 for name in (['nyxt-engine'] if '--nyxt' in sys.argv else ['engine-probe','WPEWebProcess','WPENetworkProcess']):
     run([profile/'ld.lld','-r','--gc-sections','--entry=main',work/(name+'.o'),
          work/'static-openssl.o', *([work/'static-media.o'] if media else []), '--start-group',*archives,'--end-group',

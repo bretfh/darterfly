@@ -159,7 +159,7 @@ static void darter_audio_provider_init(DarterAudioProvider *provider) { (void)pr
     X(playback) X(rawparse) X(subparse) X(typefindfunctions) \
     X(videoconvertscale) X(videotestsrc) X(volume) X(ogg) X(opus) X(vorbis) \
     X(autodetect) X(matroska) X(isomp4) X(vpx) X(wavparse) X(audioparsers) \
-    X(videoparsersbad) X(opusparse) X(subenc) X(interleave) X(audiofx)
+    X(videoparsersbad) X(opusparse) X(subenc) X(interleave) X(audiofx) X(libav)
 #define DECLARE(name) GST_PLUGIN_STATIC_DECLARE(name);
 PLUGINS(DECLARE)
 void darter_register_media(void) {

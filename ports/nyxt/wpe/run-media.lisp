@@ -50,6 +50,13 @@
             (image::text (format nil "(sb-posix:setenv ~s ~s 1)~%(sb-posix:setenv ~s ~s 1)~%"
               "GST_DEBUG" (uiop:getenv "DARTER_MEDIA_DEBUG") "GST_DEBUG_NO_COLOR" "1"))
             (third entry)))))
+    (when (uiop:getenv "DARTER_NYXT_TRACE")
+      (let ((entry (find "usr/lib/nyxt/nyxt-application.lisp" entries
+                         :key #'second :test #'equal)))
+        (setf (third entry)
+          (concatenate '(vector (unsigned-byte 8))
+            (image::text "(sb-posix:setenv \"DARTER_NYXT_TRACE\" \"1\" 1)")
+            (third entry)))))
     (image::update-root disk (image::with-entry-directories entries)))
   (let* ((image::*sbcl-runtime-options* '("--dynamic-space-size" "2048"))
          (image:*input-devices* '("virtio-keyboard-pci" "virtio-tablet-pci"
@@ -77,6 +84,10 @@
             (format nil "(progn (assert (search ~s (uiop:read-file-string \"/etc/ssl/certs/ca-certificates.crt\"))) (format t \"~&[NYXT APP TEST TRUST STORE PASS]~%\"))"
               (uiop:read-file-string (merge-pathnames "ca.pem"
                 (uiop:ensure-directory-pathname (uiop:getenv "DARTER_HTTP_FIXTURE_DIR")))))))
+        (when (uiop:getenv "DARTER_MEDIA_CLEAN_PROFILE")
+          ;; Only this disposable guest disk is changed; retain the old
+          ;; website data so qualification never deletes a saved profile.
+          (nyxt-app-ask c "(progn (dolist (parent '(\"/Users/darterfly/.local/share/nyxt/\" \"/Users/darterfly/.cache/nyxt/\")) (let ((old (merge-pathnames \"wpe/\" parent))) (when (probe-file old) (rename-file old (merge-pathnames (format nil \"wpe-test-backup-~d/\" (get-universal-time)) parent))))) :fresh-web-profile)"))
         (nyxt-app-dock c)
         (nyxt-app-await c "/tmp/nyxt-application.log" "[NYXT APPLICATION READY]" 600)
         (nyxt-app-ask c "(defparameter *nyxt-app* (darterfly/run:find-world \"Nyxt\"))")
@@ -124,6 +135,32 @@
             (until-js "v.currentTime>0.3 && !v.ended")
             (until-js "v.ended")
             (format t "~&[WPE MEDIA SOURCE REPLAY PASS]~%")
+            (until-js "!!v.canPlayType('video/mp4; codecs=\"avc1.64000d,mp4a.40.2\"') && MediaSource.isTypeSupported('video/mp4; codecs=\"avc1.64000d,mp4a.40.2\"')")
+            (js "v.src='/media-h264.mp4';v.load();v.play();true")
+            (until-js "v.currentTime>0.3 && v.videoWidth===320 && v.videoHeight===180")
+            (js "window.firstAvcHash=frameHash();v.pause();window.pausedAt=v.currentTime;true")
+            (sleep .3)
+            (until-js "v.paused && Math.abs(v.currentTime-pausedAt)<0.1")
+            (js "v.currentTime=1;true")
+            (until-js "!v.seeking && Math.abs(v.currentTime-1)<0.15")
+            (js "v.play();true")
+            (until-js "v.currentTime>1.5 && frameHash()!==firstAvcHash")
+            (nyxt-app-shot "native-h264-playing")
+            (until-js "v.ended")
+            (format t "~&[WPE H264 AAC PAUSE SEEK EOS PASS]~%")
+            (js "v.removeAttribute('src');v.load();window.mp4ms=new MediaSource();v.src=URL.createObjectURL(mp4ms);mp4ms.addEventListener('sourceopen',async()=>{try{let s=mp4ms.addSourceBuffer('video/mp4; codecs=\"avc1.64000d,mp4a.40.2\"');s.addEventListener('updateend',()=>{mp4ms.endOfStream();v.play();window.mp4Started=true},{once:true});s.appendBuffer(await (await fetch('/media-fragmented.mp4')).arrayBuffer())}catch(e){window.mp4Error=String(e)}});true")
+            (until-js "window.mp4Started && v.currentTime>0.3 && v.videoWidth===320")
+            (js "window.firstMp4Hash=frameHash();true")
+            (until-js "v.currentTime>1.5 && frameHash()!==firstMp4Hash")
+            (until-js "v.ended")
+            (js "v.currentTime=0;v.play();true")
+            (until-js "v.currentTime>0.3 && !v.ended")
+            (until-js "v.ended")
+            (format t "~&[WPE H264 AAC MEDIA SOURCE REPLAY PASS]~%")
+            (js "v.src='/media-aac.m4a';v.load();v.play();true")
+            (until-js "v.currentTime>0.3 && !v.paused")
+            (until-js "v.ended")
+            (format t "~&[WPE AAC AUDIO ONLY PASS]~%")
             (js "window.ac=new AudioContext();window.osc=ac.createOscillator();window.gain=ac.createGain();osc.frequency.value=990;gain.gain.value=0.06;window.an=ac.createAnalyser();osc.connect(gain).connect(an).connect(ac.destination);window.peak=0;window.am=setInterval(()=>{let a=new Float32Array(an.fftSize);an.getFloatTimeDomainData(a);window.peak=Math.max(window.peak,...a)},50);osc.onended=()=>window.webAudioDone=true;ac.resume().then(()=>{osc.start();osc.stop(ac.currentTime+2)}).catch(e=>window.webAudioError=String(e));true")
             (until-js "window.webAudioDone===true")
             ;; Render completion precedes physical output by the audio queue.
@@ -139,15 +176,28 @@
             (format t "~&[WPE WEB AUDIO API PASS]~%")
             (js "JSON.stringify({events:window.events,frames:window.videoFrames,mse:window.mseError||'ok'})"))
           (when (uiop:getenv "DARTER_YOUTUBE_HOME")
-            (evaluate "(nyxt:ffi-buffer-load (nyxt:current-buffer) (quri:uri \"https://www.youtube.com/\"))")
-            (until-js "location.hostname==='www.youtube.com' && document.title.includes('YouTube') && !!document.querySelector('ytd-masthead') && document.body.innerText.length>50" 90)
-            (evaluate "(list :load-finished (nyxt/renderer/wpe::native-ready (nyxt:current-buffer)) :navigating (nyxt/renderer/wpe::native-navigation (nyxt:current-buffer)))")
-            (js "JSON.stringify({ready:document.readyState,title:document.title,text:document.body.innerText.slice(0,500),resources:performance.getEntriesByType('resource').slice(-8).map(r=>({url:r.name,duration:r.duration}))})")
-            (nyxt-app-shot "youtube-home-interactive"))
+            (dotimes (visit (parse-integer (or (uiop:getenv "DARTER_YOUTUBE_LOADS") "1")))
+              (let ((start (get-internal-real-time)))
+                (js "window.darterPreviousDocument=true;true")
+                (evaluate "(nyxt:ffi-buffer-load (nyxt:current-buffer) (quri:uri \"https://www.youtube.com/\"))")
+                (until-js "!window.darterPreviousDocument && location.hostname==='www.youtube.com' && document.title.includes('YouTube') && !!document.querySelector('ytd-masthead') && document.body.innerText.length>50" 90)
+                (until-js "document.readyState==='complete'" 90)
+                (evaluate "(assert (nyxt/renderer/wpe::native-ready (nyxt:current-buffer)))")
+                (format t "~&[WPE YOUTUBE LOAD COMPLETE PASS visit=~d seconds=~,3f]~%"
+                  (1+ visit) (/ (- (get-internal-real-time) start)
+                               internal-time-units-per-second))
+                (nyxt-app-shot "youtube-home-complete"))))
           (when (uiop:getenv "DARTER_YOUTUBE_VIDEO")
             (evaluate (format nil "(nyxt:ffi-buffer-load (nyxt:current-buffer) (quri:uri ~s))"
               (uiop:getenv "DARTER_YOUTUBE_VIDEO")))
-            (until-js "(()=>{let v=document.querySelector('video');if(!v)return false;if(v.readyState>=2&&v.paused&&!v.ended){v.muted=false;v.play().catch(e=>window.ytPlayError=String(e))}return v.currentTime>0.5&&!v.paused&&v.videoWidth>0&&v.getVideoPlaybackQuality().totalVideoFrames>5})()" 120)
+            (until-js "document.readyState==='complete' && !!document.querySelector('#movie_player') && document.querySelector('video')?.readyState>=2" 120)
+            ;; Start through the actual YouTube control and native HID path,
+            ;; after page setup has finished. Early raw video.play() can race
+            ;; the site's player initialization and be paused again by it.
+            (js "document.querySelector('#movie_player').pauseVideo();true")
+            (until-js "document.querySelector('video').paused")
+            (image:pointer 400 260 t) (sleep .15) (image:pointer 400 260 nil)
+            (until-js "(()=>{let v=document.querySelector('video');return v.currentTime>0.5&&!v.paused&&v.videoWidth>0&&v.getVideoPlaybackQuality().totalVideoFrames>5})()" 45)
             (js "window.ytAt=document.querySelector('video').currentTime;true")
             (nyxt-app-shot "youtube-playing")
             (until-js "document.querySelector('video').currentTime>ytAt+2" 30)
@@ -165,7 +215,7 @@
         (nyxt-app-ask c
           (format nil "(when (darterfly/run:find-world \"Nyxt\") (nyxt-eval *nyxt-app* ~s))"
             (format nil "(nyxt:ffi-buffer-evaluate-javascript (nyxt:current-buffer) ~s)"
-              "JSON.stringify({title:document.title,events:window.events,started:window.started,playError:window.playError,mseError:window.mseError,webAudioError:window.webAudioError,video:window.v&&{ready:v.readyState,network:v.networkState,time:v.currentTime,duration:v.duration,error:v.error&&{code:v.error.code,message:v.error.message},width:v.videoWidth,height:v.videoHeight},text:document.body.innerText.slice(0,1500)})")) 30))
+              "JSON.stringify({title:document.title,ready:document.readyState,frames:[...document.querySelectorAll('iframe')].map(f=>({src:f.src,ready:f.contentDocument?.readyState})),events:window.events,started:window.started,playError:window.playError,mseError:window.mseError,webAudioError:window.webAudioError,video:window.v&&{ready:v.readyState,network:v.networkState,time:v.currentTime,duration:v.duration,error:v.error&&{code:v.error.code,message:v.error.message},width:v.videoWidth,height:v.videoHeight},text:document.body.innerText.slice(0,1500)})")) 30))
       (ignore-errors
         (nyxt-app-ask c "(progn (dolist (p '(\"/tmp/nyxt-engine.log\" \"/tmp/nyxt-application.log\")) (format t \"~&LOG ~a~%\" p) (when (probe-file p) (write-string (uiop:read-file-string p)))) (finish-output))" 30))
       (with-open-file (s (image::build-path "wpe-assessment/nyxt-media-guest.log")

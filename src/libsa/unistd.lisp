@@ -34,7 +34,7 @@
 (define-low sysconf ((name :u32))
   (cond ((= name 0) 4096)
         ((= name 30) 4096)
-        ((= name 84) 1)
+        ((or (= name 83) (= name 84)) 1)
         ((= name 70) 1024)
         ((= name 2) 100)
         (t (fail-with +einval+))))

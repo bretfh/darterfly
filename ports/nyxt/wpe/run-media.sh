@@ -8,5 +8,5 @@ guix shell -m manifest.scm -- sh -c '
 '
 
 if [ -n "${DARTER_HTTP_FIXTURE_DIR:-}" ]; then
-  python3 ports/nyxt/wpe/check-media-audio.py build/wpe-assessment/media-output.wav 440 990 1320
+  python3 ports/nyxt/wpe/check-media-audio.py build/wpe-assessment/media-output.wav 440 880 990 1320 1760
 fi

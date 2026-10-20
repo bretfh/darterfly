@@ -15,7 +15,8 @@ for name in ['static-media', 'media-probe']:
 archives = [*sorted((p/'lib/gstreamer-1.0').glob('*.a')),
             *sorted((p/'lib').glob('libgst*.a')),
             *[p/'lib'/('lib'+name+'.a') for name in
-              ['vpx','opus','vorbis','vorbisenc','ogg','gio-2.0', 'gmodule-2.0',
+              ['avcodec','avformat','avfilter','avutil','swresample','swscale',
+               'vpx','opus','vorbis','vorbisenc','ogg','gio-2.0', 'gmodule-2.0',
                'gobject-2.0','glib-2.0','pcre2-8','ffi','iconv','z']],
             b/'glib-gio-target/subprojects/proxy-libintl/libintl.a']
 run([profile/'ld.lld','-r','--gc-sections','--entry=main', b/'media-probe.o',

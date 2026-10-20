@@ -76,6 +76,29 @@ if __name__ == '__main__':
                  '--enable-static', '--disable-vp8-encoder', '--disable-vp9-encoder'], cwd=out)
             run(['make', '-j8'], cwd=out)
             run(['make', 'install'], cwd=out)
+        elif name == 'ffmpeg':
+            run([sys.executable, r/'ports/nyxt/wpe/apply-patches.py', source(name),
+                 'ffmpeg-thread-name.patch'])
+            # Decode only. Container handling, HTTP and TLS stay in the existing
+            # GStreamer/WebKit stack; FFmpeg uses the same libsa and pthreads.
+            out = w/(name+'-target')
+            out.mkdir(exist_ok=True)
+            run([source(name)/'configure', '--enable-cross-compile',
+                 '--target-os=none', '--arch=x86_64',
+                 '--cc='+str(r/'ports/nyxt/wpe/target-cc.py'),
+                 '--ar='+str(profile/'llvm-ar'),
+                 '--ranlib='+str(profile/'llvm-ranlib'),
+                 '--prefix='+str(p), '--disable-autodetect',
+                 '--disable-everything', '--disable-programs', '--disable-doc',
+                 '--disable-network', '--disable-shared', '--enable-static',
+                 '--disable-x86asm', '--disable-inline-asm',
+                 '--enable-pthreads', '--enable-decoder=h264,aac,aac_latm',
+                 '--enable-parser=h264,aac,aac_latm',
+                 '--extra-cflags=-O2 -ffunction-sections -fdata-sections'], cwd=out)
+            run(['make', '-j8'], cwd=out)
+            run(['make', 'install'], cwd=out)
+        elif name == 'gst-libav':
+            meson(name, [])
         elif name == 'gst-plugins-base':
             meson(name, [x+'=enabled' for x in
                 ['app', 'audioconvert', 'audioresample', 'audiotestsrc', 'playback',

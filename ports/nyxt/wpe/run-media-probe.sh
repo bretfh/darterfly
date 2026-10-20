@@ -7,4 +7,4 @@ guix shell -m manifest.scm -- sh -c '
   exec sbcl --dynamic-space-size 8192 --no-userinit --non-interactive --load ports/nyxt/wpe/run-media-probe.lisp
 '
 
-python3 ports/nyxt/wpe/check-media-audio.py build/wpe-assessment/media-output.wav
+python3 ports/nyxt/wpe/check-media-audio.py build/wpe-assessment/media-output.wav 440 660 880
