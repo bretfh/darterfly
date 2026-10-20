@@ -273,6 +273,35 @@ int main(int argc,char**argv) {
     webkit_cookie_manager_set_persistent_storage(
         webkit_network_session_get_cookie_manager(session),cookies,WEBKIT_COOKIE_PERSISTENT_STORAGE_SQLITE);
     g_free(cookies);g_free(dataPath);g_free(cachePath);
+    // Persistent-store creation runs in the network process. Do not launch
+    // the first web process until that work has reached an acknowledged IPC
+    // boundary, or its six-second connection watchdog races a cold profile.
+    // This reads the existing policy; it does not change cookie settings.
+    bool profileReady=false;
+    auto profileBegan=g_get_monotonic_time();
+    webkit_cookie_manager_get_accept_policy(
+        webkit_network_session_get_cookie_manager(session),nullptr,
+        [](GObject* manager,GAsyncResult* result,gpointer data) {
+            GError* error=nullptr;
+            webkit_cookie_manager_get_accept_policy_finish(
+                WEBKIT_COOKIE_MANAGER(manager),result,&error);
+            if(error) {
+                processFailure(error->message);g_error_free(error);
+            } else *static_cast<bool*>(data)=true;
+        },&profileReady);
+    // Keep GLib and process-failure handling live. Stay within the adapter's
+    // existing 30-second RPC bound instead of extending WebKit's watchdog.
+    while(running && !profileReady &&
+          g_get_monotonic_time()-profileBegan<25*G_USEC_PER_SEC) {
+        g_main_context_iteration(nullptr,FALSE);
+        usleep(1000);
+    }
+    if(!running || !profileReady) {
+        fprintf(stderr,"NYXT profile initialization failed or timed out\n");
+        close(connection);return 7;
+    }
+    if(trace) fprintf(stderr,"NYXT profile ready elapsed=%.3f\n",
+        (g_get_monotonic_time()-profileBegan)/1000000.0);
     display=WPE_DISPLAY(g_object_new(nyxt_display_get_type(),nullptr));
     GError* error=nullptr;if(!wpe_display_connect(display,&error))return 5;
     std::vector<char> input;gint64 inputBegan=0,inputProgress=0;send(1000,0);

@@ -36,6 +36,10 @@
               (format t \"~&[NYXT EVAL] ~a~%\" reply)
               (assert (not (search \"error: \" reply))) reply)))")
         (dotimes (i (parse-integer (or (uiop:getenv "DARTER_LAUNCH_CYCLES") "6")))
+          (when (uiop:getenv "DARTER_NYXT_FRESH_PROFILE")
+            ;; Keep compiled Lisp; recreate only the website store on this
+            ;; explicitly supplied disposable test disk. Preserve prior data.
+            (nyxt-app-ask c "(progn (dolist (parent '(\"/Users/darterfly/.local/share/nyxt/\" \"/Users/darterfly/.cache/nyxt/\")) (let ((old (merge-pathnames \"wpe/\" parent))) (when (probe-file old) (rename-file old (merge-pathnames (format nil \"wpe-launch-backup-~d/\" (get-universal-time)) parent))))))"))
           (nyxt-app-ask c "(progn (setf *nyxt-log-at* 0)
             (uiop:delete-file-if-exists \"/tmp/nyxt-application.log\"))")
           (nyxt-app-dock c)
