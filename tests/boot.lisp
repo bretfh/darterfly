@@ -376,6 +376,12 @@
                            (nth-value 1 (sb-bsd-sockets:socket-name s)))
       (sb-bsd-sockets:socket-close s))))
 
+(defun free-tcp-port ()
+  (let ((s (make-instance 'sb-bsd-sockets:inet-socket :type :stream :protocol :tcp)))
+    (unwind-protect (progn (sb-bsd-sockets:socket-bind s #(0 0 0 0) 0)
+                           (nth-value 1 (sb-bsd-sockets:socket-name s)))
+      (sb-bsd-sockets:socket-close s))))
+
 (defun host-listener ()
   (let ((server (make-instance 'sb-bsd-sockets:inet-socket :type :stream :protocol :tcp)))
     (setf (sb-bsd-sockets:sockopt-reuse-address server) t)
@@ -385,7 +391,7 @@
 
 (test network-on-darterfly
   (let* ((udp (free-udp-port))
-         (tcp (free-udp-port))
+         (tcp (free-tcp-port))
          (c (image:bare-console :forwards (list (list :udp udp 7) (list :tcp tcp 7)))))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
       (unwind-protect
@@ -485,7 +491,7 @@
         (image:finish c 5)))))
 
 (test sockets-on-darterfly
-  (let* ((tcp (free-udp-port))
+  (let* ((tcp (free-tcp-port))
          (c (image:bare-console :forwards (list (list :tcp tcp 8)))))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
       (unwind-protect
@@ -782,7 +788,7 @@
 
 (test what-was-running-keeps-running
   (let ((esp (merge-pathnames "esp-running-world.img" (darterfly-file "build/")))
-        (port (free-udp-port))
+        (port (free-tcp-port))
         (image:*screen-size* '(1280 800)))
     (uiop:delete-file-if-exists esp)
     (flet ((beating (ask) (search "T" (funcall ask "(let ((a cl-user::*beat*)) (sleep 2.5) (and (find \"beat\" (sb-thread:list-all-threads) :key #'sb-thread:thread-name :test #'equal) (/= a cl-user::*beat*) t))"))))
@@ -3176,7 +3182,7 @@
           (image:finish c 5))))))
 
 (defun nrepl-check (&key (ip "10.0.2.15") status)
-  (let* ((port (free-udp-port))
+  (let* ((port (free-tcp-port))
          (c (image:bare-console :forwards (list (list :tcp port 4011)))))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60))
            (client (key code)
@@ -3261,7 +3267,7 @@
       (image:finish c 5))))
 
 (test the-hardware-check-runs-across-a-sleep
-  (let* ((port (free-udp-port))
+  (let* ((port (free-tcp-port))
          (image:*extra-qemu* (list "-global" "ICH9-LPC.disable_s3=0"))
          (image::*expected* '(:log :network :disk))
          (label "vm-check")
@@ -3291,7 +3297,7 @@
       (image:finish c 5))))
 
 (test the-network-world-sleeps-and-wakes
-  (let* ((port (free-udp-port))
+  (let* ((port (free-tcp-port))
          (image:*extra-qemu* (list "-global" "ICH9-LPC.disable_s3=0"))
          (image::*expected* '(:log :network :disk))
          (label "vm-world-check")
@@ -3336,7 +3342,7 @@
 (test usb-ethernet-plugged-in-later
   (let* ((image:*input-devices* '("qemu-xhci,id=xhci" "virtio-keyboard-pci" "virtio-tablet-pci"))
          (image:*network-device* nil)
-         (port (free-udp-port))
+         (port (free-tcp-port))
          (c (image:bare-console :forwards (list (list :tcp port 4011)))))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60))
            (plug () (image:qmp "device_add" (darterfly/qmp:dict "driver" "usb-net" "netdev" "net0" "bus" "xhci.0" "id" "dongle")))
@@ -3360,7 +3366,7 @@
 (test usb-ethernet-on-a-controller-with-only-msi
   (let ((image:*input-devices* '("qemu-xhci,id=xhci,msi=on,msix=off" "virtio-keyboard-pci" "virtio-tablet-pci"))
         (image:*network-device* "usb-net,netdev=net0,bus=xhci.0")
-        (port (free-udp-port)))
+        (port (free-tcp-port)))
     (let ((c (image:bare-console :forwards (list (list :tcp port 4011)))))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
         (unwind-protect
@@ -3375,7 +3381,7 @@
 (defvar *stick-netdev* "user,id=net0")
 
 (defun stick-machine (&rest devices)
-  (image:console :args (append (list "qemu-system-x86_64" "-enable-kvm" "-cpu" "host" "-m" "4096" "-smp" "4" "-machine" "q35"
+  (image:console :args (append (list "qemu-system-x86_64" "-enable-kvm" "-cpu" "host" "-m" (if (image::nyxt-package-root) "8192" "4096") "-smp" "4" "-machine" "q35"
                                      "-drive" (format nil "if=pflash,format=raw,readonly=on,file=~a" (darterfly/image::firmware "ovmf_code_x64.bin"))
                                      "-drive" (format nil "if=pflash,format=raw,snapshot=on,file=~a" (darterfly/image::firmware "ovmf_vars_x64.bin"))
                                      "-device" "qemu-xhci,id=xhci"
@@ -3528,7 +3534,7 @@
 (test deploy-updates-an-installed-system
   (let* ((stick (image:usb-image))
          (disk (merge-pathnames "deploy-nvme.img" (darterfly-file "build/")))
-         (port (free-udp-port)))
+         (port (free-tcp-port)))
     (with-open-file (s disk :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
       (file-position s (1- (* 4096 1048576)))
       (write-byte 0 s))
