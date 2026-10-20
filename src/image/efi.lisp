@@ -84,7 +84,33 @@
 (defun user-objects ()
   (mapcar (lambda (unit) (list (getf unit :name) (unit-object unit))) (host-units)))
 
+#-darterfly
+(defparameter *kernel-definition-directories*
+  (mapcar #'source '("src/kern/" "src/bsd/dev/" "src/bsd/kern/" "src/platform/"
+                     "src/asm/" "src/low/" "src/link/" "src/boot/" "src/cc/" "src/install/")))
+
+#-darterfly
+(defun kernel-definition-sources ()
+  (labels ((walk (dir)
+             (append (loop for file in (uiop:directory-files dir "*.lisp")
+                           collect (cons (namestring file) (octets file)))
+                     (mapcan #'walk (uiop:subdirectories dir)))))
+    (sort (mapcan #'walk *kernel-definition-directories*) #'string< :key #'car)))
+
+;; A host builder must not stamp old in-memory Low definitions with the mtime
+;; of newly edited source. Keep the original snapshot across ASDF reloads;
+;; start a fresh builder after edits. Live Darterfly reloads have their own
+;; generation workflow and intentionally do not use this host-only guard.
+#-darterfly
+(defvar *kernel-definition-snapshot* (kernel-definition-sources))
+
+#-darterfly
+(defun check-kernel-definitions ()
+  (unless (equalp *kernel-definition-snapshot* (kernel-definition-sources))
+    (error "Kernel sources changed since this builder loaded its definitions; restart the host builder.")))
+
 (defun kernel-file ()
+  #-darterfly (check-kernel-definitions)
   (let ((out (build-path (if (eq *c-compiler* :clang) "kernel/kernel" "kernel/kernel-tcc"))))
     (when (and (probe-file out) (> (file-write-date out) (newest (kernel-inputs))))
       (return-from kernel-file out))
@@ -92,6 +118,7 @@
     (let ((image (darterfly/install:kernel-image (loop :for (name path) :in (user-objects) :collect (cons name (octets path)))
                                                  :date (newest (mapcar #'source '("src/kern/" "src/bsd/dev/" "src/bsd/kern/" "src/platform/"
                                                                                   "src/libsa/" "src/sbcl/" "src/low/" "src/asm/"))))))
+      #-darterfly (check-kernel-definitions)
       (ensure-directories-exist out)
       (with-open-file (s out :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
         (write-sequence image s)))

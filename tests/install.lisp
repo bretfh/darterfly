@@ -241,3 +241,17 @@
         (is (equalp (image::text "edited")
                     (third (find "usr/src/darterfly/tracked.lisp" entries
                                  :key #'second :test #'equal))))))))
+
+#-darterfly
+(test a-host-builder-rejects-source-edits-after-loading
+  (let* ((dir (scratch))
+         (file (merge-pathnames "kernel-definition.lisp" dir))
+         (image::*kernel-definition-directories* (list dir)))
+    (with-open-file (s file :direction :output :if-exists :supersede)
+      (write-string "(define-low example () 1)" s))
+    (let ((image::*kernel-definition-snapshot* (image::kernel-definition-sources)))
+      (is (null (image::check-kernel-definitions)))
+      ;; Same length and potentially the same timestamp: compare contents.
+      (with-open-file (s file :direction :output :if-exists :supersede)
+        (write-string "(define-low example () 2)" s))
+      (signals error (image:kernel-file)))))
