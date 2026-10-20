@@ -19,7 +19,9 @@
 (defconstant +t-specific+ 64)
 (defconstant +t-name+ 1088)
 (defconstant +t-owned-stack+ 1120)
-(defconstant +thread-size+ 1128)
+;; Compiler layout for newly emitted libsa objects. Keep the old +THREAD-SIZE+
+;; binding intact in retained images; their native binaries own the old layout.
+(defconstant +pthread-record-size+ 1128)
 
 (define-global main-thread :u8 :count 1128)
 (define-global next-key :u32)
@@ -63,7 +65,7 @@
   (free th))
 
 (define-low pthread_create (out attr start arg)
-  (let ((th (calloc 1 +thread-size+)))
+  (let ((th (calloc 1 +pthread-record-size+)))
     (when (= th 0) (result +eagain+))
     (setf (mem :u64 (+ th +t-start+)) start)
     (setf (mem :u64 (+ th +t-arg+)) arg)

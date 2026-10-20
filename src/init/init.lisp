@@ -15,6 +15,8 @@
    (program :initarg :program :reader program)
    (arguments :initarg :arguments :reader arguments)
    (plist :initarg :plist :reader job-plist)
+   (output :initform (make-instance 'bsd::capture-file) :reader job-output)
+   (errors :initform (make-instance 'bsd::capture-file) :reader job-errors)
    (pid :initform nil :accessor pid)
    (status :initform nil :accessor status)
    (started :initform 0 :accessor started)
@@ -100,11 +102,28 @@
                 :collect (format nil "~a=~a" k v))))
 
 (defun file-actions (job)
-  (flet ((std (fd key flags)
-           (list :open fd (key (job-plist job) key "/dev/null") flags)))
-    (list (std 0 :stdin bsd:+o-rdonly+)
-          (std 1 :stdout (logior bsd:+o-wronly+ bsd:+o-creat+ bsd:+o-append+))
-          (std 2 :stderr (logior bsd:+o-wronly+ bsd:+o-creat+ bsd:+o-append+)))))
+  (flet ((output (fd key capture)
+           (let ((path (key (job-plist job) key)))
+             (if path
+                 (list :open fd path (logior bsd:+o-wronly+ bsd:+o-creat+ bsd:+o-append+))
+                 (list :capture fd capture)))))
+    (list (list :open 0 (key (job-plist job) :stdin "/dev/null") bsd:+o-rdonly+)
+          (output 1 :stdout (job-output job))
+          (output 2 :stderr (job-errors job)))))
+
+(defun diagnostic-output (job key capture)
+  (let ((path (key (job-plist job) key)))
+    (if path (list :path path) (or (bsd::captured-output capture) :busy))))
+
+(defun diagnostic-jobs ()
+  ;; Never wait behind a supervisor operation to learn that it is blocked.
+  (or (sb-thread:with-mutex (*lock* :wait-p nil)
+        (list :jobs
+          (loop for job in *jobs* for i below 32
+                collect (list :label (label job) :pid (pid job) :state (state job)
+                              :stdout (diagnostic-output job :stdout (job-output job))
+                              :stderr (diagnostic-output job :stderr (job-errors job))))))
+      :busy))
 
 (defun start (job)
   (if (key (job-plist job) :world)
@@ -258,6 +277,8 @@
       (list :label label
             :state (state job)
             :reason (reason job)
+            :stdout (diagnostic-output job :stdout (job-output job))
+            :stderr (diagnostic-output job :stderr (job-errors job))
             :exits (reverse (exits job))
             :world id
             :inside (and id

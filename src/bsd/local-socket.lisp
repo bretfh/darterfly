@@ -50,17 +50,24 @@
     (fail :enametoolong))
   (path name))
 
+(defun make-local-node (path mode)
+  (vfs::with-vfs
+    (multiple-value-bind (dir leaf) (vfs::namei-parent path)
+      (when (vfs:vnop-lookup dir leaf) (fail :eaddrinuse))
+      (vfs::vnop-mksocket dir leaf mode))))
+
 (defun local-bind (s name)
-  (unless (and (eq (local-state s) :new) (null (local-node s)))
-    (fail :einval))
-  (vfs
-    (vfs::with-vfs
-      (multiple-value-bind (dir leaf) (vfs::namei-parent (local-path name))
-        (when (vfs:vnop-lookup dir leaf) (fail :eaddrinuse))
-        (let ((node (vfs::vnop-mksocket dir leaf
-                                      (logand #o777 (lognot vfs:*umask*)))))
-          (setf (local-node s) node (local-name s) name
-                (gethash node *local-names*) s)))))
+  (unless (and (eq (local-state s) :new) (null (local-node s))) (fail :einval))
+  (let ((path (local-path name)))
+    (setf (local-state s) :binding)
+    (unwind-protect
+         (let ((node (vfs-call (make-local-node path (logand #o777 (lognot vfs:*umask*))))))
+           ;; A concurrent close owns the transition to :CLOSED. As with a
+           ;; socket closed just after bind, the pathname remains in the VFS.
+           (unless (eq (local-state s) :binding) (fail :ebadf))
+           (setf (local-node s) node (local-name s) name
+                 (gethash node *local-names*) s))
+      (when (eq (local-state s) :binding) (setf (local-state s) :new))))
   0)
 
 (defun local-listen (s backlog)
@@ -74,8 +81,9 @@
 (defun local-connect (s name)
   (when (eq (local-state s) :connected) (fail :eisconn))
   (unless (eq (local-state s) :new) (fail :einval))
-  (let* ((node (vfs (vfs:namei (local-path name))))
+  (let* ((node (vfs-call (vfs:namei (local-path name))))
          (listener (gethash node *local-names*)))
+    (unless (eq (local-state s) :new) (fail :ebadf))
     (unless listener (fail :econnrefused))
     (unless (= (socket-type s) (socket-type listener)) (fail :eprototype))
     (sleep-until

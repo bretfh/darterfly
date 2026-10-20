@@ -44,6 +44,7 @@
 
 (defvar *window-epoch* nil)
 (defvar *window-revision* 0)
+(defstruct flight window from to start (duration .28) target (display-position 0.0))
 (defvar *flight* nil)
 (defvar *motion-wakeup* nil)
 (defvar *windows* nil)

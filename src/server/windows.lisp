@@ -4,7 +4,6 @@
 (defvar *window-revision* 0)
 (defvar *minimize-sequence* 0)
 (defvar *flight* nil)
-(defstruct flight window from to start (duration .28) target (display-position 0.0))
 
 (defun window-handle (w) (list *window-epoch* (window-id w) (owner w)))
 (defun handle-window (handle)

@@ -6,6 +6,17 @@
 (defmacro with-bsd (&body body)
   `(sb-thread:with-recursive-lock (*bsd*) ,@body))
 
+(defun call-without-bsd (function)
+  ;; The caller snapshots arguments and retains any open file before dropping
+  ;; this lock. Reacquire even on an interrupt/nonlocal exit before cleanup.
+  (if (sb-thread:holding-mutex-p *bsd*)
+      (sb-sys:without-interrupts
+        (unwind-protect
+             (progn (sb-thread:release-mutex *bsd*)
+                    (sb-sys:with-local-interrupts (funcall function)))
+          (sb-thread:grab-mutex *bsd*)))
+      (funcall function)))
+
 (defun changed ()
   (sb-thread:condition-broadcast *changed*))
 
@@ -45,12 +56,14 @@
 
 (defvar *procs* (make-hash-table))
 (defvar *next-pid* 0)
+(defvar *preparing-pids* (make-hash-table))
 (defvar *proc0* (setf (gethash 0 *procs*) (make-instance 'proc :pid 0 :task darterfly/mach:*task*)))
 (defvar *proc* *proc0*)
 
 (defun next-pid ()
   (loop (setf *next-pid* (if (>= *next-pid* +pid-max+) 100 (1+ *next-pid*)))
-        (unless (gethash *next-pid* *procs*) (return *next-pid*))))
+        (unless (or (gethash *next-pid* *procs*) (gethash *next-pid* *preparing-pids*))
+          (return *next-pid*))))
 
 (defun pfind (pid)
   (let ((proc (gethash pid *procs*)))
@@ -218,6 +231,9 @@
            (started nil))
       (unwind-protect
            (progn
+             ;; Preparation may release BSD for filesystem work. Reserve the
+             ;; PID without publishing a partly prepared process.
+             (setf (gethash (proc-pid child) *preparing-pids*) t)
              (loop for slot across (proc-fds parent) do
                (when slot (incf (file-refs (car slot))))
                (vector-push-extend (and slot (cons (car slot) (cdr slot)))
@@ -230,6 +246,10 @@
                    (proc-comm child) (proc-comm parent)
                    (proc-bindings child) (proc-bindings parent))
              (when prepare (let ((*proc* child)) (funcall prepare)))
+             (when (or (proc-closing parent) (eq (proc-state parent) :zombie)
+                       (and (proc-world-owner parent)
+                            (proc-closing (proc-world-owner parent))))
+               (fail :eintr))
              (setf (gethash (proc-pid child) *procs*) child)
              (push child (proc-children parent))
              (setf (proc-thread child)
@@ -238,6 +258,7 @@
                                                         (proc-pid child))))
              (setf started t)
              (proc-pid child))
+        (remhash (proc-pid child) *preparing-pids*)
         (unless started
           (loop for fd below (length (proc-fds child))
                 when (aref (proc-fds child) fd) do (release-fd child fd))

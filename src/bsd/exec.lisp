@@ -29,15 +29,19 @@
 (defconstant +s-ixall+ #o111)
 
 (defun first-line (full)
-  (vfs (let ((fd (vfs:vfs-open full (list :access :rdonly) 0)))
+  (call-without-bsd
+   (lambda ()
+     (vfs
+       (let ((fd (vfs:vfs-open full (list :access :rdonly) 0)))
          (unwind-protect
               (let ((octets (vfs:vfs-read fd 256)))
-                (map 'string #'code-char (subseq octets 0 (or (position 10 octets) (length octets)))))
-           (vfs:vfs-close fd)))))
+                (map 'string #'code-char
+                     (subseq octets 0 (or (position 10 octets) (length octets)))))
+           (vfs:vfs-close fd)))))))
 
 (defun program-of (name)
   (let* ((full (path name))
-         (mode (vfs:vattr-mode (vfs (vfs:vfs-stat full)))))
+         (mode (vfs:vattr-mode (vfs-call (vfs:vfs-stat full)))))
     (unless (and (= (logand mode +s-ifmt+) +s-ifreg+) (logtest mode +s-ixall+))
       (fail :eacces))
     (let ((line (first-line full)))
@@ -46,7 +50,7 @@
                       '(127 69 76 70))
                (handler-case
                    (make-native-program
-                    :image (darterfly/worlds:read-native-image full))
+                    :image (call-without-bsd (lambda () (darterfly/worlds:read-native-image full))))
                  (darterfly/worlds:world-error () (fail :enoexec))))
           (and (uiop:string-prefix-p "#!darterfly " line)
                (gethash (string-trim " " (subseq line (length "#!darterfly "))) *programs*))
@@ -90,6 +94,14 @@
                           (aref (proc-fds *proc*) fd)) (close fd))
                (let ((new (open path flags mode)))
                  (unless (= new fd) (dup2 new fd) (close new)))))
+      (:capture (destructuring-bind (fd file) args
+                  (unless (and (<= 0 fd 4095) (typep file 'capture-file)) (fail :einval))
+                  (when (and (< fd (length (proc-fds *proc*)))
+                             (aref (proc-fds *proc*) fd)) (close fd))
+                  (loop while (<= (length (proc-fds *proc*)) fd)
+                        do (vector-push-extend nil (proc-fds *proc*)))
+                  (incf (file-refs file))
+                  (setf (aref (proc-fds *proc*) fd) (cons file nil))))
       (:dup2 (destructuring-bind (from to) args
                (dup2 from to)
                ;; POSIX spawn's dup2 action clears close-on-exec even for

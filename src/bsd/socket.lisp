@@ -19,10 +19,7 @@
   (:method ((socket socket)) t))
 
 (defmacro without-bsd (&body body)
-  `(if (sb-thread:holding-mutex-p *bsd*)
-       (progn (sb-thread:release-mutex *bsd*)
-              (unwind-protect (progn ,@body) (sb-thread:grab-mutex *bsd*)))
-       (progn ,@body)))
+  `(call-without-bsd (lambda () ,@body)))
 
 (defun fd-socket (fd)
   (let ((file (fd-file fd)))

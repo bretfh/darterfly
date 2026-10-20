@@ -6,6 +6,7 @@
 (defparameter *system-locks*
   '(("DARTERFLY/BSD" "*BSD*")
     ("DARTERFLY/VFS" "*LOCK*")
+    ("DARTERFLY/VFS" "*FILES-LOCK*")
     ("DARTERFLY/MACH" "*IPC*")
     ("DARTERFLY/APFS" "*DIRTY-LOCK*")
     ("DARTERFLY/JOURNAL" "*JOURNAL-LOCK*")

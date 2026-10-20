@@ -139,16 +139,22 @@
 (defstruct file vnode (offset 0) flags (refs 1) stack listing)
 
 (defvar *files* (make-hash-table))
+;; Descriptor-table operations never wait for filesystem I/O. Lock order is
+;; VFS -> files; no files-lock owner may acquire VFS.
+(defvar *files-lock* (sb-thread:make-mutex :name "vfs descriptors"))
 (defconstant +first-fd+ 3)
 
 (defun install (file &optional (from +first-fd+))
-  (loop for fd from from below 4096
-        unless (gethash fd *files*) do (setf (gethash fd *files*) file) (return fd)
-        finally (fail :emfile)))
+  (sb-thread:with-mutex (*files-lock*)
+    (loop for fd from from below 4096
+          unless (gethash fd *files*) do (setf (gethash fd *files*) file) (return fd)
+          finally (fail :emfile))))
 
-(defun fd-file (fd) (or (gethash fd *files*) (fail :ebadf)))
+(defun fd-file (fd)
+  (sb-thread:with-mutex (*files-lock*)
+    (or (gethash fd *files*) (fail :ebadf))))
 
-(defun fd-vnode (fd) (with-vfs (file-vnode (fd-file fd))))
+(defun fd-vnode (fd) (file-vnode (fd-file fd)))
 
 (defun lookup-or-nil (path &key (follow t))
   (handler-case (namei path :follow follow)
@@ -176,8 +182,8 @@
                           :stack (and (eq (vnode-type vnode) :vdir) (namei-stack path)))))))
 
 (defun vfs-close (fd)
-  (with-vfs
-    (fd-file fd)
+  (sb-thread:with-mutex (*files-lock*)
+    (unless (gethash fd *files*) (fail :ebadf))
     (remhash fd *files*)
     0))
 
@@ -313,7 +319,8 @@
   (with-vfs
     (let ((f (fd-file fd)))
       (when (< new +first-fd+) (fail :ebadf))
-      (unless (= fd new) (setf (gethash new *files*) f))
+      (unless (= fd new)
+        (sb-thread:with-mutex (*files-lock*) (setf (gethash new *files*) f)))
       new)))
 
 (defun namei-at (fd path &key (follow t))

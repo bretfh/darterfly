@@ -168,3 +168,30 @@
                                         (or (zerop (readers buffer))
                                             (< (length (octets buffer)) +pipe-size+))))))))
     written))
+
+;; Supervised output has a bounded, disk-independent home even when no log path
+;; was configured. A job owns the initial reference; spawned descriptors borrow it.
+(defclass capture-file (file)
+  ((bytes :initform (make-array 32768 :element-type '(unsigned-byte 8)) :reader capture-bytes)
+   (position :initform 0 :accessor capture-position)
+   (lock :initform (sb-thread:make-mutex :name "service output") :reader capture-lock)))
+
+(defmethod file-access ((file capture-file)) 1)
+(defmethod file-read ((file capture-file) count) (declare (ignore count)) (fail :ebadf))
+(defmethod file-write ((file capture-file) octets)
+  (sb-thread:with-mutex ((capture-lock file))
+    (let* ((ring (capture-bytes file)) (size (length ring)) (n (length octets))
+           (end (+ (capture-position file) n)))
+      (loop for i from (max 0 (- n size)) below n
+            do (setf (aref ring (mod (+ (capture-position file) i) size)) (aref octets i)))
+      (setf (capture-position file) end)
+      n)))
+
+(defun captured-output (file &optional (limit 2048))
+  (sb-thread:with-mutex ((capture-lock file) :wait-p nil)
+    (let* ((end (capture-position file)) (ring (capture-bytes file))
+           (n (min end (length ring) (max 0 limit)))
+           (bytes (make-array n :element-type '(unsigned-byte 8))))
+      (dotimes (i n) (setf (aref bytes i) (aref ring (mod (+ (- end n) i) (length ring)))))
+      (list :bytes end :omitted (- end n)
+            :text (sb-ext:octets-to-string bytes :external-format '(:utf-8 :replacement #\?))))))
