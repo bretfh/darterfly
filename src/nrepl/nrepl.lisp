@@ -271,6 +271,7 @@
 (defvar *port* 4011)
 (defvar *listener* nil)
 (defvar *thread* nil)
+(defvar *server-lock* (sb-thread:make-mutex :name "nrepl server"))
 
 (defun running-p () (and *thread* (sb-thread:thread-alive-p *thread*) t))
 
@@ -295,35 +296,53 @@
     (format nil "~{~(~8,'0x~)~}" (loop repeat 4 collect (random (ash 1 32) state)))))
 
 (defun start (&key (port *port*) key)
-  (let ((key (or key
-                 (let ((arg (darterfly/devices:boot-arg "nrepl-key"))) (and (stringp arg) arg))
-                 *key*
-                 (new-key))))
-    (darterfly/bsd:keep-running :nrepl (start-server port key))))
+  ;; Keep the retained activity and its live instance ordered with STOP. The
+  ;; recursive lock also covers START-SERVER called directly by saved activities.
+  (sb-thread:with-recursive-lock (*server-lock*)
+    (let ((key (or key
+                   (let ((arg (darterfly/devices:boot-arg "nrepl-key"))) (and (stringp arg) arg))
+                   *key*
+                   (new-key))))
+      (darterfly/bsd:keep-running :nrepl (start-server port key)))))
 
 (defun start-server (port key)
-  (unless darterfly/net:*interface*
-    (darterfly/net:start-network))
-  (setf *key* key)
-  (unless (running-p)
-    (setf *port* port
-          *listener* (darterfly/net:tcp-listen port)
-          *thread* (sb-thread:make-thread (lambda () (%accept *listener*)) :name "nrepl listener")))
-  (let ((address (format nil "~a:~d" (darterfly/net:address-string (darterfly/net::interface-ip darterfly/net:*interface*)) *port*)))
-    (format t "~&nrepl: ~a key ~a~%" address *key*)
-    address))
+  (sb-thread:with-recursive-lock (*server-lock*)
+    (unless darterfly/net:*interface*
+      (darterfly/net:start-network))
+    (unless (running-p)
+      (when *listener* (darterfly/net:tcp-unlisten *listener*))
+      (setf *listener* nil *thread* nil)
+      (let ((listener nil) (published nil))
+        (unwind-protect
+             (progn
+               (setf listener (darterfly/net:tcp-listen port))
+               ;; Publish the thread before an asynchronous unwind can abandon
+               ;; it. Capture its own listener, never the mutable global slot.
+               (sb-sys:without-interrupts
+                 (setf *thread* (sb-thread:make-thread (lambda () (%accept listener))
+                                                       :name "nrepl listener")
+                       *listener* listener *port* port published t)))
+          (unless published
+            (when listener (darterfly/net:tcp-unlisten listener))))))
+    (setf *key* key)
+    (let ((address (format nil "~a:~d" (darterfly/net:address-string (darterfly/net::interface-ip darterfly/net:*interface*)) *port*)))
+      (format t "~&nrepl: ~a key ~a~%" address *key*)
+      address)))
 
 (defun stop ()
-  (darterfly/bsd:stop-keeping :nrepl)
-  (when *listener*
-    (ignore-errors (darterfly/net:tcp-unlisten *listener*)))
-  (when *thread*
-    (ignore-errors (sb-thread:terminate-thread *thread*)))
-  (setf *listener* nil *thread* nil)
+  (sb-thread:with-recursive-lock (*server-lock*)
+    (darterfly/bsd:stop-keeping :nrepl)
+    (when *listener*
+      (darterfly/net:tcp-unlisten *listener*))
+    (when (running-p)
+      (sb-thread:terminate-thread *thread*)
+      (sb-thread:join-thread *thread* :default nil))
+    (setf *listener* nil *thread* nil))
   t)
 
 (defun forget-server ()
   (setf *listener* nil *thread* nil
+        *server-lock* (sb-thread:make-mutex :name "nrepl server")
         *sessions* (make-hash-table :test 'equal) *sessions-lock* (sb-thread:make-mutex :name "nrepl sessions")
         *running* (make-hash-table :test 'equal) *running-lock* (sb-thread:make-mutex :name "nrepl running")))
 

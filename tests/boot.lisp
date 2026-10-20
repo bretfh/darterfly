@@ -2829,27 +2829,33 @@
 (test darterfly-saves-itself-and-boots-the-save
   (let ((esp (merge-pathnames "esp-save.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists esp)
-    (let ((c (image:bare-console :esp esp)))
+    (let ((c (image:bare-console :esp esp :boot-args "nrepl-key=startup-test")))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
         (unwind-protect
              (progn
                (image:expect c "* " :timeout 60)
                (ask "(defvar cl-user::*made-in-darterfly* :made-in-darterfly)")
+               ;; Both boot and this retained activity start nREPL after restore.
+               (ask "(darterfly/nrepl:start :key \"startup-test\")")
                (image:send c "(darterfly/install:save)")
                (is (image:expect c "restart: core " :timeout 300) "the save restarts the runtime on it")
                (image:expect c "* " :timeout 120)
                (is (search ":MADE-IN-DARTERFLY" (ask "cl-user::*made-in-darterfly*")) "the restarted image is the saved one")
+               (is (search "(1 1)" (ask "(progn (sleep 1) (loop for name in '(\"nrepl listener\" \"tcp timer\") collect (count name (sb-thread:list-all-threads) :key #'sb-thread:thread-name :test #'equal)))"))
+                   "boot and retained activities share one listener and timer")
                (is (search "\"gen-2\"" (ask "(darterfly/install:install \"/System/Library/Kernels/kernel\" \"/System/Library/Kernels/darterfly.core\")")))
                (image:send c "(sb-ext:exit)")
                (image:expect c "exit(0)" :timeout 60))
           (image:finish c 5))))
-    (let ((c (image:bare-console :esp esp)))
+    (let ((c (image:bare-console :esp esp :boot-args "nrepl-key=startup-test")))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
         (unwind-protect
              (progn
                (is (image:expect c "boot.efi: generation gen-2"))
                (image:expect c "* " :timeout 60)
-               (is (search ":MADE-IN-DARTERFLY" (ask "cl-user::*made-in-darterfly*")) "gen-2 is the image darterfly saved"))
+               (is (search ":MADE-IN-DARTERFLY" (ask "cl-user::*made-in-darterfly*")) "gen-2 is the image darterfly saved")
+               (is (search "(1 1)" (ask "(progn (sleep 1) (loop for name in '(\"nrepl listener\" \"tcp timer\") collect (count name (sb-thread:list-all-threads) :key #'sb-thread:thread-name :test #'equal)))"))
+                   "boot and retained activities share one listener and timer"))
           (image:finish c 5))))))
 
 (defun listener-line (file prefix)

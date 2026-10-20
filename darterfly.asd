@@ -341,6 +341,6 @@
   :depends-on (#:darterfly #:fiveam (:require #:sb-posix) (:require #:sb-md5) (:require #:sb-bsd-sockets))
   :serial t
   :pathname "tests/"
-  :components ((:file "suite") (:file "worlds") (:file "local-socket") (:file "io-locking") (:file "native") (:file "native-sleep") (:file "native-ipc") (:file "native-tcc") (:file "native-cxx") (:file "native-clang") (:file "native-lld") (:file "native-dl") (:file "native-llvm-tools") (:file "native-tblgen-rebuild") (:file "mach") (:file "server") (:file "kit") (:file "init") (:file "boot") (:file "apfs") (:file "net") (:file "wifi") (:file "power") (:file "install") (:file "onboarding") (:static-file "socketpair-probe.c") (:static-file "low-harness.c") (:file "low"))
+  :components ((:file "suite") (:file "worlds") (:file "local-socket") (:file "io-locking") (:file "native") (:file "native-sleep") (:file "native-ipc") (:file "native-tcc") (:file "native-cxx") (:file "native-clang") (:file "native-lld") (:file "native-dl") (:file "native-llvm-tools") (:file "native-tblgen-rebuild") (:file "mach") (:file "server") (:file "kit") (:file "init") (:file "boot") (:file "apfs") (:file "net") (:file "network-startup") (:file "wifi") (:file "power") (:file "install") (:file "onboarding") (:static-file "socketpair-probe.c") (:static-file "low-harness.c") (:file "low"))
   :perform (asdf:test-op (o c)
              (uiop:symbol-call :darterfly/test :run-them)))
