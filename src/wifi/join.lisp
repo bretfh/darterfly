@@ -424,7 +424,14 @@
       (retire-link l)
       (note (link-card l) :lost why)
       (sb-thread:make-thread
-       (lambda () (unwind-protect (rejoin d) (setf (wireless-rejoining d) nil)))
+       (lambda ()
+         (let ((joined nil))
+           (unwind-protect (setf joined (rejoin d))
+             (setf (wireless-rejoining d) nil))
+           ;; Transmit is enabled only after REJOINING clears. An earlier DHCP
+           ;; attempt may have expired while the firmware was still recovering.
+           (when joined
+             (darterfly/net::configure-interface d :only-if-unconfigured t))))
        :name "wifi rejoin"))))
 
 (defun lost-signal (l p f)

@@ -266,3 +266,123 @@
            (finishes (darterfly/net::flush-acks))
            (is (null darterfly/net::*acks-due*)))
       (sb-int:unencapsulate 'darterfly/devices:network-send 'queue-failure))))
+
+(test a-dhcp-reply-cannot-reconfigure-a-replacement-interface
+  (dolist (replacement '(:replacement :old))
+   (let* ((darterfly/net:*interface* (darterfly/net::make-interface :device :old :mac +peer-mac+))
+         (replacement-ip (darterfly/net:ip-address "192.168.1.12"))
+         (offer (darterfly/net:ip-address "10.0.2.15"))
+         (options (make-hash-table)) (failure nil))
+    (setf (gethash 54 options) (darterfly/net::be (darterfly/net:ip-address "10.0.2.2") 4))
+    (sb-int:encapsulate 'darterfly/net:udp-send 'stale-dhcp
+      (lambda (&rest args) (declare (ignore args)) nil))
+    (sb-int:encapsulate 'darterfly/net::dhcp-reply 'stale-dhcp
+      (lambda (f port xid type timeout)
+        (declare (ignore f port xid timeout))
+        (when (= type 5)
+          (darterfly/net::interface-detach :old)
+          (setf (darterfly/net::interface-device darterfly/net:*interface*) replacement
+                (darterfly/net::interface-ip darterfly/net:*interface*) replacement-ip))
+        (values offer options)))
+    (unwind-protect
+         (progn
+           (handler-case (darterfly/net:dhcp)
+             (darterfly/net:net-error (e) (setf failure (darterfly/net:net-errno e))))
+           (is (eq :enetdown failure) "the superseded transaction is cancelled")
+           (is (= replacement-ip (darterfly/net::interface-ip darterfly/net:*interface*)))
+           (is (null (gethash 68 (darterfly/net::interface-ports darterfly/net:*interface*)))))
+      (sb-int:unencapsulate 'darterfly/net:udp-send 'stale-dhcp)
+      (sb-int:unencapsulate 'darterfly/net::dhcp-reply 'stale-dhcp)))))
+
+(test address-recovery-preserves-current-configuration
+  (let* ((darterfly/net:*interface* (darterfly/net::make-interface :device :radio :ip 123))
+         (darterfly/net::*configuration* nil) (calls 0))
+    (sb-int:encapsulate 'darterfly/net:dhcp 'configuration-recovery
+      (lambda (&rest args) (declare (ignore args)) (incf calls)))
+    (unwind-protect
+         (progn
+           (darterfly/net::configure-interface :radio :only-if-unconfigured t)
+           (is (= 0 calls) "do not discard an existing address on radio recovery")
+           (setf (darterfly/net::interface-device darterfly/net:*interface*) :wired
+                 (darterfly/net::interface-ip darterfly/net:*interface*) 0)
+           (darterfly/net::configure-interface :radio :only-if-unconfigured t)
+           (is (= 0 calls) "recovery of an inactive radio cannot configure Ethernet")
+           (setf darterfly/net::*configuration* '(:ip "10.0.2.15" :gateway "10.0.2.2"))
+           (darterfly/net::configure-interface :wired :only-if-unconfigured t)
+           (is (= (darterfly/net:ip-address "10.0.2.15") (darterfly/net::interface-ip darterfly/net:*interface*)))
+           (is (= 0 calls) "respect explicitly configured addresses"))
+      (sb-int:unencapsulate 'darterfly/net:dhcp 'configuration-recovery))))
+
+(test radio-recovery-waits-for-the-current-address-attempt
+  (let* ((interface (darterfly/net::make-interface :device :radio))
+         (started (sb-thread:make-semaphore)) (worker nil) (calls 0))
+    (sb-int:encapsulate 'darterfly/net:dhcp 'configuration-owner
+      (lambda (&rest args) (declare (ignore args)) (incf calls)))
+    (unwind-protect
+         (progn
+           (sb-thread:with-mutex (darterfly/net::*configuration-lock*)
+             (setf worker (sb-thread:make-thread
+                           (lambda ()
+                             (let ((darterfly/net:*interface* interface)
+                                   (darterfly/net::*configuration* nil))
+                               (sb-thread:signal-semaphore started)
+                               (darterfly/net::configure-interface :radio :only-if-unconfigured t)))))
+             (is (sb-thread:wait-on-semaphore started :timeout 2))
+             (sleep .05)
+             (is (= 0 calls) "recovery does not replace an in-flight DHCP port")
+             (setf (darterfly/net::interface-ip interface) 123))
+           (sb-thread:join-thread worker :timeout 2)
+           (is (= 0 calls) "reuse the address obtained by the prior attempt"))
+      (when (and worker (sb-thread:thread-alive-p worker)) (sb-thread:terminate-thread worker))
+      (sb-int:unencapsulate 'darterfly/net:dhcp 'configuration-owner))))
+
+(test tcp-neighbor-discovery-does-not-block-network-input
+  (dolist (ipv6 '(nil t))
+    (let* ((device (make-instance 'captured-device))
+           (peer (darterfly/net:ip-address (if ipv6 "fe80::2" "10.0.2.2")))
+           (darterfly/net:*interface*
+             (darterfly/net::make-interface :device device :mac +peer-mac+
+               :ip (darterfly/net:ip-address "10.0.2.15") :prefix 24
+               :ip6 (list (darterfly/net:ip-address "fe80::1"))))
+           (darterfly/net::*connections* (make-hash-table :test 'equalp))
+           (darterfly/net::*acks-due* nil)
+           (c (darterfly/net::make-connection :local-port 1234 :remote-ip peer :remote-port 80
+                :state :established :snd-una 100 :snd-nxt 100 :rcv-nxt 200))
+           (started nil) (elapsed nil) (failure nil))
+      (progn
+             (setf started (get-internal-real-time))
+             (handler-case
+                 (sb-thread:with-recursive-lock (darterfly/net::*tcp-lock*)
+                   (darterfly/net::queue-segment c darterfly/net::+ack+ #(42)))
+               (darterfly/net:net-error (e) (setf failure e)))
+             (setf elapsed (/ (- (get-internal-real-time) started) internal-time-units-per-second))
+             (is (null failure) "neighbor discovery defers the queued transmission")
+             (is (< elapsed .25) "TCP never waits for input while owning its lock (~a s)" elapsed)
+             (is (= 1 (length (darterfly/net::tcp-unacked c))))
+             (is (= 1 (length (frames device))) "one neighbor solicitation, no blocking retries")
+             (setf (frames device) nil)
+             (setf started (get-internal-real-time))
+             (handler-case (darterfly/net::send-segment c darterfly/net::+ack+ 101)
+               (darterfly/net:net-error () nil))
+             (setf elapsed (/ (- (get-internal-real-time) started) internal-time-units-per-second))
+             (is (darterfly/net::tcp-ack-pending c) "standalone ACK remains due until the neighbor is known")
+             (setf (gethash peer (if ipv6 (darterfly/net::interface-nd6 darterfly/net:*interface*)
+                                        (darterfly/net::interface-arp darterfly/net:*interface*))) +peer-mac+
+                   (frames device) nil)
+             (darterfly/net::tcp-tick)
+             (is (not (darterfly/net::tcp-ack-pending c)))
+             (is (= 1 (length (frames device))) "the timer sends the deferred ACK after learning the neighbor")
+             (darterfly/net::retransmit c (first (darterfly/net::tcp-unacked c)))
+             (is (= 2 (length (frames device))) "the queued payload is retained and retransmits")
+             (is (< elapsed .25) "standalone ACK does not wait for discovery (~a s)" elapsed)
+             (clrhash (if ipv6 (darterfly/net::interface-nd6 darterfly/net:*interface*)
+                              (darterfly/net::interface-arp darterfly/net:*interface*)))
+             (darterfly/net::send-segment c darterfly/net::+ack+ 101)
+             (setf (darterfly/net::tcp-state c) :time-wait
+                   (darterfly/net::tcp-unacked c) nil
+                   (darterfly/net::tcp-closed-at c) (- (get-internal-real-time) (* 3 internal-time-units-per-second))
+                   (gethash :closing darterfly/net::*connections*) c
+                   (frames device) nil)
+             (darterfly/net::tcp-tick)
+             (is (null darterfly/net::*acks-due*) "closing a connection retires deferred ACK ownership")
+             (is (null (frames device)) "closed connections do not keep probing an absent neighbor")))))

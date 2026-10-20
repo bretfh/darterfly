@@ -3755,3 +3755,25 @@
              (is (search ":NETWORK T" (ask "(list :network (and (darterfly/net:ping \"10.0.2.2\") t))")))
              (is (search ":FAILURE NIL" (ask "(list :failure darterfly/devices::*device-last-failure*)"))))
         (image:finish c 5)))))
+
+(test unreachable-tcp-peers-do-not-starve-address-recovery
+  (let* ((image:*input-devices* '("qemu-xhci,id=xhci" "virtio-keyboard-pci" "virtio-tablet-pci"))
+         (image:*network-device* "usb-net,netdev=net0,bus=xhci.0")
+         (port (free-tcp-port))
+         (c (image:bare-console :forwards (list (list :tcp port 4011)))))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 90)
+             (is (search "4011" (ask "(darterfly/nrepl:start :key \"test-key\")")))
+             (is (loop repeat 15 thereis (search "=> 3" (nrepl-client port "test-key" "(+ 1 2)")) do (sleep 1)))
+             ;; Retained peers from an old attachment must not hold TCP while
+             ;; waiting for neighbor answers from the new network's input loop.
+             (ask "(sb-thread:with-recursive-lock (darterfly/net::*tcp-lock*) (dotimes (n 16) (dolist (ip (list (darterfly/net:ip-address (format nil \"10.0.2.~d\" (+ 200 n))) (darterfly/net:ip-address (format nil \"fe80::~x\" (+ 512 n))))) (let ((c (darterfly/net::make-connection :local-port (+ 5000 n) :remote-ip ip :remote-port 80 :state :established :snd-una 1 :snd-nxt 2 :rcv-nxt 1 :unacked (list (list 1 16 #(42) 0 0))))) (setf (gethash (darterfly/net::tcp-key (+ 5000 n) ip 80) darterfly/net::*connections*) c)))) :seeded)")
+             (dotimes (round 3)
+               (let* ((start (get-internal-real-time))
+                      (reply (nrepl-client port "test-key" "(progn (clrhash (darterfly/net::interface-arp darterfly/net:*interface*)) (clrhash (darterfly/net::interface-nd6 darterfly/net:*interface*)) (setf (darterfly/net::interface-ip darterfly/net:*interface*) 0) (darterfly/net:dhcp) :recovered)")))
+                 (is (search ":RECOVERED" reply) "DHCP and authenticated control recover amid unresolved peers")
+                 (is (< (- (get-internal-real-time) start) (* 5 internal-time-units-per-second))
+                     "old peers cannot hold up recovery for their combined neighbor timeouts"))))
+        (image:finish c 5)))))

@@ -350,3 +350,35 @@
            (is (zerop reads)))
       (sb-int:unencapsulate 'probe-file 'suspended-fs)
       (sb-int:unencapsulate 'sb-thread:make-thread 'suspended-fs))))
+
+(test a-recovered-radio-retries-an-expired-address-attempt
+  (let* ((old (offline-link)) (new (offline-link))
+         (d (make-instance 'darterfly/wifi::wireless-interface :link old))
+         (darterfly/net:*interface* (darterfly/net::make-interface :device d))
+         (calls 0) (sent-while-rejoining nil))
+    (setf (darterfly/wifi::link-keyed old) t (darterfly/wifi::link-keyed new) t)
+    ;; SBCL workers do not inherit the fixture's dynamic interface binding.
+    (sb-int:encapsulate 'sb-thread:make-thread 'address-retry
+      (lambda (f thunk &rest args)
+        (let ((interface darterfly/net:*interface*))
+          (apply f (lambda ()
+                     (let ((darterfly/net:*interface* interface)
+                           (darterfly/net::*configuration* nil))
+                       (funcall thunk))) args))))
+    (sb-int:encapsulate 'darterfly/wifi::rejoin 'address-retry
+      (lambda (f device) (declare (ignore f))
+        ;; The prior DHCP attempt expired while radio recovery was in progress.
+        (setf (darterfly/wifi::wireless-link device) new) t))
+    (sb-int:encapsulate 'darterfly/net:dhcp 'address-retry
+      (lambda (&rest args) (declare (ignore args))
+        (incf calls)
+        (setf sent-while-rejoining (not (null (darterfly/wifi::wireless-rejoining d)))
+              (darterfly/net::interface-ip darterfly/net:*interface*) (darterfly/net:ip-address "10.0.2.15"))))
+    (unwind-protect
+         (progn
+           (sb-thread:join-thread (darterfly/wifi::lost d :firmware-error))
+           (is (= 1 calls) "successful radio recovery retries an unconfigured selected interface")
+           (is (plusp (darterfly/net::interface-ip darterfly/net:*interface*)))
+           (is (null sent-while-rejoining) "clear rejoining before DHCP can transmit"))
+      (dolist (name '(darterfly/wifi::rejoin darterfly/net:dhcp sb-thread:make-thread))
+        (sb-int:unencapsulate name 'address-retry)))))

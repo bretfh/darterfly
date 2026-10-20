@@ -90,6 +90,7 @@
         (let ((mac (gethash hop (interface-nd6 if))))
           (when mac (return mac))))
       (send-icmp6 135 0 (octets (be 0 4) hop (link-option 1)) (solicited-node hop))
+      (unless *wait-for-neighbor* (defer-neighbor hop))
       (sb-thread:with-mutex ((interface-lock if))
         (unless (gethash hop (interface-nd6 if))
           (sb-thread:condition-wait (interface-changed if) (interface-lock if) :timeout 0.5))))))

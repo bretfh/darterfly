@@ -48,7 +48,19 @@
                           (be (ash (/ header-length 4) 4) 1) (be flags 1) (be (advertised-window c flags) 2) (be 0 2) (be 0 2)
                           options (coerce data '(vector (unsigned-byte 8))))))
     (replace segment (be (transport-checksum (source-address (tcp-remote-ip c)) (tcp-remote-ip c) 6 segment) 2) :start1 16)
-    (send-ip 6 (tcp-remote-ip c) segment)))
+    ;; Input and retransmission both own TCP state. Waiting for ARP/ND here
+    ;; blocks the input thread that must receive the neighbor's answer, and a
+    ;; batch of old connections can starve DHCP through an interface switch.
+    (let ((*wait-for-neighbor* nil))
+      (handler-case (send-ip 6 (tcp-remote-ip c) segment)
+        (neighbor-pending ()
+          ;; Data/SYN/FIN already live in UNACKED. Standalone ACKs also need a
+          ;; timer retry after discovery; reset packets remain best effort.
+          (when (and (= flags +ack+) (zerop (length data)))
+            (sb-thread:with-recursive-lock (*tcp-lock*)
+              (setf (tcp-ack-pending c) t)
+              (pushnew c *acks-due*)))
+          nil)))))
 
 (defun advertised-window (c flags)
   (let ((free (max 0 (- +rcvbuf+ (length (tcp-received c))))))
@@ -293,8 +305,12 @@
                               (> (- now (tcp-closed-at c)) (* 2 internal-time-units-per-second)))
                      (push key dead)))
                  *connections*)
-        (dolist (key dead) (remhash key *connections*))
-        (when dead (sb-thread:condition-broadcast *tcp-changed*)))))
+        (dolist (key dead)
+          (let ((c (gethash key *connections*)))
+            (when c (setf (tcp-ack-pending c) nil)))
+          (remhash key *connections*))
+        (when dead (sb-thread:condition-broadcast *tcp-changed*))
+        (flush-acks))))
 
 (defun ensure-tcp-timer ()
   (sb-thread:with-recursive-lock (*tcp-lock*)
@@ -397,4 +413,6 @@
   (clrhash *connections*)
   (clrhash *listeners*)
   (setf *interface* nil *tcp-timer* nil *acks-due* nil
-        *start-lock* (sb-thread:make-mutex :name "network start")))
+        *start-lock* (sb-thread:make-mutex :name "network start")
+        *configuration-lock* (sb-thread:make-mutex :name "network configuration"))
+  (incf *interface-epoch*))
