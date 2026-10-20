@@ -4,6 +4,7 @@
 (in-package #:darterfly/install)
 
 (defvar *esp* "/Volumes/EFI/")
+(defvar *installing* (sb-thread:make-mutex :name "installing"))
 
 (defun esp-path (name) (concatenate 'string *esp* "EFI/darterfly/" name))
 
@@ -46,21 +47,23 @@
 (defun failed () (link "failed"))
 
 (defun confirm ()
-  (esp)
-  (let ((name (current)))
-    (unless (equal name (link "good"))
-      (put-line "good" name))
-    (uiop:delete-file-if-exists (esp-path "tried"))
-    name))
+  (sb-thread:with-recursive-lock (*installing*)
+    (esp)
+    (let ((name (current)))
+      (unless (equal name (link "good"))
+        (put-line "good" name))
+      (uiop:delete-file-if-exists (esp-path "tried"))
+      name)))
 
 (defun select (name)
-  (unless (member name (generations) :test #'string=)
-    (error "no generation ~a" name))
-  (let ((was (current)))
-    (unless (string= was name)
-      (put-line "previous" was)
-      (put-line "current" name)))
-  name)
+  (sb-thread:with-recursive-lock (*installing*)
+    (unless (member name (generations) :test #'string=)
+      (error "no generation ~a" name))
+    (let ((was (current)))
+      (unless (string= was name)
+        (put-line "previous" was)
+        (put-line "current" name)))
+    name))
 
 (defun stop-threads (&optional keep)
   (darterfly/worlds:quiet-watchdog)
@@ -75,13 +78,12 @@
 
 (defparameter *pending-generation* "/Library/Settings/pending-generation")
 
-(defvar *installing* (sb-thread:make-mutex :name "installing"))
 (defvar *save-token* nil)
 (defvar *saving* nil)
 
 (defparameter *deployments-dir* "/Library/Settings/deployments/")
 (defvar *deployment* nil)
-(defparameter *final-stages* '(:refused :reload-failed :save-failed :install-failed :lost :healthy :unhealthy))
+(defparameter *final-stages* '(:refused :receive-failed :reload-failed :save-failed :install-failed :lost :healthy :unhealthy))
 
 (defun deployment-path (id)
   (format nil "~a~a" *deployments-dir* id))
@@ -109,24 +111,40 @@
                 until (eq entry s)
                 collect entry))))))
 
-(defun end-deployment (stage &rest detail)
-  (when *deployment*
-    (apply #'note-deployment *deployment* stage detail)
-    (setf *deployment* nil)))
+(defun finish-deployment (id stage &rest detail)
+  (sb-thread:with-recursive-lock (*installing*)
+    (when (and id (equal id *deployment*))
+      (apply #'note-deployment id stage detail)
+      (setf *deployment* nil))))
 
-(defun save-failed (condition)
+(defun end-deployment (stage &rest detail)
+  (apply #'finish-deployment *deployment* stage detail))
+
+(defun claim-deployment (id)
+  (sb-thread:with-recursive-lock (*installing*)
+    (when (or *saving* *deployment*)
+      (error "a save or deployment is already under way"))
+    (setf *deployment* id)
+    (note-deployment id :accepted))
+  id)
+
+(defun save-failed (condition &key (quiesced t))
   (format *error-output* "~&save failed: ~a~%save: the world carries on unsaved~%" condition)
-  (end-deployment :save-failed (princ-to-string condition))
-  (setf *saving* nil)
-  (handler-case (delete-file *pending-generation*)
-    (error (e) (format *error-output* "~&save: pending generation: ~a~%" e)))
-  (handler-case (darterfly/journal::unsave)
-    (error (e) (format *error-output* "~&save: journal: ~a~%" e)))
-  (handler-case (darterfly/power:flush-disks)
-    (error (e) (format *error-output* "~&save: flush: ~a~%" e)))
-  (unless (typep condition 'sb-impl::save-error)
-    (sb-impl::call-hooks "save" sb-ext:*save-hooks* :on-error :warn)
-    (sb-impl::call-hooks "initialization" sb-ext:*init-hooks* :on-error :warn)))
+  (setf *saving* t)
+  (unwind-protect
+       (progn
+         (handler-case (delete-file *pending-generation*)
+           (error (e) (format *error-output* "~&save: pending generation: ~a~%" e)))
+         (handler-case (darterfly/journal::unsave)
+           (error (e) (format *error-output* "~&save: journal: ~a~%" e)))
+         (handler-case (darterfly/power:flush-disks)
+           (error (e) (format *error-output* "~&save: flush: ~a~%" e)))
+         (when (and quiesced (not (typep condition 'sb-impl::save-error)))
+           (sb-impl::call-hooks "save" sb-ext:*save-hooks* :on-error :warn)
+           (sb-impl::call-hooks "initialization" sb-ext:*init-hooks* :on-error :warn)))
+    (sb-thread:with-recursive-lock (*installing*)
+      (end-deployment :save-failed (princ-to-string condition))
+      (setf *saving* nil))))
 
 (defun save ()
   (handler-case
@@ -161,43 +179,85 @@
 
 (defparameter *stable-after* 90)
 
-(defun save-generation (&key kernel loader boot-conf restart then)
-  (let ((errors (heap-errors)))
-    (when (null errors) (format *error-output* "~&save: this runtime can't check the heap; saving unchecked~%"))
-    (when (and errors (plusp errors)) (error 'bad-world :errors errors)))
+(defparameter *save-start-within* 30)
+
+(defun on-save-thread (function &key (thread (sb-thread:main-thread))
+                                    (within *save-start-within*) (accepted (constantly nil)))
+  "Obtain the save thread before changing persistent or application state.
+A timed-out request is cancelled, even if its interrupt is delivered later."
+  (if (eq thread sb-thread:*current-thread*)
+      (progn (funcall accepted) (funcall function))
+      (let ((lock (sb-thread:make-mutex :name "save handoff"))
+            (ready (sb-thread:make-semaphore :count 0))
+            (state :waiting))
+        (unwind-protect
+             (progn
+               (sb-thread:interrupt-thread
+                thread
+                (lambda ()
+                  (when (sb-thread:with-mutex (lock)
+                          (when (eq state :waiting)
+                            (setf state :running)
+                            (funcall accepted)
+                            t))
+                    (sb-thread:signal-semaphore ready)
+                    (sb-sys:with-interrupts (funcall function)))))
+               (unless (sb-thread:wait-on-semaphore ready :timeout within)
+                 (let ((cancelled (sb-thread:with-mutex (lock)
+                                    (when (eq state :waiting)
+                                      (setf state :cancelled)
+                                      t))))
+                   (when cancelled
+                     (error "the save thread did not accept the request within ~a seconds; the world is unchanged" within))))
+               t)
+          (sb-thread:with-mutex (lock)
+            (when (eq state :waiting) (setf state :cancelled)))))))
+
+(defun save-generation (&key kernel loader boot-conf restart then deployment)
   (sb-thread:with-mutex (*installing*)
-    (when *saving*
-      (error "a save is already under way"))
+    (when *saving* (error "a save is already under way"))
+    (when (and *deployment* (not (equal deployment *deployment*)))
+      (error "a deployment is already under way"))
     (setf *saving* t))
   (let ((begun nil))
     (unwind-protect
-         (multiple-value-prog1 (begin-save kernel loader boot-conf restart then)
-           (setf begun t))
+         (progn
+           (let ((errors (heap-errors)))
+             (when (null errors) (format *error-output* "~&save: this runtime can't check the heap; saving unchecked~%"))
+             (when (and errors (plusp errors)) (error 'bad-world :errors errors)))
+           (on-save-thread (lambda () (begin-save kernel loader boot-conf restart then))
+                           :accepted (lambda () (setf begun t))))
       (unless begun
         (setf *saving* nil)))))
 
 (defun begin-save (kernel loader boot-conf restart then)
-  (darterfly/journal:note-save)
-  (ensure-directories-exist *pending-generation*)
-  (with-open-file (s *pending-generation* :direction :output :if-exists :supersede)
-    (with-standard-io-syntax
-      (prin1 (list :token (setf *save-token* (format nil "~36r" (random (expt 2 64) (make-random-state t))))
-                   :kernel kernel :loader loader :boot-conf boot-conf :deployment *deployment*
-                   :restart (or restart (eq then :restart)) :shut-down (eq then :shut-down))
-             s)))
-  (darterfly/bsd:suspend-processes)
-  (darterfly/bsd:suspend-threads)
-  (darterfly/bsd:end-processes)
-  (handler-case (darterfly/power:flush-disks)
-    (darterfly/power:flush-failed (e)
-      (save-failed e)
-      (return-from begin-save nil)))
-  (if (eq sb-thread:*current-thread* (sb-thread:main-thread))
-      (save)
-      (sb-thread:interrupt-thread (sb-thread:main-thread) #'save)))
+  ;; This runs on the save thread, so its errors cannot be handled by the
+  ;; requesting thread. Only restart services after we began stopping them.
+  (let ((quiesced nil))
+    (handler-case
+        (progn
+          (darterfly/journal:note-save)
+          (ensure-directories-exist *pending-generation*)
+          (with-open-file (s *pending-generation* :direction :output :if-exists :supersede)
+            (with-standard-io-syntax
+              (prin1 (list :token (setf *save-token* (format nil "~36r" (random (expt 2 64) (make-random-state t))))
+                           :kernel kernel :loader loader :boot-conf boot-conf :deployment *deployment*
+                           :restart (or restart (eq then :restart)) :shut-down (eq then :shut-down))
+                     s)))
+          (darterfly/bsd:suspend-processes)
+          (darterfly/bsd:suspend-threads)
+          (setf quiesced t)
+          (darterfly/bsd:end-processes)
+          (darterfly/power:flush-disks)
+          (save))
+      (error (e)
+        (unless quiesced
+          (setf darterfly/bsd::*suspended* nil darterfly/bsd::*threads-to-resume* nil))
+        (save-failed e :quiesced quiesced)
+        nil))))
 
 (defun install-saved-generation ()
-  (sb-thread:with-mutex (*installing*)
+  (sb-thread:with-recursive-lock (*installing*)
     (handler-case (install-pending)
       (error (e)
         (format *error-output* "~&install: the saved world is running, but it couldn't be installed as a generation: ~a; a cold boot starts ~a~%"
@@ -244,21 +304,23 @@
         (remove-generation g)))))
 
 (defun install (kernel core &key loader manifest)
-  (prune-generations (1- *kept-generations*))
-  (let* ((was (current))
-         (name (format nil "gen-~d" (1+ (reduce #'max (generations) :key (lambda (g) (parse-integer g :start 4)) :initial-value 0)))))
-    (handler-bind ((error (lambda (e) (declare (ignore e)) (ignore-errors (remove-generation name)))))
-      (ensure-directories-exist (esp-path (format nil "~a/" name)))
-      (uiop:copy-file kernel (esp-path (format nil "~a/kernel" name)))
-      (uiop:copy-file core (esp-path (format nil "~a/darterfly.core" name)))
-      (when manifest
-        (uiop:copy-file manifest (esp-path (format nil "~a/manifest" name))))
-      (when loader
-        (uiop:copy-file loader (esp-path (format nil "~a/boot.efi" name)))
-        (uiop:copy-file loader (concatenate 'string *esp* "EFI/BOOT/BOOTX64.EFI"))))
-    (put-line "previous" was)
-    (put-line "current" name)
-    name))
+  (sb-thread:with-recursive-lock (*installing*)
+    (when *saving* (error "a save is already under way"))
+    (prune-generations (1- *kept-generations*))
+    (let* ((was (current))
+           (name (format nil "gen-~d" (1+ (reduce #'max (generations) :key (lambda (g) (parse-integer g :start 4)) :initial-value 0)))))
+      (handler-bind ((error (lambda (e) (declare (ignore e)) (ignore-errors (remove-generation name)))))
+        (ensure-directories-exist (esp-path (format nil "~a/" name)))
+        (uiop:copy-file kernel (esp-path (format nil "~a/kernel" name)))
+        (uiop:copy-file core (esp-path (format nil "~a/darterfly.core" name)))
+        (when manifest
+          (uiop:copy-file manifest (esp-path (format nil "~a/manifest" name))))
+        (when loader
+          (uiop:copy-file loader (esp-path (format nil "~a/boot.efi" name)))
+          (uiop:copy-file loader (concatenate 'string *esp* "EFI/BOOT/BOOTX64.EFI"))))
+      (put-line "previous" was)
+      (put-line "current" name)
+      name)))
 
 (defun build-date (time)
   (multiple-value-bind (s m h d mo y) (decode-universal-time time 0)

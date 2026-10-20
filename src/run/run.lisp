@@ -287,6 +287,7 @@
 
 (defstruct (running-world (:conc-name world-) (:constructor make-world)) id inward thread name core stopping restarts command cwd disk base every memory)
 
+(defvar *bases* nil)
 (defvar *worlds* nil)
 (defvar *worlds-lock* (sb-thread:make-mutex :name "worlds"))
 
@@ -378,7 +379,6 @@
 (defun restart-world (name path &key (cwd "/"))
   (new-world name :core path :cwd cwd))
 
-(defvar *bases* nil)
 
 (defun free-base ()
   (sb-thread:with-mutex (*worlds-lock*)

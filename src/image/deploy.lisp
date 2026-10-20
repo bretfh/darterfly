@@ -34,11 +34,19 @@
          (sb-bsd-sockets:socket-close listener)))
      :name "deployment")))
 
+(defun finish-deployment-server (server)
+  (unless (sb-thread:join-thread server :default nil :timeout 5)
+    (when (sb-thread:thread-alive-p server)
+      (sb-thread:terminate-thread server)
+      (sb-thread:join-thread server :default nil :timeout 5))))
+
 (defun device-eval (host code &key (timeout 600) (nrepl-port 4011))
-  (multiple-value-bind (out err)
+  (multiple-value-bind (out err status)
       (uiop:run-program (list "timeout" (princ-to-string timeout) "sbcl" "--script" (uiop:native-namestring (source "tools/nrepl.lisp"))
                               "eval" "--new" "--host" host "--port" (princ-to-string nrepl-port) "--key" (nrepl-key) code)
                         :output :string :error-output :string :ignore-error-status t)
+    (unless (zerop status)
+      (error "device evaluation failed (exit ~d): ~a~a" status out err))
     (concatenate 'string out err)))
 
 (defun device-log (host &key (lines 100) (nrepl-port 4011))
@@ -59,12 +67,12 @@
 
 (defun push-generation (host &key (from (address-toward host)) (port 47100) (nrepl-port 4011))
   (let* ((entries (append (deployment :generation t) (list (list "gen" "darterfly.core" (octets (darterfly-core)) #o644))))
-         (server (serve-deployment entries port))
-         (result (device-eval host (format nil "(progn ~a (append (darterfly/install::receive-deployment ~s ~d) (let ((dir darterfly/install::*deploy-dir*)) (list :generation (darterfly/install:install (concatenate 'string dir \"kernel\") (concatenate 'string dir \"darterfly.core\") :loader (concatenate 'string dir \"boot.efi\")) :restart (darterfly/power:restart-soon)))))"
+         (server (serve-deployment entries port)))
+    (unwind-protect
+         (device-eval host (format nil "(progn ~a (append (darterfly/install::receive-deployment ~s ~d :check-reload nil) (let ((dir darterfly/install::*deploy-dir*)) (list :generation (darterfly/install:install (concatenate 'string dir \"kernel\") (concatenate 'string dir \"darterfly.core\") :loader (concatenate 'string dir \"boot.efi\")) :restart (darterfly/power:restart-soon)))))"
                                            (receiver-code) from port)
-                              :nrepl-port nrepl-port)))
-    (sb-thread:join-thread server :default nil :timeout 5)
-    result))
+                      :nrepl-port nrepl-port)
+      (finish-deployment-server server))))
 
 (defparameter *deploy-within* 1200)
 
@@ -101,10 +109,9 @@
 
 (defun deploy (host &key (from (address-toward host)) (port 47100) (nrepl-port 4011) (reload nil) (restart nil))
   (let* ((entries (deployment :generation (not reload)))
-         (server (serve-deployment entries port))
-         (result (device-eval host (format nil "(progn ~a (append (darterfly/install::receive-deployment ~s ~d) ~a))"
-                                           (receiver-code) from port
-                                           (if reload "(darterfly/install::reload-systems)" (format nil "(darterfly/install::deploy-into-world :restart ~a)" (and restart t))))
-                              :nrepl-port nrepl-port)))
-    (sb-thread:join-thread server :default nil :timeout 5)
-    result))
+         (server (serve-deployment entries port)))
+    (unwind-protect
+         (device-eval host (format nil "(sb-thread:with-recursive-lock (darterfly/install::*installing*) (when (or darterfly/install::*saving* darterfly/install::*deployment*) (error \"a save or deployment is already under way\")) ~a (darterfly/install::receive-and-deploy ~s ~d :reload ~a :restart ~a))"
+                                           (receiver-code) from port (and reload t) (and restart t))
+                      :nrepl-port nrepl-port)
+      (finish-deployment-server server))))

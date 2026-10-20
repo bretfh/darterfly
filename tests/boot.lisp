@@ -2744,7 +2744,8 @@
              (progn
                (image:expect c "* " :timeout 60)
                (let ((result (generation-resume c "(darterfly/generation:generation-steps)")))
-                 (is (eq :done (first result)) "darterfly builds a whole generation from source: ~s" result))
+                 (is (eq :done (first result)) "darterfly builds a whole generation from source: ~s" result)
+                 (unless (eq :done (first result)) (error "generation build failed: ~s" result)))
                (is (search "(\"gen-1\" \"gen-2\")" (ask "(darterfly/install:generations)")))
                (is (search "T" (ask "(equalp (darterfly/install::read-octets \"/Users/darterfly/generation/boot.efi\") (darterfly/boot:boot-image))"))
                    "the loader darterfly built is the one its running code makes")
@@ -2779,7 +2780,8 @@
                (image:expect c "* " :timeout 120)
                (ask "(uiop:delete-file-if-exists darterfly/generation:*state*)")
                (let ((result (generation-resume c "(darterfly/generation:generation-steps :out \"/Users/darterfly/generation-c/\")")))
-                 (is (eq :done (first result)) "generation B builds generation C: ~s" result))
+                 (is (eq :done (first result)) "generation B builds generation C: ~s" result)
+                 (unless (eq :done (first result)) (error "successor build failed: ~s" result)))
                (is (search "(\"gen-1\" \"gen-2\" \"gen-3\")" (ask "(darterfly/install:generations)")))
                (is (search "T" (ask (format nil "(funcall ~a \"/Users/darterfly/generation/boot.efi\" \"/Users/darterfly/generation-c/boot.efi\")" same)))
                    "B and C build the same boot.efi")
@@ -3594,3 +3596,26 @@
                (image:screendump)
                (uiop:copy-file (darterfly/image::build-path "screen.ppm") (darterfly-file "build/install-done.ppm")))
           (image:finish c 5))))))
+
+(in-suite recovery)
+
+(test a-save-interrupts-the-legacy-console-callback
+  (let ((esp (merge-pathnames "esp-legacy-poll-save.img" (darterfly-file "build/"))))
+    (uiop:delete-file-if-exists esp)
+    (let ((c (image:bare-console :boot-args "init" :esp esp)))
+      (unwind-protect
+           (progn
+             (is (image:expect c "init: pid 1" :timeout 120))
+             (settled c)
+             (marked c "(defparameter cl-user::*legacy-kept* (list 41 42 43))")
+             ;; This is the callback used by libsa before console-only polling
+             ;; moved into the kernel. The console supplies no input to wake it.
+             (image:send c "(progn (sb-thread:make-thread (lambda () (sleep 0.2) (darterfly/install:save-generation)) :name \"remote save\") (let ((fds (make-array 8 :element-type '(unsigned-byte 8) :initial-element 0))) (setf (aref fds 4) 1) (sb-sys:with-pinned-objects (fds) (darterfly/bsd::libsa-entry 50 (sb-sys:sap-int (sb-sys:vector-sap fds)) 1 #xffffffff 0))))")
+             (is (image:expect c "restart: core " :timeout 60)
+                 "a pending save escapes the legacy foreign callback without keyboard input")
+             (is (image:expect c "init: pid 1" :timeout 120))
+             (settled c)
+             (is (search "(41 42 43)" (marked c "cl-user::*legacy-kept*"))
+                 "the live object survives the save and warm restart")
+             (is (search "NIL" (marked c "darterfly/install::*saving*"))))
+        (image:finish c 5)))))

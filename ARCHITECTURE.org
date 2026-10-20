@@ -1,7 +1,12 @@
 #+title: Darterfly: the terms that must stay distinct
 #+date: 2026-10-19
 
-The plan that set these out is RECOVERY-PLAN.org (2026-10-19).
+These terms follow the user's corrections on 2026-10-19. Darterfly is a live,
+personal Lisp workstation: a coherent desktop and development environment whose
+objects, definitions and failures can be inspected and repaired while it runs.
+Generations preserve recoverable working state. Native compatibility provides
+facilities needed by software such as WebKit without determining the object
+model or the default placement of ordinary applications.
 
 * World
 A world is a generic concept: any tree of objects, for any purpose (bfh,
@@ -9,10 +14,20 @@ A world is a generic concept: any tree of objects, for any purpose (bfh,
 of applications, development state, a service or an experiment may each be a
 use of a world. None of them is the unit a world must be allocated for.
 
+An ownership hierarchy can be a tree even when reachable objects share references
+or form cycles. The current whole-image save mechanism is not yet a general
+implementation of independently saving, restoring or granting authority over an
+arbitrary rooted object graph.
+
 * Kernel world
 The kernel's address space, threads, rights and ports (src/kern/i386/world.lisp,
 src/worlds/). It runs a Lisp image or native code. It is one mechanism a world
 can be placed on, and it does not decide the user-facing object model.
+
+One hardware kernel manages these worlds. A world's own environment, rights,
+service references and lifecycle policy do not require another copy of that
+hardware kernel. Access to a driver or another world is an explicit grant or
+reference; each world does not automatically duplicate the drivers.
 
 * Lisp image
 A heap, its definitions, its collector and its threads. Objects inside one image
@@ -34,11 +49,25 @@ records (src/install/). It is not a process, and not an arbitrary subtree
 checkpoint.
 
 * Init
-The one lifecycle and service supervisor (src/init/). Anything that runs in a
-kernel world is supervised through it, not through a second supervisor.
+The existing lifecycle and service supervisor (src/init/). Jobs may name explicit
+kernel worlds and scoped launch policy. Reuse these mechanisms when supervision
+is needed; an arbitrary object tree does not require its own init process.
 
 * Placement and authority
 Where something runs, what it shares and which rights it holds are explicit
 policy, chosen by whoever starts it. No application name, device class or
 default variable moves anything into its own kernel world by itself. Neither
 "everything in one heap" nor "a new core per application" is a rule.
+
+* Boot and saved state
+The loader selects a generation and loads its kernel and Lisp core. A fresh core
+is built from source; a saved core contains the live heap. Runtime initialization
+reestablishes machine resources, then init starts supervised services and retained
+activities resume. The initial system world is the starting environment, not a
+rule that every later world must be an application or a fresh copy of that world.
+SBCL's genesis build phase creates a cold image; it is not an additional mandatory
+world-management layer at every boot.
+
+The update path must preserve live state and keep compatible kernel/runtime/core
+artifacts together. A host-built fresh core is a separate installation operation,
+not a substitute for saving the user's working world after a live reload.

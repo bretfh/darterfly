@@ -530,6 +530,7 @@
     (cond ((typep d 'wireless-interface)
            (let ((l (wireless-link d)))
              (list :kind :wifi :up (wireless-up-p d) :signal (link-signal l)
+                   :rejoining (wireless-rejoining d)
                    :ssid (and (link-bss l) (getf (link-bss l) :ssid)))))
           (d (list :kind :wired :up t))
           (t (list :kind :none :up nil)))))

@@ -195,3 +195,17 @@
     (unwind-protect (darterfly/wifi::set-power-save (offline-link) 2)
       (sb-int:unencapsulate 'darterfly/wifi::command-ok 'capture))
     (is (equal '((0 #x77 4) (0 #xA9 40)) (reverse sent)))))
+
+(test health-checks-the-wireless-interface
+  (let* ((l (offline-link))
+         (d (make-instance 'darterfly/wifi::wireless-interface :link l))
+         (darterfly/wifi::*card* (darterfly/wifi::link-card l))
+         (darterfly/wifi::*link* l)
+         (darterfly/net:*interface* (darterfly/net::make-interface :device d))
+         (probe (second (assoc :wifi darterfly/health:*checks*))))
+    (setf (darterfly/wifi::link-keyed l) t)
+    (is (eq :ok (first (funcall probe))))
+    (is (null (getf (rest (funcall probe)) :rejoining)))
+    (setf (darterfly/wifi::wireless-rejoining d) :beacons-lost)
+    (is (eq :fail (first (funcall probe))))
+    (is (eq :beacons-lost (getf (rest (funcall probe)) :rejoining)))))

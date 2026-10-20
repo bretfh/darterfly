@@ -27,7 +27,15 @@
             (if broken #x8 0)
             (if (and eof (or (local-write-shut s) broken)) #x10 0))))))
 
+(defun pending-lisp-interrupt ()
+  ;; Libsa callbacks defer Lisp interrupts until their locks and foreign frames
+  ;; unwind. A blocking poll must return EINTR so that unwind can happen.
+  (when (sb-thread::thread-interruptions sb-thread:*current-thread*)
+    (fail :eintr)))
+
 (defun console-ready ()
+  ;; Also reached by an already-running poll in pre-console-only libsa images.
+  (pending-lisp-interrupt)
   ;; Query the kernel directly, not libc poll (which calls this service).
   (let ((fds (make-array 16 :element-type '(unsigned-byte 8) :initial-element 0)))
     (setf (aref fds 4) 1 (aref fds 8) 1 (aref fds 12) 4)
@@ -82,6 +90,7 @@ immediately. Console and network queues are sampled at most 10ms apart."
                       (+ (get-internal-real-time)
                          (ceiling (* timeout internal-time-units-per-second) 1000)))))
       (loop
+        (pending-lisp-interrupt)
         (when (or (eq (proc-state *proc*) :zombie)
                   (proc-native-result *proc*)) (fail :eintr))
         (let ((results

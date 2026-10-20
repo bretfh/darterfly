@@ -526,7 +526,10 @@
     (setf record data))
   (__libsa_run_core (record-word 8) (record-word 16))
   (when (record-word 88) (result 0))
-  (when (record-word 104) (__libsa_vfs_boot_first))
+  ;; The core supplied by the run record is immutable bootstrap data. Open it
+  ;; through the boot descriptor path, including archive-backed compiler runs.
+  ;; Its read-only SBCL space must not be sent to the general MAP_SHARED service.
+  (__libsa_vfs_boot_first)
   (when (record-word 112)
     (__libsa_vfs_register (code-address port-vfs))
     (argv-from-record argc argv max)

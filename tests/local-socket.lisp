@@ -514,3 +514,25 @@
       (when sap
         (sb-ext:cancel-finalization n)
         (sb-posix:munmap sap darterfly/vfs::+shared-file-capacity+)))))
+
+(in-suite local-socket)
+
+(test libsa-poll-releases-pending-lisp-interrupts
+  (with-local-process
+    (let* ((interrupted nil)
+           (held nil)
+           (proc bsd:*proc*)
+           (worker (local-worker
+                    (lambda () (bsd::libsa-entry 50 0 0 1000 0 proc)))))
+      (unwind-protect
+           (progn
+             (wait-local-syscall proc)
+             (sb-thread:interrupt-thread
+              worker (lambda ()
+                       (setf interrupted t
+                             held (sb-thread:holding-mutex-p bsd::*bsd*))))
+             (is (eql -4 (sb-thread:join-thread worker :timeout 0.5 :default :blocked))
+                 "a pending Lisp interrupt ends the callback with EINTR")
+             (is-true interrupted "the interrupt executes after the callback unwinds")
+             (is-false held "the interrupt does not run while BSD owns its lock"))
+        (sb-thread:join-thread worker :timeout 2 :default nil)))))
