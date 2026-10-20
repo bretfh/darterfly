@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Record normal-app qualification separately from the source-build baseline."""
+import os
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -73,7 +74,9 @@ def png_from_ppm(source, target):
         chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 2, 0, 0, 0)) +
         chunk(b'IDAT', zlib.compress(rows)) + chunk(b'IEND', b''))
 
-logs = port / 'qualification-logs'
+evidence_dir = Path(os.environ.get('DARTERFLY_WPE_EVIDENCE_DIR', Path.home() / 'org/darterfly/ports/nyxt/wpe'))
+evidence_dir.mkdir(parents=True, exist_ok=True)
+logs = evidence_dir / 'qualification-logs'
 records = {}
 for name in ['nyxt-app-host.log', 'nyxt-app-guest.log', 'nyxt-app-origin.log',
              'nyxt-app-host-tests.log', 'nyxt-app-os-tests.log',
@@ -126,5 +129,5 @@ evidence = {
                   'Complete input/renderer APIs and broader site compatibility',
                   'Fresh build/install and reboot qualification'],
 }
-(port / 'app-evidence.json').write_text(json.dumps(evidence, indent=2) + '\n')
+(evidence_dir / 'app-evidence.json').write_text(json.dumps(evidence, indent=2) + '\n')
 print('Recorded normal Nyxt application qualification:', port / 'app-evidence.json')

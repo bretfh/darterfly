@@ -98,7 +98,7 @@
 
 (test harbor-controls-render-with-packaged-font
   (let ((darterfly/text::*fonts-dir*
-          (namestring (asdf:system-relative-pathname :darterfly "assets/branding/fonts/"))))
+          (namestring (darterfly/image:asset "branding/fonts/"))))
     (is (plusp (darterfly/text:string-width (darterfly/kit:ui-font) "Continue")))
     (let ((faces nil))
       (dolist (role '(:secondary :primary :caution :danger))

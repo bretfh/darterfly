@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Record the native browser run only after every integration gate passes."""
+import os
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -62,7 +63,9 @@ def png_from_ppm(source, target):
         chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 2, 0, 0, 0)) +
         chunk(b'IDAT', zlib.compress(rows)) + chunk(b'IEND', b''))
 
-logs = port / 'qualification-logs'
+evidence_dir = Path(os.environ.get('DARTERFLY_WPE_EVIDENCE_DIR', Path.home() / 'org/darterfly/ports/nyxt/wpe'))
+evidence_dir.mkdir(parents=True, exist_ok=True)
+logs = evidence_dir / 'qualification-logs'
 logs.mkdir(exist_ok=True)
 records = {}
 for source, name in [('nyxt-build-guest.log', 'nyxt-browser-guest.log'),
@@ -106,5 +109,5 @@ evidence = {
                   'Downloads, clipboard, wheel/motion and complete renderer API coverage',
                   'Broader real-site compatibility, media and performance qualification'],
 }
-(port / 'browser-evidence.json').write_text(json.dumps(evidence, indent=2) + '\n')
+(evidence_dir / 'browser-evidence.json').write_text(json.dumps(evidence, indent=2) + '\n')
 print('Recorded native Nyxt browser qualification:', port / 'browser-evidence.json')

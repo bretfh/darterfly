@@ -1,11 +1,18 @@
 (defpackage #:darterfly/image
   (:use #:cl)
-  (:export #:write-cpio #:*build*
+  (:export #:asset #:write-cpio #:*build*
    #:console #:expect #:send #:transcript #:finish #:screendump #:pixel #:monitor #:pointer #:qmp #:send-keys
    #:boot-efi #:kernel-file #:esp #:bare-console #:bare-boot #:send-char #:*screen-size* #:update-root #:desktop #:copy-in #:build-sbcl #:*c-compiler* #:build-tcc #:*input-devices* #:*network-device* #:*extra-qemu* #:usb-image #:deploy #:push-generation #:bench #:device-log #:hw))
 (in-package #:darterfly/image)
 
 (defvar *build* (asdf:system-relative-pathname :darterfly "build/"))
+
+(defun asset (name)
+  "Locate external artwork and fonts, shared with the Org workspace."
+  (merge-pathnames name
+    (uiop:ensure-directory-pathname
+      (or (uiop:getenv "DARTERFLY_ASSET_ROOT")
+          (merge-pathnames "org/darterfly/assets/" (user-homedir-pathname))))))
 
 (defun build-path (name)
   (merge-pathnames name (ensure-directories-exist *build*)))
@@ -106,19 +113,18 @@
            :collect (list :file (format nil "System/Library/Fonts/~a.ttf" (pathname-name file)) (octets file)))
      (loop :for name :in '("Nunito-Regular.ttf" "Nunito-SemiBold.ttf" "Nunito-Bold.ttf" "Nunito-OFL.txt")
            :collect (list :file (concatenate 'string "System/Library/Fonts/" name)
-                          (octets (asdf:system-relative-pathname :darterfly
-                                   (concatenate 'string "assets/branding/fonts/" name))))))))
+                          (octets (asset (concatenate 'string "branding/fonts/" name))))))))
 
 
 (defun startup-artwork ()
   (list (list :file "System/Library/Desktop Pictures/Asheville.png"
-              (octets (asdf:system-relative-pathname :darterfly "assets/branding/asheville.png")))
+              (octets (asset "branding/asheville.png")))
         (list :file "System/Library/Desktop Pictures/Asheville Drawn.png"
-              (octets (asdf:system-relative-pathname :darterfly "assets/branding/asheville-drawn.png")))
+              (octets (asset "branding/asheville-drawn.png")))
         (list :file "System/Library/Startup/tied-darter-menu.png"
-              (octets (asdf:system-relative-pathname :darterfly "assets/branding/tied-darter-menu.png")))
+              (octets (asset "branding/tied-darter-menu.png")))
         (list :file "System/Library/Startup/tied-darter.png"
-              (octets (asdf:system-relative-pathname :darterfly "assets/branding/tied-darter.png")))
+              (octets (asset "branding/tied-darter.png")))
         (list :file "System/Library/Startup/console-font.bin"
               (coerce darterfly/platform::+console-font+ '(vector (unsigned-byte 8))))))
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Record successful native Nyxt core qualification, separately from its UI."""
+import os
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -32,7 +33,9 @@ for name in ['nyxt-origin.log', 'nyxt-tls-host-origin.log']:
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
-logs = p / 'qualification-logs'
+evidence_dir = Path(os.environ.get('DARTERFLY_WPE_EVIDENCE_DIR', Path.home() / 'org/darterfly/ports/nyxt/wpe'))
+evidence_dir.mkdir(parents=True, exist_ok=True)
+logs = evidence_dir / 'qualification-logs'
 logs.mkdir(exist_ok=True)
 records = {}
 for source, dest in [('nyxt-build-guest.log', 'nyxt-source-build.log'),
@@ -83,5 +86,5 @@ data = {
     'inputs_sha256': {str(x.relative_to(r)): digest(x) for x in sorted(files)},
     'artifacts_sha256': {str(x): digest(x) for x in artifacts},
 }
-(p / 'nyxt-build-evidence.json').write_text(json.dumps(data, indent=2) + '\n')
+(evidence_dir / 'nyxt-build-evidence.json').write_text(json.dumps(data, indent=2) + '\n')
 print('Recorded native Nyxt core qualification:', p / 'nyxt-build-evidence.json')

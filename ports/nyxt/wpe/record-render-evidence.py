@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Record measured engine/runtime checks separately from unfinished Nyxt work."""
+import os
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -9,7 +10,9 @@ import shutil
 import subprocess
 r=Path(__file__).resolve().parents[3];p=r/'ports/nyxt/wpe';b=r/'build/wpe-assessment'
 w=Path((b/'render-build-root.txt').read_text().strip())
-logs=p/'qualification-logs';logs.mkdir(exist_ok=True)
+evidence_dir = Path(os.environ.get('DARTERFLY_WPE_EVIDENCE_DIR', Path.home() / 'org/darterfly/ports/nyxt/wpe'))
+evidence_dir.mkdir(parents=True, exist_ok=True)
+logs = evidence_dir / 'qualification-logs';logs.mkdir(exist_ok=True)
 def digest(path):
     h=hashlib.sha256()
     with path.open('rb') as stream:
@@ -68,5 +71,5 @@ data={
     'inputs_sha256':{str(x.relative_to(r)):digest(x) for x in sorted(files)},
     'artifacts_sha256':{str(x):digest(x) for x in artifacts},
 }
-(p/'render-evidence.json').write_text(json.dumps(data,indent=2)+'\n')
+(evidence_dir / 'render-evidence.json').write_text(json.dumps(data,indent=2)+'\n')
 print('Recorded completed rendering checks:',p/'render-evidence.json')

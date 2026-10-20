@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Record the combined dispatch and recovery run without replacing older evidence."""
+import os
 from pathlib import Path
 import argparse
 import hashlib
@@ -61,7 +62,9 @@ manifest = json.loads((build / 'nyxt-source-manifest.json').read_text())
 for name, expected in manifest['files_sha256'].items():
     if digest(root / 'nyxt-source' / name) != expected:
         raise SystemExit(f'Pinned Nyxt source changed: {name}')
-logs = port / 'qualification-logs'
+evidence_dir = Path(os.environ.get('DARTERFLY_WPE_EVIDENCE_DIR', Path.home() / 'org/darterfly/ports/nyxt/wpe'))
+evidence_dir.mkdir(parents=True, exist_ok=True)
+logs = evidence_dir / 'qualification-logs'
 records = {}
 for source, target in [(args.guest_log, 'nyxt-dispatch-guest.log'),
                        (repo / 'build/nyxt-port-stop-guest.log', 'nyxt-port-stop-guest.log'),
@@ -93,5 +96,5 @@ evidence = {
                'Navigation-generation cancellation, broader deletion/GC stress and long soaks remain.',
                'Persistent profiles, complete interaction, authority review and fresh install remain merge gates.'],
 }
-(port / 'dispatch-evidence.json').write_text(json.dumps(evidence,indent=2)+'\n')
+(evidence_dir / 'dispatch-evidence.json').write_text(json.dumps(evidence,indent=2)+'\n')
 print('Recorded complete dispatch/recovery qualification:',port / 'dispatch-evidence.json')

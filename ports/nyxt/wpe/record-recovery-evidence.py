@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Keep crash-recovery evidence separate from the historical browser records."""
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 import hashlib
@@ -78,7 +79,9 @@ manifest = json.loads((build / 'nyxt-source-manifest.json').read_text())
 for name, expected in manifest['files_sha256'].items():
     if digest(root / 'nyxt-source' / name) != expected:
         raise SystemExit(f'Pinned Nyxt source changed: {name}')
-logs = port / 'qualification-logs'
+evidence_dir = Path(os.environ.get('DARTERFLY_WPE_EVIDENCE_DIR', Path.home() / 'org/darterfly/ports/nyxt/wpe'))
+evidence_dir.mkdir(parents=True, exist_ok=True)
+logs = evidence_dir / 'qualification-logs'
 records = {}
 for source, target in [
     ('nyxt-app-guest.log', 'nyxt-recovery-guest.log'),
@@ -136,5 +139,5 @@ evidence = {
                'Frame coalescing and callback queue bounds remain separate work.',
                'Persistent profiles, complete interaction, and wider-site coverage remain merge gates.'],
 }
-(port / 'recovery-evidence.json').write_text(json.dumps(evidence, indent=2) + '\n')
+(evidence_dir / 'recovery-evidence.json').write_text(json.dumps(evidence, indent=2) + '\n')
 print('Recorded actual-OS recovery:', port / 'recovery-evidence.json')

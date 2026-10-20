@@ -3,11 +3,12 @@
 Regenerate with: guix shell python python-fonttools -- python3 tools/harbor/fonts.py
 Source and derived faces remain under assets/branding/fonts/Nunito-OFL.txt.
 """
+import os
 from pathlib import Path
 from fontTools.ttLib import TTFont
 from fontTools.varLib.instancer import instantiateVariableFont
 
-fonts = Path(__file__).resolve().parents[2] / 'assets' / 'branding' / 'fonts'
+fonts = Path(os.environ.get('DARTERFLY_ASSET_ROOT', Path.home() / 'org/darterfly/assets')) / 'branding' / 'fonts'
 for name, weight in [('Regular', 400), ('SemiBold', 600), ('Bold', 700)]:
     font = TTFont(fonts / 'Nunito.ttf', recalcTimestamp=False)
     instance = instantiateVariableFont(font, {'wght': weight}, inplace=True,

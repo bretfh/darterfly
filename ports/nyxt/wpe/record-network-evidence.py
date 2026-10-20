@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Save completed native networking qualification and its exact inputs."""
+import os
 from datetime import datetime, timezone
 import hashlib
 import json
-import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -11,7 +11,9 @@ import subprocess
 root = Path(__file__).resolve().parents[3]
 port = root/'ports/nyxt/wpe'
 build = root/'build/wpe-assessment'
-logs = port/'qualification-logs'
+evidence_dir = Path(os.environ.get('DARTERFLY_WPE_EVIDENCE_DIR', Path.home() / 'org/darterfly/ports/nyxt/wpe'))
+evidence_dir.mkdir(parents=True, exist_ok=True)
+logs = evidence_dir / 'qualification-logs'
 def digest(path):
     h=hashlib.sha256()
     with path.open('rb') as f:
@@ -81,5 +83,5 @@ result={
     'native_runtime_sha256':{p:digest(root/p) for p in
                               ['build/cxx/runtime.o','build/cxx/crt0.o']},
 }
-(port/'network-evidence.json').write_text(json.dumps(result,indent=2)+'\n')
+(evidence_dir / 'network-evidence.json').write_text(json.dumps(result,indent=2)+'\n')
 print('Recorded native HTTP/TLS qualification:',port/'network-evidence.json')

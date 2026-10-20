@@ -1,7 +1,10 @@
 (in-package #:darterfly/image)
 
 (defun results-dir (label)
-  (source (format nil "bench/results/~a/" label)))
+  (merge-pathnames (format nil "~a/" label)
+                   (uiop:ensure-directory-pathname
+                    (or (uiop:getenv "DARTERFLY_RESULTS_DIR")
+                        (merge-pathnames "org/darterfly/bench/results/" (user-homedir-pathname))))))
 
 (defun read-answer (text)
   (let ((at (search "=> " text)))

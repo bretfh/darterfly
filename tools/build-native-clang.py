@@ -31,7 +31,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     tool = args.tool or ('lld' if args.lld else 'clang')
     if not SOURCE.is_dir():
-        raise SystemExit('Realize the LLVM source described in ports/cxx/README.org')
+        raise SystemExit('Realize the LLVM source described in ~/org/darterfly/ports/cxx/README.org')
     if not args.skip_prerequisites:
         host_env = ['guix', 'shell', '--pure', '-m',
                     str(ROOT / 'ports/clang/host-manifest.scm'), '--']

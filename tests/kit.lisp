@@ -254,7 +254,7 @@
       (is (null (darterfly/kit::chrome-pressed frame))))))
 
 (test control-focus-paints-outside-without-changing-layout-or-hit-target
-  (let* ((darterfly/text::*fonts-dir* (namestring (asdf:system-relative-pathname :darterfly "assets/branding/fonts/")))
+  (let* ((darterfly/text::*fonts-dir* (namestring (darterfly/image:asset "branding/fonts/")))
          (parent (make-instance 'darterfly/kit:view :frame #(0 0 300 100)))
          (button (make-instance 'darterfly/kit:button :frame #(20 20 100 26) :title "Continue")))
     (darterfly/kit:add-subview parent button)
@@ -560,7 +560,7 @@
 
 (test shortened-field-restores-leading-text
   (let* ((darterfly/text::*fonts-dir*
-           (namestring (asdf:system-relative-pathname :darterfly "assets/branding/fonts/")))
+           (namestring (darterfly/image:asset "branding/fonts/")))
          (field (make-instance 'darterfly/kit:entry-field :frame #(0 0 200 26) :string "Darterfly"))
          (bitmap (darterfly/text:make-bitmap 208 34)))
     (setf (darterfly/kit::entry-offset field) 9)

@@ -3,3 +3,18 @@
 
 __pycache__/
 *.pyc
+
+# Project notes, design studies and evidence live under ~/org/darterfly/.
+*.org
+*.md
+/design/
+/assets/branding/
+/bench/results/
+/ports/nyxt/host-validation/
+/ports/nyxt/engine/*-validation.json
+/ports/nyxt/engine/source-audit.json
+/ports/nyxt/engine/validation.json
+/ports/nyxt/sbom/*.json
+/ports/nyxt/sbom/*.graphml.gz
+/ports/nyxt/sbom/*.txt
+/ports/nyxt/sbom/SHA256SUMS
