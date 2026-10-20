@@ -8,7 +8,6 @@ __pycache__/
 *.org
 *.md
 /design/
-/assets/branding/
 /bench/results/
 /ports/nyxt/host-validation/
 /ports/nyxt/engine/*-validation.json
