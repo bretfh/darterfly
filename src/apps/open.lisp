@@ -1,11 +1,6 @@
 (in-package #:darterfly/apps)
 
-(defparameter *in-own-world* '("Hello" "Terminal" "Editor" "Nyxt"))
-
-(defparameter *app-memory* 512)
-;; Explicit per-app budgets; keep the existing lightweight app default.
 (defparameter *single-instance-apps* '("Nyxt"))
-(defparameter *app-memory-overrides* '(("Nyxt" . 2048)))
 
 (defun program-name (path)
   (subseq path (1+ (or (position #\/ path :from-end t) -1))))
@@ -43,17 +38,18 @@
                     (and (equal answer ":LOADING")
                          (< (- (get-universal-time) began) 240)))))))))
 
-(defun world-job (path &optional (argv (list path)))
+(defun world-job (path world &optional (argv (list path)))
   (append
     (when (equal (program-name path) "Nyxt") (nyxt-recovery-policy))
     (list :label (if (member (program-name path) *single-instance-apps* :test #'equal)
                    (program-name path) (fresh-label (program-name path)))
-        :world (list :core "/System/Library/Kernels/darterfly.core"
-                     :memory (or (cdr (assoc (program-name path) *app-memory-overrides*
-                                              :test #'equal)) *app-memory*)
-                     :evals (list (format nil "(progn (let ((status (nth-value 1 (darterfly/bsd:wait4 (darterfly/bsd:posix-spawn ~s (quote ~s) nil))))) (sb-ext:exit :code (if (and status (darterfly/bsd:wifexited status)) (darterfly/bsd:wexitstatus status) 1))))"
-                                          path argv)))
-        :run-at-load t)))
+          :world (list* :core (getf world :core "/System/Library/Kernels/darterfly.core")
+                        :evals (list (format nil "(progn (let ((status (nth-value 1 (darterfly/bsd:wait4 (darterfly/bsd:posix-spawn ~s (quote ~s) nil))))) (sb-ext:exit :code (if (and status (darterfly/bsd:wifexited status)) (darterfly/bsd:wexitstatus status) 1))))"
+                                            path argv))
+                        (loop for (key value) on world by #'cddr
+                              unless (member key '(:core :evals))
+                                append (list key value)))
+          :run-at-load t)))
 
 (defun activate-application (name argv)
   (let ((world (darterfly/run:find-world name)))
@@ -65,11 +61,10 @@
           (format nil "DARTERFLY/~a-APPLICATION" (string-upcase name)) "ACTIVATE" (rest argv)) :timeout 5)))
   name)
 
-(defun open-application (path &optional (argv (list path)))
+(defun open-application (path &key world (argv (list path)))
   (let ((name (program-name path)))
-    (cond ((and (member name *single-instance-apps* :test #'equal)
+    (cond ((not world) (bsd:posix-spawn path argv nil))
+          ((and (member name *single-instance-apps* :test #'equal)
                 (active-label-p name))
            (activate-application name argv))
-          ((member name *in-own-world* :test #'string=)
-           (darterfly/init:submit (world-job path argv)))
-          (t (bsd:posix-spawn path argv nil)))))
+          (t (darterfly/init:submit (world-job path world argv))))))

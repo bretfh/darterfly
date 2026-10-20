@@ -4,7 +4,7 @@
 (load "ports/nyxt/wpe/nyxt-wire.lisp")
 (in-package #:darterfly/test)
 (let* ((plist (darterfly/apps::world-job
-                "/System/Applications/Nyxt.app/Contents/Programs/Nyxt"))
+                "/System/Applications/Nyxt.app/Contents/Programs/Nyxt" '(:memory 2048)))
        (job (make-instance 'darterfly/init:job :label "Nyxt"
                           :program nil :arguments nil :plist plist)))
   (assert (eq :leave (darterfly/init:decide job :exit '(:exit 0))))

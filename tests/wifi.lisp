@@ -195,3 +195,66 @@
     (unwind-protect (darterfly/wifi::set-power-save (offline-link) 2)
       (sb-int:unencapsulate 'darterfly/wifi::command-ok 'capture))
     (is (equal '((0 #x77 4) (0 #xA9 40)) (reverse sent)))))
+
+(test health-checks-the-wireless-interface
+  (let* ((l (offline-link))
+         (d (make-instance 'darterfly/wifi::wireless-interface :link l))
+         (darterfly/wifi::*card* (darterfly/wifi::link-card l))
+         (darterfly/wifi::*link* l)
+         (darterfly/net:*interface* (darterfly/net::make-interface :device d))
+         (probe (second (assoc :wifi darterfly/health:*checks*))))
+    (setf (darterfly/wifi::link-keyed l) t)
+    (is (eq :ok (first (funcall probe))))
+    (is (null (getf (rest (funcall probe)) :rejoining)))
+    (setf (darterfly/wifi::wireless-rejoining d) :beacons-lost)
+    (is (eq :fail (first (funcall probe))))
+    (is (eq :beacons-lost (getf (rest (funcall probe)) :rejoining)))))
+
+(test wired-health-does-not-fail-for-a-retained-wifi-card
+  (let* ((darterfly/wifi::*card* (darterfly/wifi::link-card (offline-link)))
+         (darterfly/net:*interface*
+           (darterfly/net::make-interface :device (make-instance 'darterfly/devices:ethernet-controller)))
+         (probe (second (assoc :wifi darterfly/health:*checks*))))
+    (is (equal '(:off :because :cable) (funcall probe)))))
+
+(test replacing-a-block-ack-session-removes-it-before-allocating-again
+  (let* ((l (offline-link)) (sent nil) (fail-remove nil)
+         (request (darterfly/crypto:octets
+                   (darterfly/wifi::frame-header #xD0 0 (hex "10f60a82a3ca") (hex "04f021323f38") (hex "04f021323f38") 0)
+                   3 0 7 (darterfly/wifi::le-u16 (logior 2 (ash 5 2) (ash 64 6)))
+                   0 0 0 0)))
+    (setf (darterfly/wifi::card-firmware (darterfly/wifi::link-card l))
+          (darterfly/wifi::make-firmware :commands '((5 #x16 2 1))))
+    (sb-int:encapsulate 'darterfly/wifi::command-ok 'capture-ba
+      (lambda (f w group opcode payload)
+        (declare (ignore f w group opcode))
+        (push payload sent)
+        (when (and fail-remove (= 2 (darterfly/wifi::u32le payload 0))) (error "removal refused"))
+        (list :payload (darterfly/crypto:octets (le32 3)))))
+    (sb-int:encapsulate 'darterfly/wifi::transmit 'capture-ba
+      (lambda (f l frame &rest options) (declare (ignore f l frame options)) nil))
+    (unwind-protect
+         (progn
+           (darterfly/wifi::answer-addba l request)
+           (darterfly/wifi::answer-addba l request)
+           (is (equal '(0 2 0) (mapcar (lambda (p) (darterfly/wifi::u32le p 0)) (reverse sent))))
+           (is (every (lambda (p) (= 16 (length p))) sent))
+           (is (equal '((5 . 3)) (darterfly/wifi::link-block-acks l)))
+           (setf fail-remove t sent nil)
+           (is (null (getf (darterfly/wifi::answer-addba l request) :baid)))
+           (is (= 1 (length sent)) "failed removal must not be followed by allocation")
+           (is (equal '((5 . 3)) (darterfly/wifi::link-block-acks l)))
+           (setf fail-remove nil sent nil)
+           (let ((delba (darterfly/crypto:octets (subseq request 0 24) 3 2
+                          (darterfly/wifi::le-u16 (logior (ash 5 12) (ash 1 11))) 0 0)))
+             (darterfly/wifi::end-block-ack l delba)
+             (is (null (darterfly/wifi::link-block-acks l)))
+             (is (= 5 (darterfly/wifi::u32le (first sent) 8))))
+           (setf (darterfly/wifi::firmware-commands (darterfly/wifi::card-firmware (darterfly/wifi::link-card l))) '((5 #x16 1 1))
+                 (darterfly/wifi::link-block-acks l) '((5 . 3)) sent nil)
+           (darterfly/wifi::remove-block-ack l 5)
+           (is (= 16 (length (first sent))))
+           (is (= 3 (darterfly/wifi::u32le (first sent) 4)))
+           (is (null (darterfly/wifi::block-ack-action l (subseq request 0 27)))))
+      (sb-int:unencapsulate 'darterfly/wifi::command-ok 'capture-ba)
+      (sb-int:unencapsulate 'darterfly/wifi::transmit 'capture-ba))))

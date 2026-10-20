@@ -26,11 +26,12 @@ qualification requires evidence, not just an implementation. See [[file:ROADMAP.
   claiming bit-identical disk/core images.
 
 * Release blockers found by the baseline
-- [ ] REL-001: detect the injected interior-object pointer and refuse the damaged
+- [X] REL-001: detect the injected interior-object pointer and refuse the damaged
   save; all three failed assertions in a-damaged-world-is-not-saved must pass.
-- [ ] REL-002: complete erase-and-install-over-an-installed-system without losing
+- [X] REL-002: complete erase-and-install-over-an-installed-system without losing
   the system-world heartbeat and resetting. Keep watchdog protection enabled.
-Evidence and reproduction: [[file:release/VALIDATION.org][validation report]]. These block make release.
+Historical reproduction: [[file:release/VALIDATION.org][validation report]]. Current recovery results:
+[[file:RECOVERY-STATUS.org][foundation recovery status]]. Full release qualification remains open above.
 
 * Current UX workstream
 See [[file:UX.org][the user journey map, implementation notes, and acceptance criteria]].
@@ -57,7 +58,8 @@ See [[file:UX.org][the user journey map, implementation notes, and acceptance cr
 - [ ] Qualify edit -> build -> install -> reboot -> recover as one workstation flow.
 
 * Milestone 2: world boundaries
-- [ ] Default ordinary applications to isolated worlds.
+- [ ] Define rooted object-world ownership, sharing, authority and persistence;
+  choose kernel-world placement explicitly (see [[file:ARCHITECTURE.org][architecture contract]]).
 - [ ] Filesystem/network/device/debugging rights and revocation policy.
 - [ ] Memory/thread/port/FD/queue quotas and observable usage.
 - [ ] Bounded asynchronous service dispatch, cancellation, deadlines, and cleanup.

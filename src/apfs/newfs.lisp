@@ -211,10 +211,24 @@
 (defun dstream-field (size blocks)
   (octets (le size 8) (le (* blocks +block-size+) 8) (le 0 8) (le size 8) (le 0 8)))
 
+(defun unique-entries (entries)
+  ;; Image components may repeat their parent directories. They still name one
+  ;; inode. Duplicate files or a directory/file collision are input errors.
+  (let ((seen (make-hash-table :test 'equal)))
+    (loop for entry in entries
+          for path = (string-trim "/" (second entry))
+          for previous = (gethash path seen)
+          unless (and previous (eq (first previous) :dir) (eq (first entry) :dir))
+            collect (progn
+                      (when previous (error "newfs: duplicate entry ~s" path))
+                      (setf (gethash path seen) entry)
+                      (list* (first entry) path (cddr entry))))))
+
 (defun build-tree (entries &key time owner group data-start)
   "ENTRIES are (:dir path) (:file path octets) (:symlink path target). Returns fs records, extentref records,
 data blocks as (block . octets), the next inode number and counts."
-  (let ((ids (make-hash-table :test 'equal))
+  (let ((entries (unique-entries entries))
+        (ids (make-hash-table :test 'equal))
         (children (make-hash-table :test 'equal))
         (next 16) (block data-start)
         (fs nil) (extents nil) (data nil)

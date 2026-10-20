@@ -2,7 +2,7 @@
   (:use #:cl)
   (:export #:run-core #:run-world #:start-world #:finish-world #:stop-world #:world-eval #:attach #:world-id #:world-name
            #:new-world #:list-worlds #:find-world #:save-world #:restart-world #:checkpoint-world #:restore-world #:restore-worlds #:*worlds-dir* #:collect #:tree-files #:in-run-p #:in-world-p #:no-room #:no-answer #:memory-use #:*system-reserve-mb* #:*answer-within*
-           #:offer-service #:look-up))
+           #:offer-service #:look-up #:await-answer #:*start-within*))
 (in-package #:darterfly/run)
 
 (defconstant +magic+ #x4e555248434e4946)
@@ -165,21 +165,22 @@
 
 (defun serve-service (world proc name port)
   (destructuring-bind (serve gone) (gethash name *services*)
-    (let ((buffer (make-array 65536 :element-type '(unsigned-byte 8))))
+    (let ((buffer (make-array 65536 :element-type '(unsigned-byte 8)))
+          (slots (darterfly/worlds:dispatcher)))
       (unwind-protect
            (loop
              (handler-case
                  (multiple-value-bind (n token sender) (darterfly/worlds:receive-into port buffer :timeout 1)
                    (when (= sender world)
                      (let ((request (subseq buffer 0 n)))
-                       (sb-thread:make-thread
+                       (darterfly/worlds:dispatch
+                        slots name
                         (lambda ()
                           (darterfly/worlds:reply token
                                                   (handler-case (funcall serve world proc request token)
                                                     (error (e)
                                                       (format *error-output* "~&~a for world ~d: ~a~%" name world e)
-                                                      #()))))
-                        :name name))))
+                                                      #()))))))))
                (darterfly/worlds:world-error ()
                  (when (member (darterfly/worlds:world-state world) '(:stopped :gone))
                    (return)))))
@@ -206,19 +207,20 @@
 (defun serve-world (port world proc timeout)
   (let ((end (and timeout (+ (get-internal-real-time) (* timeout internal-time-units-per-second))))
         (code nil) (archive nil) (at 0)
-        (m (make-array 65536 :element-type '(unsigned-byte 8))))
+        (m (make-array 65536 :element-type '(unsigned-byte 8)))
+        (slots (darterfly/worlds:dispatcher)))
     (loop
       (handler-case
           (multiple-value-bind (n token sender) (darterfly/worlds:receive-into port m :timeout 1)
             (unless (= sender world) (error "Unexpected world service sender"))
             (case (if (>= n 8) (u64-at m 0) 0)
               (1 (let ((request (subseq m 0 n)))
-                   (sb-thread:make-thread
+                   (darterfly/worlds:dispatch
+                    slots "world call"
                     (lambda ()
                       (darterfly/worlds:reply token (if proc
                                                         (darterfly/bsd:serve-request proc request token)
-                                                        (make-array 24 :element-type '(unsigned-byte 8) :initial-element 255))))
-                    :name "world call")))
+                                                        (make-array 24 :element-type '(unsigned-byte 8) :initial-element 255)))))))
               (2 (setf code (u64-at m 8)
                        archive (make-array (u64-at m 16) :element-type '(unsigned-byte 8))
                        at 0)
@@ -285,6 +287,7 @@
 
 (defstruct (running-world (:conc-name world-) (:constructor make-world)) id inward thread name core stopping restarts command cwd disk base every memory)
 
+(defvar *bases* nil)
 (defvar *worlds* nil)
 (defvar *worlds-lock* (sb-thread:make-mutex :name "worlds"))
 
@@ -318,25 +321,41 @@
 (defun resident-mb (id)
   (or (getf (find id (darterfly/worlds:worlds) :key (lambda (w) (getf w :id))) :resident-mb) 0))
 
+(defvar *admitted* nil)
+
+(defun usage ()
+  (loop for w in *worlds*
+        collect (list :name (world-name w)
+                      :memory (world-memory w)
+                      :resident (resident-mb (world-id w)))))
+
 (defun memory-use ()
   (sb-thread:with-mutex (*worlds-lock*)
-    (loop for w in *worlds*
-          collect (list :name (world-name w)
-                        :memory (world-memory w)
-                        :resident (resident-mb (world-id w))))))
+    (usage)))
 
-(defun room-for (memory)
-  (let* ((free (round (* 4096 (darterfly/worlds:free-pages)) (* 1024 1024)))
-         (use (memory-use))
-         (promised (loop for w in use
-                         for budget = (getf w :memory)
-                         when budget sum (max 0 (- budget (getf w :resident))))))
-    (when (> (+ memory promised *system-reserve-mb*) free)
-      (error 'no-room
-             :wanted memory :free free :promised promised
-             :using (loop for w in use
-                          collect (format nil "~a ~d MB~@[ of ~d~]" (getf w :name) (getf w :resident) (getf w :memory)))))
-    t))
+(defun admit (memory)
+  (sb-thread:with-mutex (*worlds-lock*)
+    (let* ((free (round (* 4096 (darterfly/worlds:free-pages)) (* 1024 1024)))
+           (use (usage))
+           (promised (+ (loop for w in use
+                              for budget = (getf w :memory)
+                              when budget sum (max 0 (- budget (getf w :resident))))
+                        (reduce #'+ *admitted* :key #'car))))
+      (when (> (+ memory promised *system-reserve-mb*) free)
+        (error 'no-room
+               :wanted memory :free free :promised promised
+               :using (append (loop for w in use
+                                    collect (format nil "~a ~d MB~@[ of ~d~]" (getf w :name) (getf w :resident) (getf w :memory)))
+                              (loop for (mb) in *admitted*
+                                    collect (format nil "a starting world's ~d MB" mb)))))
+      (let ((ticket (list memory)))
+        (push ticket *admitted*)
+        ticket))))
+
+(defun let-go (ticket base)
+  (sb-thread:with-mutex (*worlds-lock*)
+    (setf *admitted* (remove ticket *admitted*)
+          *bases* (remove base *bases*))))
 
 (defun with-memory (argv memory)
   (if memory
@@ -360,7 +379,6 @@
 (defun restart-world (name path &key (cwd "/"))
   (new-world name :core path :cwd cwd))
 
-(defvar *bases* nil)
 
 (defun free-base ()
   (sb-thread:with-mutex (*worlds-lock*)
@@ -376,23 +394,39 @@
     (push base *bases*)
     base))
 
-(defun start-world (core argv &key files cwd stdin disk timeout attach name memory)
-  (when memory (room-for memory))
-  (let* ((argv (with-memory (if attach (with-prelude argv) argv) memory))
-         (parts (record-parts core argv files cwd stdin nil))
-         (base (free-base))
-         (port (darterfly/worlds:make-port)))
-    (multiple-value-bind (offsets back-at size) (layout parts 0)
-      (write-record base size parts offsets back-at 0 0 1 disk)
-      (multiple-value-bind (id inward) (darterfly/worlds:spawn-record base size port)
-        (launch-world id inward port base size disk timeout
-                      :name name :core core :argv argv :cwd cwd :memory memory)))))
+(defun unwind-start (ticket base size id)
+  (when id
+    (ignore-errors (darterfly/worlds:stop id))
+    (wait-gone id))
+  (when size
+    (libsa "munmap" sb-alien:int (sb-alien:unsigned base) (sb-alien:unsigned size)))
+  (let-go ticket base))
 
-(defun launch-world (id inward port base size disk timeout &key name core argv cwd memory)
+(defun start-world (core argv &key files cwd stdin disk timeout attach name memory)
+  (let ((ticket (and memory (admit memory)))
+        (base nil) (size nil) (id nil) (world nil))
+    (unwind-protect
+         (let* ((argv (with-memory (if attach (with-prelude argv) argv) memory))
+                (parts (record-parts core argv files cwd stdin nil))
+                (port (darterfly/worlds:make-port)))
+           (setf base (free-base))
+           (multiple-value-bind (offsets back-at record-size) (layout parts 0)
+             (setf size record-size)
+             (write-record base size parts offsets back-at 0 0 1 disk)
+             (multiple-value-bind (new inward) (darterfly/worlds:spawn-record base size port)
+               (setf id new
+                     world (launch-world id inward port base size disk timeout
+                                         :name name :core core :argv argv :cwd cwd :memory memory :ticket ticket)))))
+      (unless world
+        (unwind-start ticket base size id)))))
+
+(defun launch-world (id inward port base size disk timeout &key name core argv cwd memory ticket)
   (let* ((proc (and disk (darterfly/bsd:make-world-proc (or cwd "/"))))
          (world (make-world :id id :inward inward :name (or name (format nil "world ~d" id)) :core core
                             :command argv :cwd cwd :disk disk :base base :memory memory)))
-    (sb-thread:with-mutex (*worlds-lock*) (push world *worlds*))
+    (sb-thread:with-mutex (*worlds-lock*)
+      (push world *worlds*)
+      (setf *admitted* (remove ticket *admitted*)))
     (setf (world-thread world)
           (sb-thread:make-thread
            (lambda ()
@@ -422,7 +456,7 @@
                      (with-standard-io-syntax
                        (prin1-to-string (list :name (world-name world) :core (world-core world) :argv (world-command world)
                                               :cwd (world-cwd world) :disk (world-disk world) :base (world-base world)
-                                              :checkpoint (world-every world))))
+                                              :checkpoint (world-every world) :memory (world-memory world))))
                      :external-format :utf-8)))
           (write-sequence (darterfly/worlds::u64-octets (length meta)) out)
           (write-sequence meta out)))
@@ -437,18 +471,27 @@
            (base (getf meta :base))
            (name (or name (getf meta :name))))
       (when (find-world name) (error "a world named ~a is already running" name))
-      (take-base base)
-      (let ((parts (record-parts (getf meta :core) (getf meta :argv) nil (getf meta :cwd) nil nil))
-            (port (darterfly/worlds:make-port)))
-        (multiple-value-bind (offsets back-at size) (layout parts 0)
-          (write-record base size parts offsets back-at 0 0 1 (getf meta :disk))
-          (multiple-value-bind (id inward) (darterfly/worlds:restore in base size port)
-            (let ((world (launch-world id inward port base size (getf meta :disk) nil
-                                       :name name :core (getf meta :core) :argv (getf meta :argv) :cwd (getf meta :cwd))))
-              (when (getf meta :checkpoint)
-                (setf (world-every world) (getf meta :checkpoint))
-                (keep-checkpointed world))
-              world)))))))
+      (let* ((memory (getf meta :memory))
+             (ticket (and memory (admit memory)))
+             (taken nil) (size nil) (id nil) (world nil))
+        (unwind-protect
+             (let ((parts (record-parts (getf meta :core) (getf meta :argv) nil (getf meta :cwd) nil nil))
+                   (port (darterfly/worlds:make-port)))
+               (setf taken (take-base base))
+               (multiple-value-bind (offsets back-at record-size) (layout parts 0)
+                 (setf size record-size)
+                 (write-record base size parts offsets back-at 0 0 1 (getf meta :disk))
+                 (multiple-value-bind (new inward) (darterfly/worlds:restore in base size port)
+                   (setf id new
+                         world (launch-world id inward port base size (getf meta :disk) nil
+                                             :name name :core (getf meta :core) :argv (getf meta :argv) :cwd (getf meta :cwd)
+                                             :memory memory :ticket ticket))
+                   (when (getf meta :checkpoint)
+                     (setf (world-every world) (getf meta :checkpoint))
+                     (keep-checkpointed world))
+                   world)))
+          (unless world
+            (unwind-start ticket (and taken base) size id)))))))
 
 (defun scheduled-p (path)
   (with-open-file (in path :element-type '(unsigned-byte 8))
@@ -518,6 +561,18 @@
                                  :external-format :utf-8)
       (darterfly/worlds:no-reply ()
         (error 'no-answer :world (world-id world) :seconds timeout)))))
+
+(defparameter *start-within* 30)
+
+(defun await-answer (world &key (within *start-within*))
+  (let ((deadline (+ (get-internal-real-time) (* within internal-time-units-per-second))))
+    (loop
+      (let ((left (/ (- deadline (get-internal-real-time)) internal-time-units-per-second)))
+        (when (<= left 0)
+          (error 'no-answer :world (world-id world) :seconds within))
+        (when (ignore-errors (world-eval world "t" :timeout (min left 2)))
+          (return t))
+        (sleep 0.1)))))
 
 (defun attach (world &key (input *standard-input*) (output *standard-output*))
   (loop

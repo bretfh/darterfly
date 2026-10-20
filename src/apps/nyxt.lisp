@@ -1,8 +1,12 @@
 (in-package #:darterfly/apps)
 
 (bsd:define-program "Nyxt" (argv envp)
-  (unless (darterfly/run:in-world-p)
-    (error "Launch Nyxt through open-application in its own app world"))
+  ;; The application requests isolation explicitly. This also works when a
+  ;; desktop launches the program directly through POSIX-SPAWN.
+  (if (not (darterfly/run:in-world-p))
+      (progn
+        (open-application (first argv) :argv argv :world '(:memory 2048))
+        0)
   ;; Keep diagnostics in the installed OS, including initialization failures.
   (with-open-file (log "/tmp/nyxt-application.log" :direction :output
                        :if-exists :append :if-does-not-exist :create)
@@ -19,4 +23,4 @@
           (format log "~&[NYXT APPLICATION FAILED] ~a~%" condition)
           (sb-debug:print-backtrace :stream log :count 30)
           (finish-output log)
-          1)))))
+          1))))))

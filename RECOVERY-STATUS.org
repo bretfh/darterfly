@@ -1,0 +1,160 @@
+#+title: Foundation recovery status
+#+date: 2026-10-20
+
+* Architectural contract
+[[file:ARCHITECTURE.org][The architecture contract]] follows bfh's October 19 corrections. Darterfly is a
+live, personal Lisp workstation with a coherent desktop, persistent working state
+and native compatibility. Worlds can organize arbitrary rooted objects and
+activities; they are not obligatorily applications, processes or address spaces.
+One hardware kernel manages kernel worlds. Per-world authority, environments and
+service references do not imply duplicated kernels or drivers. Placement is an
+explicit choice; existing init provides lifecycle supervision where needed.
+
+Generic independently persistent object graphs are still a design/implementation
+task. Whole-image save and kernel-world isolation are useful existing mechanisms,
+not evidence that arbitrary object-subgraph persistence already works. WebKit's
+native runtime remains part of the platform. Nyxt and Harbor are separate active
+workstreams, not replacements for fixing the foundation.
+
+* What this recovery repairs
+The earlier 19 recovery commits are already on master through facd54d. They must
+not be cherry-picked a second time. This follow-up starts there and fixes:
+
+- Live saves queued behind an uninterruptible legacy console poll. The callback
+  unwinds before delivering an interrupt; main-thread handoff is acknowledged and
+  bounded before save preparation changes live state.
+- Save/deploy ownership and failure cleanup. Competing operations cannot take
+  another operation's record; a cold boot does not reopen a terminal record.
+- Refused or incomplete transfers publishing new live sources. Incoming files
+  are staged and checked before publication. This is not whole-tree atomic
+  rollback if storage fails partway through publication.
+- Confirmation racing pending installation, and a Wi-Fi health probe asking
+  the card for an interface slot. Probe exceptions now prevent confirmation.
+- Heap verification accepting an injected interior pointer. Aggressive tag/heap
+  verification refuses the damaged save; the corruption test is retained.
+- Native SBCL core loading through an unsupported general mmap request. Run
+  archives now use the boot-file mapping path for their immutable core data.
+- Duplicate APFS directory metadata in formatted root images. Repeated directory
+  entries are coalesced before formatting; identical legacy duplicate keys are
+  normalized on writable open and rewritten by normal copy-on-write commits.
+  Conflicting duplicates are refused. This is not an offline filesystem checker.
+- Shared guest FASL caches crossing worktrees. Guest core compilation uses the
+  checkout's build/fasl directory.
+- Recovery tests consuming a stale console prompt as the answer to a new query.
+  The affected boot-menu and retained-activity tests delimit their evaluations.
+
+- Suspend reporting: successful wake counts can exceed one; a refused kernel
+  suspend returns zero without advancing the count. The hardware checker now
+  distinguishes both and bounds reconnect attempts. Post-wake acceptance requires
+  healthy observations separated by at least ten seconds. Timings start at the
+  suspend RPC reply, not at the physical screen lighting up.
+- A retained inactive Wi-Fi card no longer fails health while Ethernet is active.
+
+* Evidence recorded so far
+Logs are in /tmp/darterfly-correctness on the development host; the final evidence
+copy and physical results are recorded below when qualification finishes.
+
+| Check | Result |
+|-------+--------|
+| Full host suite | 1,504 / 1,504 |
+| Full recovery suite | 56 / 56 |
+| Installed-system live deployment, retained Listener/user file, new kernel/cold boot | 21 / 21 |
+| Native SBCL bootstrap and contribs, rebuilt in order | 7 / 7 and 13 / 13 |
+| Native BSD process compatibility | 43 / 43 |
+| Three VM wakes with a refused S3 request between wakes | 10 / 10 |
+| Native generation B build | 7 / 7 |
+| B builds C, boots C, native compiler/Mach checks | 8 / 8 |
+| B versus C C objects and boot.efi | byte-identical |
+
+REL-001 reproduced before the verifier correction and passes after it. REL-002's
+historical watchdog reset did not reproduce at facd54d or in the corrected full
+recovery run; reinstall completes with the watchdog enabled. This does not prove
+a cause for the historical reset. The October 18 release bundle remains historical.
+
+* The UIOP byte difference is compiler state, not a target miscompile
+The normalized host UIOP FASL has 693,086 bytes and the guest has 693,070. A clean
+host SBCL bootstrap reproduces the larger output. In that same fresh host runtime,
+allocating =(make-list 10000)= into a defparameter before compiling UIOP produces
+the smaller output, byte-for-byte identical to the guest after the existing path
+normalization and equal source timestamps. Pre-interning equivalent union types
+also reproduces it. No Darterfly runtime participates in this host-only experiment.
+
+SBCL interns equivalent type sets without preserving a prescribed order. Its
+compiler's union type checks therefore depend on prior compiler/heap state.
+The first disassembly difference is reordered character/pathname checks in
+REIFY-SIMPLE-SEXP; instruction/branch layout and later register choices also
+differ. The entire normalized guest FASL is reproduced by the host allocation
+experiment, not just the first changed function. This is more than a timestamp
+difference.
+
+The native contrib test retains exact normalized comparisons for ASDF,
+sb-rotate-byte, sb-md5, sb-posix and sb-bsd-sockets. For UIOP it loads the freshly
+built module and exercises the SEXP converters over symbols, numbers,
+characters, strings, pathnames, conses, vectors and nested combinations, plus
+rejection of an unsupported object. Full-image/FASL reproducibility is not
+claimed. Changing SBCL's type interning globally solely to force this comparison
+would be a separate compiler change requiring its own qualification.
+
+Host reproduction, using two fresh SBCL processes against the same source:
+#+begin_src sh
+build/sbcl-mt/run-sbcl.sh --noinform --disable-debugger --no-sysinit --no-userinit \
+  --eval '(setf (sb-ext:readtable-base-char-preference *readtable*) :both)' \
+  --eval '(compile-file #p"SYS:CONTRIB;ASDF;UIOP.LISP" :output-file "/tmp/uiop-a.fasl")' --quit
+build/sbcl-mt/run-sbcl.sh --noinform --disable-debugger --no-sysinit --no-userinit \
+  --eval '(defparameter *probe-allocation* (make-list 10000))' \
+  --eval '(setf (sb-ext:readtable-base-char-preference *readtable*) :both)' \
+  --eval '(compile-file #p"SYS:CONTRIB;ASDF;UIOP.LISP" :output-file "/tmp/uiop-b.fasl")' --quit
+#+end_src
+The observed pair used the clean bootstrap at /tmp/darterfly-correctness/fresh-sbcl;
+SYS translations in a copied SBCL core can still name its original checkout.
+
+* Worktree disposition
+- master: integrate the corrective commits forward, preserving its existing
+  README.org, TASKS.org, UX.org edits and untracked design/ and RECOVERY-PLAN.org.
+- darterfly-recovery: keep as the audit/evidence checkout. HANDOFF.org is historical
+  untracked material, not current authority. The older RECOVERY-PLAN.org on master
+  also describes pre-repair findings; this report records their current disposition.
+- Harbor at 44bc2c5: retain the substantial unfinished UI changes separately.
+- Nyxt at ab36fe5 at inventory: active work continues separately. Its machdep 85
+  signal-native conflicts with master's machdep 85 live-calls. Resolve that ABI
+  conflict explicitly when integrating Nyxt; do not silently renumber a deployed
+  interface or merge the branch wholesale during foundation recovery.
+- d2 0548aa7 and log 54ef189: ancestors already incorporated into master.
+- d1 1770756: historical stats implementation; the renamed/evolved functionality
+  is already in master. No blind cherry-pick of its old paths.
+- Detached base/site worktrees and the four preexisting stashes are retained.
+
+This is a review of the recovery changes and implicated subsystems, supported by
+regression and hardware evidence, not a claim to have audited every line of every
+compiler, driver and browser dependency. Full release qualification, exhaustive
+fault injection, general world-object persistence, and unfinished UI/browser work
+remain separate development tasks.
+
+* Physical qualification in progress
+Arraniz accepted source revision 3357e1f through the live-save path, advancing
+from gen-57 to gen-58. Deployment 1U6CWF4-BROHPQNW reached terminal healthy after
+90 seconds; the retained Lisp probe, Listener and running desktop survived.
+
+Four RTC wakes returned cumulative counts 1 through 4. The old checker falsely
+rejected count 2. Subsequent timing instrumentation showed a real radio failure:
+Wi-Fi joined in 4–5 seconds, reported a firmware error about six seconds later,
+then spent 45 seconds in failed scans before a retry joined without HT. The
+65–69 second remote recovery is not a successful low-latency wake qualification.
+The user connected Ethernet; remote access works at 10.42.0.194 and the live
+probe still has its original gen-57 contents. Radio diagnosis continues over
+Ethernet. Temporary timing wrappers were removed before any further save.
+
+The radio was then isolated while Ethernet carried remote access. With identical
+ARP traffic, legacy mode received 83 frames in 30 seconds; HT twice failed in
+2 seconds. The retained UMAC error was 0x2010350b, last command 0x001d0516.
+Command tracing showed two allocations for the same receive TID with no removal.
+The corrected ADDBA path serializes session changes and removes an existing TID
+before allocating it again. Removal is the full 16-byte firmware command, with
+version-specific identifiers. DELBA now decodes the upper TID bits and checks the
+peer's initiator bit. A failed removal retains ownership and prevents allocation.
+The same HT test then received 82 frames over 30 seconds without firmware error.
+This is a targeted driver repair, not a Wi-Fi throughput or full aggregation audit.
+
+Firmware command layouts were checked against Intel's definitions and use in
+[[https://github.com/torvalds/linux/blob/v6.6/drivers/net/wireless/intel/iwlwifi/fw/api/datapath.h][Linux v6.6 datapath.h]] and
+[[https://github.com/torvalds/linux/blob/v6.6/drivers/net/wireless/intel/iwlwifi/mvm/sta.c][iwl_mvm_fw_baid_op_cmd]].

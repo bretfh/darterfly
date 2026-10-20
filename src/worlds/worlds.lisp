@@ -1,6 +1,6 @@
 (defpackage #:darterfly/worlds
   (:use #:cl)
-  (:export #:spawn-native #:spawn-native-image #:read-native-image #:wait-native #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages #:spawn-record #:receive-into #:copy-from #:copy-into
+  (:export #:spawn-native #:spawn-native-image #:read-native-image #:wait-native #:make-port #:receive #:reply #:call #:spawn #:stop #:world-state #:world-error #:free-pages #:live-calls #:spawn-record #:receive-into #:dispatcher #:dispatch #:*requests-at-once* #:copy-from #:copy-into
            #:heartbeat #:*watchdog-limit* #:quiet-watchdog #:pause #:resume #:checkpoint #:restore #:grant-memory #:grant-vectors #:port-into #:grant-rights #:*rights* #:worlds #:inspect-world #:peek #:no-reply #:when-silent #:port-give))
 (in-package #:darterfly/worlds)
 
@@ -53,7 +53,7 @@
   (let ((m (octets message))
         (r (if (eq sb-thread:*current-thread* (sb-thread:main-thread))
                (reply-buffer)
-               (make-array 4096 :element-type '(unsigned-byte 8))))
+               (make-array +max-message+ :element-type '(unsigned-byte 8))))
         (deadline (and timeout
                        (+ (get-internal-real-time)
                           (round (* timeout internal-time-units-per-second)))))
@@ -95,6 +95,22 @@
         (let ((n (machdep 42 port bs (length buffer) os (round (* timeout 1000000)))))
           (values n (aref out 0) (aref out 2)))))))
 
+(defparameter *requests-at-once* 64)
+
+(defun dispatcher (&optional (limit *requests-at-once*))
+  (sb-thread:make-semaphore :count limit))
+
+(defun dispatch (slots name work)
+  (sb-thread:wait-on-semaphore slots)
+  (handler-case
+      (sb-thread:make-thread (lambda ()
+                               (unwind-protect (funcall work)
+                                 (sb-thread:signal-semaphore slots)))
+                             :name name)
+    (error (e)
+      (sb-thread:signal-semaphore slots)
+      (error e))))
+
 (defun copy-from (token there here size) (machdep 49 token there size here))
 
 (defun copy-into (token there here size) (machdep 50 token there size here))
@@ -117,6 +133,8 @@
       (values (machdep 48 base size port os) (aref out 0)))))
 
 (defun free-pages () (machdep 47))
+
+(defun live-calls () (machdep 85))
 
 (defvar *watchdog-limit* 30)
 
@@ -143,10 +161,12 @@
   '((:console . 2) (:hardware . 4) (:power . 8) (:worlds . 16) (:stats . 32) (:boot . 64) (:log . 128)))
 
 (defun rights-mask (rights)
-  (loop for right in rights
+  (loop with mask = 0
+        for right in rights
         for bit = (or (cdr (assoc right *rights*))
                       (error "no right ~s; the rights are ~{~s~^ ~}" right (mapcar #'car *rights*)))
-        sum bit))
+        do (setf mask (logior mask bit))
+        finally (return mask)))
 
 (defun rights-named (mask)
   (loop for (right . bit) in *rights*
@@ -437,4 +457,4 @@ A second wait signals ECHILD. TIMEOUT never kills or reaps a live child."
         (return nil))
       (sleep 0.01))))
 
-(defun signal-native (world signal) (machdep 85 world signal))
+(defun signal-native (world signal) (machdep 87 world signal))

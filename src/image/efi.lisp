@@ -32,12 +32,14 @@
     (unless (and (probe-file core)
                  (> (file-write-date core) (max (newest (darterfly-sources))
                                                 (file-write-date (merge-pathnames "output/sbcl.core" (sbcl-tree))))))
-      (run "sh" "-c"
-           (format nil "CL_SOURCE_REGISTRY=\"~a//:$GUIX_ENVIRONMENT/share/common-lisp//\" ASDF_OUTPUT_TRANSLATIONS=\"/:$HOME/.cache/common-lisp/darterfly-mt/\" ~a --non-interactive --no-userinit --no-sysinit --load ~a ~a"
-                   (string-right-trim "/" (source ""))
-                   (uiop:native-namestring (merge-pathnames "run-sbcl.sh" (sbcl-tree)))
-                   (source "src/image/darterfly-core.lisp")
-                   (uiop:native-namestring core))))
+      (run "env"
+           (format nil "CL_SOURCE_REGISTRY=~a//:~a/share/common-lisp//"
+                   (string-right-trim "/" (source "")) (uiop:getenv "GUIX_ENVIRONMENT"))
+           (format nil "ASDF_OUTPUT_TRANSLATIONS=/:~a/"
+                   (string-right-trim "/" (uiop:native-namestring (build-path "fasl/"))))
+           (uiop:native-namestring (merge-pathnames "run-sbcl.sh" (sbcl-tree)))
+           "--non-interactive" "--no-userinit" "--no-sysinit" "--load"
+           (source "src/image/darterfly-core.lisp") (uiop:native-namestring core)))
     core))
 
 (defun host-units () (darterfly/cc:units :libtcc1 (eq *c-compiler* :tcc)))

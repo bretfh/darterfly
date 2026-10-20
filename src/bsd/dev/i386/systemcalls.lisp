@@ -246,7 +246,7 @@
         ((or (= n 44) (= n 45) (= n 46) (= n 48) (= n 53) (= n 54) (= n 55) (= n 56) (= n 57)
              (= n 58) (= n 59) (= n 60) (= n 62) (= n 63) (= n 64) (= n 74) (= n 79) (= n 84))
          +right-worlds+)
-        ((or (= n 25) (= n 28) (= n 29) (= n 47) (= n 75))
+        ((or (= n 25) (= n 28) (= n 29) (= n 47) (= n 75) (= n 85))
          +right-stats+)
         ((or (= n 7) (= n 8) (= n 19))
          +right-boot+)
@@ -301,10 +301,10 @@
                                      (reg regs +r-r10+) (reg regs +r-r8+))))
       ((= n 81) (ok regs (native-wait a)))
       ((= n 82) (ok regs (native-validate a b)))
-      ;; 80-83 retain master's native ABI; 85 extends it with signal delivery.
+      ;; 85 is the live-call counter; 87 delivers native process signals.
       ;; Like native launch/wait/map, this is a supervisor service, not a
       ;; direct escape from an unprivileged world into another world.
-      ((= n 85)
+      ((= n 87)
        (let ((w (world-by-id a)))
          (unless w (result (ok regs (- 0 3))))
          (when (or (= b 0) (>= b +nsig+))
@@ -333,6 +333,7 @@
       ((= n 45) (ok regs (world-stop-id a)))
       ((= n 46) (ok regs (world-state a)))
       ((= n 47) (ok regs (vm-page-free-count)))
+      ((= n 85) (ok regs (calls-live)))
       ((= n 51) (ok regs (map-shared a b (reg regs +r-rdx+))))
       ((= n 49) (ok regs (port-copy a b (reg regs +r-r10+) (reg regs +r-rdx+) 0)))
       ((= n 50) (ok regs (port-copy a b (reg regs +r-r10+) (reg regs +r-rdx+) 1)))

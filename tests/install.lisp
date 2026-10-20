@@ -74,3 +74,143 @@
 
 (test a-runtime-without-the-heap-check-does-not-block-saving
   (is (null (darterfly/install:heap-errors)) "the host runtime has no check, and says so with nil instead of an error"))
+
+(test a-save-handoff-times-out-without-running-later
+  (let* ((ready (sb-thread:make-semaphore :count 0))
+         (release (sb-thread:make-semaphore :count 0))
+         (ran nil) (accepted nil)
+         (worker (sb-thread:make-thread
+                  (lambda ()
+                    (sb-sys:without-interrupts
+                      (sb-thread:signal-semaphore ready)
+                      (sb-thread:wait-on-semaphore release))))))
+    (unwind-protect
+         (progn
+           (is-true (sb-thread:wait-on-semaphore ready :timeout 2))
+           (signals error
+             (darterfly/install::on-save-thread
+              (lambda () (setf ran t)) :thread worker :within 0.05
+              :accepted (lambda () (setf accepted t))))
+           (is-false accepted)
+           (sb-thread:signal-semaphore release)
+           (sb-thread:join-thread worker :timeout 2)
+           (is-false ran "a cancelled interrupt never starts the save later"))
+      (sb-thread:signal-semaphore release)
+      (sb-thread:join-thread worker :timeout 2 :default nil))))
+
+(test a-save-handoff-confirms-its-owner
+  (let* ((ready (sb-thread:make-semaphore :count 0))
+         (finished (sb-thread:make-semaphore :count 0))
+         (ran nil) (accepted nil)
+         (worker (sb-thread:make-thread
+                  (lambda () (sb-thread:signal-semaphore ready) (sleep 5)))))
+    (unwind-protect
+         (progn
+           (sb-thread:wait-on-semaphore ready :timeout 2)
+           (is-true
+            (darterfly/install::on-save-thread
+             (lambda ()
+               (setf ran sb-thread:*current-thread*)
+               (sb-thread:signal-semaphore finished))
+             :thread worker :within 1
+             :accepted (lambda () (setf accepted t))))
+           (is-true accepted)
+           (is-true (sb-thread:wait-on-semaphore finished :timeout 2))
+           (is (eq worker ran)))
+      (sb-thread:terminate-thread worker)
+      (sb-thread:join-thread worker :timeout 2 :default nil))))
+
+(test broken-health-probes-prevent-confirmation
+  (is (equal '(:wifi)
+             (darterfly/start::unhealthy
+              '((:log :ok) (:disk :ok) (:wifi :fail :error "broken probe")) nil)))
+  (is (null (darterfly/start::unhealthy
+             '((:log :ok) (:disk :ok) (:wifi :fail :ssid nil))
+             '((:wifi :ok)))))
+  (is (member :display (darterfly/start::unhealthy
+                       '((:log :ok) (:disk :ok)) '((:display :ok)))))
+  (is (member :disk (darterfly/start::unhealthy '((:log :ok)) nil))))
+
+(test a-save-preparation-failure-does-not-restart-running-services
+  (let* ((dir (merge-pathnames "save-preparation/" (scratch)))
+         (blocker (merge-pathnames "not-a-directory" dir))
+         (darterfly/install::*pending-generation* (namestring (merge-pathnames "not-a-directory/pending" dir)))
+         (darterfly/journal:*journal* (namestring (merge-pathnames "journal" dir)))
+         (darterfly/install::*deployment* nil)
+         (darterfly/install::*saving* t)
+         (darterfly/bsd::*suspended* nil)
+         (darterfly/bsd::*threads-to-resume* nil)
+         (hooks 0))
+    (ensure-directories-exist blocker)
+    (with-open-file (s blocker :direction :output :if-exists :supersede) (write-line "block" s))
+    (sb-int:encapsulate 'darterfly/power:flush-disks 'save-preparation-test
+                        (lambda (original &rest args) (declare (ignore original args)) t))
+    (sb-int:encapsulate 'sb-impl::call-hooks 'save-preparation-test
+                        (lambda (original &rest args) (declare (ignore original args)) (incf hooks)))
+    (unwind-protect
+         (progn
+           (is (null (darterfly/install::begin-save nil nil nil nil nil)))
+           (is-false darterfly/install::*saving*)
+           (is (= 0 hooks))
+           (is (null darterfly/bsd::*suspended*)))
+      (sb-int:unencapsulate 'sb-impl::call-hooks 'save-preparation-test)
+      (sb-int:unencapsulate 'darterfly/power:flush-disks 'save-preparation-test))))
+
+(test a-second-deployment-cannot-take-the-first-ones-record
+  (let ((darterfly/install::*deployment* "first")
+        (darterfly/install::*saving* nil))
+    (signals error (darterfly/install::claim-deployment "second"))
+    (is (equal "first" darterfly/install::*deployment*))
+    (darterfly/install::finish-deployment "older" :healthy "gen-old")
+    (is (equal "first" darterfly/install::*deployment*))))
+
+(defun deployment-input (path content &key (end t))
+  (let ((wire (merge-pathnames "deployment-wire" (scratch))))
+    (with-open-file (s wire :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
+      (let ((bytes (sb-ext:string-to-octets content :external-format :utf-8)))
+        (write-sequence (sb-ext:string-to-octets (format nil "file ~d 644 ~a~%" (length bytes) (subseq (namestring path) 1))) s)
+        (write-sequence bytes s)
+        (when end (write-sequence #(101 110 100 10) s))))
+    wire))
+
+(test a-refused-or-incomplete-transfer-keeps-live-files
+  (let* ((darterfly/vfs:*root* (darterfly/vfs:make-host-root))
+         (darterfly/vfs:*mounts* nil)
+         (darterfly/devices::*registry-root* (make-instance 'darterfly/devices:entry))
+         (darterfly/vfs::*cwd* (list (cons "" darterfly/vfs:*root*)))
+         (darterfly/vfs::*files* (make-hash-table))
+         (darterfly/install::*written* nil)
+         (target (merge-pathnames "live-probe.lisp" (scratch)))
+         (stage (namestring (merge-pathnames "incoming/" (scratch))))
+         (old "(in-package #:darterfly/test) (defstruct reload-probe a b)")
+         (new "(in-package #:darterfly/test) (defstruct reload-probe a b c)"))
+    (with-open-file (s target :direction :output :if-exists :supersede) (write-string old s))
+    (with-open-file (s (deployment-input target new) :element-type '(unsigned-byte 8))
+      (is (search "deploy refused" (handler-case (darterfly/install::receive-files s stage)
+                                    (error (e) (princ-to-string e))))))
+    (is (equal old (uiop:read-file-string target)))
+    (is (null darterfly/install::*written*))
+    (with-open-file (s (deployment-input target "; safe change" :end nil) :element-type '(unsigned-byte 8))
+      (is (search "end marker" (handler-case (darterfly/install::receive-files s stage)
+                                 (error (e) (princ-to-string e))))))
+    (is (equal old (uiop:read-file-string target)))
+    (is (null darterfly/install::*written*))
+    ;; A previously refused old receiver may have already written bad source.
+    ;; A compatible replacement must be checked instead of that stale file.
+    (with-open-file (s target :direction :output :if-exists :supersede) (write-string new s))
+    (setf darterfly/install::*written* (list (namestring target)))
+    (with-open-file (s (deployment-input target "; safe change") :element-type '(unsigned-byte 8))
+      (is (= 1 (getf (darterfly/install::receive-files s stage) :written))))
+    (is (equal "; safe change" (uiop:read-file-string target)))
+    (is (member (namestring target) darterfly/install::*written* :test #'equal))))
+
+(test a-cold-boot-does-not-reopen-a-finished-deployment
+  (let ((darterfly/install::*deployments-dir* (namestring (merge-pathnames "deployment-history/" (scratch))))
+        (darterfly/install::*deployment* "closed")
+        (darterfly/vfs:*syncers* nil))
+    (darterfly/install::note-deployment "closed" :healthy "gen-2")
+    (is (null (darterfly/install::resume-deployment)))
+    (is (= 1 (length (darterfly/install::deployment-record "closed"))))
+    (setf darterfly/install::*deployment* "pending")
+    (darterfly/install::note-deployment "pending" :installed "gen-3")
+    (is (equal "pending" (darterfly/install::resume-deployment)))))

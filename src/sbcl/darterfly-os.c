@@ -82,5 +82,5 @@ int darterfly_heap_errors(void) {
   lispobj here;
   for_each_thread(th) gc_close_thread_regions(th, 0);
   gc_close_collector_regions(0);
-  return verify_heap(&here, VERIFY_DONT_LOSE | VERIFY_TAGS);
+  return verify_heap(&here, VERIFY_DONT_LOSE | VERIFY_TAGS | VERIFY_AGGRESSIVE);
 }

@@ -29,7 +29,7 @@ generation:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/image)" --eval "(format t \"~a~%\" (darterfly/image:push-generation \"$(HOST)\"))"'
 
 deploy:
-	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/image)" --eval "(format t \"~a~%\" (darterfly/image:deploy \"$(HOST)\"))"'
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/image)" --eval "(unless (darterfly/image::deploy-and-wait \"$(HOST)\") (uiop:quit 1))"'
 
 reload:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/image)" --eval "(format t \"~a~%\" (darterfly/image:deploy \"$(HOST)\" :reload t))"'

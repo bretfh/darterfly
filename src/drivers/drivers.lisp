@@ -2,7 +2,7 @@
   (:use #:cl)
   (:local-nicknames (#:devices #:darterfly/devices) (#:worlds #:darterfly/worlds) (#:run #:darterfly/run))
   (:export #:grant-device #:attach-controller #:serve-requests #:serve-network #:remote-network
-           #:start-network-world #:start-driver-worlds #:*in-own-world*))
+           #:start-network-world #:start-driver-worlds #:*driver-placement*))
 (in-package #:darterfly/drivers)
 
 (defun pci-address (node)
@@ -48,16 +48,16 @@
 (defun serve-requests (port handle &key (name "requests"))
   (sb-thread:make-thread
    (lambda ()
-     (let ((buffer (make-array 65536 :element-type '(unsigned-byte 8))))
+     (let ((buffer (make-array 65536 :element-type '(unsigned-byte 8)))
+           (slots (worlds:dispatcher)))
        (loop
          (multiple-value-bind (n token)
              (handler-case (worlds:receive-into port buffer)
                (worlds:world-error () (values nil nil)))
            (when n
              (let ((request (subseq buffer 0 n)))
-               (sb-thread:make-thread
-                (lambda () (worlds:reply token (funcall handle request token)))
-                :name name)))))))
+               (worlds:dispatch slots name
+                                (lambda () (worlds:reply token (funcall handle request token))))))))))
    :name name))
 
 (defun u64 (v at) (loop :for i :below 8 :sum (ash (aref v (+ at i)) (* 8 i))))
@@ -72,6 +72,7 @@
 (defconstant +receive+ 2)
 (defconstant +suspend+ 3)
 (defconstant +wake+ 4)
+(defconstant +status+ 5)
 (defconstant +receive-wait+ 0.1)
 
 (defvar *nic* nil)
@@ -147,6 +148,8 @@
           ((= op +wake+)
            (wake-devices)
            (octets 0))
+          ((= op +status+)
+           (octets 1))
           (t (octets 0)))))
 
 (defparameter *appear-within* 30)
@@ -212,7 +215,7 @@
 
 (defun attach-network-world (world node)
   (let ((id (run:world-id world)))
-    (loop :repeat 300 :until (ignore-errors (run:world-eval world "t")) :do (sleep 0.1))
+    (run:await-answer world)
     (let ((granted (grant-device id node)))
       (multiple-value-bind (theirs ours) (worlds:port-into id)
         (let* ((mac (eval-in world (list* 'serve-network theirs granted)))
@@ -227,24 +230,19 @@
   (let ((world (run:start-world core (run::world-argv "(loop (sleep 60))") :cwd "/" :disk t :attach t :name name)))
     (values world (attach-network-world world node))))
 
-(defvar *in-own-world* (list (cons #x020000 'attach-network-world)))
+(defvar *driver-placement* nil)
 
 (defparameter *driver-memory* 256)
 
 (defun attach-of (node)
-  (cdr (assoc (devices::pci-class node) *in-own-world*)))
-
-(defun own-world-p (node)
-  (and (attach-of node) t))
-
-(pushnew 'own-world-p devices::*reservations*)
+  (cdr (assoc (devices::pci-class node) *driver-placement*)))
 
 (defun driver-job (node)
   (let ((attach (attach-of node)))
     (list :label (format nil "driver ~(~a~)" (devices::pci-location node))
           :world (list :core "/System/Library/Kernels/darterfly.core" :memory *driver-memory*)
           :keep-alive t :throttle 2 :most-exits 3 :window 120
-          :healthy #'network-healthy-p :check-every 10 :unhealthy-for 60
+          :healthy (lambda () (driver-answers-p node)) :check-every 10 :unhealthy-for 60
           :after-start (lambda (world) (funcall attach world node))
           :when-failed (lambda () (drive-here node)))))
 
@@ -253,24 +251,20 @@
   (dolist (controller (devices:find-entries 'devices:ethernet-controller node))
     (devices::announce :added controller)))
 
-(defun network-healthy-p ()
-  (let* ((interface darterfly/net:*interface*)
-         (gateway (and interface (darterfly/net::interface-gateway interface))))
-    (or (null gateway)
-        (zerop gateway)
-        (darterfly/net:ping gateway :timeout 2)
-        (darterfly/net:ping gateway :timeout 2))))
+(defun driver-answers-p (node)
+  (let ((net (find-if (lambda (entry) (typep entry 'remote-network)) (devices:entry-children node))))
+    (and net
+         (= 1 (u64 (worlds:call (remote-port net) (octets +status+ 0 0) :timeout 5) 0)))))
 
 (defun init-running-p ()
   (ignore-errors (darterfly/init:jobs)))
 
-(defun start-driver-worlds ()
-  (when (devices:boot-arg "init")
-    (loop :repeat 300 :until (init-running-p) :do (sleep 0.1)))
-  (dolist (node (devices:find-entries 'devices:pci-node))
-    (when (and (own-world-p node)
-               (not (devices::reserved-by-boot-p node))
-               (null (devices:entry-children node)))
-      (if (init-running-p)
-          (darterfly/init:submit (driver-job node))
-          (drive-here node)))))
+(defun start-driver-worlds (nodes)
+  (dolist (node nodes)
+    (unless (attach-of node)
+      (error "no driver placement for ~a; *driver-placement* names none for its class" (devices::pci-location node)))
+    (when (devices:entry-children node)
+      (error "~a is already driven here" (devices::pci-location node)))
+    (if (init-running-p)
+        (darterfly/init:submit (driver-job node))
+        (drive-here node))))

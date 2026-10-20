@@ -97,6 +97,22 @@
       (visit root))
     (values (nreverse leaves) (nreverse records) index)))
 
+(defun normalize-tree-keys (tree)
+  "Coalesce duplicate keys left by older image builders, using the live table.
+The next ordinary transaction writes a unique tree and retires the old nodes."
+  (let ((seen (make-hash-table :test 'equalp)) (duplicates 0))
+    (loop for leaf across (tree-leaves tree)
+          do (loop for key across (leaf-keys leaf)
+                   do (if (gethash key seen) (incf duplicates) (setf (gethash key seen) t))))
+    (when (plusp duplicates)
+      (let ((keys (sort (loop for key being the hash-keys of (tree-table tree) collect key)
+                        (lambda (a b) (key< tree a b)))))
+        (setf (tree-index tree)
+              (remove-duplicates (append (tree-index tree)
+                                         (loop for leaf across (tree-leaves tree) collect (leaf-paddr leaf))))
+              (tree-leaves tree) (vector (make-leaf :keys (key-vector keys) :dirty t)))))
+    duplicates))
+
 (defun tree-keys (tree) (reduce #'+ (tree-leaves tree) :key (lambda (l) (length (leaf-keys l)))))
 
 (defun leaf-node (tree leaf records xid root total-keys total-nodes)

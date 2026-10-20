@@ -209,12 +209,6 @@
     (format nil "(progn (sb-thread:make-thread (lambda () (loop (sb-alien:alien-funcall (sb-alien:extern-alien \"__machdep5\" (function sb-alien:long sb-alien:long sb-alien:unsigned-long sb-alien:unsigned-long sb-alien:unsigned-long sb-alien:unsigned-long sb-alien:unsigned-long)) 52 ~d 0 0 0 0) (sleep ~f))) :name \"heartbeat\") t)"
             seconds (float every))))
 
-(defun answering (world)
-  (loop :repeat 300
-        :when (ignore-errors (darterfly/run:world-eval world "t" :timeout 5))
-          :return t
-        :do (sleep 0.1)))
-
 (defun open-world (job)
   (let* ((spec (world-spec job))
          (world (darterfly/run:new-world (label job)
@@ -226,14 +220,16 @@
     (setf (world job) world
           (cpu job) nil
           (started job) (get-internal-real-time))
-    (when (and seconds (answering world))
-      (darterfly/run:world-eval world (beat-form seconds) :timeout 30))
-    (let ((after (key (job-plist job) :after-start)))
-      (when after
-        (handler-case (funcall after world)
-          (error (e)
-            (ignore-errors (darterfly/run:stop-world world))
-            (error e)))))
+    (handler-case
+        (let ((after (key (job-plist job) :after-start)))
+          (when seconds
+            (darterfly/run:await-answer world)
+            (darterfly/run:world-eval world (beat-form seconds) :timeout 30))
+          (when after
+            (funcall after world)))
+      (error (e)
+        (ignore-errors (darterfly/run:stop-world world))
+        (error e)))
     world))
 
 (defun sample (job)

@@ -316,7 +316,7 @@ int main(int argc, char **argv, char **envp) {
         unsigned long q[10] = {1, 999, 0, 0, 0, 0, 0, 0, 0, 0};
         long reply[3], denied;
         /* Hardware and supervisor-native calls require explicit rights. */
-        const long restricted[] = {65, 66, 67, 68, 80, 81, 82, 83, 85};
+        const long restricted[] = {65, 66, 67, 68, 80, 81, 82, 83, 85, 87};
         for (unsigned i = 0; i < sizeof restricted / sizeof restricted[0]; ++i) {
             __asm__ volatile("int $0x82; jnc 1f; neg %%rax; 1:"
                              : "=a"(denied)

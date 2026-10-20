@@ -27,31 +27,43 @@
 
 (defun unhealthy (now before)
   (remove-duplicates
-   (append (loop for part in '(:log :disk)
+   (append ;; Environmental changes are allowed; a broken probe is not.
+           (loop for (part status . detail) in now
+                 when (and (eq status :fail) (getf detail :error)) collect part)
+           (loop for part in '(:log :disk)
                  unless (eq (second (assoc part now)) :ok) collect part)
            (loop for (part status) in before
                  when (and (eq status :ok) (not (member part *surroundings*))
                            (not (eq (second (assoc part now)) :ok)))
                    collect part))))
 
-(defun confirm-when-healthy (&key (tries 10) (every 60))
-  (let ((name (darterfly/install:current))
-        (before (recorded-health (darterfly/install::link "good"))))
+(defun confirm-when-healthy (&key (tries 10) (every 60)
+                                  (name (darterfly/install:current))
+                                  (deployment darterfly/install::*deployment*))
+  (let ((before (recorded-health (darterfly/install::link "good"))))
     (loop repeat tries
           for now = (darterfly/health:check)
           for bad = (unhealthy now before)
-          do (if (null bad)
-                 (progn
+          do (unless (and (equal name (darterfly/install:current))
+                          (equal deployment darterfly/install::*deployment*))
+               (return nil))
+             (if (null bad)
+                 (sb-thread:with-recursive-lock (darterfly/install::*installing*)
+                   (unless (and (equal name (darterfly/install:current))
+                                (equal deployment darterfly/install::*deployment*))
+                     (return nil))
                    (with-open-file (s (health-path name) :direction :output :if-exists :supersede)
                      (with-standard-io-syntax (let ((*print-readably* nil)) (prin1 now s))))
                    (darterfly/install:confirm)
                    (format *error-output* "~&confirm: ~a is good~%" name)
+                   (darterfly/install::finish-deployment deployment :healthy name)
                    (return name))
                  (progn
                    (format *error-output* "~&confirm: ~a isn't good yet: ~{~(~a~)~^, ~}~%" name bad)
                    (sleep every)))
           finally (format *error-output* "~&confirm: ~a never became good; the next boot goes back to ~a~%"
-                          name (darterfly/install::link "good")))))
+                          name (darterfly/install::link "good"))
+                  (darterfly/install::finish-deployment deployment :unhealthy name (unhealthy (darterfly/health:check) before)))))
 
 (defun sources ()
   (or (probe-file "/Users/darterfly/src/darterfly/darterfly.asd")
@@ -98,9 +110,20 @@
     (attempt "log" #'darterfly/log:start-log)
     (setf darterfly/bsd:*safe* (and (darterfly/devices:boot-arg "safe") t))
     (format *error-output* "~&boot: generation ~a~:[~;, safe~]~%" (ignore-errors (darterfly/install:current)) darterfly/bsd:*safe*)
+    (when (darterfly/install::resume-deployment)
+      (attempt "deployment" (lambda () (darterfly/install::note-deployment darterfly/install::*deployment* :booted (darterfly/install:current)))))
     (unless darterfly/bsd:*safe*
-      (in-thread "confirm" (lambda () (sleep darterfly/install:*stable-after*) (confirm-when-healthy)))
-      (in-thread "saved generation" #'darterfly/install:install-saved-generation))
+      (let ((deployment darterfly/install::*deployment*))
+        (in-thread "saved generation"
+                   (lambda ()
+                     (darterfly/install:install-saved-generation)
+                     (unless (probe-file darterfly/install::*pending-generation*)
+                       (let ((name (ignore-errors (darterfly/install:current))))
+                         (when name
+                           (in-thread "confirm"
+                                    (lambda ()
+                                      (sleep darterfly/install:*stable-after*)
+                                      (confirm-when-healthy :name name :deployment deployment))))))))))
     (in-thread "brightness" (lambda () (darterfly/devices:start-devices) (darterfly/devices:restore-brightness)))
     (in-thread "display start" #'darterfly/display:start-display)
     (in-thread "audio start" #'darterfly/audio:start-audio)
@@ -109,7 +132,6 @@
     (sb-thread:make-thread
      (lambda ()
        (attempt "network start" #'darterfly/net:start-network)
-       (attempt "driver worlds" #'darterfly/drivers:start-driver-worlds)
        (in-thread "wifi start" #'darterfly/wifi:start-wifi)
        (when (stringp (darterfly/devices:boot-arg "nrepl-key"))
          (attempt "nrepl start" #'darterfly/nrepl:start)))
