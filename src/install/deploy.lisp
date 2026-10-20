@@ -21,14 +21,28 @@
   (let ((attr (ignore-errors (darterfly/vfs:vfs-stat path))))
     (and attr (= (darterfly/vfs:vattr-size attr) (length octets))
          (let ((fd (darterfly/vfs:vfs-open path (list :access :rdonly) 0)))
-           (unwind-protect (equalp (darterfly/vfs:vfs-read fd (length octets)) octets)
+           (unwind-protect
+                (loop for at from 0 below (length octets) by 1048576
+                      for count = (min 1048576 (- (length octets) at))
+                      for chunk = (darterfly/vfs:vfs-read fd count)
+                      always (and (= (length chunk) count)
+                                  (loop for i below count
+                                        always (= (aref chunk i) (aref octets (+ at i))))))
              (darterfly/vfs:vfs-close fd))))))
 
 (defun put-octets (path octets mode)
   (unless (same-octets-p path octets)
     (ensure-directories-exist path)
     (let ((fd (darterfly/vfs:vfs-open path (list :access :wronly :creat t :trunc t) mode)))
-      (unwind-protect (darterfly/vfs:vfs-write fd octets)
+      (unwind-protect
+           ;; APFS writes and verification allocate their own buffers. Bound
+           ;; those copies even when a native engine is hundreds of MB.
+           (loop for at from 0 below (length octets) by 1048576
+                 for end = (min (length octets) (+ at 1048576))
+                 for chunk = (if (and (zerop at) (= end (length octets)))
+                                 octets (subseq octets at end))
+                 do (unless (= (length chunk) (darterfly/vfs:vfs-write fd chunk))
+                      (error "deploy: short write to ~a" path)))
         (darterfly/vfs:vfs-close fd)))
     (unless (same-octets-p path octets) (error "deploy: incomplete write to ~a" path))
     t))

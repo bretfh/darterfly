@@ -266,3 +266,44 @@
   (let ((darterfly/vfs::*file-lifetime-version* 2))
     (is (null (darterfly/install::form-hazard
                '(defvar darterfly/vfs::*file-lifetime-version* 2))))))
+
+(test deployment-copies-large-files-with-bounded-io
+  (let* ((darterfly/vfs:*root* (darterfly/vfs:make-host-root))
+         (darterfly/vfs:*mounts* nil)
+         (darterfly/vfs::*cwd* (list (cons "" darterfly/vfs:*root*)))
+         (darterfly/vfs::*files* (make-hash-table))
+         (target (namestring (merge-pathnames "large-deployment.bin" (scratch))))
+         (data (make-array (+ (* 2 1048576) 37) :element-type '(unsigned-byte 8)))
+         (largest-read 0) (largest-write 0))
+    (dotimes (i (length data)) (setf (aref data i) (mod (+ (* i 17) (floor i 251)) 256)))
+    (uiop:delete-file-if-exists target)
+    (sb-int:encapsulate 'darterfly/vfs:vfs-read 'deploy-bounds
+      (lambda (original fd count &optional offset)
+        (setf largest-read (max largest-read count))
+        (funcall original fd count offset)))
+    (sb-int:encapsulate 'darterfly/vfs:vfs-write 'deploy-bounds
+      (lambda (original fd bytes &optional offset)
+        (setf largest-write (max largest-write (length bytes)))
+        (funcall original fd bytes offset)))
+    (unwind-protect
+         (progn
+           (is-true (darterfly/install::put-octets target data #o600))
+           (with-open-file (s target :element-type '(unsigned-byte 8))
+             (let ((actual (make-array (file-length s) :element-type '(unsigned-byte 8))))
+               (read-sequence actual s)
+               (is (equalp data actual))))
+           (is-false (darterfly/install::put-octets target data #o600))
+           (with-open-file (s target :direction :output :if-exists :overwrite
+                                    :element-type '(unsigned-byte 8))
+             (file-position s 1048576)
+             (write-byte (logxor 255 (aref data 1048576)) s))
+           (is-false (darterfly/install::same-octets-p target data))
+           (is-true (darterfly/install::put-octets target data #o600))
+           (is-true (darterfly/install::put-octets target #() #o600))
+           (is-true (darterfly/install::same-octets-p target #()))
+           (is-false (darterfly/install::same-octets-p target data))
+           (is (<= largest-read 1048576))
+           (is (<= largest-write 1048576)))
+      (sb-int:unencapsulate 'darterfly/vfs:vfs-read 'deploy-bounds)
+      (sb-int:unencapsulate 'darterfly/vfs:vfs-write 'deploy-bounds)
+      (uiop:delete-file-if-exists target))))
