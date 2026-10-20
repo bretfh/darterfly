@@ -217,7 +217,7 @@
                ;; No stopped caller can consume a queued or completed call.
                ;; Only a live receiver's outstanding token must survive.
                (when (= state +queued+) (unqueue (mem :u64 (+ m +m-port+)) m))
-               (if (and (/= receiver w) (= state +received+))
+               (if (and (/= receiver w) (or (= state +received+) (= state +abandoned+)))
                    (progn
                      (setf (mem :u64 (+ m +m-state+)) +abandoned+)
                      (setf (mem :u64 (+ m +m-world+)) 0)

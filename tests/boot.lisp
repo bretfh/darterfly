@@ -3331,14 +3331,24 @@
          (c (image:bare-console :boot-args "init")))
     (flet ((ask (form)
              (image:send c form)
-             (image:expect c (format nil "~%* ") :timeout 90)))
+             (let ((out (image:expect c (list (format nil "~%* ") "debugger invoked") :timeout 90)))
+               (when (search "debugger invoked" out) (error "Guest: ~a" out))
+               out)))
       (unwind-protect
           (progn
             (is (image:expect c "init: pid 1" :timeout 120))
              (ask "(defparameter *program* (let ((v (make-array 2052 :element-type '(unsigned-byte 8) :initial-element #x90))) (replace v #(184 41 0 0 0 191 1 0 0 0 72 190 0 8 0 64 0 0 0 0 186 4 0 0 0 73 186 0 9 0 64 0 0 0 0 65 184 16 0 0 0 205 130 184 41 0 0 0 191 1 0 0 0 72 190 0 9 0 64 0 0 0 0 186 4 0 0 0 73 186 0 10 0 64 0 0 0 0 65 184 16 0 0 0 205 130 184 1 0 0 0 49 255 205 128 235)) (replace v (sb-ext:string-to-octets \"ping\") :start1 #x800)))")
             (ask "(defparameter *port* (darterfly/worlds:make-port))")
+            ;; A supervisor wakeup can interrupt receive during driver startup.
+            ;; Retry only EINTR; keep the receive deadline and retry count bounded.
+            (ask "(defun test-receive () (loop repeat 10 do (handler-case (return-from test-receive (darterfly/worlds:receive *port* :timeout 5)) (darterfly/worlds:world-error (e) (unless (= 4 (darterfly/worlds::world-error-code e)) (error e)))) finally (error \"Too many interrupted receives\")))")
             (is (search "[STOP-REPLY-RACE PASS]"
-                  (ask "(progn (dotimes (i 200) (let ((w (darterfly/worlds:spawn *program* :port *port*))) (multiple-value-bind (m token) (darterfly/worlds:receive *port* :timeout 5) (declare (ignore m)) (darterfly/worlds:stop w) (darterfly/worlds:reply token \"late\")) (assert (loop repeat 100 when (eq :gone (darterfly/worlds:world-state w)) return t do (sleep .001))))) (format nil \"[STOP-REPLY-RACE PASS]\"))")))
+                  (ask "(progn (dotimes (i 200) (let ((w (darterfly/worlds:spawn *program* :port *port*))) (multiple-value-bind (m token) (test-receive) (declare (ignore m)) (darterfly/worlds:stop w) (darterfly/worlds:reply token \"late\")) (assert (loop repeat 100 when (eq :gone (darterfly/worlds:world-state w)) return t do (sleep .001))))) (format nil \"[STOP-REPLY-RACE PASS]\"))")))
+            ;; Start (76), timed wait (77), abandon (78), then a second call
+            ;; (41). Receiving the second call proves the first was abandoned.
+            (ask "(defparameter *abandon-program* (let ((v (copy-seq *program*))) (replace v #(184 76 0 0 0 191 1 0 0 0 190 0 8 0 64 186 4 0 0 0 205 130 73 137 196 184 77 0 0 0 76 137 231 190 0 9 0 64 186 16 0 0 0 65 186 160 134 1 0 205 130 184 78 0 0 0 76 137 231 205 130 184 41 0 0 0 191 1 0 0 0 190 0 8 0 64 186 4 0 0 0 65 186 0 9 0 64 65 184 16 0 0 0 205 130 15 11)) v))")
+            (is (search "[ABANDON-STOP-REPLY PASS]"
+                  (ask "(progn (dotimes (i 10) (let ((w (darterfly/worlds:spawn *abandon-program* :port *port*))) (multiple-value-bind (first first-token) (test-receive) (declare (ignore first)) (multiple-value-bind (second second-token) (test-receive) (declare (ignore second)) (darterfly/worlds:stop w) (assert (zerop (darterfly/worlds:reply first-token \"late\"))) (assert (zerop (darterfly/worlds:reply second-token \"late\"))))) (assert (loop repeat 100 when (eq :gone (darterfly/worlds:world-state w)) return t do (sleep .001))))) (format nil \"[ABANDON-STOP-REPLY PASS]\"))")))
             (is (search "[ALIVE]" (ask "(format nil \"[ALIVE]\")"))))
         (with-open-file (s (merge-pathnames "nyxt-port-stop-guest.log" image:*build*)
                            :direction :output :if-exists :supersede)
