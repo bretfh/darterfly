@@ -385,4 +385,11 @@
                    (frames device) nil)
              (darterfly/net::tcp-tick)
              (is (null darterfly/net::*acks-due*) "closing a connection retires deferred ACK ownership")
-             (is (null (frames device)) "closed connections do not keep probing an absent neighbor")))))
+             (is (null (frames device)) "closed connections do not keep probing an absent neighbor")
+             ;; A peer RST removes the connection directly, before timer cleanup.
+             (setf (darterfly/net::tcp-state c) :established)
+             (darterfly/net::send-segment c darterfly/net::+ack+ 101)
+             (setf (darterfly/net::tcp-state c) :closed (frames device) nil)
+             (darterfly/net::flush-acks)
+             (is (null darterfly/net::*acks-due*) "a reset also retires deferred ACK ownership")
+             (is (null (frames device)) "never answer a reset with an ACK or neighbor probe")))))
