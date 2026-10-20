@@ -5,9 +5,13 @@
 (setf *print-length* 16 *print-level* 6)
 (load "ports/nyxt/wpe/app-test-support.lisp")
 
-(let* ((root (uiop:ensure-directory-pathname
-              (string-trim '(#\Newline #\Return #\Space)
-                (uiop:read-file-string (darterfly-file "build/wpe-assessment/render-build-root.txt")))))
+(let* ((packaged (uiop:getenv "DARTER_MEDIA_PACKAGED"))
+       (root (if packaged
+                 (image::build-path "wpe-assessment/media-package/")
+                 (uiop:ensure-directory-pathname
+                   (string-trim '(#\Newline #\Return #\Space)
+                     (uiop:read-file-string
+                       (darterfly-file "build/wpe-assessment/render-build-root.txt"))))))
        (dir (merge-pathnames "nyxt-build/" root))
        (disk (if (uiop:getenv "DARTERFLY_NYXT_APP_DISK")
                  (pathname (uiop:getenv "DARTERFLY_NYXT_APP_DISK"))
@@ -15,9 +19,16 @@
   (when (and (probe-file disk) (image::in-use-p disk)) (error "App disk is in use"))
   ;; Seed the qualified source closure once; never overwrite it on a retry.
   (unless (probe-file disk)
-    (uiop:copy-file (merge-pathnames "nyxt-browser.img" dir) disk))
+    (if packaged
+        (let ((image::*include-browser* t))
+          (assert (image::nyxt-package-root))
+          (image::root-disk disk (* 4096 1048576)))
+        (uiop:copy-file (merge-pathnames "nyxt-browser.img" dir) disk)))
   (let ((entries
-          (append (image::root-entries) (image::nyxt-application-entries root)
+          (append (image::root-entries)
+            (if packaged
+                (or (image::browser-entries) (error "No installable Nyxt package"))
+                (image::nyxt-application-entries root))
             (list (list :file "Users/darterfly/nyxt-browser-checks.lisp"
                     (image::octets (darterfly-file "ports/nyxt/wpe/nyxt-browser-checks.lisp"))))
             (when (uiop:getenv "DARTERFLY_NYXT_DISPATCH")
@@ -42,7 +53,7 @@
     (image::update-root disk (image::with-entry-directories entries)))
   (let* ((image::*sbcl-runtime-options* '("--dynamic-space-size" "2048"))
          (image:*input-devices* '("virtio-keyboard-pci" "virtio-tablet-pci"
-                                  "intel-hda" "hda-duplex,audiodev=media"))
+                                  "intel-hda" "hda-output,audiodev=media"))
          (image:*extra-qemu* (append (list "-m" "8192" "-audiodev" (format nil "wav,id=media,path=~a" (image::build-path "wpe-assessment/media-output.wav"))) image:*extra-qemu*))
          (image::*console-log-directory*
            (merge-pathnames (format nil "app-console-~d-~d/" (get-universal-time) (sb-posix:getpid)) dir))
@@ -127,6 +138,12 @@
             (js "ac48.close();true")
             (format t "~&[WPE WEB AUDIO API PASS]~%")
             (js "JSON.stringify({events:window.events,frames:window.videoFrames,mse:window.mseError||'ok'})"))
+          (when (uiop:getenv "DARTER_YOUTUBE_HOME")
+            (evaluate "(nyxt:ffi-buffer-load (nyxt:current-buffer) (quri:uri \"https://www.youtube.com/\"))")
+            (until-js "location.hostname==='www.youtube.com' && document.title.includes('YouTube') && !!document.querySelector('ytd-masthead') && document.body.innerText.length>50" 90)
+            (evaluate "(list :load-finished (nyxt/renderer/wpe::native-ready (nyxt:current-buffer)) :navigating (nyxt/renderer/wpe::native-navigation (nyxt:current-buffer)))")
+            (js "JSON.stringify({ready:document.readyState,title:document.title,text:document.body.innerText.slice(0,500),resources:performance.getEntriesByType('resource').slice(-8).map(r=>({url:r.name,duration:r.duration}))})")
+            (nyxt-app-shot "youtube-home-interactive"))
           (when (uiop:getenv "DARTER_YOUTUBE_VIDEO")
             (evaluate (format nil "(nyxt:ffi-buffer-load (nyxt:current-buffer) (quri:uri ~s))"
               (uiop:getenv "DARTER_YOUTUBE_VIDEO")))

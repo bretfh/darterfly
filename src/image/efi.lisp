@@ -432,12 +432,24 @@
   (not (zerop (nth-value 2 (uiop:run-program (list "qemu-io" "-f" "raw" "-c" "quit" (uiop:native-namestring disk))
                                              :ignore-error-status t :output nil :error-output nil)))))
 
+(defun desktop-audio-args ()
+  ;; PulseAudio also reaches PipeWire's Pulse server on the Guix desktop.
+  ;; Tests and other hosts can select e.g. "wav,path=/tmp/darterfly.wav",
+  ;; "alsa" or "none" without changing guest hardware or the audio driver.
+  (unless (some (lambda (device) (search "hda" device)) *input-devices*)
+    (list "-audiodev"
+          (format nil "~a,id=desktop-audio"
+                  (or (uiop:getenv "DARTERFLY_QEMU_AUDIO") "pa"))
+          "-device" "intel-hda"
+          "-device" "hda-output,audiodev=desktop-audio")))
+
 (defun desktop (&key (disk (build-path "darterfly-hd.img")))
   (when (and (probe-file disk) (in-use-p disk))
     (error "~a is in use by a running darterfly; quit that one first" (uiop:native-namestring disk)))
   (let* ((*include-browser* t)
          (*sbcl-runtime-options* (desktop-runtime-options))
-         (*extra-qemu* (append (when (nyxt-package-root) '("-m" "8192")) *extra-qemu*))
+         (*extra-qemu* (append (when (nyxt-package-root) '("-m" "8192"))
+                              (desktop-audio-args) *extra-qemu*))
          (root (if (probe-file disk) (update-root disk) (root-disk disk (desktop-disk-size))))
         (esp (build-path "desktop/esp/")))
     (uiop:delete-directory-tree esp :validate t :if-does-not-exist :ignore)
