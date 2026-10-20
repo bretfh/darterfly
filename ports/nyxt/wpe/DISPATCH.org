@@ -15,6 +15,14 @@ See [[file:dispatch-evidence.json][the revision, hashes and complete evidence in
 [[file:qualification-logs/nyxt-dispatch-guest.log][the combined guest transcript]]. This qualifies the dispatch/shutdown
 change; the [[file:MERGE-READINESS.org][remaining supported-browser and merge gates]] are still open.
 
+The evidence uses the console's persistent serial log. A subsequent
+host-only capture fix preserves the in-memory transcript after the final
+error scan; IMAGE's transcript API consumes its stream. The regression
+=check-console-transcript.lisp= exercises the actual harness guard, including
+repeated successful/failed scans and appended cleanup output. See
+[[file:qualification-logs/nyxt-console-transcript-host.log][the host regression result]]. This changes capture only; the runtime
+qualification revision remains the one recorded in the evidence index.
+
 * Ownership
 
 Only the native UI process's GLib thread touches WebKit objects or its

@@ -155,6 +155,9 @@
           (nyxt-crash-checks c))
         ;; An app cleanup marker must not hide a stopped supervisor worker.
         (let ((transcript (image:transcript c)))
+          ;; TRANSCRIPT consumes the capture stream. Preserve it for the
+          ;; unwind-protect export, including when validation signals an error.
+          (write-string transcript (image::console-seen c))
           (when (or (search "panic(" transcript)
                     (search "debugger invoked" transcript)
                     (search (format nil "~%stopped ") transcript))
