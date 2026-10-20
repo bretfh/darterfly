@@ -2,29 +2,29 @@
 +++ b/Source/WebKit/NetworkProcess/NetworkProcess.cpp
 @@ -25,6 +25,8 @@
   */
- 
+
  #include "config.h"
 +#include <cstdio>
 +#include <cstdlib>
  #include "NetworkProcess.h"
- 
+
  #include "ArgumentCoders.h"
 @@ -315,6 +317,7 @@
- 
+
  void NetworkProcess::initializeNetworkProcess(NetworkProcessCreationParameters&& parameters, CompletionHandler<void()>&& completionHandler)
  {
 +    if (getenv("DARTER_NYXT_TRACE")) fprintf(stderr, "WPE network initialize begin pid=%d\n", getpid());
      CompletionHandlerCallingScope callCompletionHandler(WTF::move(completionHandler));
- 
+
      applyProcessCreationParameters(WTF::move(parameters.auxiliaryProcessParameters));
 @@ -378,6 +381,7 @@
      if (parameters.defaultRequestTimeoutInterval)
          setDefaultRequestTimeoutInterval(*parameters.defaultRequestTimeoutInterval);
- 
+
 +    if (getenv("DARTER_NYXT_TRACE")) fprintf(stderr, "WPE network initialize done pid=%d\n", getpid());
      RELEASE_LOG(Process, "%p - NetworkProcess::initializeNetworkProcess: Presenting processPID=%d", this, legacyPresentingApplicationPID());
  }
- 
+
 @@ -400,6 +404,7 @@
  void NetworkProcess::createNetworkConnectionToWebProcess(ProcessIdentifier identifier, PAL::SessionID sessionID, NetworkProcessConnectionParameters&& parameters, CompletionHandler<void(std::optional<IPC::Connection::Handle>&&, HTTPCookieAcceptPolicy)>&& completionHandler)
  {
@@ -36,45 +36,64 @@
 @@ -414,6 +419,7 @@
      for (auto& domain : parameters.allowedFirstPartiesForCookies)
          currentDomains.add(domain);
- 
+
 +    if (getenv("DARTER_NYXT_TRACE")) fprintf(stderr, "WPE network connection pair created pid=%d\n", getpid());
      auto newConnection = NetworkConnectionToWebProcess::create(*this, identifier, sessionID, WTF::move(parameters), WTF::move(connectionIdentifiers->server));
      Ref connection = newConnection;
- 
+
 @@ -424,6 +430,7 @@
- 
+
      RELEASE_LOG(Process, "%p - NetworkProcess::createNetworkConnectionToWebProcess: Finished creating connection for web process core identifier %" PRIu64 ", notifying the UI process", this, identifier.toUInt64());
- 
+
 +    if (getenv("DARTER_NYXT_TRACE")) fprintf(stderr, "WPE network connection reply sent pid=%d\n", getpid());
      completionHandler(WTF::move(connectionIdentifiers->client), storage ? storage->cookieAcceptPolicy() : HTTPCookieAcceptPolicy::Never);
- 
+
      RELEASE_LOG(Process, "%p - NetworkProcess::createNetworkConnectionToWebProcess: Handed off connect for web process core identifier %" PRIu64 " to the UI process", this, identifier.toUInt64());
---- a/Source/WebKit/Platform/IPC/unix/ConnectionUnix.cpp
-+++ b/Source/WebKit/Platform/IPC/unix/ConnectionUnix.cpp
-@@ -26,6 +26,8 @@
+--- a/Source/WebKit/Platform/IPC/glib/ConnectionGLib.cpp
++++ b/Source/WebKit/Platform/IPC/glib/ConnectionGLib.cpp
+@@ -24,6 +24,8 @@
   */
- 
+
  #include "config.h"
 +#include <cstdio>
 +#include <cstdlib>
  #include "Connection.h"
- 
- #include "IPCUtilities.h"
-@@ -200,6 +202,8 @@
-     if (!decoder)
-         return false;
- 
-+    if (getenv("DARTER_NYXT_TRACE") && (decoder->messageName() == IPC::MessageName::NetworkProcess_CreateNetworkConnectionToWebProcess || decoder->messageName() == IPC::MessageName::NetworkProcess_CreateNetworkConnectionToWebProcessReply))
-+        fprintf(stderr, "WPE handshake IPC received pid=%d fd=%d message=%u\n", getpid(), socketDescriptor(), static_cast<unsigned>(decoder->messageName()));
-     processIncomingMessage(makeUniqueRefFromNonNullUniquePtr(WTF::move(decoder)));
- 
-     if (m_readBuffer.size() > messageLength) {
-@@ -371,6 +375,8 @@
+
+ #if USE(GLIB)
+@@ -290,9 +292,11 @@
+         if (!receiveIncomingHardwareBuffers())
+             return;
+
+-        if (auto decoder = createMessageDecoder())
++        if (auto decoder = createMessageDecoder()) {
++            if (getenv("DARTER_NYXT_TRACE") && (decoder->messageName() == IPC::MessageName::NetworkProcess_CreateNetworkConnectionToWebProcess || decoder->messageName() == IPC::MessageName::NetworkProcess_CreateNetworkConnectionToWebProcessReply))
++                fprintf(stderr, "WPE handshake IPC received pid=%d fd=%d message=%u\n", getpid(), g_socket_get_fd(m_socket.get()), static_cast<unsigned>(decoder->messageName()));
+             processIncomingMessage(makeUniqueRefFromNonNullUniquePtr(WTF::move(decoder)));
+-        else
++        } else
+             connectionDidClose();
+     }
+ #endif
+@@ -336,9 +340,11 @@
+         }
+ #endif // OS(ANDROID)
+
+-        if (auto decoder = createMessageDecoder())
++        if (auto decoder = createMessageDecoder()) {
++            if (getenv("DARTER_NYXT_TRACE") && (decoder->messageName() == IPC::MessageName::NetworkProcess_CreateNetworkConnectionToWebProcess || decoder->messageName() == IPC::MessageName::NetworkProcess_CreateNetworkConnectionToWebProcessReply))
++                fprintf(stderr, "WPE handshake IPC received pid=%d fd=%d message=%u\n", getpid(), g_socket_get_fd(m_socket.get()), static_cast<unsigned>(decoder->messageName()));
+             processIncomingMessage(makeUniqueRefFromNonNullUniquePtr(WTF::move(decoder)));
+-        else
++        } else
+             connectionDidClose();
+     }
+ }
+@@ -387,6 +393,8 @@
  {
-     static_assert(sizeof(MessageInfo) + attachmentMaxAmount * sizeof(size_t) <= messageMaxSize, "Attachments fit to message inline");
- 
+     static_assert(sizeof(MessageInfo) + s_attachmentMaxAmount * sizeof(size_t) <= s_messageMaxSize, "Attachments fit to message inline");
+
 +    if (getenv("DARTER_NYXT_TRACE") && (encoder->messageName() == IPC::MessageName::NetworkProcess_CreateNetworkConnectionToWebProcess || encoder->messageName() == IPC::MessageName::NetworkProcess_CreateNetworkConnectionToWebProcessReply))
-+        fprintf(stderr, "WPE handshake IPC sending pid=%d fd=%d message=%u\n", getpid(), socketDescriptor(), static_cast<unsigned>(encoder->messageName()));
++        fprintf(stderr, "WPE handshake IPC sending pid=%d fd=%d message=%u\n", getpid(), g_socket_get_fd(m_socket.get()), static_cast<unsigned>(encoder->messageName()));
      UnixMessage outputMessage(encoder.get());
-     if (outputMessage.attachments().size() > (attachmentMaxAmount - 1)) {
+     if (outputMessage.attachments().size() > (s_attachmentMaxAmount - 1)) {
          ASSERT_NOT_REACHED();
