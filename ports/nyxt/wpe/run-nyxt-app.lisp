@@ -30,6 +30,13 @@
                   (third (first (image::certificates)))
                   (image::octets (merge-pathnames "ca.pem"
                     (uiop:ensure-directory-pathname (uiop:getenv "DARTER_HTTP_FIXTURE_DIR")))))))))))
+    (when (uiop:getenv "DARTER_NYXT_TRACE")
+      (let ((entry (find "usr/lib/nyxt/nyxt-application.lisp" entries
+                         :key #'second :test #'equal)))
+        (setf (third entry)
+          (concatenate '(vector (unsigned-byte 8))
+            (image::text "(sb-posix:setenv \"DARTER_NYXT_TRACE\" \"1\" 1)")
+            (third entry)))))
     (image::update-root disk (image::with-entry-directories entries)))
   (let* ((image::*sbcl-runtime-options* '("--dynamic-space-size" "2048"))
          (image:*extra-qemu* (append '("-m" "8192") image:*extra-qemu*))
@@ -176,7 +183,7 @@
           (format t "~&[NYXT COMBINED QUALIFICATION PASS]~%")))
       (ignore-errors
         (nyxt-app-ask c
-          "(progn (write-string (or (ignore-errors (uiop:read-file-string \"/tmp/nyxt-application.log\")) \"\")) (finish-output))" 20))
+          "(progn (dolist (path '(\"/tmp/nyxt-engine.log\" \"/tmp/nyxt-application.log\")) (let ((text (ignore-errors (uiop:read-file-string path)))) (when text (format t \"~&LOG ~a~%\" path) (write-string text *standard-output* :start (max 0 (- (length text) 65536)))))) (finish-output))" 20))
       (with-open-file (s (darterfly-file "build/wpe-assessment/nyxt-app-guest.log")
                         :direction :output :if-exists :supersede)
         (write-string (image:transcript c) s))
