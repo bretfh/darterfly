@@ -437,3 +437,25 @@
     (is (equalp #(17 23 42) (darterfly/vfs:vnop-read node 0 3)))
     (darterfly/vfs::reset-filesystem-session)
     (is (zerop (hash-table-count darterfly/vfs::*files*)))))
+
+
+(test saved-process-is-not-also-replayed-as-a-user-thread
+  (with-io-process
+    (let* ((bsd:*recording* t)
+           (bsd::*user-threads* (make-hash-table :test 'eq))
+           (bsd::*threads-to-resume* nil)
+           (release (sb-thread:make-semaphore))
+           (pid nil) (worker nil))
+      (unwind-protect
+           (progn
+             (setf pid (bsd:fork (lambda () (sb-thread:wait-on-semaphore release :timeout 5) 0))
+                   worker (sb-thread:make-thread
+                           (lambda () (sb-thread:wait-on-semaphore release :timeout 5))))
+             (let ((process-thread (bsd::proc-thread (bsd:pfind pid))))
+               (is (not (null (gethash process-thread bsd::*user-threads*))))
+               (bsd:suspend-threads)
+               (is (= 1 (length bsd::*threads-to-resume*)))
+               (is (eq (gethash worker bsd::*user-threads*) (first bsd::*threads-to-resume*)))))
+        (sb-thread:signal-semaphore release 2)
+        (when worker (sb-thread:join-thread worker :timeout 6 :default nil))
+        (when pid (bsd:wait4 pid))))))

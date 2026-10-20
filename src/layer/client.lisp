@@ -99,13 +99,19 @@
         (send-commit (context-port context) (layer-id root) (tree-objects root)))))
 
 (defclass connection ()
-  ((window-server :initform nil :accessor connection-window-server)
+  ((task :initform nil :accessor connection-task)
+   (window-server :initform nil :accessor connection-window-server)
    (lock :initform (sb-thread:make-mutex :name "connection") :reader connection-lock)))
 
 (darterfly/bsd:define-process-variable *connection* (make-instance 'connection))
 
 (defun window-server ()
   (sb-thread:with-mutex ((connection-lock *connection*))
+    ;; Saved applications retain the connection object, but resume in a new
+    ;; task. A port name is meaningful only in the task that acquired it.
+    (unless (eq (connection-task *connection*) darterfly/mach:*task*)
+      (setf (connection-window-server *connection*) nil
+            (connection-task *connection*) darterfly/mach:*task*))
     (or (connection-window-server *connection*)
         (setf (connection-window-server *connection*)
               (darterfly/init:bootstrap-look-up "windowserver")))))
