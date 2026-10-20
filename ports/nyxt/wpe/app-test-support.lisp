@@ -12,10 +12,11 @@
 (defun nyxt-app-await (console path marker &optional (seconds 180))
   (image:send console
     (format nil
-      "(loop repeat ~d for log = (ignore-errors (uiop:read-file-string ~s)) do (when log (write-string log *standard-output* :start (min *nyxt-log-at* (length log))) (setf *nyxt-log-at* (length log)) (finish-output)) when (and log (or (search ~s log) (search \"[NYXT APPLICATION FAILED]\" log) (search \"[NYXT APP CHECK FAILED]\" log))) return t do (sleep .2) finally (format t \"~%[NYXT APP TIMEOUT]~%\"))"
+      "(loop repeat ~d for log = (ignore-errors (uiop:read-file-string ~s)) do (when log (write-string log *standard-output* :start (min *nyxt-log-at* (length log))) (setf *nyxt-log-at* (length log)) (finish-output)) when (and log (or (search ~s log) (search \"[NYXT APPLICATION FAILED]\" log) (search \"[NYXT APP CHECK FAILED]\" log) (search \"[NYXT WORKER FAILED]\" log))) return t do (sleep .2) finally (format t \"~%[NYXT APP TIMEOUT]~%\"))"
       (* seconds 5) path marker))
   (let ((out (image:expect console (list marker "[NYXT APPLICATION FAILED]"
-                                        "[NYXT APP CHECK FAILED]" "[NYXT APP TIMEOUT]"
+                                        "[NYXT APP CHECK FAILED]" "[NYXT WORKER FAILED]"
+                                        "[NYXT APP TIMEOUT]"
                                         "debugger invoked") :timeout (+ seconds 10))))
     (image:expect console (format nil "~%* ") :timeout 15)
     (unless (search marker out)
