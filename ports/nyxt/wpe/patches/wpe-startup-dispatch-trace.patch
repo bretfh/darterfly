@@ -1,0 +1,28 @@
+--- a/Source/WebKit/Platform/IPC/Connection.cpp
++++ b/Source/WebKit/Platform/IPC/Connection.cpp
+@@ -25,6 +25,9 @@
+ 
+ #include "config.h"
+ #include "Connection.h"
++#include <cstdio>
++#include <cstdlib>
++#include <unistd.h>
+ 
+ #include "Encoder.h"
+ #include "GeneratedSerializers.h"
+@@ -1404,6 +1407,15 @@
+ 
+ void Connection::dispatchMessage(Decoder& decoder)
+ {
++    // Bound opt-in startup diagnostics, including replies and early returns.
++    static std::atomic<unsigned> tracedMessages { 0 };
++    bool trace = getenv("DARTER_NYXT_TRACE") && tracedMessages.fetch_add(1) < 128;
++    if (trace)
++        fprintf(stderr, "WPE dispatch begin pid=%d %s\n", getpid(), description(decoder.messageName()).characters());
++    auto traceExit = makeScopeExit([&] {
++        if (trace)
++            fprintf(stderr, "WPE dispatch end pid=%d %s\n", getpid(), description(decoder.messageName()).characters());
++    });
+     assertIsCurrent(dispatcher());
+     RefPtr client = m_client.get();
+     RELEASE_ASSERT(client);
