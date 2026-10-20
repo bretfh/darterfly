@@ -3217,7 +3217,12 @@
       (unwind-protect
            (progn
              (image:expect c "* " :timeout 90)
-             (is (search "10.0.2.15:4011" (ask "(darterfly/nrepl:start :key \"test-key\")")))
+             ;; USB discovery can attach asynchronously while START opens the
+             ;; listener. The address may still be unspecified until DHCP ends;
+             ;; the real host connection and assigned address are checked below.
+             (let ((started (ask "(darterfly/nrepl:start :key \"test-key\")")))
+               (is (or (search "0.0.0.0:4011" started)
+                       (search (format nil "~a:4011" ip) started))))
              (is (search "=> 3" (client "test-key" "(+ 1 2)")) "the host evaluates a form on darterfly")
              (is (search (format nil "=> ~s" ip) (client "test-key" "(darterfly/net:address-string (darterfly/net::interface-ip darterfly/net:*interface*))")) "in darterfly's own image")
              (is (not (search "=>" (client "wrong" "(+ 1 2)"))) "and a wrong key evaluates nothing")
