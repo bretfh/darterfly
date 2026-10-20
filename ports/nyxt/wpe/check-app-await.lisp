@@ -1,0 +1,20 @@
+(require :asdf)
+(asdf:load-system :darterfly/test)
+(load "ports/nyxt/wpe/app-test-support.lisp")
+(in-package :darterfly/test)
+(let ((old (symbol-function 'nyxt-app-ask)) (calls 0))
+  (unwind-protect
+      (progn
+        (setf (symbol-function 'nyxt-app-ask)
+          (lambda (console form &optional timeout)
+            (declare (ignore console timeout))
+            ;; The emitted guest form must parse as a single form.
+            (multiple-value-bind (value end) (read-from-string form)
+              (declare (ignore value)) (assert (= end (length form))))
+            (if (= (incf calls) 1)
+                (format nil "; warning source contains :NYXT-AWAIT-READY~%NIL~%* ")
+                (format nil "[NYXT ASK COMPLETE]~%:NYXT-AWAIT-READY~%* "))))
+        (assert (nyxt-app-await nil "/tmp/unused" "[READY]" 5))
+        (assert (= calls 2))
+        (format t "~&AWAIT DIAGNOSTIC FALSE-POSITIVE CHECK PASS~%"))
+    (setf (symbol-function 'nyxt-app-ask) old)))

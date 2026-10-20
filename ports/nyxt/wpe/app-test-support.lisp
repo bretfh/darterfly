@@ -23,7 +23,8 @@
             (error "Nyxt app did not reach ~a within ~d seconds" marker seconds))
           (nyxt-app-ask console
           (format nil
-            "(progn
+            "(locally
+               (declare (special *nyxt-await-path* *nyxt-await-tail*))
                (defvar *nyxt-await-path* nil)
                (defvar *nyxt-await-tail* \"\")
                (unless (equal *nyxt-await-path* ~s)
@@ -50,7 +51,7 @@
                        '("[NYXT APPLICATION FAILED]" "[NYXT APP CHECK FAILED]"
                          "[NYXT WORKER FAILED]"))
              (error "Nyxt failed before ~a: ~a" marker out))
-        when (search ":NYXT-AWAIT-READY" out) return t
+        when (search (format nil "~%:NYXT-AWAIT-READY~%") out) return t
         do (sleep (min .2 remaining))))
 (defun nyxt-app-until (console predicate &optional (seconds 60))
   ;; Keep the world's control dispatcher available to init's health probes.
