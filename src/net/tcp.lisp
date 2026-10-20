@@ -251,8 +251,9 @@
       (dolist (c (shiftf *acks-due* nil))
         (when (tcp-ack-pending c)
           (setf (tcp-ack-pending c) nil)
-          (handler-case (send-segment c +ack+ (tcp-snd-nxt c))
-            (net-error () nil)))))))
+          (unless (eq (tcp-state c) :closed)
+            (handler-case (send-segment c +ack+ (tcp-snd-nxt c))
+              (net-error () nil))))))))
 
 (defun receive-in-order (c seq data fin)
   (let ((behind (seq- (tcp-rcv-nxt c) seq)))
