@@ -111,6 +111,14 @@
                 until (eq entry s)
                 collect entry))))))
 
+(defun resume-deployment ()
+  ;; A saved core retains the ID that was active when it was saved. A later
+  ;; cold boot must not reopen an operation whose durable record is terminal.
+  (when (and *deployment*
+             (member (first (car (last (deployment-record *deployment*)))) *final-stages*))
+    (setf *deployment* nil))
+  *deployment*)
+
 (defun finish-deployment (id stage &rest detail)
   (sb-thread:with-recursive-lock (*installing*)
     (when (and id (equal id *deployment*))

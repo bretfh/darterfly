@@ -110,7 +110,7 @@
     (attempt "log" #'darterfly/log:start-log)
     (setf darterfly/bsd:*safe* (and (darterfly/devices:boot-arg "safe") t))
     (format *error-output* "~&boot: generation ~a~:[~;, safe~]~%" (ignore-errors (darterfly/install:current)) darterfly/bsd:*safe*)
-    (when darterfly/install::*deployment*
+    (when (darterfly/install::resume-deployment)
       (attempt "deployment" (lambda () (darterfly/install::note-deployment darterfly/install::*deployment* :booted (darterfly/install:current)))))
     (unless darterfly/bsd:*safe*
       (let ((deployment darterfly/install::*deployment*))

@@ -2656,7 +2656,10 @@
       (unless (ignore-errors (image:expect c "restart: core" :timeout *run-wait*))
         (format t "~&generation-resume: no return; console ends:~%~a~%" (let ((s (image:transcript c))) (subseq s (max 0 (- (length s) 3000)))))
         (return nil))
-      (image:expect c "* " :timeout 120))))
+      (multiple-value-bind (seen found)
+          (image:expect c '("* " "boot failed:" "debugger invoked") :timeout 120)
+        (unless (string= found "* ")
+          (error "generation build could not restore its parent: ~a" seen))))))
 
 (test darterfly-builds-its-contribs
   (let ((disk (merge-pathnames "sbcl-build.img" (darterfly-file "build/")))

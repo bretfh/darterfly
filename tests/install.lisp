@@ -203,3 +203,14 @@
       (is (= 1 (getf (darterfly/install::receive-files s stage) :written))))
     (is (equal "; safe change" (uiop:read-file-string target)))
     (is (member (namestring target) darterfly/install::*written* :test #'equal))))
+
+(test a-cold-boot-does-not-reopen-a-finished-deployment
+  (let ((darterfly/install::*deployments-dir* (namestring (merge-pathnames "deployment-history/" (scratch))))
+        (darterfly/install::*deployment* "closed")
+        (darterfly/vfs:*syncers* nil))
+    (darterfly/install::note-deployment "closed" :healthy "gen-2")
+    (is (null (darterfly/install::resume-deployment)))
+    (is (= 1 (length (darterfly/install::deployment-record "closed"))))
+    (setf darterfly/install::*deployment* "pending")
+    (darterfly/install::note-deployment "pending" :installed "gen-3")
+    (is (equal "pending" (darterfly/install::resume-deployment)))))
