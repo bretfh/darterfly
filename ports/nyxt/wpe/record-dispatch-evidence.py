@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Record the combined dispatch and recovery run without replacing older evidence."""
 from pathlib import Path
+import argparse
 import hashlib
 import json
 import re
@@ -11,7 +12,10 @@ repo = Path(__file__).resolve().parents[3]
 port = repo / 'ports/nyxt/wpe'
 build = repo / 'build/wpe-assessment'
 root = Path((build / 'render-build-root.txt').read_text().strip())
-guest = (build / 'nyxt-app-guest.log').read_text()
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--guest-log', type=Path, default=build / 'nyxt-app-guest.log')
+args = parser.parse_args()
+guest = args.guest_log.read_text()
 host = (build / 'nyxt-dispatch-os.log').read_text()
 markers = [
     '[NYXT BROWSER QUALIFICATION PASS]', '[NYXT APP QUIT PASS]',
@@ -59,7 +63,7 @@ for name, expected in manifest['files_sha256'].items():
         raise SystemExit(f'Pinned Nyxt source changed: {name}')
 logs = port / 'qualification-logs'
 records = {}
-for source, target in [(build / 'nyxt-app-guest.log', 'nyxt-dispatch-guest.log'),
+for source, target in [(args.guest_log, 'nyxt-dispatch-guest.log'),
                        (repo / 'build/nyxt-port-stop-guest.log', 'nyxt-port-stop-guest.log'),
                        (repo / 'build/native-bsd-guest.log', 'nyxt-dispatch-native-guest.log'),
                        (repo / 'build/native-ipc-guest.log', 'nyxt-dispatch-ipc-guest.log'),
@@ -75,6 +79,7 @@ sources = [*port.glob('nyxt-*.lisp'),port / 'nyxt-engine.cpp',port / 'nyxt-outbo
 evidence = {
     'recorded_utc': datetime.now(timezone.utc).isoformat(),
     'branch': git('branch','--show-current'), 'head': git('rev-parse','HEAD'),
+    'guest_console_source': str(args.guest_log.resolve()),
     'run': 'One uninterrupted actual Darterfly QEMU guest: normal browsing, dispatch backpressure, clean relaunch, full crash recovery.',
     'install': 'Resumed source-build disk; freshly staged app and relinked shared-runtime engines.',
     'nyxt_revision': manifest['revision'], 'unchanged_nyxt_source_files_verified': len(manifest['files_sha256']),
