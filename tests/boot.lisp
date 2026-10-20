@@ -1133,11 +1133,13 @@
         (image:finish c 5)))))
 
 (test a-world-calls-the-system-through-a-port
-  (let ((c (image:bare-console :boot-args "init")))
+  ;; Global free-page accounting needs a quiet root: init's concurrent driver
+  ;; startup allocates unrelated pages while the 200 short worlds run.
+  (let ((c (image:bare-console)))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
       (unwind-protect
            (progn
-             (is (image:expect c "init: pid 1" :timeout 120))
+             (is (image:expect c "* " :timeout 120))
              (ask "(defparameter *program* (let ((v (make-array 2052 :element-type '(unsigned-byte 8) :initial-element #x90))) (replace v #(184 41 0 0 0 191 1 0 0 0 72 190 0 8 0 64 0 0 0 0 186 4 0 0 0 73 186 0 9 0 64 0 0 0 0 65 184 16 0 0 0 205 130 184 41 0 0 0 191 1 0 0 0 72 190 0 9 0 64 0 0 0 0 186 4 0 0 0 73 186 0 10 0 64 0 0 0 0 65 184 16 0 0 0 205 130 184 1 0 0 0 49 255 205 128 235)) (replace v (sb-ext:string-to-octets \"ping\") :start1 #x800)))")
              (ask "(defparameter *port* (darterfly/worlds:make-port))")
              (ask "(defparameter *world* (darterfly/worlds:spawn *program* :port *port*))")
@@ -3323,3 +3325,22 @@
                (image:screendump)
                (uiop:copy-file (darterfly/image::build-path "screen.ppm") (darterfly-file "build/install-done.ppm")))
           (image:finish c 5))))))
+
+(test stopping-world-calls-does-not-race-late-replies
+  (let* ((image::*console-log-directory* (merge-pathnames "port-stop-console/" (scratch)))
+         (c (image:bare-console :boot-args "init")))
+    (flet ((ask (form)
+             (image:send c form)
+             (image:expect c (format nil "~%* ") :timeout 90)))
+      (unwind-protect
+          (progn
+            (is (image:expect c "init: pid 1" :timeout 120))
+             (ask "(defparameter *program* (let ((v (make-array 2052 :element-type '(unsigned-byte 8) :initial-element #x90))) (replace v #(184 41 0 0 0 191 1 0 0 0 72 190 0 8 0 64 0 0 0 0 186 4 0 0 0 73 186 0 9 0 64 0 0 0 0 65 184 16 0 0 0 205 130 184 41 0 0 0 191 1 0 0 0 72 190 0 9 0 64 0 0 0 0 186 4 0 0 0 73 186 0 10 0 64 0 0 0 0 65 184 16 0 0 0 205 130 184 1 0 0 0 49 255 205 128 235)) (replace v (sb-ext:string-to-octets \"ping\") :start1 #x800)))")
+            (ask "(defparameter *port* (darterfly/worlds:make-port))")
+            (is (search "[STOP-REPLY-RACE PASS]"
+                  (ask "(progn (dotimes (i 200) (let ((w (darterfly/worlds:spawn *program* :port *port*))) (multiple-value-bind (m token) (darterfly/worlds:receive *port* :timeout 5) (declare (ignore m)) (darterfly/worlds:stop w) (darterfly/worlds:reply token \"late\")) (assert (loop repeat 100 when (eq :gone (darterfly/worlds:world-state w)) return t do (sleep .001))))) (format nil \"[STOP-REPLY-RACE PASS]\"))")))
+            (is (search "[ALIVE]" (ask "(format nil \"[ALIVE]\")"))))
+        (with-open-file (s (merge-pathnames "nyxt-port-stop-guest.log" image:*build*)
+                           :direction :output :if-exists :supersede)
+          (write-string (image:transcript c) s))
+        (image:finish c 5)))))

@@ -144,6 +144,10 @@
   (unless (the :u32 (user-ok reply max 1)) (result (- 0 +efault+)))
   (while (< (mem :u64 (+ m +m-state+)) +replied+)
     (let ((r (the :u32 (thread-wait m deadline))))
+      ;; World stop retires this caller's ownership. A late server reply can
+      ;; free the abandoned call before this sleeping kernel stack resumes.
+      ;; Do not touch M again on the non-returning termination path.
+      (when (terminating) (thread-terminate-self))
       (when (and (= r +thread-timed-out+) (< (mem :u64 (+ m +m-state+)) +replied+))
         (result (- 0 +etimedout+)))
       (when (and (= r +thread-interrupted+) (< (mem :u64 (+ m +m-state+)) +replied+))
@@ -207,21 +211,25 @@
   (let ((m all-calls))
     (while m
       (let ((next (mem :u64 (+ m +m-all+)))
-            (state (mem :u64 (+ m +m-state+))))
-        (cond ((= (mem :u64 (+ (mem :u64 (+ m +m-port+)) +p-receiver+)) w)
+            (state (mem :u64 (+ m +m-state+)))
+            (receiver (mem :u64 (+ (mem :u64 (+ m +m-port+)) +p-receiver+))))
+        (cond ((= (mem :u64 (+ m +m-world+)) w)
+               ;; No stopped caller can consume a queued or completed call.
+               ;; Only a live receiver's outstanding token must survive.
+               (when (= state +queued+) (unqueue (mem :u64 (+ m +m-port+)) m))
+               (if (and (/= receiver w) (= state +received+))
+                   (progn
+                     (setf (mem :u64 (+ m +m-state+)) +abandoned+)
+                     (setf (mem :u64 (+ m +m-world+)) 0)
+                     (setf (mem :u64 (+ m +m-caller+)) 0)
+                     (thread-wakeup m 1))
+                   (call-free m)))
+              ((= receiver w)
                (cond ((or (= state +queued+) (= state +received+))
                       (when (= state +queued+) (unqueue (mem :u64 (+ m +m-port+)) m))
                       (setf (mem :u64 (+ m +m-state+)) +failed+)
                       (thread-wakeup m 1))
-                     ((= state +abandoned+) (call-free m))))
-              ((= (mem :u64 (+ m +m-world+)) w)
-               (cond ((= state +queued+)
-                      (unqueue (mem :u64 (+ m +m-port+)) m)
-                      (setf (mem :u64 (+ m +m-state+)) +failed+)
-                      (thread-wakeup m 1))
-                     ((= state +received+)
-                      (setf (mem :u64 (+ m +m-state+)) +abandoned+)
-                      (thread-wakeup m 1)))))
+                     ((= state +abandoned+) (call-free m)))))
         (setf m next)))))
 
 (define-low world-by-id (id)
