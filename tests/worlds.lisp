@@ -19,3 +19,10 @@
         "an expected part with no row at all is a failure")
     (is (null (darterfly/image::health-failures '((:log :ok) (:disk :ok) (:audio :absent))))
         "every expected part ok, an unexpected one absent, is no failure")))
+
+(test repeated-wakes-and-failed-suspends-are-distinguished
+  (is (darterfly/image::suspend-succeeded-p "=> 1"))
+  (is (darterfly/image::suspend-succeeded-p "=> 2"))
+  (is (darterfly/image::suspend-succeeded-p "=> 11"))
+  (dolist (reply '(nil "no answer" "=> NIL" "=> 0" "=> -1" "=> :failed"))
+    (is (not (darterfly/image::suspend-succeeded-p reply)))))

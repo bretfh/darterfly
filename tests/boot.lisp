@@ -3264,12 +3264,22 @@
            (image:expect c "* " :timeout 90)
            (image:send c (format nil "(progn (darterfly/net:start-network) (darterfly/nrepl:start :key ~s) :up)" (image::nrepl-key)))
            (image:expect c ":UP" :timeout 60)
-           (let* ((out (make-string-output-stream))
-                  (ok (let ((*standard-output* out)) (image:hw "127.0.0.1" :label label :wake-after 5 :settle 60 :nrepl-port port)))
-                  (text (get-output-stream-string out)))
-             (is (eq t ok) "the check passes before and after the sleep:~%~a" text)
-             (is (search "suspend: => 1" text) "the machine slept and the clock woke it: ~a" text)
-             (is (search "display      absent" text) "a part the VM lacks is reported absent: ~a" text)))
+           (loop for count from 1 to 3
+                 do (when (= count 3)
+                      ;; No FACS means the kernel must decline S3 and restart
+                      ;; parked CPUs without reporting a successful wake.
+                      (is (eql 0 (image::read-answer
+                                  (image::device-eval "127.0.0.1" "(darterfly/devices:machdep 66 0 0)"
+                                                      :nrepl-port port)))
+                          "a refused sleep returns zero and does not advance the wake count"))
+                    (let* ((out (make-string-output-stream))
+                           (ok (let ((*standard-output* out)) (image:hw "127.0.0.1" :label label :wake-after 5 :settle 60 :nrepl-port port)))
+                           (text (get-output-stream-string out)))
+                      (is (eq t ok) "the check passes before and after wake ~d:~%~a" count text)
+                      (is (search (format nil "suspend: => ~d" count) text)
+                          "successful wake counts advance exactly once: ~a" text)
+                      (is (search "display      absent" text) "a part the VM lacks is reported absent: ~a" text))))
+
       (uiop:delete-directory-tree (image::results-dir (format nil "hw-~a" label)) :validate t :if-does-not-exist :ignore)
       (image:finish c 5))))
 

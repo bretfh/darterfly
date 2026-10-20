@@ -43,15 +43,25 @@ not be cherry-picked a second time. This follow-up starts there and fixes:
 - Recovery tests consuming a stale console prompt as the answer to a new query.
   The affected boot-menu and retained-activity tests delimit their evaluations.
 
+- Suspend reporting: successful wake counts can exceed one; a refused kernel
+  suspend returns zero without advancing the count. The hardware checker now
+  distinguishes both and bounds reconnect attempts. Post-wake acceptance requires
+  healthy observations separated by at least ten seconds. Timings start at the
+  suspend RPC reply, not at the physical screen lighting up.
+- A retained inactive Wi-Fi card no longer fails health while Ethernet is active.
+
 * Evidence recorded so far
 Logs are in /tmp/darterfly-correctness on the development host; the final evidence
 copy and physical results are recorded below when qualification finishes.
 
 | Check | Result |
 |-------+--------|
-| Full host suite | 1,483 / 1,483 |
+| Full host suite | 1,504 / 1,504 |
 | Full recovery suite | 56 / 56 |
 | Installed-system live deployment, retained Listener/user file, new kernel/cold boot | 21 / 21 |
+| Native SBCL bootstrap and contribs, rebuilt in order | 7 / 7 and 13 / 13 |
+| Native BSD process compatibility | 43 / 43 |
+| Three VM wakes with a refused S3 request between wakes | 10 / 10 |
 | Native generation B build | 7 / 7 |
 | B builds C, boots C, native compiler/Mach checks | 8 / 8 |
 | B versus C C objects and boot.efi | byte-identical |
@@ -119,3 +129,32 @@ regression and hardware evidence, not a claim to have audited every line of ever
 compiler, driver and browser dependency. Full release qualification, exhaustive
 fault injection, general world-object persistence, and unfinished UI/browser work
 remain separate development tasks.
+
+* Physical qualification in progress
+Arraniz accepted source revision 3357e1f through the live-save path, advancing
+from gen-57 to gen-58. Deployment 1U6CWF4-BROHPQNW reached terminal healthy after
+90 seconds; the retained Lisp probe, Listener and running desktop survived.
+
+Four RTC wakes returned cumulative counts 1 through 4. The old checker falsely
+rejected count 2. Subsequent timing instrumentation showed a real radio failure:
+Wi-Fi joined in 4–5 seconds, reported a firmware error about six seconds later,
+then spent 45 seconds in failed scans before a retry joined without HT. The
+65–69 second remote recovery is not a successful low-latency wake qualification.
+The user connected Ethernet; remote access works at 10.42.0.194 and the live
+probe still has its original gen-57 contents. Radio diagnosis continues over
+Ethernet. Temporary timing wrappers were removed before any further save.
+
+The radio was then isolated while Ethernet carried remote access. With identical
+ARP traffic, legacy mode received 83 frames in 30 seconds; HT twice failed in
+2 seconds. The retained UMAC error was 0x2010350b, last command 0x001d0516.
+Command tracing showed two allocations for the same receive TID with no removal.
+The corrected ADDBA path serializes session changes and removes an existing TID
+before allocating it again. Removal is the full 16-byte firmware command, with
+version-specific identifiers. DELBA now decodes the upper TID bits and checks the
+peer's initiator bit. A failed removal retains ownership and prevents allocation.
+The same HT test then received 82 frames over 30 seconds without firmware error.
+This is a targeted driver repair, not a Wi-Fi throughput or full aggregation audit.
+
+Firmware command layouts were checked against Intel's definitions and use in
+[[https://github.com/torvalds/linux/blob/v6.6/drivers/net/wireless/intel/iwlwifi/fw/api/datapath.h][Linux v6.6 datapath.h]] and
+[[https://github.com/torvalds/linux/blob/v6.6/drivers/net/wireless/intel/iwlwifi/mvm/sta.c][iwl_mvm_fw_baid_op_cmd]].

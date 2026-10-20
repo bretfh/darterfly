@@ -110,7 +110,7 @@
   (sleep-restore (address sleep-context)))
 
 (define-low sleep-now ()
-  (let ((others (- |real_ncpus| 1)) (t0 (rdtsc)) (i 1))
+  (let ((others (- |real_ncpus| 1)) (t0 (rdtsc)) (i 1) (slept 0))
     (funnel-unlock)
     (while (< i |real_ncpus|) (i386-signal-cpu i) (incf i))
     (while (and (< sleep-parked others) (< (- (rdtsc) t0) (ref commpage 0))) (pause))
@@ -122,8 +122,10 @@
             (let ((t0 (rdtsc))) (hash-ram 0) (setf (ref hash-ticks 0) (- (rdtsc) t0))))
           (if (= (sleep-save (address sleep-context)) 0)
               (enter-s3)
-              (when sleep-check
-                (let ((t0 (rdtsc))) (hash-ram 1) (setf (ref hash-ticks 1) (- (rdtsc) t0))))))
+              (progn
+                (setf slept 1)
+                (when sleep-check
+                  (let ((t0 (rdtsc))) (hash-ram 1) (setf (ref hash-ticks 1) (- (rdtsc) t0)))))))
         (kprintf "sleep: %u of %u cpus parked, page 0x%lx, facs 0x%lx; not sleeping
 " sleep-parked others boot-page sleep-facs))
     (setf (ref commpage 2) (- (rtc-epoch) (truncate (- (rdtsc) (ref commpage 1)) (ref commpage 0))))
@@ -134,9 +136,9 @@
         (setf (mem :u32 (+ (cpu-datap i) +c-running+)) 0)
         (start-cpu i boot-page))
       (incf i))
-    (incf sleep-count)
+    (when slept (incf sleep-count))
     (setf sleep-request 0)
-    (setf sleep-done 1)
+    (setf sleep-done (if slept 1 2))
     (thread-wakeup (address sleep-done) 1)))
 
 (define-low request-sleep (control event (type :u32) facs (check :u32))
@@ -151,4 +153,4 @@
   (unless (= (cpu-number) 0) (i386-signal-cpu 0))
   (while (= sleep-done 0)
     (thread-wait (address sleep-done) 0))
-  sleep-count)
+  (if (= sleep-done 1) sleep-count 0))

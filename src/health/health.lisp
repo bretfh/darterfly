@@ -37,7 +37,7 @@
                      :gateway gateway :ms (and rtt (round (* rtt 1000)))))))))
 
 (define-check :wifi
-  (cond ((and (null darterfly/wifi::*card*) darterfly/net:*interface*
+  (cond ((and darterfly/net:*interface*
               (darterfly/wifi::wired-p (darterfly/net::interface-device darterfly/net:*interface*)))
          (list :off :because :cable))
         ((null darterfly/wifi::*card*)

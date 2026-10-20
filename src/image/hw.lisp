@@ -27,14 +27,25 @@
      (when (and was now (> now was))
        (list (list :errors :new (list (- now was) (getf (cddr (assoc :errors results)) :latest))))))))
 
+(defun suspend-succeeded-p (reply)
+  ;; The kernel returns the cumulative successful-wake count, not a boolean.
+  (let ((count (and reply (ignore-errors (read-answer reply)))))
+    (and (integerp count) (plusp count))))
+
 (defun settle-health (host nrepl-port seconds)
   (let ((start (get-universal-time))
-        (answered nil))
+        (answered nil)
+        (healthy-since nil))
     (loop with deadline = (+ start seconds)
           for left = (- deadline (get-universal-time))
-          for results = (and (plusp left) (ignore-errors (health-on-device host nrepl-port (min 120 left))))
+          for results = (and (plusp left) (ignore-errors (health-on-device host nrepl-port (min 10 left))))
           when (and results (not answered)) do (setf answered (- (get-universal-time) start))
-          when (and results (null (health-failures results)))
+          do (if (and results (null (health-failures results)))
+                 (unless healthy-since (setf healthy-since (get-universal-time)))
+                 (setf healthy-since nil))
+          ;; One successful rejoin can fail again seconds later. Require a
+          ;; second healthy observation after ten seconds before passing.
+          when (and healthy-since (>= (- (get-universal-time) healthy-since) 10))
             return (values results answered (- (get-universal-time) start))
           when (<= (- deadline (get-universal-time)) 0)
             return (values results answered nil)
@@ -51,7 +62,7 @@
     (when sleep
       (multiple-value-setq (after answered healthy) (settle-health host nrepl-port settle)))
     (setf failures (append (mapcar (lambda (f) (cons :before f)) (health-failures before))
-                           (and sleep (not (search "=> 1" (or slept ""))) (list (list :suspend :failed slept)))
+                           (and sleep (not (suspend-succeeded-p slept)) (list (list :suspend :failed slept)))
                            (and sleep (mapcar (lambda (f) (cons :after f)) (health-failures after before))))
           record (list :label label :date (timestamp) :before before :slept slept :after after
                        :answered-after answered :healthy-after healthy :failures failures))
@@ -66,7 +77,7 @@
                        (if later (string-downcase (first later)) "") (or (rest later) detail)))
       (when slept
         (format t "suspend: ~a~%" (string-trim '(#\Newline #\Space) slept))
-        (format t "answered ~:[never~;~:*~d s~] after waking, healthy ~:[never~;~:*~d s~] after~%" answered healthy))
+        (format t "answered ~:[never~;~:*~d s~] after suspend reply, healthy ~:[never~;~:*~d s~] after reply~%" answered healthy))
       (if failures
           (format t "~&FAILED~%~{  ~s~%~}" failures)
           (format t "~&ok~%"))

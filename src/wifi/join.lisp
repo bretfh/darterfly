@@ -268,35 +268,56 @@
       (values (logior (ash (aref body 6) 8) (aref body 7)) (subseq body 8)))))
 
 (defun block-ack-action (l f)
-  (and (>= (length f) 27) (= (aref f 0) #xD0) (equalp (subseq f 10 16) (link-bssid l))
-       (= (aref f 24) 3) (member (aref f 25) '(0 2))
-       (aref f 25)))
+  (and (>= (length f) 26) (= (aref f 0) #xD0) (equalp (subseq f 10 16) (link-bssid l))
+       (= (aref f 24) 3)
+       (case (aref f 25)
+         (0 (and (>= (length f) 33) 0))
+         (2 (and (>= (length f) 30) 2)))))
+
+(defun remove-block-ack (l tid)
+  (let ((old (assoc tid (link-block-acks l))))
+    (when old
+      ;; RX_BAID_ALLOCATION_CONFIG_CMD has a 12-byte union after action,
+      ;; including for remove. Version 1 identifies the BAID, version 2 the TID.
+      (let* ((w (link-card l))
+             (version (or (command-version (card-firmware w) 5 #x16) 1)))
+        (command-ok w 5 #x16
+                    (if (= version 1)
+                        (octets (le-u32 2) (le-u32 (cdr old)) (zeros 8))
+                        (octets (le-u32 2) (le-u32 1) (le-u32 tid) (zeros 4)))))
+      ;; Retain ownership when the firmware did not acknowledge removal.
+      (setf (link-block-acks l) (remove tid (link-block-acks l) :key #'car)))))
 
 (defun answer-addba (l f)
-  (let* ((token (aref f 26))
-         (params (logior (aref f 27) (ash (aref f 28) 8)))
-         (timeout (logior (aref f 29) (ash (aref f 30) 8)))
-         (ssn (ash (logior (aref f 31) (ash (aref f 32) 8)) -4))
-         (tid (ldb (byte 4 2) params))
-         (size (let ((asked (ldb (byte 10 6) params))) (if (zerop asked) 64 (min 64 asked))))
-         (baid (ignore-errors
-                (u32le (getf (command-ok (link-card l) 5 #x16
-                                         (octets (le-u32 0) (le-u32 1) tid 0 0 0 (le-u16 ssn) (le-u16 size)))
-                             :payload)
-                       0)))
-         (bssid (link-bssid l)))
-    (when baid
-      (setf (link-block-acks l) (cons (cons tid baid) (remove tid (link-block-acks l) :key #'car))))
-    (transmit l (octets (frame-header #xD0 0 bssid (getf (card-nvm (link-card l)) :mac) bssid (next-seq l))
-                        3 1 token (le-u16 (if baid 0 37))
-                        (le-u16 (logior 2 (ash tid 2) (ash size 6))) (le-u16 timeout)))
-    (list :tid tid :ssn ssn :size size :baid baid)))
+  (sb-thread:with-recursive-lock ((link-lock l))
+    (let* ((token (aref f 26))
+           (params (logior (aref f 27) (ash (aref f 28) 8)))
+           (timeout (logior (aref f 29) (ash (aref f 30) 8)))
+           (ssn (ash (logior (aref f 31) (ash (aref f 32) 8)) -4))
+           (tid (ldb (byte 4 2) params))
+           (size (let ((asked (ldb (byte 10 6) params))) (if (zerop asked) 64 (min 64 asked))))
+           (baid (ignore-errors
+                   ;; A repeated request must retire the previous session before
+                   ;; allocating this TID again; duplicate allocation asserts firmware.
+                   (remove-block-ack l tid)
+                   (let ((id (u32le (getf (command-ok (link-card l) 5 #x16
+                                                     (octets (le-u32 0) (le-u32 1) tid 0 0 0 (le-u16 ssn) (le-u16 size)))
+                                         :payload) 0)))
+                     (and (< id 32) id))))
+           (bssid (link-bssid l)))
+      (when baid
+        (push (cons tid baid) (link-block-acks l)))
+      (transmit l (octets (frame-header #xD0 0 bssid (getf (card-nvm (link-card l)) :mac) bssid (next-seq l))
+                          3 1 token (le-u16 (if baid 0 37))
+                          (le-u16 (logior 2 (ash tid 2) (ash size 6))) (le-u16 timeout)))
+      (list :tid tid :ssn ssn :size size :baid baid))))
 
 (defun end-block-ack (l f)
-  (let ((tid (ldb (byte 4 4) (logior (aref f 26) (ash (aref f 27) 8)))))
-    (when (assoc tid (link-block-acks l))
-      (ignore-errors (command-ok (link-card l) 5 #x16 (octets (le-u32 2) (le-u32 1) (le-u32 tid))))
-      (setf (link-block-acks l) (remove tid (link-block-acks l) :key #'car)))))
+  (sb-thread:with-recursive-lock ((link-lock l))
+    (let ((params (logior (aref f 26) (ash (aref f 27) 8))))
+      ;; Only the peer's originator session corresponds to our receive BAID.
+      (when (logbitp 11 params)
+        (remove-block-ack l (ldb (byte 4 12) params))))))
 
 (defun data-from-bss-p (l f)
   (and (>= (length f) 24) (= 2 (ldb (byte 2 2) (aref f 0))) (= 2 (logand 3 (aref f 1)))
