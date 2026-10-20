@@ -175,6 +175,43 @@
       (sb-thread:signal-semaphore release)
       (when worker (sb-thread:join-thread worker :timeout 6)))))
 
+(test diagnostics-report-network-progress-with-driver-locks-held
+  (let* ((darterfly/devices:*registry-root* (make-instance 'darterfly/devices:entry :name "test root"))
+         (c (make-instance 'darterfly/devices::xhci-controller))
+         (e (make-instance 'darterfly/devices::usb-cdc-ecm :controller c :slot 3))
+         (darterfly/net:*interface* (darterfly/net::make-interface :device e))
+         (net-lock (darterfly/net::interface-lock darterfly/net:*interface*))
+         (gate (sb-thread:make-semaphore)) (release (sb-thread:make-semaphore)) (worker nil))
+    (darterfly/devices::attach c darterfly/devices:*registry-root*)
+    (darterfly/devices::attach e c)
+    (setf (gethash 1 (darterfly/devices::xhci-port-slots c)) 7
+          (darterfly/devices::ecm-in-flight e) 4)
+    (unwind-protect
+         (progn
+           (setf worker (sb-thread:make-thread
+                         (lambda ()
+                           (sb-thread:with-mutex (net-lock)
+                             (sb-thread:with-mutex ((darterfly/devices::xhci-lock c))
+                               (sb-thread:signal-semaphore gate)
+                               (sb-thread:wait-on-semaphore release :timeout 5))))
+                         :name "stalled network driver"))
+           (is (sb-thread:wait-on-semaphore gate :timeout 2))
+           ;; No hardware fields are initialized. A poll or mutex acquisition
+           ;; would error or time out instead of reporting the cached state.
+           (let* ((i (sb-ext:with-timeout 1 (darterfly/nrepl::diagnostic-interface)))
+                  (usb (first (sb-ext:with-timeout 1 (darterfly/nrepl::diagnostic-usb))))
+                  (adapter (first (getf usb :ethernet))))
+             (is (equal "0.0.0.0" (getf i :ip)))
+             (is (null (getf i :input-alive)))
+             (is (equal "stalled network driver" (getf (getf i :lock) :owner)))
+             (is (equal "stalled network driver" (getf (getf usb :lock) :owner)))
+             (is (= 7 (getf (first (getf usb :ports)) :slot)))
+             (is (= 3 (getf adapter :slot)))
+             (is (eq t (getf adapter :selected)))
+             (is (= 4 (getf adapter :waiting)))))
+      (sb-thread:signal-semaphore release)
+      (when worker (sb-thread:join-thread worker :timeout 6)))))
+
 (test waiting-metadata-and-close-do-not-reacquire-bsd-around-vfs
   (with-io-process
     (let* ((root (darterfly/vfs:make-ram-node :vdir #o755))

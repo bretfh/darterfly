@@ -200,3 +200,49 @@
       (is (search "no answer" (handler-case (progn (darterfly/net::nd6-resolve (darterfly/net:ip-address "fe80::77")) "answered")
                                 (darterfly/net::net-error (e) (princ-to-string e))))
           "and so does one that never answers neighbor discovery"))))
+
+(test exhausted-usb-transmit-does-not-overwrite-owned-dma
+  (let* ((c (make-instance 'darterfly/devices::xhci-controller))
+         (e (make-instance 'darterfly/devices::usb-cdc-ecm :controller c :slot 1))
+         (writes 0) (failure nil))
+    (setf (darterfly/devices::xhci-vector c) nil
+          (darterfly/devices::ecm-in-flight e) (1- darterfly/devices::+ecm-send-pages+)
+          (darterfly/devices::ecm-mps e) 512
+          (darterfly/devices::ecm-send-pages e) (make-array darterfly/devices::+ecm-send-pages+ :initial-element 4096))
+    (unwind-protect
+         (progn
+           (sb-int:encapsulate 'darterfly/devices::process-events 'stalled-usb
+                              (lambda (&rest args) (declare (ignore args)) nil))
+           (sb-int:encapsulate 'darterfly/devices:wait-for-interrupt 'stalled-usb
+                              (lambda (&rest args) (declare (ignore args)) nil))
+           (sb-int:encapsulate 'darterfly/devices::copy-to-phys 'stalled-usb
+                              (lambda (&rest args) (declare (ignore args)) (incf writes) (error "DMA buffer reused")))
+           (handler-case
+               (darterfly/devices:network-send e (make-array 60 :element-type '(unsigned-byte 8) :initial-element 0))
+             (error (e) (setf failure (princ-to-string e))))
+           (is (and failure (search "transmit queue stalled" failure)))
+           (is (zerop writes))
+           (is (zerop (darterfly/devices::ecm-send-next e)))
+           (is (= (1- darterfly/devices::+ecm-send-pages+) (darterfly/devices::ecm-in-flight e))))
+      (dolist (f '(darterfly/devices::process-events darterfly/devices:wait-for-interrupt darterfly/devices::copy-to-phys))
+        (sb-int:unencapsulate f 'stalled-usb)))))
+
+(test tcp-reassembles-through-the-scaled-receive-window
+  (let* ((c (darterfly/net::make-connection :state :established :rcv-nxt 1001 :rcv-scale 5))
+         (gap 131072)
+         (data (make-array gap :element-type '(unsigned-byte 8) :initial-element 90)))
+    (is (> (ash (darterfly/net::advertised-window c darterfly/net::+ack+) 5) gap))
+    (darterfly/net::receive-in-order c (+ 1001 gap) #(91 92) nil)
+    (is (= 1 (length (darterfly/net::tcp-out-of-order c))) "retain data inside the window we advertised")
+    (darterfly/net::receive-in-order c 1001 data nil)
+    (is (= (+ gap 2) (length (darterfly/net::tcp-received c))) "filling a hole delivers the retained tail without retransmission")
+    (is (= (+ 1001 gap 2) (darterfly/net::tcp-rcv-nxt c))))
+  (dolist (scale '(0 5))
+    (let* ((c (darterfly/net::make-connection :rcv-nxt #xfffffff0 :rcv-scale scale))
+           (window (ash (darterfly/net::advertised-window c darterfly/net::+ack+) scale)))
+      (darterfly/net::receive-in-order c (darterfly/net::seq+ #xfffffff0 window) #(1) nil)
+      (is (null (darterfly/net::tcp-out-of-order c)) "do not retain data beyond the advertised window")))
+  (let ((c (darterfly/net::make-connection :rcv-nxt 1001 :rcv-scale 5
+             :received (make-array (- darterfly/net::+rcvbuf+ 32) :element-type '(unsigned-byte 8)))))
+    (darterfly/net::receive-in-order c 1033 #(1) nil)
+    (is (null (darterfly/net::tcp-out-of-order c)) "buffered unread data reduces the acceptable gap")))
