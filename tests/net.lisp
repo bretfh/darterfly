@@ -393,3 +393,77 @@
              (darterfly/net::flush-acks)
              (is (null darterfly/net::*acks-due*) "a reset also retires deferred ACK ownership")
              (is (null (frames device)) "never answer a reset with an ACK or neighbor probe")))))
+
+(defclass lock-checking-device (captured-device)
+  ((under-lock :initform nil :accessor output-under-tcp-lock)
+   (callback :initarg :callback :initform nil :accessor output-callback)))
+
+(defmethod darterfly/net:if-output ((device lock-checking-device) frame)
+  (when (sb-thread:holding-mutex-p darterfly/net::*tcp-lock*)
+    (setf (output-under-tcp-lock device) t))
+  (call-next-method)
+  (when (output-callback device) (funcall (output-callback device) frame)))
+
+(test tcp-connect-publishes-before-waiting-without-owning-protocol-lock
+  (let* ((device (make-instance 'lock-checking-device))
+         (peer (darterfly/net:ip-address "10.0.2.2"))
+         (darterfly/net:*interface*
+           (darterfly/net::make-interface :device device :mac +peer-mac+
+             :ip (darterfly/net:ip-address "10.0.2.15") :prefix 24 :gateway peer))
+         (darterfly/net::*connections* (make-hash-table :test 'equalp)))
+    (setf (gethash peer (darterfly/net::interface-arp darterfly/net:*interface*)) +peer-mac+
+          (output-callback device)
+          (lambda (frame)
+            (when (logtest 2 (aref frame (+ 34 13)))
+              (let ((answer (peer-segment 1000 (1+ (darterfly/net::u32be frame (+ 34 4))) #x12)))
+                (replace answer (subseq frame 36 38))
+                (replace answer (subseq frame 34 36) :start1 2)
+                (darterfly/net::receive-tcp peer answer)))))
+    (let ((connection (darterfly/net:tcp-connect peer 5000 :timeout .1)))
+      (is (eq :established (darterfly/net::tcp-state connection)))
+      (darterfly/net:tcp-send connection (make-array 20000 :element-type '(unsigned-byte 8) :initial-element 90))
+      (is (not (output-under-tcp-lock device)))
+      (is (> (length (frames device)) 2)))))
+
+(test tcp-batch-does-not-cross-an-interface-detach
+  (let* ((device (make-instance 'captured-device))
+         (darterfly/net:*interface* (darterfly/net::make-interface :device device :mac +peer-mac+))
+         (darterfly/net::*interface-epoch* 1))
+    (darterfly/net::with-tcp-state
+      (darterfly/net::send-frame +peer-mac+ #x0800 #(1 2 3))
+      (is (null (frames device)))
+      (incf darterfly/net::*interface-epoch*))
+    (is (null (frames device)))))
+
+(test virtio-transmit-buffers-stay-owned-until-their-used-entry
+  (call-with-nvme-model
+   (lambda (unused commands complete)
+     (declare (ignore unused commands complete))
+     (let* ((q (darterfly/devices::make-virtqueue :index 1 :size 8 :free '(0 1 2 3 4 5 6 7)
+                 :desc (darterfly/devices:vm-page-grab) :avail (darterfly/devices:vm-page-grab)
+                 :used (darterfly/devices:vm-page-grab) :notify 1))
+            (net (make-instance 'darterfly/devices::virtio-network)))
+       (setf (darterfly/devices::transmit-queue net) q
+             (darterfly/devices::send-page net) (darterfly/devices:vm-page-grab))
+       (sb-int:encapsulate 'darterfly/devices:mmio-write 'network-model
+         (lambda (&rest args) (declare (ignore args))))
+       (unwind-protect
+            (dotimes (round 10)
+              (dotimes (i 8)
+                (darterfly/devices:network-send net (make-array 100 :element-type '(unsigned-byte 8) :initial-element (+ i 1))))
+              (is (null (darterfly/devices::virtqueue-free q)))
+              (dotimes (i 8)
+                (let* ((avail (+ (darterfly/devices::virtqueue-avail q) 4 (* i 2)))
+                       (id (darterfly/devices::ml-phys-read-16 avail))
+                       (page (aref (darterfly/devices::network-send-pages net) id)))
+                  (is (= (1+ i) (darterfly/devices::ml-phys-read-8 (+ page 12))))))
+              ;; Reclaim in reverse descriptor order; RX/reset's mutex remains
+              ;; usable while the hardware owns every TX page.
+              (sb-thread:with-mutex ((darterfly/devices::network-lock net))
+                (dotimes (i 8)
+                  (darterfly/devices::ml-phys-write-32 (+ (darterfly/devices::virtqueue-used q) 4 (* i 8)) (- 7 i)))
+                (darterfly/devices::ml-phys-write-16 (+ (darterfly/devices::virtqueue-used q) 2) (* 8 (1+ round)))
+                (darterfly/devices::network-reap-transmit net))
+              (is (= 8 (length (darterfly/devices::virtqueue-free q))))
+              (is (= (* 8 (1+ round)) (darterfly/devices::network-completed net))))
+         (sb-int:unencapsulate 'darterfly/devices:mmio-write 'network-model))))))

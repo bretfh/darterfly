@@ -88,3 +88,17 @@
       (sb-thread:signal-semaphore release)
       (when thread (sb-thread:join-thread thread :timeout 2 :default nil))
       (sb-int:unencapsulate 'darterfly/power::perform-suspend 'overlap))))
+
+(test device-suspend-failure-aborts-traversal-but-wake-continues
+  (let ((root (make-instance 'darterfly/devices::entry))
+        (visited 0))
+    (signals error
+      (darterfly/devices::each-device
+       (lambda (device) (declare (ignore device)) (incf visited) (error "injected drain failure"))
+       :children-first root))
+    (is (= visited 1))
+    (finishes
+      (darterfly/devices::each-device
+       (lambda (device) (declare (ignore device)) (incf visited) (error "injected wake failure"))
+       :parents-first root))
+    (is (= visited 2))))

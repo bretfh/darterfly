@@ -27,6 +27,7 @@
    (cmd-hw :initform 0 :accessor card-cmd-hw)
    (nvm :initform nil :accessor card-nvm)
    (mpdus :initform nil :accessor card-mpdus)
+   (tx-queues :initform (make-hash-table) :reader card-tx-queues)
    (pump-lock :initform (sb-thread:make-mutex :name "wifi card") :reader card-pump-lock)
    (notifications :initform nil :accessor card-notifications)))
 
@@ -302,14 +303,49 @@
 
 (defun last-n (list n) (if (> (length list) n) (last list n) list))
 
+(defstruct wifi-tx-state (read 0) (write 0) (completed 0) (high-water 0)
+  (backpressure 0) (invalid 0))
+
+(defun wifi-tx-pending (state)
+  (ldb (byte 16 0) (- (wifi-tx-state-write state) (wifi-tx-state-read state))))
+
+(defun wifi-tx-complete (w qid next)
+  ;; CARD-PUMP-LOCK owns both publication and firmware completion accounting.
+  ;; The firmware's SCD SSN is the next descriptor, not an acknowledgement
+  ;; count. Reject forward progress past our producer; never free live DMA.
+  (let ((state (gethash qid (card-tx-queues w))))
+    (when state
+      (let ((count (ldb (byte 16 0) (- next (wifi-tx-state-read state)))))
+        (cond ((<= count (wifi-tx-pending state))
+               (setf (wifi-tx-state-read state) next)
+               (incf (wifi-tx-state-completed state) count))
+              ((< count 32768) (incf (wifi-tx-state-invalid state))))))))
+
+(defun wifi-tx-notification (w packet)
+  ;; AX210 TX response v6-v9: queue at 36, status at 40, trailing SCD SSN.
+  ;; Compressed BA: 32-byte header followed by 8-byte queue-progress records.
+  ;; See Intel's iwlwifi fw/api/tx.h. Validate lengths before reading fields.
+  (let ((p (getf packet :payload)))
+    (flet ((u16 (at) (logior (aref p at) (ash (aref p (1+ at)) 8))))
+      (case (getf packet :code)
+        (#x1C (when (and (>= (length p) 48) (= (aref p 0) 1))
+                (wifi-tx-complete w (u16 36) (u16 44))))
+        (#xC5 (when (>= (length p) 32)
+                (let ((count (u16 28)))
+                  (when (<= count (floor (- (length p) 32) 8))
+                    (dotimes (i count)
+                      (let ((at (+ 32 (* i 8))))
+                        (wifi-tx-complete w (u16 at) (u16 (+ at 2)))))))))))))
+
 (defun pump (w)
   (sb-thread:with-recursive-lock ((card-pump-lock w))
     (let ((packets (receive-packets w)))
       (dolist (p packets)
-        (case (getf p :code)
-          (#xC1 (setf (card-mpdus w) (nconc (card-mpdus w) (list p))))
-          (#x1C nil)
-          (t (setf (card-notifications w) (nconc (card-notifications w) (list p))))))
+        (cond ((and (zerop (getf p :group)) (= (getf p :code) #xC1))
+               (setf (card-mpdus w) (nconc (card-mpdus w) (list p))))
+              ((and (zerop (getf p :group)) (member (getf p :code) '(#x1C #xC5)))
+               (wifi-tx-notification w p))
+              (t (setf (card-notifications w) (nconc (card-notifications w) (list p))))))
       (setf (card-mpdus w) (last-n (card-mpdus w) 1024)
             (card-notifications w) (last-n (card-notifications w) 256))
       packets)))
@@ -458,6 +494,7 @@
     (setf (card-log w) nil (card-rx-cur w) 0 (card-alive w) nil)
     (setf (card-notifications w) nil)
     (start-hardware w)
+    (clrhash (card-tx-queues w))
     (boot-firmware w)
     (setf (card-cmd-cur w) 0 (card-cmd-hw w) 0)
     (when (card-alive w)

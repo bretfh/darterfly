@@ -382,3 +382,53 @@
            (is (null sent-while-rejoining) "clear rejoining before DHCP can transmit"))
       (dolist (name '(darterfly/wifi::rejoin darterfly/net:dhcp sb-thread:make-thread))
         (sb-int:unencapsulate name 'address-retry)))))
+
+(test tx-completion-progress-is-bounded-by-published-descriptors
+  (let* ((w (make-instance 'darterfly/wifi::wireless-card))
+         (state (darterfly/wifi::make-wifi-tx-state :read 65530 :write 4))
+         (p (make-array 48 :element-type '(unsigned-byte 8) :initial-element 0)))
+    (setf (gethash 2 (darterfly/wifi::card-tx-queues w)) state
+          (aref p 0) 1 (aref p 36) 2 (aref p 44) 2)
+    (darterfly/wifi::wifi-tx-notification w (list :code 28 :payload p))
+    (is (= 8 (darterfly/wifi::wifi-tx-state-completed state)))
+    (is (= 2 (darterfly/wifi::wifi-tx-pending state)))
+    (darterfly/wifi::wifi-tx-notification w (list :code 28 :payload p))
+    (is (= 8 (darterfly/wifi::wifi-tx-state-completed state)) "duplicate completion cannot release more DMA")
+    (setf (aref p 44) 5)
+    (darterfly/wifi::wifi-tx-notification w (list :code 28 :payload p))
+    (is (= 2 (darterfly/wifi::wifi-tx-pending state)))
+    (is (= 1 (darterfly/wifi::wifi-tx-state-invalid state)))
+    (dotimes (length 48)
+      (finishes (darterfly/wifi::wifi-tx-notification w (list :code 28 :payload (subseq p 0 length)))))
+    (is (= 2 (darterfly/wifi::wifi-tx-pending state)))
+    (setf (aref p 44) 4)
+    (darterfly/wifi::wifi-tx-notification w (list :code 28 :payload p))
+    (is (zerop (darterfly/wifi::wifi-tx-pending state)))))
+
+(test compressed-block-ack-completions-validate-the-entire-record-array
+  (let* ((w (make-instance 'darterfly/wifi::wireless-card))
+         (state (darterfly/wifi::make-wifi-tx-state :read 1 :write 20))
+         (p (make-array 40 :element-type '(unsigned-byte 8) :initial-element 0)))
+    (setf (gethash 2 (darterfly/wifi::card-tx-queues w)) state
+          (aref p 28) 2 (aref p 32) 2 (aref p 34) 20)
+    (darterfly/wifi::wifi-tx-notification w (list :code 197 :payload p))
+    (is (= 19 (darterfly/wifi::wifi-tx-pending state)))
+    (setf (aref p 28) 1)
+    (darterfly/wifi::wifi-tx-notification w (list :code 197 :payload p))
+    (is (zerop (darterfly/wifi::wifi-tx-pending state)))))
+
+(test a-full-wifi-transmit-ring-never-reuses-a-live-buffer
+  (let* ((w (make-instance 'darterfly/wifi::wireless-card))
+         (q (darterfly/wifi::make-txq :qid 2))
+         (l (make-instance 'darterfly/wifi::link :card w))
+         (state (darterfly/wifi::make-wifi-tx-state :write 255)))
+    (setf (darterfly/wifi::link-mgmt l) q (gethash 2 (darterfly/wifi::card-tx-queues w)) state)
+    (sb-int:encapsulate 'darterfly/wifi::pump 'saturated-ring (lambda (&rest args) (declare (ignore args)) nil))
+    (unwind-protect
+         (progn
+           ;; No DMA fields are initialized: touching one before capacity is
+           ;; available would raise an unbound-slot/type error.
+           (is (null (darterfly/wifi::transmit l #(0))))
+           (is (= 255 (darterfly/wifi::wifi-tx-pending state)))
+           (is (= 1 (darterfly/wifi::wifi-tx-state-backpressure state))))
+      (sb-int:unencapsulate 'darterfly/wifi::pump 'saturated-ring))))

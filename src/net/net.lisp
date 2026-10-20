@@ -85,10 +85,28 @@
     (darterfly/devices::ethernet-transmit-stalled (e)
       (net-fail :etimedout "~a" e))))
 
+;; TCP constructs immutable frames while protecting its protocol state, then
+;; sends this per-call batch after releasing that lock. The interface epoch
+;; prevents frames prepared before detach from leaking onto a new attachment.
+(defvar *output-batch* nil)
+(defvar *interface-epoch* 0)
+
+(defun flush-output-batch ()
+  (loop for batch = (nreverse (shiftf (car *output-batch*) nil)) while batch
+        do (dolist (item batch)
+             (destructuring-bind (interface device epoch frame) item
+               (when (and (eq interface *interface*) (= epoch *interface-epoch*)
+                          (eq device (interface-device interface)))
+                 (if-output device frame))))))
+
 (defun send-frame (dst type payload)
   (let ((device (interface-device *interface*)))
     (when device
-      (if-output device (octets dst (interface-mac *interface*) (be type 2) payload)))))
+      (let ((frame (octets dst (interface-mac *interface*) (be type 2) payload)))
+        (if *output-batch*
+            (progn (push (list *interface* device *interface-epoch* frame) (car *output-batch*))
+                   (length frame))
+            (if-output device frame))))))
 
 (defun arp-packet (op target-mac target-ip)
   (octets (be 1 2) (be +ethertype-ip+ 2) (be 6 1) (be 4 1) (be op 2)
