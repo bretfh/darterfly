@@ -6,6 +6,7 @@
 (define-class wpe-browser () () (:metaclass user-class))
 (define-class wpe-buffer ()
   ((native-lock (bt:make-lock "WPE buffer lifetime") :type t)
+   (native-callback-lock (sb-thread:make-mutex :name "WPE callback lifetime") :type t)
    (native-id nil :type (or null unsigned-byte)) (native-url "about:blank") (native-title "")
    (native-width 640) (native-height 400) (native-zoom 1.0)
    (native-ready nil) (native-navigation nil) (native-frame-count 0)) (:metaclass user-class))
@@ -80,6 +81,7 @@
       (handler-case (funcall thunk)
         (error (e) (unless *closing*
                      (format t "~&[NYXT WPE CALLBACK ERROR] ~a~%" e)
+                     (sb-debug:print-backtrace :count 20)
                      (finish-output) (setf *failure* e)))))))
 (defun start-dispatch ()
   (setf *event-queue* (darterfly/nyxt-work:make-queue)
@@ -97,8 +99,12 @@
   ;; One FIFO worker preserves event order. It may make synchronous engine
   ;; calls: the reply reader and scheme workers never wait on this queue.
   (darterfly/nyxt-work:enqueue *event-queue* id
-    (lambda () (when (and (not *closing*) (eql id (native-id buffer)))
-                 (funcall thunk))) bytes))
+    (lambda ()
+      ;; A callback may synchronously call the engine or delete its own buffer.
+      ;; Serialize it with deletion without holding the transport/view lock.
+      (sb-thread:with-recursive-lock ((native-callback-lock buffer))
+        (when (and (not *closing*) (eql id (native-id buffer)))
+          (funcall thunk)))) bytes))
 (defun queue-frame (id buffer width height pixels)
   (unless (and (<= 1 width 2048) (<= 1 height 2048)
                (= (length pixels) (* width height 4)))
@@ -171,7 +177,14 @@
                       (when (web-buffer-p buffer)
                         (callback-thread id buffer
                           (lambda () (on-signal-notify-title buffer title)) (length data))))))
-            (1103 (when buffer (setf (native-url buffer) (darterfly/nyxt-wire:text data))))
+            (1103
+             (when buffer
+               (let ((uri (darterfly/nyxt-wire:text data)))
+                 (setf (native-url buffer) uri)
+                 (when (web-buffer-p buffer)
+                   (callback-thread id buffer
+                     (lambda () (on-signal-notify-uri buffer (quri:uri uri)))
+                     (length data))))))
             (1104 (let ((uri (darterfly/nyxt-wire:text data)))
                     (darterfly/nyxt-work:enqueue *scheme-queue* id
                       (lambda () (scheme-request id seq uri)) (length data))))
@@ -292,11 +305,11 @@
 (defmethod ffi-buffer-title ((buffer wpe-buffer)) (native-title buffer))
 (defmethod ffi-buffer-load ((buffer wpe-buffer) url)
   (setf (native-ready buffer) nil (native-navigation buffer) t)
-  (engine-send 2 (native-id buffer) :data (quri:render-uri url)) buffer)
+  (buffer-command buffer 2 :data (quri:render-uri url)) buffer)
 (defmethod ffi-buffer-reload ((buffer wpe-buffer))
-  (engine-send 12 (native-id buffer)) buffer)
+  (buffer-command buffer 12) buffer)
 (defmethod ffi-buffer-load-alternate-html ((buffer wpe-buffer) html content-url url)
-  (declare (ignore content-url url)) (engine-send 3 (native-id buffer) :data html))
+  (declare (ignore content-url url)) (buffer-command buffer 3 :data html))
 (defmethod ffi-buffer-evaluate-javascript ((buffer wpe-buffer) javascript &optional world-name)
   (when world-name (error "Named JavaScript worlds are not yet supported by WPE transport"))
   (bt:with-lock-held ((native-lock buffer))
@@ -307,15 +320,30 @@
   ;; Preserve command order. Spawning one thread per async evaluation can put
   ;; a status update before the HTML skeleton it was meant to update.
   (buffer-command buffer 4 :data javascript) nil)
+(defun selected-text (buffer)
+  (ffi-buffer-evaluate-javascript buffer
+    "(()=>{let e=document.activeElement;return e && typeof e.selectionStart==='number' ? e.value.substring(e.selectionStart,e.selectionEnd) : window.getSelection().toString()})()"))
+(defmethod ffi-buffer-copy ((buffer wpe-buffer) &optional (text nil supplied))
+  (copy-to-clipboard (if supplied text (selected-text buffer))))
+(defmethod ffi-buffer-cut ((buffer wpe-buffer))
+  (let ((text (ffi-buffer-copy buffer)))
+    (rpc 22 (native-id buffer)) text))
+(defmethod ffi-buffer-paste ((buffer wpe-buffer) &optional (text nil supplied))
+  (let ((text (if supplied text (trivial-clipboard:text))))
+    (rpc 21 (native-id buffer) :data text) text))
 (defmethod ffi-buffer-zoom-ratio ((buffer wpe-buffer)) (native-zoom buffer))
 (defmethod (setf ffi-buffer-zoom-ratio) (value (buffer wpe-buffer))
   (assert (and (realp value) (<= .1 value 10)))
-  (engine-send 15 (native-id buffer) :a (round (* value 1000)))
+  (buffer-command buffer 15 :a (round (* value 1000)))
   (setf (native-zoom buffer) value))
 (defmethod ffi-buffer-navigate-backwards ((buffer wpe-buffer))
-  (engine-send 13 (native-id buffer)))
+  (buffer-command buffer 13))
 (defmethod ffi-buffer-navigate-forwards ((buffer wpe-buffer))
-  (engine-send 14 (native-id buffer)))
+  (buffer-command buffer 14))
+(defmethod ffi-buffer-delete :around ((buffer wpe-buffer))
+  ;; Include upstream hooks and registry removal, not just native destruction.
+  (sb-thread:with-recursive-lock ((native-callback-lock buffer))
+    (call-next-method)))
 (defmethod ffi-buffer-delete ((buffer wpe-buffer))
   (bt:with-lock-held ((native-lock buffer))
     (when (native-id buffer)
@@ -419,11 +447,24 @@
                    (setf (key-stack buffer) (append (key-stack buffer) (list key)))
                    (on-signal-key-press buffer key))
                  (unless (and key (dispatch-input-event (list op a b) buffer))
+                   (cond
+                     ((and (logbitp 0 mods) (= a 46)) (ffi-buffer-copy buffer))
+                     ((and (logbitp 0 mods) (= a 45)) (ffi-buffer-cut buffer))
+                     ((and (logbitp 0 mods) (= a 47)) (ffi-buffer-paste buffer))
+                     (t
                    (let ((symbol (or (cdr (assoc a '((1 . #xff1b) (14 . #xff08)
                          (15 . #xff09) (28 . #xff0d) (103 . #xff52) (108 . #xff54)
                          (105 . #xff51) (106 . #xff53) (111 . #xffff))))
                          (if (and (logbitp 0 mods) (<= 1 b 26)) (+ b 96) b))))
-                     (engine-send 6 (native-id buffer) :a a :b symbol :data (darterfly/nyxt-wire:words mods))))))
+                     (engine-send 6 (native-id buffer) :a a :b symbol :data (darterfly/nyxt-wire:words mods))))))))
+              (204
+               (let ((hit (find-if (lambda (item)
+                                    (<= (second item) b
+                                        (1- (+ (second item) (third item)))))
+                                  (native-layout window))))
+                 (when hit
+                   (engine-send 20 (native-id (first hit)) :a a
+                     :b (- b (second hit)) :data data))))
               (202
                (let ((hit (find-if (lambda (item) (<= (second item) b
                                            (1- (+ (second item) (third item)))))
@@ -434,6 +475,12 @@
                      :data (darterfly/nyxt-wire:words seq))))))))))
     (error (e) (unless *closing* (setf *failure* e)
                  (format t "~&[NYXT INPUT ERROR] ~a~%" e)))))
+;; Adapt the clipboard dependency at the platform boundary; Nyxt stays upstream.
+(setf (symbol-function 'trivial-clipboard:text)
+      (lambda (&optional text)
+        (if text (setf (darterfly/layer:clipboard-text) text)
+            (darterfly/layer:clipboard-text))))
+
 (setf nyxt::*renderer* (make-instance 'wpe-renderer))
 
 (defun worker-failed (condition previous-hook)
@@ -448,7 +495,7 @@
   (sb-thread:abort-thread))
 
 (export 'launch)
-(defun launch (urls &key (online-suggestions t))
+(defun launch (urls &key (online-suggestions t suggestions-supplied-p))
   "Start upstream Nyxt's normal browser initialization with native WPE views."
   (when *engine* (error "The WPE renderer is already running"))
   (setf bt:*default-special-bindings*
@@ -458,8 +505,14 @@
   (nyxt::initialize-lparallel-kernel :worker-count 2)
   (unless (uiop:getenv "FONTCONFIG_FILE")
     (sb-posix:setenv "FONTCONFIG_FILE" "/etc/fonts/fonts.conf" 1))
-  (install nyxt::*renderer*)
-  (setf nyxt:*browser* (make-instance 'nyxt:browser)
-        (nyxt::search-engine-suggestions-p nyxt:*browser*) online-suggestions)
-  (ffi-initialize nyxt:*browser* (mapcar #'quri:uri urls) (time:now))
+  ;; Use upstream startup so user configuration, hooks and profile files have
+  ;; their normal semantics. The renderer is the platform-specific extension.
+  ;; Init already owns single-instance activation and the world control port.
+  ;; Upstream supports a disabled socket via an empty virtual file.
+  (setf nyxt:*socket-file*
+    (make-instance 'files:file :base-path #p""
+      :profile (make-instance 'files:virtual-profile)))
+  (nyxt::start-browser urls)
+  (when suggestions-supplied-p
+    (setf (nyxt::search-engine-suggestions-p nyxt:*browser*) online-suggestions))
   nyxt:*browser*)

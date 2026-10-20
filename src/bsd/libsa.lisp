@@ -372,8 +372,22 @@
                 (2 (setf (cdr (aref (proc-fds *proc*) a)) (logbitp 0 c)) 0)
                 (3 (logior (file-access file) (if (nonblocking-p file) #o4000 0)))
                 (4 (setf (file-flags file) (if (logtest c #o4000) +o-nonblock+ 0)) 0)
-                ;; In particular, never claim that an unimplemented record
-                ;; lock succeeded: SQLite relies on those locks for safety.
+                ((5 6 7)
+                 (unless (plusp c) (fail :efault))
+                 (let* ((sap (sb-sys:int-sap c))
+                        (lock (record-lock a b (sb-sys:sap-ref-16 sap 0)
+                                (sb-sys:sap-ref-16 sap 2)
+                                (signed (sb-sys:sap-ref-64 sap 8))
+                                (signed (sb-sys:sap-ref-64 sap 16)))))
+                   (when (= b 5)
+                     (setf (sb-sys:sap-ref-16 sap 0) (if lock (second lock) 2))
+                     (when lock
+                       (setf (sb-sys:sap-ref-16 sap 2) 0
+                             (sb-sys:sap-ref-64 sap 8) (third lock)
+                             (sb-sys:sap-ref-64 sap 16)
+                             (if (= (fourth lock) (ash 1 63)) 0 (- (fourth lock) (third lock)))
+                             (sb-sys:sap-ref-32 sap 24) (proc-pid (first lock)))))
+                   0))
                 (t (fail :einval))))))
     (:readdir (let ((entry (vfs (vfs:vfs-readdir (vfs-fd (vnode-file a)) b))))
                 (if entry (put-dirent (car entry) (cdr entry) c) 0)))
@@ -570,12 +584,17 @@
             (layout '(1 0 0 0)))
            ((:symlink :rename :link) (layout '(1 1 0 0)))
            ((:close :lseek :fchdir :fchmod :fchown :ftruncate :dup :dup2
-             :fcntl :fsync :umask :socket :listen :shutdown :getpid :getppid :kill)
+             :fsync :umask :socket :listen :shutdown :getpid :getppid :kill)
             (and (layout '(0 0 0 0))
                  (or (not (member name '(:dup2 :fcntl)))
                      (if (eq name :dup2) (<= (second args) 4095)
                          (and (<= (second args) 4)
                               (or (/= (second args) 0) (<= (third args) 4095)))))))
+           (:fcntl
+            (if (member (second args) '(5 6 7))
+                (and (layout '(0 0 6 0)) (len 2 32 32))
+                (and (layout '(0 0 0 0)) (<= (second args) 4)
+                     (or (/= (second args) 0) (<= (third args) 4095)))))
            ((:read :pread) (and (layout '(0 5 0 0)) (= (second sizes) (third args))))
            ((:write :pwrite) (and (layout '(0 4 0 0)) (= (second sizes) (third args))))
            ((:stat :lstat) (and (layout '(1 3 0 0)) (len 1 144 144)))

@@ -171,8 +171,32 @@
     (when identity
       (list (list :file "System/Library/Release/identity.json" (octets identity))))))
 
+(defun nyxt-package-root ()
+  (let ((explicit (uiop:getenv "DARTERFLY_NYXT_ROOT")))
+    (let ((root (uiop:ensure-directory-pathname
+                 (or explicit (merge-pathnames ".cache/darterfly/nyxt/root/"
+                                               (user-homedir-pathname))))))
+      (cond ((probe-file (merge-pathnames "usr/lib/nyxt/package.sexp" root)) root)
+            (explicit (error "No Nyxt package at ~a; run make nyxt-package" root))))))
+
+(defvar *include-browser* nil)
+
+(defun browser-entries ()
+  (let ((root (nyxt-package-root)))
+    (when root
+      (loop for entry in (tree-entries root "")
+            for name = (string-left-trim "/" (second entry))
+            unless (equal name "") collect (list* (first entry) name (cddr entry))))))
+
+(defun desktop-runtime-options ()
+  (or *sbcl-runtime-options*
+      (when (nyxt-package-root) '("--dynamic-space-size" "2048"))))
+
+(defun desktop-disk-size ()
+  (* (if (nyxt-package-root) 4096 1024) 1048576))
+
 (defun root-entries ()
-  (let ((files (append (release-entries) (desktop-entries)
+  (let ((files (append (when *include-browser* (browser-entries)) (release-entries) (desktop-entries)
                        (firmware-entries)
                        (ocicl-entries)
                        (contribs)
@@ -290,10 +314,12 @@
           (file "darterfly.core" (darterfly-core)) (file "root.cpio" (ramdisk)))))
 
 (defun usb-image (&key (path (build-path "darterfly-usb.img")) (boot-args (format nil "rd=ram init nrepl-key=~a" (nrepl-key))))
-  (let ((fat (esp-image (esp :boot-args boot-args
-                             :root-image (root-disk (build-path "usb-root.img") (* 640 1048576)
+  (let* ((*include-browser* t)
+         (*sbcl-runtime-options* (desktop-runtime-options))
+         (fat (esp-image (esp :boot-args boot-args
+                             :root-image (root-disk (build-path "usb-root.img") (min (desktop-disk-size) (* 2048 1048576))
                                                     (append (root-entries) (boot-payload))))
-                        (build-path "usb-esp.img") (* 1024 1048576))))
+                        (build-path "usb-esp.img") (+ (min (desktop-disk-size) (* 2048 1048576)) (* 512 1048576)))))
     (darterfly/gpt:write-disk path (list (list darterfly/gpt:+esp-type+ "F1C40000-0000-4000-8000-000000000011" "EFI" fat)))
     (delete-file fat)
     path))
@@ -383,7 +409,10 @@
 (defun desktop (&key (disk (build-path "darterfly-hd.img")))
   (when (and (probe-file disk) (in-use-p disk))
     (error "~a is in use by a running darterfly; quit that one first" (uiop:native-namestring disk)))
-  (let ((root (if (probe-file disk) (update-root disk) (root-disk disk (* 1024 1048576))))
+  (let* ((*include-browser* t)
+         (*sbcl-runtime-options* (desktop-runtime-options))
+         (*extra-qemu* (append (when (nyxt-package-root) '("-m" "8192")) *extra-qemu*))
+         (root (if (probe-file disk) (update-root disk) (root-disk disk (desktop-disk-size))))
         (esp (build-path "desktop/esp/")))
     (uiop:delete-directory-tree esp :validate t :if-does-not-exist :ignore)
     (run "cp" "-a" (uiop:native-namestring (esp :boot-args (root-boot-args "init" t)))

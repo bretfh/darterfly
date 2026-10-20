@@ -211,6 +211,15 @@ static void command(Header h,char* data) {
                 view,WPE_INPUT_SOURCE_MOUSE,g_get_monotonic_time()/1000,
                 static_cast<WPEModifiers>(0),1,h.a,h.b,kind?1:0);
             wpe_view_focus_in(view);wpe_view_event(view,e);wpe_event_unref(e);break;}
+        case 20:{
+            if(h.n!=8){text(1001,h.id,h.seq,"Invalid wheel event");return;}
+            int32_t deltas[2];memcpy(deltas,data,8);
+            auto e=wpe_event_scroll_new(view,WPE_INPUT_SOURCE_MOUSE,
+                g_get_monotonic_time()/1000,static_cast<WPEModifiers>(0),
+                deltas[0],deltas[1],FALSE,FALSE,h.a,h.b);
+            wpe_view_event(view,e);wpe_event_unref(e);break;}
+        case 21:webkit_web_view_execute_editing_command_with_argument(p->web,"InsertText",data);break;
+        case 22:webkit_web_view_execute_editing_command(p->web,"Delete");break;
         case 8:destroy(p);pages.erase(h.id);break;
         case 12:webkit_web_view_reload(p->web);break;
         case 13:webkit_web_view_go_back(p->web);break;
@@ -230,7 +239,16 @@ int main(int argc,char**argv) {
     if(fcntl(connection,F_SETFL,O_NONBLOCK))return 4;
     trace=getenv("DARTER_NYXT_TRACE")!=nullptr;
     WTF::initializeMainThread();darter_register_openssl();
-    context=webkit_web_context_new();session=webkit_network_session_new_ephemeral();
+    context=webkit_web_context_new();
+    const char* home=g_get_home_dir();
+    auto dataPath=g_build_filename(home,".local","share","nyxt","wpe",nullptr);
+    auto cachePath=g_build_filename(home,".cache","nyxt","wpe",nullptr);
+    if(g_mkdir_with_parents(dataPath,0700)||g_mkdir_with_parents(cachePath,0700))return 6;
+    session=webkit_network_session_new(dataPath,cachePath);
+    auto cookies=g_build_filename(dataPath,"cookies.sqlite",nullptr);
+    webkit_cookie_manager_set_persistent_storage(
+        webkit_network_session_get_cookie_manager(session),cookies,WEBKIT_COOKIE_PERSISTENT_STORAGE_SQLITE);
+    g_free(cookies);g_free(dataPath);g_free(cachePath);
     display=WPE_DISPLAY(g_object_new(nyxt_display_get_type(),nullptr));
     GError* error=nullptr;if(!wpe_display_connect(display,&error))return 5;
     std::vector<char> input;gint64 inputBegan=0;send(1000,0);

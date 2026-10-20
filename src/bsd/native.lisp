@@ -142,7 +142,7 @@
                  :continued (logbitp 3 options))
     (values child (native-wait-status status))))
 
-(defun run-native-program (image argv envp)
+(defun run-native-program (program argv envp)
   ;; A blocking poll/read must not hold up a different native thread's write.
   ;; Reuse bounded request workers; all mutations still use the BSD lock.
   (let ((proc *proc*) (world nil) (workers nil) (busy 0) (closing nil))
@@ -166,9 +166,14 @@
       (unwind-protect
            (progn
              (with-bsd
-               (setf world (darterfly/worlds:spawn-native-image
-                            image :argv argv :envp envp :port (native-service-port)
-                            :signals (proc-native-signals proc))
+               ;; The exec closure stays live until exit. Drop its immutable
+               ;; snapshot once the kernel has copied the child image.
+               (setf world (unwind-protect
+                              (darterfly/worlds:spawn-native-image
+                                (native-program-image program)
+                                :argv argv :envp envp :port (native-service-port)
+                                :signals (proc-native-signals proc))
+                             (setf (native-program-image program) nil))
                      (proc-native-world proc) world
                      (proc-native-result proc) nil
                      (gethash world *native-processes*) proc))

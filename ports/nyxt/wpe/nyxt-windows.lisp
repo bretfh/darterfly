@@ -140,6 +140,12 @@
            (destructuring-bind (x y width height) (getf event :frame)
              (declare (ignore x y))
              (return-from next-event (values 203 id 0 width height #()))))
+          (:scroll-wheel
+           (destructuring-bind (x y) (getf event :window-location)
+             (return-from next-event
+               (values 204 id 0 x y
+                 (wire:words (ldb (byte 32 0) (getf event :delta-x 0))
+                             (ldb (byte 32 0) (getf event :delta-y 0)))))))
           (:key-down
            (return-from next-event (values 201 id 0 (getf event :keycode)
              (char-code (or (getf event :character) #\Null))

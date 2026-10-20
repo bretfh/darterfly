@@ -121,6 +121,8 @@
 (defun serve-window-request (client body token)
   (destructuring-bind (op &rest args) body
     (ecase op
+      (:clipboard-read (clipboard-text))
+      (:clipboard-write (setf (clipboard-text) (getf args :text)))
       (:context-create
        (let ((context (local-context-create)))
          (sb-thread:with-mutex ((client-lock client))
@@ -179,3 +181,24 @@
           (ignore-errors (darterfly/mach:mach-port-mod-refs darterfly/mach:*task* (context-events context) :receive -1)))))))
 
 (darterfly/run:offer-service "windowserver" #'serve-world-window-request :gone #'forget-world-client)
+
+;; Text clipboard belongs to the desktop session, not an individual app heap.
+;; Bound characters so escaped UTF-8 replies always fit the world transport.
+(defvar *clipboard-text* "")
+(defvar *clipboard-lock* (sb-thread:make-mutex :name "desktop clipboard"))
+(defun clipboard-in-world-p ()
+  (handler-case (darterfly/run:in-world-p)
+    (sb-kernel::undefined-alien-function-error () nil)))
+(defun clipboard-text ()
+  (if (clipboard-in-world-p)
+      (remote-request '(:clipboard-read))
+      (sb-thread:with-mutex (*clipboard-lock*) (copy-seq *clipboard-text*))))
+(defun (setf clipboard-text) (text)
+  (check-type text string)
+  (when (> (length text) 8192) (error "Clipboard text exceeds 8192 characters"))
+  (if (clipboard-in-world-p)
+      (remote-request (list :clipboard-write :text text))
+      (sb-thread:with-mutex (*clipboard-lock*)
+        (setf *clipboard-text* (copy-seq text))))
+  text)
+(export 'clipboard-text)

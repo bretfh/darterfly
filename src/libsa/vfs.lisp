@@ -34,6 +34,23 @@
       (if (or (= op 19) (= op 20) (= op 8) (= op 9) (= op 1)) (- 0 +enoent+) (- 0 9))
       (call-pointer vfs op a b c d)))
 
+(define-low call-uninterrupted ((op :u32) a b c d)
+  ;; These descriptor operations do not block. A signal must not abandon their
+  ;; world reply after the service has committed an allocation or flag change.
+  ;; Blocking I/O and F_SETLKW continue to use the interruptible call path.
+  ;; The in-process Lisp VFS callback has no cancellable transport, and must
+  ;; retain SBCL's normal signal/GC behavior.
+  (unless (= vfs (code-address port-vfs)) (result (call op a b c d)))
+  (let ((masks (malloc 256)) (r 0))
+    (unless masks (result (- 0 +enomem+)))
+    (sigfillset masks)
+    (setf r (pthread_sigmask 0 masks (+ masks 128)))
+    (when r (free masks) (result (- 0 r)))
+    (setf r (call op a b c d))
+    (pthread_sigmask 2 (+ masks 128) 0)
+    (free masks)
+    r))
+
 (define-low console ((fd :u32))
   (and (not native-runtime) (<= fd 2) (not (and (= fd 0) (the :u32 (__libsa_run_stdin))))))
 
@@ -269,7 +286,7 @@
 (define-low fsync ((fd :u32)) (if (console fd) 0 (ret (call 33 (sign-extend :u32 fd) 0 0 0))))
 (define-low fdatasync ((fd :u32)) (fsync fd))
 (define-low sync () 0)
-(define-low pipe (fds) (ret (call 35 fds 0 0 0)))
+(define-low pipe (fds) (ret (call-uninterrupted 35 fds 0 0 0)))
 
 (define-low __libsa_spawn (program argv (in :u32) (out :u32) (err :u32) (search :u32) envp pwd)
   (let ((actions 0) (storage 0) (pid 0) (r 0))
@@ -295,12 +312,12 @@
     (free storage)
     (if r (ret (- 0 r)) pid)))
 
-(define-low socket ((domain :u32) (type :u32) (protocol :u32)) (ret (call 38 domain type protocol 0)))
+(define-low socket ((domain :u32) (type :u32) (protocol :u32)) (ret (call-uninterrupted 38 domain type protocol 0)))
 (define-low socketpair ((domain :u32) (type :u32) (protocol :u32) fds)
   (unless fds (result (ret (- 0 14))))
   (let ((pair (malloc 8)) (r 0))
     (unless pair (result (ret (- 0 +enomem+))))
-    (setf r (ret (call 49 domain type protocol pair)))
+    (setf r (ret (call-uninterrupted 49 domain type protocol pair)))
     ;; Failed world calls may return an initialized output buffer. Never
     ;; overwrite the caller's descriptor array unless both ends were made.
     (when (= r 0) (memcpy fds pair 8))
@@ -435,7 +452,7 @@
   (if (= e #xFFFFFFFE) "Name or service not known" "Name resolution failed"))
 
 (define-low waitpid ((pid :u32) status (options :u32)) (ret (call 37 (sign-extend :u32 pid) status options 0)))
-(define-low dup ((fd :u32)) (ret (call 27 (sign-extend :u32 fd) 0 0 0)))
+(define-low dup ((fd :u32)) (ret (call-uninterrupted 27 (sign-extend :u32 fd) 0 0 0)))
 (define-low dup2 ((a :u32) (b :u32)) (ret (call 28 (sign-extend :u32 a) (sign-extend :u32 b) 0 0)))
 
 (define-low umask ((m :u32))
@@ -461,7 +478,8 @@
   (let ((arg (va-next ap)))
     (when (or (console fd) (kfd fd))
       (result (if (= cmd 3) (if (console fd) 2 0) 0)))
-    (ret (call 29 (sign-extend :u32 fd) cmd arg 0))))
+    (ret (if (= cmd 7) (call 29 (sign-extend :u32 fd) cmd arg 0)
+             (call-uninterrupted 29 (sign-extend :u32 fd) cmd arg 0)))))
 
 (define-low isatty ((fd :u32))
   (when (console fd) (result 1))

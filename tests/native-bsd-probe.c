@@ -197,7 +197,7 @@ static int map_churn(void) {
     const size_t size = 4096 * 4096;
     unsigned char *p = mmap(0, size, PROT_READ | PROT_WRITE,
                             MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    void *maps[2048];
+    void *maps[16384];
     int count = 0, i;
     CHECK(p != MAP_FAILED, 225);
     for (i = 0; i < 4096; ++i) {
@@ -206,13 +206,13 @@ static int map_churn(void) {
         CHECK(p[i * 4096] == 73, 227);
         CHECK(!mprotect(p + i * 4096, 4096, PROT_READ | PROT_WRITE), 228);
     }
-    while (count < 2048) {
+    while (count < 16384) {
         void *m = mmap(0, 4096, PROT_READ | PROT_WRITE,
                        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         if (m == MAP_FAILED) break;
         maps[count++] = m;
     }
-    CHECK(count > 0 && count < 2048 && errno == ENOMEM, 229);
+    CHECK(count > 0 && count < 16384 && errno == ENOMEM, 229);
     CHECK(mprotect(p + 4096, 4096, PROT_READ) == -1 && errno == ENOMEM, 230);
     p[4096] = 91; /* Failed protection must leave the old mapping writable. */
     CHECK(p[4096] == 91, 231);

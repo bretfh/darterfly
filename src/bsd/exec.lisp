@@ -77,7 +77,7 @@
              bindings
              (lambda ()
                (if (native-program-p program)
-                   (run-native-program (native-program-image program) argv envp)
+                   (run-native-program program argv envp)
                    (with-stdio (funcall program argv envp)))))))))))
 
 (defun spawn-file-actions (actions)

@@ -95,10 +95,14 @@ int main(int argc, char **argv)
 
     int inherited=open("/tmp/gio-document.txt",O_RDONLY);
     CHECK(inherited>=3,"parent descriptor");
-    struct flock unsupported_lock={0};
-    unsupported_lock.l_type=F_WRLCK;
-    CHECK(fcntl(inherited,F_SETLK,&unsupported_lock)==-1 && errno==EINVAL,
-          "unsupported record lock must fail");
+    struct flock record_lock={0};
+    record_lock.l_type=F_WRLCK;
+    CHECK(fcntl(inherited,F_SETLK,&record_lock)==-1 && errno==EBADF,
+          "write lock requires writable descriptor");
+    record_lock.l_type=F_RDLCK;
+    CHECK(fcntl(inherited,F_SETLK,&record_lock)==0,"read lock");
+    record_lock.l_type=F_UNLCK;
+    CHECK(fcntl(inherited,F_SETLK,&record_lock)==0,"unlock");
     char inherited_text[24]; snprintf(inherited_text,sizeof inherited_text,"%d",inherited);
     GSubprocessLauncher *launcher=g_subprocess_launcher_new(
         G_SUBPROCESS_FLAGS_STDIN_PIPE | G_SUBPROCESS_FLAGS_STDOUT_PIPE |

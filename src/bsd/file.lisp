@@ -16,6 +16,9 @@
 (defgeneric descriptor-released (file)
   (:method ((file file)) nil))
 
+(defgeneric release-record-locks (file proc)
+  (:method ((file file) proc) (declare (ignore proc)) nil))
+
 (defgeneric file-access (file)
   (:method ((file file)) 2))
 
@@ -40,6 +43,7 @@
 
 (defun release-fd (proc fd)
   (let ((file (car (aref (proc-fds proc) fd))))
+    (release-record-locks file proc)
     (setf (aref (proc-fds proc) fd) nil)
     (when (zerop (decf (file-refs file)))
       (file-close file))

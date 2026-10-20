@@ -145,7 +145,7 @@
         (107 (slide-to control (slider-maximum control)))))))
 
 ;; A single-line editor. Labels remain text-field; editing is an explicit class.
-(defvar *text-clipboard* "")
+
 (defclass entry-field (text-field button)
   ((caret :initform 0 :accessor entry-caret)
    (anchor :initform 0 :accessor entry-anchor)
@@ -244,9 +244,9 @@
           ((and command (= keycode 30)) (setf (entry-anchor control) 0 (entry-caret control) (length (string-value control))))
           ((and command (member keycode '(46 45)))
            (when (< lo hi)
-             (setf *text-clipboard* (subseq (string-value control) lo hi))
+             (setf (layer:clipboard-text) (subseq (string-value control) lo hi))
              (when (= keycode 45) (entry-replace control ""))))
-          ((and command (= keycode 47)) (entry-replace control *text-clipboard*))
+          ((and command (= keycode 47)) (entry-replace control (layer:clipboard-text)))
           ((and command (member keycode '(44 21)))
            (let ((redo (or (= keycode 21) shift)))
              (when (if redo (entry-redo control) (entry-undo control))

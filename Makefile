@@ -3,6 +3,7 @@
 GUIX := guix shell -m manifest.scm --
 ENV  := CL_SOURCE_REGISTRY="$$PWD//:$$GUIX_ENVIRONMENT/share/common-lisp//" ASDF_OUTPUT_TRANSLATIONS="/:$$HOME/.cache/common-lisp/darterfly/"
 SBCL := sbcl --no-userinit --eval "(require :asdf)"
+IMAGE_SBCL := sbcl --dynamic-space-size 8192 --no-userinit --eval "(require :asdf)"
 
 repl:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --eval "(asdf:load-system :darterfly)"'
@@ -16,14 +17,14 @@ test:
 bare:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/image)" --eval "(darterfly/image:bare-boot)"'
 
-desktop:
-	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/image)" --eval "(darterfly/image:desktop)"'
+desktop: browser-assets
+	$(GUIX) sh -c '$(ENV) $(IMAGE_SBCL) --non-interactive --eval "(asdf:load-system :darterfly/image)" --eval "(darterfly/image:desktop)"'
 
 sbcl:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/image)" --eval "(darterfly/image:build-sbcl)"'
 
-usb:
-	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/image)" --eval "(format t \"~a~%\" (darterfly/image:usb-image))"'
+usb: browser-assets
+	$(GUIX) sh -c '$(ENV) $(IMAGE_SBCL) --non-interactive --eval "(asdf:load-system :darterfly/image)" --eval "(format t \"~a~%\" (darterfly/image:usb-image))"'
 
 generation:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/image)" --eval "(format t \"~a~%\" (darterfly/image:push-generation \"$(HOST)\"))"'
@@ -136,3 +137,12 @@ test-native-sleep-guest:
 
 test-d2-devices-guest:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/test)" --eval "(let ((ok t)) (dolist (name (quote (darterfly/test::the-system-sleeps-and-wakes darterfly/test::sound-plays-and-sleeps))) (unless (fiveam:run! name) (setf ok nil))) (unless ok (uiop:quit 1)))"'
+
+# The package is a cross-built userland input, shared by fresh source checkouts.
+# No prepared browser disk or guest cache is required.
+.PHONY: nyxt-package browser-assets
+nyxt-package:
+	$(GUIX) sh -c '$(ENV) sbcl --dynamic-space-size 8192 --no-userinit --non-interactive --load ports/nyxt/wpe/package.lisp'
+
+browser-assets:
+	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/image)" --eval "(unless (darterfly/image::nyxt-package-root) (error \"Build the browser package with make nyxt-package, or set DARTERFLY_NYXT_ROOT to a packaged root\"))"'

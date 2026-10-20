@@ -420,8 +420,12 @@
                   ;; Bound the allocation by the checked size even if the file
                   ;; grows during collection. A truncated file fails the read.
                   (let ((v (make-array size :element-type '(unsigned-byte 8))))
-                    (unless (= (read-sequence v s) size)
-                      (error "Short executable read"))
+                    ;; VFS reads return octet vectors. Bound their temporary
+                    ;; copies instead of allocating another whole engine image.
+                    (loop for start from 0 below size by 1048576
+                          for end = (min size (+ start 1048576)) do
+                            (unless (= (read-sequence v s :start start :end end) end)
+                              (error "Short executable read")))
                     v)))))
     (with-octets (f file) (machdep 82 f (length file)))
     file))

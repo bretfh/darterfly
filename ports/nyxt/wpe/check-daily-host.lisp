@@ -1,0 +1,47 @@
+(require :asdf)
+(asdf:load-system :darterfly/test)
+(in-package #:darterfly/test)
+(with-local-filesystem
+  (let* ((bsd::*record-locks* (make-hash-table :test 'equal))
+         (parent bsd:*proc*)
+         (child (make-instance 'bsd:proc :pid 123 :task mach:*task*))
+         (fd (bsd:open "/locks" (logior bsd:+o-creat+ bsd:+o-rdwr+)))
+         (other (let ((bsd:*proc* child)) (bsd:open "/locks" bsd:+o-rdwr+))))
+    (unwind-protect
+        (progn
+          (bsd::record-lock fd 6 1 0 100 100)
+          (let ((bsd:*proc* child))
+            (assert (eq :eagain (local-errno (lambda () (bsd::record-lock other 6 0 0 150 1)))))
+            (assert (eq parent (first (bsd::record-lock other 5 1 0 150 1))))
+            (bsd::record-lock other 6 1 0 200 1))
+          ;; Partial unlock must retain both surrounding intervals.
+          (bsd::record-lock fd 6 2 0 120 20)
+          (let ((bsd:*proc* child))
+            (bsd::record-lock other 6 1 0 120 20)
+            (assert (bsd::record-lock other 5 1 0 119 1))
+            (assert (bsd::record-lock other 5 1 0 140 1)))
+          ;; Closing an independently opened descriptor drops all parent locks.
+          (bsd:close (bsd:open "/locks" bsd:+o-rdonly+))
+          (let ((bsd:*proc* child))
+            (assert (null (bsd::record-lock other 5 1 0 0 0))))
+          ;; A zero-length lock covers future file growth, and is released on close.
+          (let ((bsd:*proc* child)) (bsd::record-lock other 6 1 0 0 0))
+          (assert (eq :eagain (local-errno (lambda () (bsd::record-lock fd 6 1 0 999999 1)))))
+          (let ((bsd:*proc* child)) (bsd:close other) (setf other nil))
+          (bsd::record-lock fd 6 1 0 999999 1)
+          (bsd:close fd) (setf fd nil)
+          (assert (zerop (hash-table-count bsd::*record-locks*))))
+      (when fd (bsd:close fd))
+      (when other (let ((bsd:*proc* child)) (bsd:close other))))))
+;; The pointer-carrying lock ABI must be serialized, never accepted as a scalar.
+(with-local-process
+  (assert (= -22 (service-result (service-request 29 3 6 #x1000 '(0 0 0 0) '(0 0 0 0))))))
+(let ((darterfly/layer::*clipboard-text* ""))
+  (setf (darterfly/layer:clipboard-text) "Lisp λ dragonfly 🪰")
+  (assert (equal "Lisp λ dragonfly 🪰" (darterfly/layer:clipboard-text)))
+  (let ((copy (darterfly/layer:clipboard-text)))
+    (setf (char copy 0) #\X)
+    (assert (char= #\L (char (darterfly/layer:clipboard-text) 0))))
+  (assert (handler-case (progn (setf (darterfly/layer:clipboard-text) (make-string 8193)) nil)
+            (error () t))))
+(format t "~&[NYXT DAILY HOST PASS]~%")

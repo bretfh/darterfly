@@ -1,0 +1,19 @@
+--- a/Source/WebCore/platform/sql/SQLiteDatabase.cpp
++++ b/Source/WebCore/platform/sql/SQLiteDatabase.cpp
+@@ -188,6 +188,16 @@
+     }
+ 
+     if (filename != inMemoryPath()) {
++#if OS(DARTERFLY)
++        // SQLite's exclusive WAL mode keeps the index in heap memory while
++        // retaining real OS record locks and the durable WAL on disk.
++        // Regular-file shared mappings are not available on this port yet.
++        if (openMode != OpenMode::ReadOnly) {
++            auto statement = prepareStatement("PRAGMA locking_mode=EXCLUSIVE;"_s);
++            if (!statement || statement->step() != SQLITE_ROW)
++                return false;
++        }
++#endif
+         if (openMode != OpenMode::ReadOnly && !useWALJournalMode())
+             return false;
+ 
