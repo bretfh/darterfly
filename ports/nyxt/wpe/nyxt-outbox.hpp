@@ -13,7 +13,7 @@ struct Header { uint32_t op,id,seq,a,b,n; };
 static_assert(sizeof(Header)==24);
 class Outbox {
     struct Packet {
-        unsigned id; bool frame; int64_t born; size_t at=0;
+        unsigned id; bool frame; int64_t born,progress=0; size_t at=0;
         std::vector<char> bytes;
         Packet(Header h,const void* data,int64_t now):id(h.id),frame(h.op==1100),born(now),bytes(sizeof h+h.n) {
             memcpy(bytes.data(),&h,sizeof h);
@@ -29,6 +29,9 @@ public:
     static constexpr unsigned controlSlots=256,frameSlots=64;
     size_t controlBytes=0,frameBytes=0,peakFrameBytes=0;
     unsigned controlCount=0,peakFrames=0;
+    const char* failureReason="none";
+    size_t activeBytes() const { return active ? active->bytes.size() : 0; }
+    size_t activeWritten() const { return active ? active->at : 0; }
     uint64_t coalesced=0,evicted=0,sentFrames=0,blocked=0,writeCalls=0;
     size_t pendingFrames() const { return frames.size(); }
     bool empty() const { return !active && controls.empty() && frames.empty(); }
@@ -66,14 +69,21 @@ public:
                 if(control){active=std::make_unique<Packet>(std::move(controls.front()));controls.pop_front();++controlBurst;}
                 else if(!frames.empty()){
                     active=std::make_unique<Packet>(std::move(frames.front()));frames.pop_front();
-                    frameBytes-=active->bytes.size();active->born=now;controlBurst=0;
+                    frameBytes-=active->bytes.size();controlBurst=0;
                 } else return true;
+                // Queue residence is not a failed write. Start the transfer
+                // deadline only when this packet actually owns the wire.
+                active->born=active->progress=now;
             }
-            if(now-active->born>=10000000)return false;
+            // Bound a dead reader and a trickling reader separately. A large
+            // frame making progress must not fail after ten seconds total.
+            if(now-active->progress>=10000000){failureReason="idle";return false;}
+            if(now-active->born>=60000000){failureReason="deadline";return false;}
             size_t size=std::min({size_t(32768),budget,active->bytes.size()-active->at});
             ++writeCalls;auto n=write(active->bytes.data()+active->at,size);
             if(n<0 && (errno==EAGAIN || errno==EINTR)){++blocked;return true;}
-            if(n<=0)return false;
+            if(n<=0){failureReason=n ? "write-error" : "closed";return false;}
+            active->progress=now;
             active->at+=n;budget-=n;
             if(active->at==active->bytes.size()){
                 if(active->frame)++sentFrames;

@@ -57,6 +57,13 @@
           (third (first (image::certificates)))
           (image::octets (merge-pathnames "ca.pem"
             (uiop:ensure-directory-pathname (uiop:getenv "DARTER_HTTP_FIXTURE_DIR")))))))))
+  (when (uiop:getenv "DARTER_NYXT_TRACE")
+    (image::update-root disk
+      (list (list :file "usr/lib/nyxt/nyxt-application.lisp"
+        (concatenate '(vector (unsigned-byte 8))
+          (image::text "(sb-posix:setenv \"DARTER_NYXT_TRACE\" \"1\" 1)")
+          (image::octets (merge-pathnames "usr/lib/nyxt/nyxt-application.lisp"
+                            (image::nyxt-package-root))))))))
   (dotimes (boot 2)
     (let* ((image::*console-log-directory*
              (image::build-path (format nil "wpe-assessment/daily-~d-~d/" (get-universal-time) boot)))
@@ -76,6 +83,7 @@
           (nyxt-app-dock c)
           (nyxt-app-await c "/tmp/nyxt-application.log" "[NYXT APPLICATION READY]" 600)
           (nyxt-app-ask c "(defparameter *nyxt-app* (darterfly/run:find-world \"Nyxt\"))")
+          (nyxt-app-ask c "(assert (null (getf (darterfly/init:inspect-job \"Nyxt\") :exits)) () \"Unexpected restart during normal browser launch\")")
           (daily-navigate c "https://10.0.2.2:18766/browser")
           (daily-check-js c "document.title==='Nyxt on Darterfly'")
           (if (zerop boot)
@@ -156,7 +164,7 @@
           (daily-quit c)
           (format t "~&[DAILY BOOT ~d PASS]~%" boot))
         (ignore-errors
-          (nyxt-app-ask c "(progn (dolist (p '(\"/tmp/nyxt-engine.log\" \"/tmp/nyxt-application.log\")) (format t \"~&LOG ~a~%\" p) (when (probe-file p) (write-string (uiop:read-file-string p)))) (finish-output))" 30))
+          (nyxt-app-ask c "(progn (dolist (p '(\"/tmp/nyxt-engine.log\" \"/tmp/nyxt-application.log\")) (format t \"~&LOG ~a~%\" p) (when (probe-file p) (let ((text (uiop:read-file-string p))) (write-string text *standard-output* :start (max 0 (- (length text) 65536)))))) (finish-output))" 30))
         (with-open-file (s (image::build-path (format nil "wpe-assessment/nyxt-daily-guest-~d.log" boot))
                           :direction :output :if-exists :supersede)
           (write-string (image:transcript c) s))

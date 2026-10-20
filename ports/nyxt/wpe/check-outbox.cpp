@@ -29,11 +29,25 @@ int main(){
     Outbox controls;
     for(unsigned i=0;i<256;++i)assert(controls.push({1000,0,i,0,0,0},nullptr,1));
     assert(!controls.push({1000,0,999,0,0,0},nullptr,2));
-    assert(!controls.pump(10000001,drain));
+    // An old queued control is still deliverable when it gets the wire.
+    assert(controls.pump(10000001,drain));
     // No busy retry inside one pump when the receiver is blocked.
     Outbox blocked;assert(blocked.push({1000,0,1,0,0,0},nullptr,1));
     int calls=0;assert(blocked.pump(2,[&](char*,size_t)->long{++calls;errno=EAGAIN;return -1;}));
     assert(calls==1);
+    assert(!blocked.pump(10000002,drain));
+    assert(!strcmp(blocked.failureReason,"idle"));
+    Outbox progressing;assert(progressing.push({1100,1,0,4,4,64},frame,1));
+    auto trickle=[](char*,size_t)->long{return 1;};
+    for(int64_t time=2;time<=20000002;time+=5000000)
+        assert(progressing.pump(time,trickle));
+    assert(progressing.pump(25000002,trickle) && progressing.empty());
+    Outbox bounded;std::vector<char> slow(1024);
+    assert(bounded.push({1000,0,1,0,0,1024},slow.data(),1));
+    for(int64_t time=2;time<60000002;time+=5000000)
+        assert(bounded.pump(time,trickle));
+    assert(!bounded.pump(60000002,trickle));
+    assert(!strcmp(bounded.failureReason,"deadline"));
     Outbox large;std::vector<char> pixels(Outbox::packetLimit);
     for(unsigned i=0;i<10;++i){
         assert(large.push({1100,i,0,2048,2048,static_cast<uint32_t>(pixels.size())},pixels.data(),1));

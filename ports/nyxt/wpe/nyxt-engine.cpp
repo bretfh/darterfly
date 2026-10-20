@@ -275,7 +275,7 @@ int main(int argc,char**argv) {
     g_free(cookies);g_free(dataPath);g_free(cachePath);
     display=WPE_DISPLAY(g_object_new(nyxt_display_get_type(),nullptr));
     GError* error=nullptr;if(!wpe_display_connect(display,&error))return 5;
-    std::vector<char> input;gint64 inputBegan=0;send(1000,0);
+    std::vector<char> input;gint64 inputBegan=0,inputProgress=0;send(1000,0);
     while(running){
         // Interleave commands with every GLib turn. Animated UI panels may
         // keep the context continuously ready; draining dozens of turns first
@@ -295,20 +295,35 @@ int main(int argc,char**argv) {
             if(n==0)break;
             if(n<0&&errno!=EAGAIN&&errno!=EINTR)break;
             if(n>0){
-                if(input.empty())inputBegan=g_get_monotonic_time();
+                inputProgress=g_get_monotonic_time();
+                if(input.empty())inputBegan=inputProgress;
                 input.insert(input.end(),chunk,chunk+n);
             }
         }
-        for(unsigned commands=0;running && commands<32 && input.size()>=sizeof(Header);++commands){
+        // View creation can synchronously launch a native process. Dispatch
+        // GLib between commands so tab bursts cannot starve IPC replies and
+        // make WebKit's responsiveness watchdog kill a healthy child.
+        for(unsigned commands=0;running && commands<1 && input.size()>=sizeof(Header);++commands){
             Header h;memcpy(&h,input.data(),sizeof h);
             if(h.n>limit){running=false;break;}
             if(input.size()<sizeof h+h.n)break;
             std::vector<char> body(input.begin()+sizeof h,input.begin()+sizeof h+h.n);body.push_back(0);
-            input.erase(input.begin(),input.begin()+sizeof h+h.n);inputBegan=g_get_monotonic_time();command(h,body.data());
+            input.erase(input.begin(),input.begin()+sizeof h+h.n);
+            auto began=g_get_monotonic_time();command(h,body.data());
+            inputBegan=inputProgress=g_get_monotonic_time();
+            if(trace && g_get_monotonic_time()-began>G_USEC_PER_SEC)
+                fprintf(stderr,"NYXT slow command op=%u seconds=%.3f\n",h.op,
+                    (g_get_monotonic_time()-began)/1000000.0);
         }
-        if(!input.empty() && g_get_monotonic_time()-inputBegan>=10*G_USEC_PER_SEC){failed=true;running=false;}
+        if(!input.empty() && (g_get_monotonic_time()-inputProgress>=10*G_USEC_PER_SEC
+            || g_get_monotonic_time()-inputBegan>=60*G_USEC_PER_SEC)){
+            fprintf(stderr,"NYXT input transfer timed out bytes=%zu\n",input.size());
+            failed=true;running=false;
+        }
         if(running && !outbox.pump(g_get_monotonic_time(),[](char* p,size_t n){return wireIO(true,p,n);})){
-            fprintf(stderr,"NYXT output stalled or disconnected\n");failed=true;running=false;
+            fprintf(stderr,"NYXT output failure=%s bytes=%zu/%zu errno=%d\n",
+                outbox.failureReason,outbox.activeWritten(),outbox.activeBytes(),errno);
+            failed=true;running=false;
         }
         usleep(1000);
     }

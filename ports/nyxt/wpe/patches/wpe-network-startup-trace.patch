@@ -1,0 +1,38 @@
+--- a/Source/WebKit/UIProcess/Network/NetworkProcessProxy.cpp
++++ b/Source/WebKit/UIProcess/Network/NetworkProcessProxy.cpp
+@@ -24,6 +24,8 @@
+  */
+ 
+ #include "config.h"
++#include <cstdio>
++#include <cstdlib>
+ #include "NetworkProcessProxy.h"
+ 
+ #include "APIContentRuleList.h"
+@@ -329,6 +331,9 @@
+ void NetworkProcessProxy::getNetworkProcessConnection(WebProcessProxy& webProcessProxy, CompletionHandler<void(NetworkProcessConnectionInfo&&)>&& reply)
+ {
+     RELEASE_LOG(ProcessSuspension, "%p - NetworkProcessProxy::getNetworkProcessConnection: Taking a background assertion because web process pid %i (core identifier %" PRIu64 ") is requesting a connection", this, webProcessProxy.processID(), webProcessProxy.coreProcessIdentifier().toUInt64());
++    auto connectionRequestedAt = MonotonicTime::now();
++    if (getenv("DARTER_NYXT_TRACE"))
++        fprintf(stderr, "WPE network connection requested pid=%d time=%.3f\n", processID(), connectionRequestedAt.secondsSinceEpoch().value());
+     startResponsivenessTimer(UseLazyStop::No);
+     NetworkProcessConnectionParameters parameters;
+ #if ENABLE(IPC_TESTING_API)
+@@ -345,13 +350,15 @@
+     auto& cookiesData = webProcessProxy.allowedFirstPartiesForCookiesData();
+     parameters.loadedWebArchive = cookiesData.first;
+     parameters.allowedFirstPartiesForCookies = cookiesData.second;
+-    sendWithAsyncReply(Messages::NetworkProcess::CreateNetworkConnectionToWebProcess { webProcessProxy.coreProcessIdentifier(), webProcessProxy.sessionID(), parameters }, [weakThis = WeakPtr { *this }, reply = WTF::move(reply)](auto&& identifier, auto cookieAcceptPolicy) mutable {
++    sendWithAsyncReply(Messages::NetworkProcess::CreateNetworkConnectionToWebProcess { webProcessProxy.coreProcessIdentifier(), webProcessProxy.sessionID(), parameters }, [weakThis = WeakPtr { *this }, connectionRequestedAt, reply = WTF::move(reply)](auto&& identifier, auto cookieAcceptPolicy) mutable {
+         RefPtr protectedThis = weakThis.get();
+         if (!protectedThis) {
+             RELEASE_LOG_ERROR(Process, "NetworkProcessProxy::getNetworkProcessConnection: NetworkProcessProxy deallocated during connection establishment");
+             return reply({ });
+         }
+ 
++        if (getenv("DARTER_NYXT_TRACE"))
++            fprintf(stderr, "WPE network connection replied pid=%d elapsed=%.3f valid=%d\n", protectedThis->processID(), (MonotonicTime::now() - connectionRequestedAt).value(), !!identifier);
+         protectedThis->stopResponsivenessTimer();
+         if (!identifier) {
+             RELEASE_LOG_ERROR(Process, "NetworkProcessProxy::getNetworkProcessConnection: connection identifier is empty");
