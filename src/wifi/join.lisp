@@ -538,7 +538,10 @@
   (and (typep device 'devices:ethernet-controller) (not (typep device 'wireless-interface))))
 
 (defun wifi-device-changed (event device)
-  (when (and (wired-p device) darterfly/net:*interface* (probe-file *wifi-settings*))
+  ;; USB can announce removal/reattachment while storage is suspended. Never
+  ;; touch the filesystem on that driver thread; START-WIFI checks settings in
+  ;; its worker after the notification has returned.
+  (when (and (wired-p device) darterfly/net:*interface*)
     (case event
       (:added
        (let ((current (darterfly/net::interface-device darterfly/net:*interface*)))

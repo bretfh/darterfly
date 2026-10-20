@@ -3723,3 +3723,30 @@
                  "the live object survives the save and warm restart")
              (is (search "NIL" (marked c "darterfly/install::*saving*"))))
         (image:finish c 5)))))
+
+(test a-busy-system-enters-s3-before-its-wake-alarm
+  (let* ((image:*extra-qemu* '("-global" "ICH9-LPC.disable_s3=0"))
+         (image:*input-devices* '("qemu-xhci,id=xhci" "virtio-keyboard-pci" "virtio-tablet-pci"))
+         (image:*network-device* "usb-net,netdev=net0,bus=xhci.0")
+         (c (image:bare-console)))
+    (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 40)))
+      (unwind-protect
+           (progn
+             (image:expect c "* " :timeout 90)
+             (ask "(progn (darterfly/net:start-network) (defvar *stop-load* nil) (defvar *load-threads* (loop repeat 4 collect (sb-thread:make-thread (lambda () (loop with end = (+ (get-universal-time) 45) until (or *stop-load* (> (get-universal-time) end)) do (darterfly/bench::fixnum-loop 1000000)))))) :ready)")
+             (ask "(defvar *disk-load* (sb-thread:make-thread (lambda () (loop with block = (make-array 65536 :element-type '(unsigned-byte 8) :initial-element 42) with end = (+ (get-universal-time) 45) until (or *stop-load* (> (get-universal-time) end)) do (with-open-file (s \"/tmp/sleep-load\" :direction :output :if-exists :supersede :element-type '(unsigned-byte 8)) (write-sequence block s)) (sleep .01)))))")
+             (image:send c "(list :slept (darterfly/power:suspend :wake-after 8))")
+             (is (loop repeat 40
+                       thereis (equal "suspended" (gethash "status" (image:qmp "query-status")))
+                       do (sleep .1))
+                 "CPU work must not prevent the BSP from entering S3")
+             (is (search "(:SLEPT 1)" (image:expect c (format nil "~%* ") :timeout 25))
+                 "the RTC wakes the still-loaded machine without intervention")
+             (is (search ":RUNNING T" (ask "(list :running (every #'sb-thread:thread-alive-p *load-threads*))"))
+                 "CPU work survives the sleep")
+             (ask "(progn (setf *stop-load* t) (mapc #'sb-thread:join-thread *load-threads*) (sb-thread:join-thread *disk-load*) :stopped)")
+             (is (search ":VERIFIED T" (ask "(with-open-file (s \"/tmp/sleep-load\" :element-type '(unsigned-byte 8)) (let ((v (make-array 65536 :element-type '(unsigned-byte 8)))) (list :verified (and (= 65536 (read-sequence v s)) (every (lambda (x) (= x 42)) v)))))")))
+             (is (search ":CONSISTENT T" (ask "(let ((devices (darterfly/devices:find-entries 'darterfly/devices::usb-cdc-ecm))) (list :consistent (and (= 1 (length devices)) (let* ((e (first devices)) (c (darterfly/devices::ecm-controller e))) (loop for slot being the hash-values of (darterfly/devices::xhci-port-slots c) always (= slot (darterfly/devices::ecm-slot e)))))))")))
+             (is (search ":NETWORK T" (ask "(list :network (and (darterfly/net:ping \"10.0.2.2\") t))")))
+             (is (search ":FAILURE NIL" (ask "(list :failure darterfly/devices::*device-last-failure*)"))))
+        (image:finish c 5)))))

@@ -329,3 +329,24 @@
     (setf (darterfly/wifi::link-keyed l) t)
     (darterfly/wifi::wifi-woke :woke nil)
     (is (null (darterfly/wifi::link-keyed l)))))
+
+(test usb-notifications-do-not-read-a-suspended-filesystem
+  (let* ((darterfly/net:*interface* (darterfly/net::make-interface))
+         (device (make-instance 'darterfly/devices:ethernet-controller))
+         (reads 0))
+    ;; USB emits these notifications while holding controller/suspend locks.
+    ;; Filesystem access here can wait for a disk that this same thread must wake.
+    (sb-int:encapsulate 'probe-file 'suspended-fs
+      (lambda (&rest args) (declare (ignore args))
+        (incf reads) (error "filesystem is waiting for its suspended disk")))
+    (sb-int:encapsulate 'sb-thread:make-thread 'suspended-fs
+      (lambda (&rest args) (declare (ignore args)) :queued))
+    (unwind-protect
+         (dolist (event '(:added :removed))
+           (is (eq :returned
+                   (handler-case
+                       (progn (darterfly/wifi::wifi-device-changed event device) :returned)
+                     (error () :blocked))))
+           (is (zerop reads)))
+      (sb-int:unencapsulate 'probe-file 'suspended-fs)
+      (sb-int:unencapsulate 'sb-thread:make-thread 'suspended-fs))))
