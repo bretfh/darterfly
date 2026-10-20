@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Record Harbor/browser integration only after the complete guest runs pass."""
 from datetime import datetime, timezone
+import argparse
 import hashlib
 import json
 import os
@@ -9,6 +10,10 @@ import re
 import shutil
 import subprocess
 
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--browser-revision', required=True,
+                    help='Source revision used to start the combined browser run')
+args = parser.parse_args()
 repo = Path(__file__).resolve().parents[3]
 build = repo / 'build/wpe-assessment'
 root = Path((build / 'render-build-root.txt').read_text().strip())
@@ -63,6 +68,16 @@ for name, expected in manifest['files_sha256'].items():
 if git('status', '--porcelain'):
     raise SystemExit('Commit the reviewed source before recording its evidence')
 revision = git('rev-parse', 'HEAD')
+browser_revision = git('rev-parse', args.browser_revision)
+# Qualification scripts/tests may change afterward, but the OS and browser
+# implementation must remain exactly the code exercised in that guest.
+changed = git('diff', '--name-only', browser_revision, revision).splitlines()
+for name in changed:
+    if (name.startswith('tests/')
+            or (name.startswith('ports/nyxt/wpe/')
+                and Path(name).name.startswith(('check-', 'record-')))):
+        continue
+    raise SystemExit(f'Runtime changed after the browser run: {name}; qualify it again')
 logs = output / 'qualification-logs' / ('harbor-' + revision[:12])
 logs.mkdir(parents=True, exist_ok=True)
 recorded = {}
@@ -73,7 +88,8 @@ for name in ['nyxt-harbor-os.log', 'nyxt-app-guest.log', 'nyxt-harbor-origin.log
 sources = git('ls-files').splitlines()
 evidence = {
     'recorded_utc': datetime.now(timezone.utc).isoformat(),
-    'head': revision,
+    'head': revision, 'browser_source_revision': browser_revision,
+    'runtime_sources_unchanged_since_browser_run': True,
     'master_included': git('rev-parse', 'master'),
     'installation': 'Resumed source/cache disk, copied and verified into a 4 GiB APFS disk; not a fresh-install qualification.',
     'nyxt_revision': manifest['revision'],
@@ -85,7 +101,7 @@ evidence = {
     'sources_sha256': {name: digest(repo / name) for name in sources
                       if name.startswith(('src/', 'tests/', 'ports/nyxt/wpe/'))},
     'kernel_sha256': digest(repo / 'build/kernel/kernel'),
-    'core_sha256': digest(repo / 'build/darterfly.core'),
+    'regression_core_sha256': digest(repo / 'build/darterfly.core'),
     'engines_sha256': {name: digest(root / 'engine' / name)
                       for name in ['nyxt-engine', 'WPEWebProcess', 'WPENetworkProcess']},
     'limits': ['WPE remains cross-built.',
