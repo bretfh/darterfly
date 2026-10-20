@@ -52,6 +52,7 @@ char *realpath(const char *, char *);
 int mkstemp(char *);
 int mkostemp(char *, int);
 char *mkdtemp(char *);
+#define RAND_MAX 2147483647
 int rand(void);
 void srand(unsigned);
 long random(void);

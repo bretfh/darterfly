@@ -7,6 +7,9 @@
 (let* ((source (or (uiop:getenv "DARTERFLY_NYXT_BUILD_ROOT")
                    (string-trim '(#\Space #\Newline #\Return)
                      (uiop:read-file-string (build-path "wpe-assessment/render-build-root.txt")))))
+       (engine-config (uiop:read-file-string
+                        (merge-pathnames "webkit-target/CMakeCache.txt"
+                          (uiop:ensure-directory-pathname source))))
        (root (uiop:ensure-directory-pathname
                (or (uiop:getenv "DARTERFLY_NYXT_ROOT")
                    (merge-pathnames ".cache/darterfly/nyxt/root/" (user-homedir-pathname))))))
@@ -30,5 +33,8 @@
         (print (list :format 1 :revision
                  (string-trim '(#\Newline) (uiop:run-program '("git" "rev-parse" "HEAD") :output :string))
                  :files (length names) :engine "WPE WebKit 2.54.1"
-                 :video nil :audio nil) s)))
+                 :video (not (null (search "ENABLE_VIDEO:BOOL=ON" engine-config)))
+                 :audio (not (null (search "USE_GSTREAMER:BOOL=ON" engine-config)))
+                 :web-audio (not (null (search "ENABLE_WEB_AUDIO:BOOL=ON" engine-config)))
+                 :media-source (not (null (search "ENABLE_MEDIA_SOURCE:BOOL=ON" engine-config)))) s)))
     (format t "~&[NYXT PACKAGE READY] ~a (~d files)~%" root (length names))))

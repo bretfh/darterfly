@@ -3,6 +3,7 @@
 import importlib.util
 from pathlib import Path
 import sys
+import os
 import re
 spec = importlib.util.spec_from_file_location('render', Path(__file__).with_name('build-render-libraries.py'))
 m = importlib.util.module_from_spec(spec)
@@ -20,19 +21,26 @@ if not unifdef.is_file():
     raise SystemExit('Realize the pinned host unifdef package: '+str(unifdef.parent.parent))
 src = b/'wpewebkit-2.54.1'
 out = w/'webkit-target'
+jobs = '-j'+str(int(os.environ.get('DARTER_WPE_JOBS', '16')))
+host_tools = {name: shutil.which(name, path=m.env['PATH'])
+              for name in ['perl', 'ruby', 'bison', 'gperf']}
+missing = [name for name, path in host_tools.items() if not path]
+if missing:
+    raise SystemExit('Missing host build tools: '+', '.join(missing)+
+                     '. Add them to the Guix build environment.')
 run([sys.executable, r/'ports/nyxt/wpe/apply-patches.py', src,
      'jsc-darterfly-platform.patch', 'jsc-standalone-includes.patch',
      'skia-darterfly-baseline.patch', 'skia-darterfly-platform.patch',
-     'wpe-darterfly-services.patch', 'wpe-darterfly-static-engine.patch', 'wpe-optional-gstreamer.patch', 'wpe-darterfly-cpu-renderer.patch', 'wpe-optional-drm-snapshot.patch', 'xdgmime-private-prefix.patch', 'wpe-static-injected-bundle.patch', 'wpe-darterfly-process-failure.patch', 'wpe-darterfly-sqlite-exclusive.patch'])
+     'wpe-darterfly-services.patch', 'wpe-darterfly-static-engine.patch', 'wpe-optional-gstreamer.patch', 'wpe-darterfly-cpu-renderer.patch', 'wpe-optional-drm-snapshot.patch', 'xdgmime-private-prefix.patch', 'wpe-static-injected-bundle.patch', 'wpe-darterfly-process-failure.patch', 'wpe-darterfly-sqlite-exclusive.patch', 'wpe-gstreamer-software.patch'])
 # Use the existing C-loop interpreter and native POSIX process launcher.
 # The upstream headless platform exercises software buffers; a Darterfly
 # display implementation will consume those buffers through WPEPlatform.
 on = ['ENABLE_WPE_PLATFORM', 'ENABLE_WPE_PLATFORM_HEADLESS', 'ENABLE_C_LOOP',
-      'USE_SYSTEM_MALLOC', 'USE_SYSTEM_UNIFDEF']
+      'USE_SYSTEM_MALLOC', 'USE_SYSTEM_UNIFDEF', 'ENABLE_VIDEO',
+      'ENABLE_WEB_AUDIO', 'ENABLE_MEDIA_SOURCE', 'USE_GSTREAMER']
 off = ['ENABLE_WPE_PLATFORM_DRM', 'ENABLE_WPE_PLATFORM_WAYLAND',
        'ENABLE_WPE_LEGACY_API', 'ENABLE_WPE_QT_API', 'USE_GBM', 'USE_LIBDRM',
-       'USE_ATK', 'ENABLE_GAMEPAD', 'ENABLE_VIDEO', 'ENABLE_WEB_AUDIO',
-       'USE_GSTREAMER', 'USE_GSTREAMER_GL', 'USE_GSTREAMER_WEBRTC',
+       'USE_ATK', 'ENABLE_GAMEPAD', 'USE_GSTREAMER_GL', 'USE_GSTREAMER_WEBRTC',
        'ENABLE_MEDIA_STREAM', 'ENABLE_MEDIA_RECORDER', 'ENABLE_MEDIA_SESSION',
        'ENABLE_WEB_CODECS', 'ENABLE_WEBGL', 'ENABLE_GPU_PROCESS', 'USE_AVIF',
        'USE_JPEGXL', 'USE_LCMS', 'USE_WOFF2', 'USE_LIBHYPHEN', 'USE_FLITE',
@@ -46,6 +54,12 @@ off = ['ENABLE_WPE_PLATFORM_DRM', 'ENABLE_WPE_PLATFORM_WAYLAND',
        'ENABLE_UNIFIED_BUILDS', 'USE_HEADER_MAPS']
 run([profile/'cmake', '-S', src, '-B', out, '-G', 'Ninja',
      '-DCMAKE_TOOLCHAIN_FILE='+str(b/'jsc-toolchain.cmake'),
+     '-DPERL_EXECUTABLE='+host_tools['perl'],
+     '-DPYTHON_EXECUTABLE='+sys.executable,
+     '-DPython_EXECUTABLE='+sys.executable,
+     '-DRuby_EXECUTABLE='+host_tools['ruby'],
+     '-DBISON_EXECUTABLE='+host_tools['bison'],
+     '-DGPERF_EXECUTABLE='+host_tools['gperf'],
      '-DGLIB_COMPILE_RESOURCES_EXECUTABLE=/gnu/store/p1dhlkm7a36fq27a02576zmh1gvpvkdk-glib-2.86.0-bin/bin/glib-compile-resources',
      '-DUNIFDEF_EXECUTABLE='+str(unifdef),
      '-DCMAKE_INSTALL_PREFIX=/usr', '-DCMAKE_INSTALL_LIBDIR=lib',
@@ -59,10 +73,10 @@ if '--configure-only' not in sys.argv:
         targets += ['LowLevelInterpreterLib']
         # Static WebKit exposes these OBJECT libraries through its interface;
         # archiving WebKit alone does not compile them.
-        run([profile/'ninja', '-C', out, 'DerivedSources/WebKit/MessageNames.h'])
+        run([profile/'ninja', '-C', out, jobs, '-k8', 'DerivedSources/WebKit/MessageNames.h'])
         object_targets=set(re.findall(r'/CMakeFiles/([^/]+)\.dir/',
                                        (out/'build.ninja').read_text()))
         targets += sorted(name for name in object_targets
                           if name.startswith(('WebKit','WebCore','JavaScriptCore'))
                           and name not in targets)
-    run([profile/'ninja', '-C', out, '-j16', '-k8', *targets])
+    run([profile/'ninja', '-C', out, jobs, '-k8', *targets])

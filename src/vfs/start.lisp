@@ -31,6 +31,7 @@
         (add-child dev "shm" (make-ram-node :vdir #o1777))
         (add-child dev "console" (make-instance 'dev-node :type :vchr :device :console :mode #o620))
         (add-child dev "tty" (make-instance 'dev-node :type :vchr :device :console :mode #o666))
+        (add-child dev "audio" (make-instance 'dev-node :type :vchr :device :audio :mode #o660))
         (add-child dev "null" (make-instance 'dev-node :type :vchr :device :null :mode #o666))
         (add-child dev "random" (make-instance 'dev-node :type :vchr :device :random :mode #o666))
         (add-child dev "urandom" (make-instance 'dev-node :type :vchr :device :random :mode #o666))

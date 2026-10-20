@@ -16,7 +16,7 @@ cat > "$DARTER_FLOAT_TEST_DIR/build.lisp" <<'LISP'
     (append
      (mapcar #'darterfly/low::function-routine
        (mapcar #'darterfly/low::low-function
-         '("nan_p" "infinite_p" "negate" "fabs" "copysign" "floor"
+         '("nan" "nanf" "nan_p" "infinite_p" "negate" "fabs" "copysign" "floor"
            "round" "ldexp" "roundf" "lroundf" "nextafterf" "fmaf"
            "lrintf" "llroundf" "fmin" "fmax" "fminf" "fmaxf" "remainder" "trunc" "rint" "llround" "ldexpf" "frexp" "frexpf"
            "log" "logf" "exp2" "exp2f" "remainderf" "exp" "erff_pp" "erff_qq" "erff_pa" "erff_qa" "erff_ra"

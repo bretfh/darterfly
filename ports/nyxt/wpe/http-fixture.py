@@ -22,6 +22,30 @@ class Handler(BaseHTTPRequestHandler):
         if isinstance(self.connection, ssl.SSLSocket):
             print("TLS-SESSION", self.server.server_port,
                   "resumed=" + str(self.connection.session_reused), flush=True)
+        route = self.path.split('?')[0]
+        if route == '/media.webm':
+            media = Path(__file__).resolve().parents[3]/'build/wpe-assessment/media.webm'
+            body = media.read_bytes()
+            start, end = 0, len(body)-1
+            requested = self.headers.get('Range', '')
+            if requested.startswith('bytes='):
+                first, last = requested[6:].split('-', 1)
+                start, end = int(first or 0), int(last or end)
+                if start > end or end >= len(body):
+                    self.send_error(416); return
+                self.send_response(206)
+                self.send_header('Content-Range', f'bytes {start}-{end}/{len(body)}')
+            else:
+                self.send_response(200)
+            body = body[start:end+1]
+            self.send_header('Content-Type', 'video/webm')
+            self.send_header('Accept-Ranges', 'bytes')
+            self.send_header('Content-Length', str(len(body)))
+            self.send_header('Connection', 'close')
+            self.end_headers()
+            self.wfile.write(body)
+            self.close_connection = True
+            return
         body = b'DARTERFLY-GIO-HTTP\n'
         if self.path == '/redirect':
             self.send_response(302)
@@ -47,6 +71,19 @@ small{display:block;margin-top:100px;color:#b0c8c0}</style>
 <script>window.realClicks=0;window.realKeys=0;
 document.addEventListener('click',e=>{if(e.isTrusted)window.realClicks++});
 document.addEventListener('keydown',e=>{if(e.isTrusted)window.realKeys++});</script>'''
+        elif route == '/media':
+            content_type = 'text/html; charset=utf-8'
+            body = b'''<!doctype html><meta charset=utf-8><title>Darterfly media</title>
+<style>body{background:#203040;color:white;font:20px sans-serif}video{width:640px;height:360px}</style>
+<h1>Native video and audio</h1><video id=v controls preload=auto src=/media.webm></video>
+<p id=status>Loading</p><script>
+window.events=[];window.videoFrames=0;
+for(const name of ['loadedmetadata','playing','pause','seeking','seeked','ended','error'])
+v.addEventListener(name,()=>{events.push({event:name,time:v.currentTime});
+document.querySelector('#status').textContent=JSON.stringify(events);});
+if(v.requestVideoFrameCallback){let tick=()=>{window.videoFrames++;v.requestVideoFrameCallback(tick)};
+v.requestVideoFrameCallback(tick);}
+</script>'''
         elif self.path == '/page':
             content_type = 'text/html; charset=utf-8'
             body = (b'<!doctype html><meta charset=utf-8><title>Loading</title>'

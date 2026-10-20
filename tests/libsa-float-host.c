@@ -12,6 +12,8 @@ extern long long darter_llround(double);
 extern float darter_erff(float),darter_ldexpf(float,int),darter_frexpf(float,int *);
 extern float darter_logf(float),darter_exp2f(float),darter_remainderf(float,float);
 extern float darter_fmaf(float,float,float);
+extern double darter_nan(const char *);
+extern float darter_nanf(const char *);
 static uint32_t seed=0x15638a2du;
 static uint32_t next(void) { seed^=seed<<13;seed^=seed>>17;seed^=seed<<5;return seed; }
 static float from(uint32_t u) { union { uint32_t u; float f; } v={.u=u};return v.f; }
@@ -88,6 +90,8 @@ static int elementary(float x) {
     return 1;
 }
 int main(void) {
+    if (!isnan(darter_nan("")) || !isnan(darter_nan("payload")) ||
+        !isnan(darter_nanf("")) || !isnan(darter_nanf("123"))) return 12;
     if(bits(darter_fminf(0.0f,-0.0f))!=0x80000000u ||
        bits(darter_fminf(-0.0f,0.0f))!=0x80000000u ||
        bits(darter_fmaxf(0.0f,-0.0f))!=0 ||

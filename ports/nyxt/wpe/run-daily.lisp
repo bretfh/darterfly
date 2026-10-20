@@ -40,7 +40,7 @@
        (reuse (uiop:getenv "DARTERFLY_NYXT_DAILY_REUSE"))
        (image::*include-browser* t)
        (image::*sbcl-runtime-options* (image::desktop-runtime-options))
-       (image:*extra-qemu* '("-m" "8192")))
+       (image:*extra-qemu* (append '("-m" "8192") (image::desktop-audio-args))))
   (assert (image::nyxt-package-root))
   (when reuse (image::update-root disk))
   (unless reuse

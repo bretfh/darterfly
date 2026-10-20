@@ -47,6 +47,13 @@ run([r/'ports/nyxt/wpe/target-cc.py','-c','-Os','-ffunction-sections',
      '-fdata-sections','-I'+str(p/'include/glib-2.0'),
      '-I'+str(p/'lib/glib-2.0/include'),r/'ports/nyxt/wpe/static-openssl.c',
      '-o',work/'static-openssl.o'])
+media = 'USE_GSTREAMER:BOOL=ON' in (out/'CMakeCache.txt').read_text()
+if media:
+    run([r/'ports/nyxt/wpe/target-cc.py', '-c', '-Os', '-ffunction-sections',
+         '-fdata-sections', '-DGST_STATIC_COMPILATION',
+         '-I'+str(p/'include/gstreamer-1.0'), '-I'+str(p/'include/glib-2.0'),
+         '-I'+str(p/'lib/glib-2.0/include'), r/'ports/nyxt/wpe/static-media.c',
+         '-o', work/'static-media.o'])
 if '--compile-only' in sys.argv:
     raise SystemExit(0)
 
@@ -81,8 +88,13 @@ archives=[archive,out/'lib/libSkia.a',out/'lib/libPAL.a',out/'lib/libxdgmime.a',
           *[p/'lib'/('lib'+name+'.a') for name in libs],
           b/'glib-networking-target/tls/openssl/libgioopenssl.a',
           b/'glib-gio-target/subprojects/proxy-libintl/libintl.a']
+if media:
+    archives += sorted((p/'lib/gstreamer-1.0').glob('*.a'))
+    archives += sorted((p/'lib').glob('libgst*.a'))
+    archives += [p/'lib'/('lib'+name+'.a') for name in
+                 ['vpx', 'opus', 'vorbis', 'vorbisenc', 'ogg']]
 for name in (['nyxt-engine'] if '--nyxt' in sys.argv else ['engine-probe','WPEWebProcess','WPENetworkProcess']):
     run([profile/'ld.lld','-r','--gc-sections','--entry=main',work/(name+'.o'),
-         work/'static-openssl.o','--start-group',*archives,'--end-group',
+         work/'static-openssl.o', *([work/'static-media.o'] if media else []), '--start-group',*archives,'--end-group',
          '-o',work/(name+'-guest.o')])
 print('Engine partial links:',work)
