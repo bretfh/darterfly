@@ -5,6 +5,7 @@
 ;; Keep one submission queue, but give each outstanding command its own DMA.
 ;; Leave room in the 64-entry hardware ring; no caller owns the completion ring.
 (defconstant +nvme-inflight+ 16)
+(defconstant +nvme-transfer-ceiling+ (* 128 1024))
 
 (define-device-class nvme-disk "NVMeBlockStorageDevice" (block-device)
   ((registers :accessor nvme-registers)
@@ -21,6 +22,8 @@
    (lba-size :initform 512 :accessor nvme-lba-size)
    (data :accessor nvme-data)
    (prp-list :accessor nvme-prp-list)
+   (identify-page :initform nil :accessor nvme-identify-page)
+   (max-transfer :initform nil :accessor nvme-max-transfer)
    (buffers :initform nil :accessor nvme-buffers)
    (active :initform 0 :accessor nvme-active)
    (fault :initform nil :accessor nvme-fault)
@@ -121,16 +124,38 @@
                    (setf target (logior (ash state 3) (ash (if (<= (+ entry exit) 15000) 100 2000) 8)))))))
     table))
 
-(defun enable-apst (n)
-  (let ((page (vm-page-grab)))
-    (zero-page page)
+(defun nvme-transfer-size (mdts minimum-page-shift)
+  ;; MDTS is a power of two in CAP.MPSMIN pages; zero means no device limit.
+  ;; Bound the exponent before shifting, including malformed identify values.
+  (check-type mdts (unsigned-byte 8))
+  (check-type minimum-page-shift (unsigned-byte 4))
+  (if (zerop mdts) +nvme-transfer-ceiling+
+      (min +nvme-transfer-ceiling+ (ash 4096 (min 5 (+ mdts minimum-page-shift))))))
+
+(defun nvme-identify-controller (n)
+  (let ((page (or (nvme-identify-page n)
+                  (setf (nvme-identify-page n) (vm-page-grab)))))
     (nvme-command n (nvme-admin n) #x06 :prp1 page :cdw10 1)
-    (when (logbitp 0 (ml-phys-read-8 (+ page 265)))
-      (let ((table (apst-table page)))
-        (zero-page page)
-        (dotimes (i 32) (ml-phys-write-64 (+ page (* 8 i)) (aref table i)))
-        (nvme-command n (nvme-admin n) #x09 :prp1 page :cdw10 #x0C :cdw11 1)
-        t))))
+    (setf (nvme-max-transfer n)
+          (nvme-transfer-size (ml-phys-read-8 (+ page 77))
+                              (ldb (byte 4 48) (nvme-read-64 n 0))))
+    page))
+
+(defun nvme-transfer-limit (n)
+  ;; CLOS supplies the missing slot on retained devices. Discover the limit
+  ;; once on live reload; fresh boot and controller resume already identify it.
+  (or (nvme-max-transfer n)
+      (sb-thread:with-mutex ((nvme-lock n))
+        (unless (nvme-max-transfer n) (nvme-identify-controller n))
+        (nvme-max-transfer n))))
+
+(defun enable-apst (n &optional (page (nvme-identify-controller n)))
+  (when (logbitp 0 (ml-phys-read-8 (+ page 265)))
+    (let ((table (apst-table page)))
+      (zero-page page)
+      (dotimes (i 32) (ml-phys-write-64 (+ page (* 8 i)) (aref table i)))
+      (nvme-command n (nvme-admin n) #x09 :prp1 page :cdw10 #x0C :cdw11 1))
+    t))
 
 (defun enable-controller (n)
   (setf (nvme-command-started n) nil (nvme-command-queue n) nil
@@ -150,7 +175,8 @@
     (nvme-command n admin #x01 :prp1 (nvme-queue-sq io)
                                :cdw10 (logior (ash (1- +nvme-queue-size+) 16) 1)
                                :cdw11 (logior (ash 1 16) 1))
-    (ignore-errors (enable-apst n))))
+    (let ((identify (nvme-identify-controller n)))
+      (ignore-errors (enable-apst n identify)))))
 
 (defmethod start ((n nvme-disk) (d pci-node))
   (let ((map (map-device-memory-with-index d 0)))
@@ -198,6 +224,17 @@
                                        do (ml-phys-write-64 (+ prp at) pa))
                                  (make-nvme-buffer :pages pages :prp prp))))
            'vector))))
+
+(defun nvme-grow-buffer (buffer pages)
+  ;; Only an unowned buffer may grow. Keep each new page and its PRP entry
+  ;; consistent even if the caller is interrupted or a later allocation fails.
+  (assert (null (nvme-buffer-request buffer)))
+  (loop for count = (length (nvme-buffer-pages buffer)) while (< count pages)
+        do (sb-sys:without-interrupts
+             (let ((page (vm-page-grab)))
+               (ml-phys-write-64 (+ (nvme-buffer-prp buffer) (* 8 (1- count))) page)
+               (setf (nvme-buffer-pages buffer)
+                     (nconc (nvme-buffer-pages buffer) (list page)))))))
 
 (defun nvme-reap (n)
   ;; NVME-LOCK protects submission, CQ consumption, and buffer ownership.
@@ -250,6 +287,11 @@
              (pages (ceiling bytes 4096))
              (request (make-nvme-request :opcode opcode :vector vector :start start
                                         :bytes bytes :started (get-internal-real-time))))
+        (unless (<= bytes (or (nvme-max-transfer n) (* +nvme-pages+ 4096)))
+          (error "nvme: transfer exceeds controller limit"))
+        (when (> pages (length data))
+          (nvme-grow-buffer buffer pages)
+          (setf data (nvme-buffer-pages buffer)))
         (when (= opcode 1)
           (loop for pa in data for at from start by 4096
                 for left downfrom bytes by 4096 while (plusp left)
@@ -301,7 +343,8 @@
       (call-outside-nvme-lock n (lambda () (nvme-transfer n opcode lba count vector start)))))
   ;; Bound the caller's retained request list as well as the hardware queue.
   ;; A large transfer and independent callers can both keep the controller busy.
-  (let ((per (* +nvme-pages+ 8)) (done 0) (requests nil))
+  (let ((per (/ (nvme-transfer-limit n) 512)) (done 0) (requests nil)
+        (deadline (+ (get-internal-real-time) (* 30 internal-time-units-per-second))))
     (loop while (< done count)
           do (let ((submitted nil))
                (sb-thread:with-mutex ((nvme-lock n))
@@ -313,7 +356,12 @@
                          while request
                          do (push request requests) (incf done amount) (setf submitted t))))
                (when requests (nvme-await n requests) (setf requests nil))
-               (unless submitted (nvme-wait-progress n))))))
+               (if submitted
+                   (setf deadline (+ (get-internal-real-time) (* 30 internal-time-units-per-second)))
+                   (progn
+                     (when (> (get-internal-real-time) deadline)
+                       (error "nvme: admission timed out; DMA ownership retained"))
+                     (nvme-wait-progress n)))))))
 
 (defun nvme-close-admission (n reason)
   ;; Returns holding NVME-LOCK with all earlier commands completed. The caller
@@ -400,7 +448,8 @@
 (defun nvme-io-status (n)
   (if (sb-thread:grab-mutex (nvme-lock n) :waitp nil)
       (unwind-protect
-           (list :fault (and (nvme-fault n) (princ-to-string (nvme-fault n)))
+           (list :max-transfer (nvme-max-transfer n)
+                 :fault (and (nvme-fault n) (princ-to-string (nvme-fault n)))
                  :admission (nvme-admission n) :active (nvme-active n)
                  :submitted (nvme-submitted n) :completed (nvme-completed n)
                  :high-water (nvme-high-water n)

@@ -31,7 +31,11 @@
                      (darterfly/devices::nvme-io n) (darterfly/devices::make-queue 1)
                      (darterfly/devices::nvme-data n) (loop repeat 8 collect (allocate))
                      (darterfly/devices::nvme-prp-list n) (allocate)
-                     (darterfly/devices::block-count n) 65536)
+                     (darterfly/devices::block-count n) 65536
+                     (darterfly/devices::nvme-max-transfer n) 32768)
+               ;; The real START method initializes the legacy buffer's PRP list.
+               (loop for pa in (rest (darterfly/devices::nvme-data n)) for at from 0 by 8
+                     do (darterfly/devices::ml-phys-write-64 (+ (darterfly/devices::nvme-prp-list n) at) pa))
                (funcall function n
                  (lambda () submitted)
                  (lambda (command &optional (status 0) (byte 0))
@@ -142,3 +146,78 @@
             (is (not (sb-thread:holding-mutex-p (darterfly/devices::nvme-lock n))))
             (error "failed completion"))))
       (is (sb-thread:holding-mutex-p (darterfly/devices::nvme-lock n))))))
+
+(test nvme-transfer-size-obeys-identify-and-software-limit
+  (is (= 131072 (darterfly/devices::nvme-transfer-size 0 0)))
+  (is (= 8192 (darterfly/devices::nvme-transfer-size 1 0)))
+  (is (= 32768 (darterfly/devices::nvme-transfer-size 3 0)))
+  (is (= 65536 (darterfly/devices::nvme-transfer-size 3 1)))
+  (is (= 131072 (darterfly/devices::nvme-transfer-size 9 0)))
+  (is (= 131072 (darterfly/devices::nvme-transfer-size 255 15)))
+  (signals type-error (darterfly/devices::nvme-transfer-size -1 0)))
+
+(test nvme-large-requests-grow-free-buffers-and-describe-all-pages
+  (call-with-nvme-model
+   (lambda (n commands complete)
+     (declare (ignore complete))
+     (setf (darterfly/devices::nvme-max-transfer n) 131072)
+     (sb-thread:with-mutex ((darterfly/devices::nvme-lock n))
+       (let* ((v (make-array 131072 :element-type '(unsigned-byte 8)))
+              (request (darterfly/devices::nvme-submit-locked n 2 0 256 v 0))
+              (cmd (first (funcall commands)))
+              (b (aref (darterfly/devices::nvme-buffers n) (getf cmd :cid)))
+              (slot (darterfly/devices::nvme-queue-sq (darterfly/devices::nvme-io n))))
+         (is (= 32 (length (darterfly/devices::nvme-buffer-pages b))))
+         (is (= 255 (darterfly/devices::ml-phys-read-32 (+ slot 48))))
+         (is (= (darterfly/devices::nvme-buffer-prp b)
+                (darterfly/devices::ml-phys-read-64 (+ slot 32))))
+         (loop for page in (rest (darterfly/devices::nvme-buffer-pages b)) for at from 0 by 8
+               do (is (= page (darterfly/devices::ml-phys-read-64
+                                (+ (darterfly/devices::nvme-buffer-prp b) at)))))
+         (is (eq request (darterfly/devices::nvme-buffer-request b)))
+         (signals error (darterfly/devices::nvme-grow-buffer b 64))
+         (signals error (darterfly/devices::nvme-submit-locked n 2 0 257 (make-array 131584) 0)))))))
+
+(test nvme-full-pool-admission-times-out-without-reclaiming-live-dma
+  (call-with-nvme-model
+   (lambda (n commands complete)
+     (declare (ignore complete))
+     (sb-thread:with-mutex ((darterfly/devices::nvme-lock n))
+       (dotimes (i 16) (darterfly/devices::nvme-submit-locked n 0 0 0 nil 0)))
+     (let ((now 0))
+       (sb-int:encapsulate 'get-internal-real-time 'admission-clock
+         (lambda (&rest args) (declare (ignore args)) now))
+       (sb-int:encapsulate 'darterfly/devices::nvme-wait-progress 'admission-clock
+         (lambda (&rest args) (declare (ignore args))
+           (incf now (* 31 internal-time-units-per-second))))
+       (unwind-protect
+            (progn
+              (signals error (darterfly/devices::read-blocks n 0 1))
+              (is (= 16 (length (funcall commands))))
+              (is (= 16 (darterfly/devices::nvme-active n)))
+              (is (every #'darterfly/devices::nvme-buffer-request (darterfly/devices::nvme-buffers n)))
+              (is (not (sb-thread:holding-mutex-p (darterfly/devices::nvme-lock n)))))
+         (sb-int:unencapsulate 'get-internal-real-time 'admission-clock)
+         (sb-int:unencapsulate 'darterfly/devices::nvme-wait-progress 'admission-clock))))))
+
+(test nvme-buffer-growth-can-retry-after-allocation-failure
+  (call-with-nvme-model
+   (lambda (n commands complete)
+     (declare (ignore commands complete))
+     (setf (darterfly/devices::nvme-max-transfer n) 131072)
+     (sb-thread:with-mutex ((darterfly/devices::nvme-lock n))
+       (darterfly/devices::nvme-ensure-buffers n)
+       (let ((b (aref (darterfly/devices::nvme-buffers n) 0)) (allocations 0))
+         (sb-int:encapsulate 'darterfly/devices:vm-page-grab 'growth-failure
+           (lambda (original)
+             (when (= (incf allocations) 3) (error "injected page allocation failure"))
+             (funcall original)))
+         (unwind-protect
+              (signals error (darterfly/devices::nvme-grow-buffer b 32))
+           (sb-int:unencapsulate 'darterfly/devices:vm-page-grab 'growth-failure))
+         (is (= 10 (length (darterfly/devices::nvme-buffer-pages b))))
+         (is (null (darterfly/devices::nvme-buffer-request b)))
+         (darterfly/devices::nvme-grow-buffer b 32)
+         (loop for page in (rest (darterfly/devices::nvme-buffer-pages b)) for at from 0 by 8
+               do (is (= page (darterfly/devices::ml-phys-read-64
+                                (+ (darterfly/devices::nvme-buffer-prp b) at))))))))))
