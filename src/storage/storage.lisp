@@ -24,7 +24,7 @@
   (ecase name
     (:serve (apply #'serve-disk args))))
 
-(defparameter +ops+ #(nil :lookup :readdir :read :write :getattr :readlink :create :mkdir :symlink :remove :rmdir :rename :setattr :truncate :sync))
+(defparameter +ops+ #(nil :lookup :readdir :read :write :getattr :readlink :create :mkdir :symlink :remove :rmdir :rename :setattr :truncate :sync :open :close))
 (defparameter +types+ #(nil :vreg :vdir :vlnk :vchr))
 
 (defun type-code (type) (or (position type +types+) 0))
@@ -86,7 +86,9 @@
               (:setattr (darterfly/vfs:vnop-setattr v :mode (and (/= a 0) a) :uid (and (/= b (1- (ash 1 64))) b) :gid (and (/= c (1- (ash 1 64))) c))
                         (octets 0))
               (:truncate (darterfly/vfs:vnop-truncate v a) (octets 0))
-              (:sync (darterfly/apfs::sync-volumes) (octets 0))))
+              (:sync (darterfly/apfs::sync-volumes) (octets 0))
+              (:open (darterfly/vfs:vnop-open v) (octets 0))
+              (:close (darterfly/vfs:vnop-close v) (octets 0))))
         (darterfly/vfs:vfs-error (e) (octets (- (ash 1 64) (darterfly/vfs:errno-code (darterfly/vfs:vfs-errno e)))))
         (error () (octets (- (ash 1 64) 5)))))))
 
@@ -115,6 +117,9 @@
 (defun remote-node (v reply)
   (let ((id (u64 reply 8)))
     (make-instance 'remote-vnode :world (remote-world v) :port (remote-port v) :id id :type (aref +types+ (u64 reply 16)))))
+
+(defmethod darterfly/vfs:vnop-open ((v remote-vnode)) (call v :open) nil)
+(defmethod darterfly/vfs:vnop-close ((v remote-vnode)) (call v :close) nil)
 
 (defmethod darterfly/vfs:vnop-lookup ((dir remote-vnode) name)
   (multiple-value-bind (status reply) (handler-case (call dir :lookup :name1 name) (darterfly/vfs:vfs-error () (values -1 nil)))

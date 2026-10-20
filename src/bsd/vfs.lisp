@@ -66,8 +66,8 @@
     (vfs-call (vfs:vfs-write (vfs-fd held) octets))))
 
 (defmethod file-close ((file vnode))
-  ;; Only the short descriptor-table lock, never the filesystem lock.
-  (vfs (vfs:vfs-close (vfs-fd file))))
+  ;; Final close may reclaim an unlinked inode in the storage world.
+  (vfs-call (vfs:vfs-close (vfs-fd file))))
 
 (defgeneric make-device-file (device fd flags)
   (:method (device fd flags)
@@ -89,7 +89,7 @@
                          :device device :flags (logand flags +o-nonblock+)))))
            (prog1 (fd-alloc file) (setf installed t)))
       (unless installed
-        (if file (file-close file) (vfs:vfs-close fd))))))
+        (if file (file-close file) (vfs-call (vfs:vfs-close fd)))))))
 
 (defun absolute (name)
   (if (and (plusp (length name)) (char= (char name 0) #\/))

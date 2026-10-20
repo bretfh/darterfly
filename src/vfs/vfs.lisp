@@ -3,7 +3,7 @@
   (:export
    #:vfs-error #:vfs-errno #:fail
    #:vnode #:vnode-type #:vnode-id #:mount #:mount-path #:*mounts* #:vfs-mount #:vfs-unmount
-   #:vnop-lookup #:vnop-readdir #:vnop-read #:vnop-write #:vnop-getattr #:vnop-readlink
+   #:vnop-open #:vnop-close #:vnop-lookup #:vnop-readdir #:vnop-read #:vnop-write #:vnop-getattr #:vnop-readlink
    #:vnop-create #:vnop-mkdir #:vnop-symlink #:vnop-remove #:vnop-rmdir #:vnop-rename #:vnop-setattr #:vnop-truncate
    #:vattr #:make-vattr #:vattr-mode #:vattr-uid #:vattr-gid #:vattr-size #:vattr-nlink #:vattr-mtime #:vattr-rdev
    #:namei #:namei-at #:vfs-open-at #:vfs-remove-at #:vfs-open #:vfs-close #:vfs-read #:vfs-write #:vfs-stat #:vfs-readdir #:vfs-readlink #:vfs-mkdir
@@ -24,6 +24,9 @@
 
 (defstruct vattr (mode 0) (uid 0) (gid 0) (size 0) (nlink 1) (mtime 0) (rdev 0))
 
+;; One retain per open file description, independent of descriptor duplication.
+(defgeneric vnop-open (vnode) (:method ((v vnode)) nil))
+(defgeneric vnop-close (vnode) (:method ((v vnode)) nil))
 (defgeneric vnop-lookup (dir name))
 (defgeneric vnop-readdir (dir))
 (defgeneric vnop-read (vnode offset count))
@@ -144,11 +147,13 @@
 (defvar *files-lock* (sb-thread:make-mutex :name "vfs descriptors"))
 (defconstant +first-fd+ 3)
 
+(defun install-locked (file from)
+  (loop for fd from from below 4096
+        unless (gethash fd *files*) do (setf (gethash fd *files*) file) (return fd)
+        finally (fail :emfile)))
+
 (defun install (file &optional (from +first-fd+))
-  (sb-thread:with-mutex (*files-lock*)
-    (loop for fd from from below 4096
-          unless (gethash fd *files*) do (setf (gethash fd *files*) file) (return fd)
-          finally (fail :emfile))))
+  (sb-thread:with-mutex (*files-lock*) (install-locked file from)))
 
 (defun fd-file (fd)
   (sb-thread:with-mutex (*files-lock*)
@@ -178,29 +183,39 @@
         (fail :eisdir))
       (when (and (getf flags :trunc) (eq (vnode-type vnode) :vreg) (not (eq (getf flags :access) :rdonly)))
         (vnop-truncate vnode 0))
-      (install (make-file :vnode vnode :flags flags
-                          :stack (and (eq (vnode-type vnode) :vdir) (namei-stack path)))))))
+      (vnop-open vnode)
+      (let ((installed nil))
+        (unwind-protect
+            (prog1 (install (make-file :vnode vnode :flags flags
+                     :stack (and (eq (vnode-type vnode) :vdir) (namei-stack path))))
+              (setf installed t))
+          (unless installed (vnop-close vnode)))))))
 
 (defun vfs-close (fd)
-  (sb-thread:with-mutex (*files-lock*)
-    (unless (gethash fd *files*) (fail :ebadf))
-    (remhash fd *files*)
-    0))
+  ;; Detach atomically, then reclaim outside the descriptor-table lock.
+  ;; RAM and device closes must not wait for unrelated filesystem I/O.
+  (let ((last (sb-thread:with-mutex (*files-lock*)
+                (let ((file (or (gethash fd *files*) (fail :ebadf))))
+                  (remhash fd *files*)
+                  (when (zerop (decf (file-refs file))) file)))))
+    (when last (vnop-close (file-vnode last))))
+  0)
 
 (defun readable-p (file) (not (eq (getf (file-flags file) :access) :wronly)))
 (defun writable-p (file) (not (eq (getf (file-flags file) :access) :rdonly)))
 
 (defun vfs-read (fd count &optional offset)
-  (let ((f (with-vfs (fd-file fd))))
-    (if (eq (vnode-type (file-vnode f)) :vchr)
-        (vnop-read (file-vnode f) 0 count)
-        (with-vfs
-          (let ((v (file-vnode f)))
-            (when (eq (vnode-type v) :vdir) (fail :eisdir))
-            (unless (readable-p f) (fail :ebadf))
-            (let ((data (vnop-read v (or offset (file-offset f)) count)))
-              (unless offset (incf (file-offset f) (length data)))
-              data))))))
+  (let ((device
+          (with-vfs
+            (let* ((f (fd-file fd)) (v (file-vnode f)))
+              (unless (eq (vnode-type v) :vchr)
+                (when (eq (vnode-type v) :vdir) (fail :eisdir))
+                (unless (readable-p f) (fail :ebadf))
+                (let ((data (vnop-read v (or offset (file-offset f)) count)))
+                  (unless offset (incf (file-offset f) (length data)))
+                  (return-from vfs-read data)))
+              v))))
+    (vnop-read device 0 count)))
 
 (defun vfs-write (fd octets &optional offset)
   (with-vfs
@@ -313,15 +328,22 @@
         (aref (file-listing f) index)))))
 
 (defun vfs-dup (fd &optional (from +first-fd+))
-  (with-vfs (install (fd-file fd) from)))
+  (sb-thread:with-mutex (*files-lock*)
+    (let ((file (or (gethash fd *files*) (fail :ebadf))))
+      (prog1 (install-locked file from) (incf (file-refs file))))))
 
 (defun vfs-dup2 (fd new)
-  (with-vfs
-    (let ((f (fd-file fd)))
-      (when (< new +first-fd+) (fail :ebadf))
-      (unless (= fd new)
-        (sb-thread:with-mutex (*files-lock*) (setf (gethash new *files*) f)))
-      new)))
+  (let ((last
+          (sb-thread:with-mutex (*files-lock*)
+            (let ((file (or (gethash fd *files*) (fail :ebadf))))
+              (unless (<= +first-fd+ new 4095) (fail :ebadf))
+              (unless (= fd new)
+                (let ((old (gethash new *files*)))
+                  (incf (file-refs file))
+                  (setf (gethash new *files*) file)
+                  (when (and old (zerop (decf (file-refs old)))) old)))))))
+    (when last (vnop-close (file-vnode last))))
+  new)
 
 (defun namei-at (fd path &key (follow t))
   "Resolve relative to an open directory without changing process cwd."

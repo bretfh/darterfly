@@ -148,8 +148,25 @@
 (defmethod vfs:vnop-symlink ((dir apfs-wvnode) name target)
   (with-commit (w dir) (wvnode w (wcreate w (vfs:vnode-id dir) name :symlink :mode #o755 :target target))))
 
+(defmethod vfs:vnop-open ((n apfs-wvnode))
+  (incf (gethash (vfs:vnode-id n) (wvolume-opens (vnode-mount n)) 0)))
+
+(defmethod vfs:vnop-close ((n apfs-wvnode))
+  (vfs::with-vfs
+    (let* ((w (vnode-mount n)) (id (vfs:vnode-id n)))
+      (assert (plusp (gethash id (wvolume-opens w) 0)))
+      (when (zerop (decf (gethash id (wvolume-opens w))))
+        (remhash id (wvolume-opens w))
+        (when (and (not (eq (vfs:vnode-type n) :vdir))
+                   (zerop (inode-field w id 56 4)))
+          (with-commit (w n) (wdispose w id))
+          (remhash (cons w id) *wvnodes*))))))
+
 (defmethod vfs:vnop-remove ((dir apfs-wvnode) name vnode)
-  (with-commit (w dir) (wremove w (vfs:vnode-id dir) name (vfs:vnode-id vnode)) (remhash (cons w (vfs:vnode-id vnode)) *wvnodes*)))
+  (with-commit (w dir)
+    (wremove w (vfs:vnode-id dir) name (vfs:vnode-id vnode))
+    (unless (plusp (gethash (vfs:vnode-id vnode) (wvolume-opens w) 0))
+      (remhash (cons w (vfs:vnode-id vnode)) *wvnodes*))))
 
 (defmethod vfs:vnop-rmdir ((dir apfs-wvnode) name vnode)
   (with-commit (w dir) (wremove w (vfs:vnode-id dir) name (vfs:vnode-id vnode)) (remhash (cons w (vfs:vnode-id vnode)) *wvnodes*)))

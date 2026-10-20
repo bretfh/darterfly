@@ -1,6 +1,6 @@
 (in-package #:darterfly/apfs)
 
-(defstruct (wvolume (:constructor %make-wvolume)) nx records extents children pending-free (by-id (make-hash-table)))
+(defstruct (wvolume (:constructor %make-wvolume)) nx records extents children pending-free (by-id (make-hash-table)) (opens (make-hash-table)))
 
 (defun key-id (key) (logand (u64 key 0) #x0fffffffffffffff))
 
@@ -35,6 +35,8 @@
           (fail "conflicting duplicate metadata key ~s" (car r))))
       (setf (gethash (car r) h) (cdr r)))))
 
+(declaim (ftype function reap-unlinked-inodes))
+
 (defun make-wvolume (nx)
   (let ((w (%make-wvolume :nx nx :records (record-table (nx-fs-records nx)) :extents (record-table (nx-extent-records nx))
                           :children (make-hash-table))))
@@ -50,6 +52,9 @@
           (nx-fs-records nx) nil (nx-extent-records nx) nil)
     (normalize-tree-keys (nx-fs-tree nx))
     (normalize-tree-keys (nx-extent-tree nx))
+    ;; No descriptors survive a remount. Reclaim zero-link files left by
+    ;; an interrupted open/unlink/close sequence, using normal transactions.
+    (reap-unlinked-inodes w)
     w))
 
 (defun wvolume-sb (w) (nx-vol-sb (wvolume-nx w)))
@@ -236,12 +241,28 @@
   (let ((old (wread w id 0 size)))
     (wset-content w id (let ((v (make-array size :element-type '(unsigned-byte 8) :initial-element 0))) (replace v old) v))))
 
-(defun wremove (w parent name id)
+(defun wdispose (w id)
   (let ((mode (inode-field w id 80 2)))
     (drop-data w id)
     (dolist (k (copy-list (gethash id (wvolume-by-id w)))) (drop-record w k))
-    (drop-drec w parent name)
     (counter w (case (logand mode #o170000) (#o040000 192) (#o120000 200) (t 184)) -1)))
+
+(defun reap-unlinked-inodes (w)
+  (let ((ids (loop for key being the hash-keys of (wvolume-records w)
+                  using (hash-value value)
+                  when (and (= (ash (u64 key 0) -60) +apfs-type-inode+)
+                            (/= (logand (u16 value 80) #o170000) #o040000)
+                            (zerop (u32 value 56)))
+                    collect (key-id key))))
+    (dolist (id ids) (wdispose w id))
+    (when ids (wcommit w))))
+
+(defun wremove (w parent name id)
+  (drop-drec w parent name)
+  (if (and (plusp (gethash id (wvolume-opens w) 0))
+           (/= (logand (inode-field w id 80 2) #o170000) #o040000))
+      (update-inode w id :nchildren 0)
+      (wdispose w id)))
 
 (defun wrename (w from-parent from-name id to-parent to-name)
   (let ((existing (wlookup w to-parent to-name)))
