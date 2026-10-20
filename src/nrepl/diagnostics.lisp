@@ -74,6 +74,7 @@
         :locks (diagnostic-part (diagnostic-locks))
         :threads (diagnostic-part (diagnostic-threads))
         :services (diagnostic-part (darterfly/init::diagnostic-jobs))
+        :suspend (diagnostic-part darterfly/power::*suspend-state*)
         :device-transition (diagnostic-part darterfly/devices::*device-transition*)
         :device-last-failure (diagnostic-part darterfly/devices::*device-last-failure*)
         :network (diagnostic-part (darterfly/wifi:network-status))
@@ -81,6 +82,9 @@
                       (loop for event in (and darterfly/wifi::*card*
                                                (darterfly/wifi::card-log darterfly/wifi::*card*))
                             for i below 12 collect event))
+        :wifi-history (diagnostic-part
+                        (and darterfly/wifi::*card*
+                             (darterfly/wifi::card-history darterfly/wifi::*card*)))
         :nvme (diagnostic-part (diagnostic-nvme))
         :kernel (diagnostic-part (darterfly/stats::kernel-times))
         :ring (diagnostic-part (diagnostic-ring))))

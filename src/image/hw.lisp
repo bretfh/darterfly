@@ -66,6 +66,7 @@
       (multiple-value-setq (after answered healthy) (settle-health host nrepl-port settle)))
     (setf failures (append (mapcar (lambda (f) (cons :before f)) (health-failures before))
                            (and sleep (not (suspend-succeeded-p slept)) (list (list :suspend :failed (or suspend-error slept))))
+                           (and sleep (null healthy) (list (list :settle :failed :no-sustained-health)))
                            (and sleep (mapcar (lambda (f) (cons :after f)) (health-failures after before))))
           record (list :label label :date (timestamp) :before before :slept slept :after after
                        :suspend-error suspend-error :answered-after answered :healthy-after healthy :failures failures))

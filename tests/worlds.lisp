@@ -70,3 +70,22 @@
       (bsd:end-world-proc a)
       (bsd:end-world-proc b)
       (mach:mach-port-mod-refs parent port :receive -1))))
+
+(test a-single-healthy-sample-is-not-a-settled-wake
+  (let ((darterfly/image::*expected* '(:log))
+        (dir (merge-pathnames "unsettled-wake/" (scratch))))
+    (sb-int:encapsulate 'darterfly/image::health-on-device 'unsettled
+      (lambda (&rest args) (declare (ignore args)) '((:log :ok))))
+    (sb-int:encapsulate 'darterfly/image::device-eval 'unsettled
+      (lambda (&rest args) (declare (ignore args)) "=> 1"))
+    (sb-int:encapsulate 'darterfly/image::settle-health 'unsettled
+      (lambda (&rest args) (declare (ignore args)) (values '((:log :ok)) 59 nil)))
+    (sb-int:encapsulate 'darterfly/image::results-dir 'unsettled
+      (lambda (&rest args) (declare (ignore args)) dir))
+    (unwind-protect
+         (let ((*standard-output* (make-string-output-stream)))
+           (is (null (darterfly/image:hw "unused" :settle 60))))
+      (dolist (name '(darterfly/image::health-on-device darterfly/image::device-eval
+                      darterfly/image::settle-health darterfly/image::results-dir))
+        (sb-int:unencapsulate name 'unsettled))
+      (uiop:delete-directory-tree dir :validate t :if-does-not-exist :ignore))))

@@ -91,7 +91,26 @@
   (cmos #x0C)
   (darterfly/devices::port-write-16 (+ event 2) enable))
 
+(defvar *suspend-lock* (sb-thread:make-mutex :name "system suspend"))
+(defvar *suspend-state* nil)
+
+(defun suspend-phase (phase &rest detail)
+  (setf *suspend-state* (list* :phase phase :since (get-internal-real-time) detail)))
+
 (defun suspend (&key check wake-after)
+  (unless (sb-thread:grab-mutex *suspend-lock* :waitp nil)
+    (error "suspend: another transition is in progress"))
+  (unwind-protect
+       (handler-case
+           (let ((result (perform-suspend :check check :wake-after wake-after)))
+             (suspend-phase :awake :wake-count result)
+             result)
+         (error (e)
+           (suspend-phase :failed :error (princ-to-string e))
+           (error e)))
+    (sb-thread:release-mutex *suspend-lock*)))
+
+(defun perform-suspend (&key check wake-after)
   (let* ((fadt (darterfly/devices::acpi-table "FACP"))
          (length (and fadt (darterfly/devices::ml-phys-read-32 (+ fadt 4))))
          (control (and fadt (darterfly/devices::ml-phys-read-32 (+ fadt 64))))
@@ -101,14 +120,26 @@
          (type (sleep-type 3)))
     (unless (and control (plusp control) event (plusp event) facs (plusp facs) type)
       (error "suspend: the firmware offers no S3"))
+    (suspend-phase :flushing)
     (flush-disks)
-    (darterfly/devices::suspend-devices)
-    (let ((enables (quiet-gpes fadt))
-          (rtc (and wake-after (arm-rtc-wake event wake-after))))
-      (unwind-protect (darterfly/devices:machdep 66 (logior control (ash event 16) (ash type 32) (if check (ash 1 35) 0)) facs)
-        (when rtc (disarm-rtc-wake event rtc))
-        (restore-gpes fadt enables)
-        (darterfly/devices::wake-devices)))))
+    ;; Establish cleanup before taking any driver locks. In particular, an RTC
+    ;; setup failure must not leave the display and disks suspended forever.
+    (unwind-protect
+         (progn
+           (suspend-phase :suspending-devices)
+           (darterfly/devices::suspend-devices)
+           (let ((enables (quiet-gpes fadt)))
+             (unwind-protect
+                  (let ((rtc (and wake-after (arm-rtc-wake event wake-after))))
+                    (unwind-protect
+                         (progn
+                           (suspend-phase :sleeping)
+                           (darterfly/devices:machdep 66
+                             (logior control (ash event 16) (ash type 32) (if check (ash 1 35) 0)) facs))
+                      (when rtc (disarm-rtc-wake event rtc))))
+               (restore-gpes fadt enables))))
+      (suspend-phase :waking-devices)
+      (darterfly/devices::wake-devices))))
 
 (defun changed-memory ()
   (let ((buffer (make-array 4098 :element-type '(unsigned-byte 64))))
