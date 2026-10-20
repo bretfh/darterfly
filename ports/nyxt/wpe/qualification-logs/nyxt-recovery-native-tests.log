@@ -1,0 +1,355 @@
+This is SBCL 2.6.4, an implementation of ANSI Common Lisp.
+More information about SBCL is available at <http://www.sbcl.org/>.
+
+SBCL is free software, provided as is, with absolutely no warranty.
+It is mostly in the public domain; some portions are provided under
+BSD-style licenses.  See the CREDITS and COPYING files in the
+distribution for more information.
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/libsa/pthread.lisp" (written 19 OCT 2026 08:22:59 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/libsa/pthread-tmpGHU3ALSV.fasl
+; compilation finished in 0:00:00.020
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/libsa/time.lisp" (written 18 OCT 2026 05:06:15 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/libsa/time-tmpAAURSO1.fasl
+; compilation finished in 0:00:00.020
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/libsa/unistd.lisp" (written 19 OCT 2026 05:32:54 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/libsa/unistd-tmp5GEXGEG5.fasl
+; compilation finished in 0:00:00.036
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/libsa/vfs.lisp" (written 19 OCT 2026 05:32:54 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/libsa/vfs-tmpAR3FSGEY.fasl
+; compilation finished in 0:00:00.039
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/libsa/resolver.lisp" (written 18 OCT 2026 11:27:43 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/libsa/resolver-tmpJAIDFZTC.fasl
+; compilation finished in 0:00:00.000
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/libsa/inet.lisp" (written 18 OCT 2026 11:56:24 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/libsa/inet-tmp8V3J6PE9.fasl
+; compilation finished in 0:00:00.008
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/libsa/fnmatch.lisp" (written 18 OCT 2026 11:34:12 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/libsa/fnmatch-tmp9V47YWQF.fasl
+; compilation finished in 0:00:00.000
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/libsa/message.lisp" (written 18 OCT 2026 08:33:36 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/libsa/message-tmp9BN22RMA.fasl
+; compilation finished in 0:00:00.000
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/libsa/dynamic.lisp" (written 19 OCT 2026 12:24:35 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/libsa/dynamic-tmp1CXFJSK9.fasl
+; compilation finished in 0:00:00.012
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/libsa/start.lisp" (written 19 OCT 2026 08:22:59 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/libsa/start-tmpX4BRKI0R.fasl
+; compilation finished in 0:00:00.008
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/libsa/spawn.lisp" (written 18 OCT 2026 11:40:03 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/libsa/spawn-tmpQ371UGST.fasl
+; compilation finished in 0:00:00.008
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/libsa/run.lisp" (written 19 OCT 2026 02:40:57 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/libsa/run-tmp2OWI3Q7U.fasl
+; compilation finished in 0:00:00.012
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/libsa/math.lisp" (written 19 OCT 2026 01:32:06 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/libsa/math-tmp9KKTJMYV.fasl
+; compilation finished in 0:00:00.028
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/libsa/fma.lisp" (written 19 OCT 2026 12:43:09 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/libsa/fma-tmpJU0JWO19.fasl
+; compilation finished in 0:00:00.004
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/libsa/strtod.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/libsa/strtod-tmpZX2WN8N4.fasl
+; compilation finished in 0:00:00.008
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/libsa/stdio.lisp" (written 19 OCT 2026 06:49:36 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/libsa/stdio-tmpOU81XRV0.fasl
+; compilation finished in 0:00:00.024
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/libsa/locale.lisp" (written 18 OCT 2026 10:45:14 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/libsa/locale-tmpY2ML9CFA.fasl
+; compilation finished in 0:00:00.028
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/install/install.lisp" (written 19 OCT 2026 05:32:54 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/install/install-tmpX2JYJDQE.fasl
+; compilation finished in 0:00:00.028
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/install/disk.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/install/disk-tmpOPCILR65.fasl
+; compilation finished in 0:00:00.012
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/install/deploy.lisp" (written 19 OCT 2026 05:32:54 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/install/deploy-tmpRV9F8A9A.fasl
+; compilation finished in 0:00:00.020
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/run/run.lisp" (written 19 OCT 2026 05:32:54 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/run/run-tmpK2ZAJT4I.fasl
+; compilation finished in 0:00:00.115
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/init/init.lisp" (written 19 OCT 2026 07:35:22 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/init/init-tmpUX5S4ADN.fasl
+; compilation finished in 0:00:00.040
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/layer/client.lisp" (written 19 OCT 2026 05:32:54 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/layer/client-tmp10401X32.fasl
+; compilation finished in 0:00:00.012
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/layer/world.lisp" (written 19 OCT 2026 05:32:54 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/layer/world-tmpZ7CBRM0G.fasl
+; compilation finished in 0:00:00.016
+WARNING: redefining ZPB-TTF::LOCATION in DEFGENERIC
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/kit/kit.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/kit/kit-tmp9OZEQ0G2.fasl
+; compilation finished in 0:00:00.036
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/server/windowserver.lisp" (written 19 OCT 2026 04:21:44 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/server/windowserver-tmpB2JTL1W9.fasl
+; compilation finished in 0:00:00.040
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/bench/bench.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/bench/bench-tmpP3BI68WQ.fasl
+; compilation finished in 0:00:00.020
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/cc/cc.lisp" (written 18 OCT 2026 05:41:03 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/cc/cc-tmpQDARA81Z.fasl
+; compilation finished in 0:00:00.028
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/cc/native.lisp" (written 19 OCT 2026 06:11:18 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/cc/native-tmpYEMMM7SE.fasl
+; compilation finished in 0:00:00.024
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/generation/generation.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/generation/generation-tmp73HU0RPK.fasl
+; compilation finished in 0:00:00.028
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/drivers/drivers.lisp" (written 19 OCT 2026 05:32:54 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/drivers/drivers-tmpIO5N7K88.fasl
+; compilation finished in 0:00:00.032
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/storage/storage.lisp" (written 19 OCT 2026 05:32:54 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/storage/storage-tmpCM21U60Z.fasl
+; compilation finished in 0:00:00.039
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/apps/hello.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/apps/hello-tmp9DT7SEFG.fasl
+; compilation finished in 0:00:00.004
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/apps/open.lisp" (written 19 OCT 2026 07:35:22 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/apps/open-tmp8065ESJT.fasl
+; compilation finished in 0:00:00.008
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/apps/terminal.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/apps/terminal-tmp7S8Z6FGF.fasl
+; compilation finished in 0:00:00.008
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/apps/listener.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/apps/listener-tmpSIT3QPKP.fasl
+; compilation finished in 0:00:00.032
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/apps/forcequit.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/apps/forcequit-tmpE0PA0714.fasl
+; compilation finished in 0:00:00.004
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/apps/editor.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/apps/editor-tmpJRWHHVG0.fasl
+; compilation finished in 0:00:00.024
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/apps/generations.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/apps/generations-tmp4WZVROCX.fasl
+; compilation finished in 0:00:00.004
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/apps/onboarding.lisp" (written 19 OCT 2026 05:32:54 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/apps/onboarding-tmpA0I3UKX8.fasl
+; compilation finished in 0:00:00.020
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/apps/session.lisp" (written 19 OCT 2026 06:03:37 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/apps/session-tmp267Y2N80.fasl
+; compilation finished in 0:00:00.024
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/apps/fetch.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/apps/fetch-tmpOUPE5FSJ.fasl
+; compilation finished in 0:00:00.016
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/apps/install.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/apps/install-tmpIGHCU6ZA.fasl
+; compilation finished in 0:00:00.004
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/apps/ocicl.lisp" (written 19 OCT 2026 02:32:44 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/apps/ocicl-tmpBO0TUGLK.fasl
+; compilation finished in 0:00:00.000
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/apps/nyxt.lisp" (written 19 OCT 2026 07:20:22 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/apps/nyxt-tmpIIXPIQNW.fasl
+; compilation finished in 0:00:00.004
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/image/image.lisp" (written 19 OCT 2026 05:32:54 PM):
+
+; file: /home/bfh/git/cl/darterfly-nyxt/src/image/image.lisp
+; in: DEFUN KEY-NAME
+;     (CASE CHAR
+;       (#\( "9")
+;       (#\) "0")
+;       (#\+ "equal")
+;       (#\* "8")
+;       (#\" "apostrophe")
+;       (#\  "spc")
+;       (#\Newline "ret")
+;       (#\Esc "esc")
+;       (#\- "minus")
+;       (#\= "equal")
+;       ...)
+; --> IF IF IF IF IF IF IF IF IF IF IF IF IF IF IF IF IF IF 
+; ==>
+;   "dot"
+; 
+; note: deleting unreachable code
+
+; --> IF IF IF IF IF IF IF IF IF IF IF IF IF IF IF 
+; ==>
+;   "apostrophe"
+; 
+; note: deleting unreachable code
+
+; --> IF IF IF IF IF IF IF IF IF IF 
+; ==>
+;   "equal"
+; 
+; note: deleting unreachable code
+
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/image/image-tmpOHM494YR.fasl
+; compilation finished in 0:00:00.048
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/image/tcc.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/image/tcc-tmpOVFB07XF.fasl
+; compilation finished in 0:00:00.011
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/image/runtime.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/image/runtime-tmpG6VFGMYP.fasl
+; compilation finished in 0:00:00.000
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/image/efi.lisp" (written 19 OCT 2026 05:32:54 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/image/efi-tmp4QIPRMOF.fasl
+; compilation finished in 0:00:00.048
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/image/deploy.lisp" (written 19 OCT 2026 05:32:54 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/image/deploy-tmpGW0QV22K.fasl
+; compilation finished in 0:00:00.016
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/image/bench.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/image/bench-tmp2K9J0HSR.fasl
+; compilation finished in 0:00:00.008
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/image/hw.lisp" (written 19 OCT 2026 05:32:54 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/image/hw-tmpP44I4E0Y.fasl
+; compilation finished in 0:00:00.008
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/src/start/start.lisp" (written 19 OCT 2026 05:32:54 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/src/start/start-tmp63LQ7EX6.fasl
+; compilation finished in 0:00:00.008
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/suite.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/suite-tmp86F1A8FB.fasl
+; compilation finished in 0:00:00.004
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/local-socket.lisp" (written 18 OCT 2026 08:47:34 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/local-socket-tmpH7D4HL98.fasl
+; compilation finished in 0:00:00.008
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/native.lisp" (written 19 OCT 2026 08:22:59 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/native-tmpCDM7YXYI.fasl
+; compilation finished in 0:00:00.004
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/native-sleep.lisp" (written 18 OCT 2026 09:42:37 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/native-sleep-tmpLM57P5P.fasl
+; compilation finished in 0:00:00.004
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/native-ipc.lisp" (written 19 OCT 2026 12:55:49 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/native-ipc-tmpZE69DN33.fasl
+; compilation finished in 0:00:00.000
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/native-tcc.lisp" (written 18 OCT 2026 04:01:58 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/native-tcc-tmpG8099TO3.fasl
+; compilation finished in 0:00:00.000
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/native-cxx.lisp" (written 19 OCT 2026 01:37:30 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/native-cxx-tmpTASQCYAW.fasl
+; compilation finished in 0:00:00.004
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/native-clang.lisp" (written 18 OCT 2026 05:29:16 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/native-clang-tmp35U57IV6.fasl
+; compilation finished in 0:00:00.008
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/native-lld.lisp" (written 18 OCT 2026 05:54:37 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/native-lld-tmpTZOONXRW.fasl
+; compilation finished in 0:00:00.004
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/native-dl.lisp" (written 19 OCT 2026 12:25:36 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/native-dl-tmpWN0UKDSV.fasl
+; compilation finished in 0:00:00.000
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/native-llvm-tools.lisp" (written 18 OCT 2026 06:12:17 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/native-llvm-tools-tmpBF3HHBTQ.fasl
+; compilation finished in 0:00:00.000
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/native-tblgen-rebuild.lisp" (written 18 OCT 2026 07:39:44 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/native-tblgen-rebuild-tmpGYUNPZCY.fasl
+; compilation finished in 0:00:00.000
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/mach.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/mach-tmpD68Q8WCA.fasl
+; compilation finished in 0:00:00.000
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/server.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/server-tmp7MK9KM9C.fasl
+; compilation finished in 0:00:00.000
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/init.lisp" (written 19 OCT 2026 07:35:53 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/init-tmpJJ71X849.fasl
+; compilation finished in 0:00:00.004
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/boot.lisp" (written 19 OCT 2026 05:32:54 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/boot-tmp1VUK6SR2.fasl
+; compilation finished in 0:00:00.087
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/apfs.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/apfs-tmpR2FIHSUG.fasl
+; compilation finished in 0:00:00.008
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/net.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/net-tmp8PYELRKX.fasl
+; compilation finished in 0:00:00.008
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/wifi.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/wifi-tmpEHTOKYT0.fasl
+; compilation finished in 0:00:00.008
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/power.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/power-tmpS6U1VHI9.fasl
+; compilation finished in 0:00:00.004
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/install.lisp" (written 19 OCT 2026 05:32:54 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/install-tmpVTFK6ZJW.fasl
+; compilation finished in 0:00:00.004
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/onboarding.lisp" (written 19 OCT 2026 05:32:54 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/onboarding-tmp75WVSJEW.fasl
+; compilation finished in 0:00:00.000
+; compiling file "/home/bfh/git/cl/darterfly-nyxt/tests/low.lisp" (written 18 OCT 2026 12:34:20 PM):
+
+; wrote /home/bfh/.cache/common-lisp/darterfly/home/bfh/git/cl/darterfly-nyxt/tests/low-tmpBU5UM3S4.fasl
+; compilation finished in 0:00:00.004
+; 
+; compilation unit finished
+;   printed 3 notes
+
+Running test NATIVE-BSD-SPAWN-ON-DARTERFLY ...............................................
+ Did 47 checks.
+    Pass: 47 (100%)
+    Skip: 0 ( 0%)
+    Fail: 0 ( 0%)
+
