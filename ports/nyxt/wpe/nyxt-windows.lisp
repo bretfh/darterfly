@@ -108,6 +108,11 @@
                  (layer:commit (native-window-context window))))) windows))
           (109 (close-session session))
           (t (error "Unknown window operation ~d" op)))))))
+(defun modifier-bits (modifiers)
+  (if (integerp modifiers) modifiers
+      (loop for (name bit) in '((:control 1) (:shift 2) (:alt 4) (:meta 8))
+            when (member name modifiers) sum bit)))
+
 (defun next-event (session)
   ;; Context ports are created in the app's BSD task. The caller preserves
   ;; that task binding, just like the existing Layer world event pump.
@@ -122,7 +127,7 @@
           (:key-down
            (return-from next-event (values 201 id 0 (getf event :keycode)
              (char-code (or (getf event :character) #\Null))
-             (wire:words (or (getf event :modifiers) 0)))))
+             (wire:words (modifier-bits (getf event :modifiers))))))
           ((:left-mouse-down :left-mouse-up)
            (destructuring-bind (x y) (getf event :window-location)
              (when (and (>= x 0) (>= y 0))

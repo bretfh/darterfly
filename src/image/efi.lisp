@@ -36,7 +36,7 @@
            (format nil "CL_SOURCE_REGISTRY=~a//:~a/share/common-lisp//"
                    (string-right-trim "/" (source "")) (uiop:getenv "GUIX_ENVIRONMENT"))
            (format nil "ASDF_OUTPUT_TRANSLATIONS=/:~a/"
-                   (string-right-trim "/" (uiop:native-namestring (build-path "fasl/"))))
+                   (string-right-trim "/" (uiop:native-namestring (build-path (format nil "fasl/~a/" darterfly/build:*sbcl-version*)))))
            (uiop:native-namestring (merge-pathnames "run-sbcl.sh" (sbcl-tree)))
            "--non-interactive" "--no-userinit" "--no-sysinit" "--load"
            (source "src/image/darterfly-core.lisp") (uiop:native-namestring core)))
@@ -126,7 +126,7 @@
 (defun desktop-entries ()
   (append (loop :for (path program) :in *programs*
                 :collect (list :file path (text (format nil "#!darterfly ~a~%" program)) #o755))
-          (desktop-jobs) (fonts) (icons)))
+          (desktop-jobs) (fonts) (icons) (startup-artwork)))
 
 (defun contribs ()
   (loop :for file :in (append (directory (merge-pathnames "obj/sbcl-home/contrib/*.fasl" (sbcl-tree)))
@@ -291,7 +291,7 @@
 
 (defun usb-image (&key (path (build-path "darterfly-usb.img")) (boot-args (format nil "rd=ram init nrepl-key=~a" (nrepl-key))))
   (let ((fat (esp-image (esp :boot-args boot-args
-                             :root-image (root-disk (build-path "usb-root.img") (* 512 1048576)
+                             :root-image (root-disk (build-path "usb-root.img") (* 640 1048576)
                                                     (append (root-entries) (boot-payload))))
                         (build-path "usb-esp.img") (* 1024 1048576))))
     (darterfly/gpt:write-disk path (list (list darterfly/gpt:+esp-type+ "F1C40000-0000-4000-8000-000000000011" "EFI" fat)))

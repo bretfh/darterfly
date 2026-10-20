@@ -23,7 +23,7 @@
     (last all rows)))
 
 (defmethod kit:draw ((view transcript-view) bitmap)
-  (text:fill-bitmap bitmap 1.0 1.0 1.0 1.0)
+  (kit:fill-surface bitmap)
   (let ((font (text:font +listener-font+ +terminal-size+))
         (shown (shown-lines view)))
     (loop :for (text . object) :in shown

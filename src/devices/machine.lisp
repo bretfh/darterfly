@@ -12,7 +12,7 @@
    #:virtio-transport #:virtio-pci-transport #:virtio-device-type
    #:virtio-block-storage-device #:block-count #:block-size #:read-blocks #:write-blocks
    #:block-device #:media #:media-read #:media-write #:media-flush #:media-size #:gpt-scheme #:crc32
-   #:acpi-table #:vm-page-grab #:vm-pages-grab #:phys-sap #:mmio-read #:mmio-write #:pci-primary-id #:ml-io-map #:ml-io-map-wcomb #:boot-arg #:kernel-flags #:boot-video
+   #:acpi-table #:vm-page-grab #:vm-pages-grab #:phys-sap #:mmio-read #:mmio-write #:pci-primary-id #:ml-io-map #:ml-io-map-wcomb #:boot-arg #:kernel-flags #:boot-video #:boot-console-position
    #:port-read-8 #:port-write-8 #:port-read-16 #:port-write-16 #:wait-for-interrupt #:interrupt-vector #:enable-msi-x #:allocate-vector #:set-msi-x-vector
    #:virtio-input #:input-events #:input-abs-range
    #:virtio-network #:ethernet-controller #:ecm-status #:battery #:ethernet-interface #:network-send #:network-receive #:network-mac
@@ -41,6 +41,11 @@
   (let ((sap (sb-sys:int-sap (machdep 11))))
     (list :row-bytes (sb-sys:sap-ref-32 sap 4) :width (sb-sys:sap-ref-32 sap 8) :height (sb-sys:sap-ref-32 sap 12)
           :depth (sb-sys:sap-ref-32 sap 16) :base (sb-sys:sap-ref-64 sap 48))))
+
+(defun boot-console-position ()
+  "Frozen text cursor, in framebuffer pixels, after console ownership passes to graphics."
+  (let ((packed (machdep 11 1)))
+    (list (ldb (byte 24 0) packed) (ldb (byte 24 24) packed) (ldb (byte 16 48) packed))))
 
 (defvar *phys-window* nil)
 

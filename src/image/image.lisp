@@ -101,9 +101,26 @@
 
 (defun fonts ()
   (let ((dir (format nil "~a/share/fonts/truetype/" (uiop:getenv "GUIX_ENVIRONMENT"))))
-    (loop :for file :in (directory (format nil "~aAdwaita*.ttf" dir))
-          :collect (list :file (format nil "System/Library/Fonts/~a.ttf" (pathname-name file))
-                         (octets file)))))
+    (append
+     (loop :for file :in (directory (format nil "~aAdwaita*.ttf" dir))
+           :collect (list :file (format nil "System/Library/Fonts/~a.ttf" (pathname-name file)) (octets file)))
+     (loop :for name :in '("Nunito-Regular.ttf" "Nunito-SemiBold.ttf" "Nunito-Bold.ttf" "Nunito-OFL.txt")
+           :collect (list :file (concatenate 'string "System/Library/Fonts/" name)
+                          (octets (asdf:system-relative-pathname :darterfly
+                                   (concatenate 'string "assets/branding/fonts/" name))))))))
+
+
+(defun startup-artwork ()
+  (list (list :file "System/Library/Desktop Pictures/Asheville.png"
+              (octets (asdf:system-relative-pathname :darterfly "assets/branding/asheville.png")))
+        (list :file "System/Library/Desktop Pictures/Asheville Drawn.png"
+              (octets (asdf:system-relative-pathname :darterfly "assets/branding/asheville-drawn.png")))
+        (list :file "System/Library/Startup/tied-darter-menu.png"
+              (octets (asdf:system-relative-pathname :darterfly "assets/branding/tied-darter-menu.png")))
+        (list :file "System/Library/Startup/tied-darter.png"
+              (octets (asdf:system-relative-pathname :darterfly "assets/branding/tied-darter.png")))
+        (list :file "System/Library/Startup/console-font.bin"
+              (coerce darterfly/platform::+console-font+ '(vector (unsigned-byte 8))))))
 
 (defparameter *icons*
   '(("places" "folder") ("mimetypes" "application-x-executable") ("mimetypes" "text-x-generic")

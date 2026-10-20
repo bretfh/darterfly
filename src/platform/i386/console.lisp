@@ -88,6 +88,11 @@
 (define-low console-off ()
   (setf console-on 0))
 
+(define-low console-position ()
+  ;; Pixel origin of the next glyph, plus the console's actual scale.
+  (logior (shl console-scale 48) (shl (* console-y 16 console-scale) 24)
+          (* console-x 8 console-scale)))
+
 (define-global kbd-line :u8 :count 256)
 (define-global kbd-length :u64)
 (define-global kbd-shift :u32 :alignment 4)

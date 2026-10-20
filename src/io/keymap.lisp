@@ -9,6 +9,8 @@
     (37 #\k #\K) (38 #\l #\L) (39 #\; #\:) (40 #\' #\") (41 #\` #\~) (43 #\\ #\|)
     (44 #\z #\Z) (45 #\x #\X) (46 #\c #\C) (47 #\v #\V) (48 #\b #\B) (49 #\n #\N) (50 #\m #\M)
     (51 #\, #\<) (52 #\. #\>) (53 #\/ #\?) (57 #\Space)
+    (102 #.(code-char #xF729)) (107 #.(code-char #xF72B)) (111 #.(code-char #x7F))
+    (104 #.(code-char #xF72C)) (109 #.(code-char #xF72D))
     (103 #.(code-char #xF700)) (108 #.(code-char #xF701)) (105 #.(code-char #xF702)) (106 #.(code-char #xF703))))
 
 (defconstant +key-leftshift+ 42)

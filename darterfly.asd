@@ -65,7 +65,7 @@
   :depends-on (#:darterfly/layer #:darterfly/text #:darterfly/mach #:darterfly/server #:darterfly/bsd #:darterfly/imageio #:darterfly/power)
   :serial t
   :pathname "src/kit/"
-  :components ((:file "kit")))
+  :components ((:file "kit") (:file "controls") (:file "commands") (:file "completion") (:file "choice-panel")))
 
 (asdf:defsystem #:darterfly/stats
   :description "What the system is doing"
@@ -76,10 +76,10 @@
 
 (asdf:defsystem #:darterfly/windowserver
   :description "WindowServer"
-  :depends-on (#:darterfly/layer #:darterfly/server #:darterfly/bsd #:darterfly/mach #:darterfly/init #:darterfly/io #:darterfly/stats #:darterfly/power)
+  :depends-on (#:darterfly/layer #:darterfly/server #:darterfly/bsd #:darterfly/mach #:darterfly/init #:darterfly/io #:darterfly/stats #:darterfly/power #:darterfly/text #:darterfly/imageio)
   :serial t
   :pathname "src/server/"
-  :components ((:file "windowserver")))
+  :components ((:file "windowserver") (:file "windows") (:file "startup")))
 
 (asdf:defsystem #:darterfly/bench
   :description "The benchmark suite"
@@ -341,6 +341,6 @@
   :depends-on (#:darterfly #:fiveam (:require #:sb-posix) (:require #:sb-md5) (:require #:sb-bsd-sockets))
   :serial t
   :pathname "tests/"
-  :components ((:file "suite") (:file "worlds") (:file "local-socket") (:file "native") (:file "native-sleep") (:file "native-ipc") (:file "native-tcc") (:file "native-cxx") (:file "native-clang") (:file "native-lld") (:file "native-dl") (:file "native-llvm-tools") (:file "native-tblgen-rebuild") (:file "mach") (:file "server") (:file "init") (:file "boot") (:file "apfs") (:file "net") (:file "wifi") (:file "power") (:file "install") (:file "onboarding") (:static-file "socketpair-probe.c") (:static-file "low-harness.c") (:file "low"))
+  :components ((:file "suite") (:file "worlds") (:file "local-socket") (:file "native") (:file "native-sleep") (:file "native-ipc") (:file "native-tcc") (:file "native-cxx") (:file "native-clang") (:file "native-lld") (:file "native-dl") (:file "native-llvm-tools") (:file "native-tblgen-rebuild") (:file "mach") (:file "server") (:file "kit") (:file "init") (:file "boot") (:file "apfs") (:file "net") (:file "wifi") (:file "power") (:file "install") (:file "onboarding") (:static-file "socketpair-probe.c") (:static-file "low-harness.c") (:file "low"))
   :perform (asdf:test-op (o c)
              (uiop:symbol-call :darterfly/test :run-them)))

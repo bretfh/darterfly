@@ -1,6 +1,6 @@
 (defpackage #:darterfly/imageio
   (:use #:cl)
-  (:export #:read-icns #:icon #:scale-rgba))
+  (:export #:read-icns #:icon #:scale-rgba #:read-image #:cover-rgba))
 (in-package #:darterfly/imageio)
 
 (defun be32 (octets at)
@@ -94,3 +94,32 @@
                    (first (sort sized #'> :key #'second)))))
     (destructuring-bind (pixels width height) best
       (scale-rgba pixels width height size))))
+
+
+(defun read-image (path)
+  "Read PNG pixels in the premultiplied RGBA representation used by layers."
+  (decode-png (file-octets path)))
+
+(defun cover-rgba (pixels width height target-width target-height)
+  "Center-crop with bilinear sampling, preserving the image's aspect ratio."
+  (declare (optimize (speed 3))
+           (type (simple-array (unsigned-byte 8) (*)) pixels)
+           (type fixnum width height target-width target-height))
+  (let* ((ratio (max (/ (float target-width) width) (/ (float target-height) height)))
+         (left (/ (- width (/ target-width ratio)) 2.0))
+         (top (/ (- height (/ target-height ratio)) 2.0))
+         (out (make-array (* target-width target-height 4) :element-type '(unsigned-byte 8))))
+    (dotimes (y target-height)
+      (let* ((sy (max 0.0 (min (float (1- height)) (+ top (- (/ (+ y .5) ratio) .5)))))
+             (y0 (floor sy)) (y1 (min (1- height) (1+ y0))) (fy (- sy y0)))
+        (dotimes (x target-width)
+          (let* ((sx (max 0.0 (min (float (1- width)) (+ left (- (/ (+ x .5) ratio) .5)))))
+                 (x0 (floor sx)) (x1 (min (1- width) (1+ x0))) (fx (- sx x0))
+                 (a (* 4 (+ x0 (* y0 width)))) (b (* 4 (+ x1 (* y0 width))))
+                 (c (* 4 (+ x0 (* y1 width)))) (d (* 4 (+ x1 (* y1 width))))
+                 (to (* 4 (+ x (* y target-width)))))
+            (dotimes (channel 4)
+              (setf (aref out (+ to channel))
+                    (round (+ (* (- 1.0 fy) (+ (* (- 1.0 fx) (aref pixels (+ a channel))) (* fx (aref pixels (+ b channel)))))
+                              (* fy (+ (* (- 1.0 fx) (aref pixels (+ c channel))) (* fx (aref pixels (+ d channel)))))))))))))
+    out))

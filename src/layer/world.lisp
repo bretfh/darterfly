@@ -134,7 +134,8 @@
          (list :window (and context
                             (local-window-create context (getf args :x) (getf args :y)
                                                  (getf args :width) (getf args :height)
-                                                 (getf args :level) (getf args :order))))))
+                                                 (getf args :level) (getf args :order)
+                                                 (getf args :min-width 280) (getf args :min-height 180))))))
       (:next-event
        (let ((context (client-context client (getf args :context))))
          (if context
@@ -143,8 +144,11 @@
       (:transaction
        (local-request body)
        nil)
-      (:display-bounds
-       (local-request body :reply t)))))
+      ((:display-bounds :activate-application :window-list :restore-window :window-thumbnail)
+       (local-request body :reply t))
+      (:window-metadata
+       (local-request body)
+       nil))))
 
 (defun serve-world-window-request (world proc request token)
   (let ((client (world-client world)))

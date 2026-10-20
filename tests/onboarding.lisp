@@ -38,22 +38,23 @@
     (is (not (getf darterfly/apps::*desktop-preferences* :complete)))))
 
 (test fresh-install-does-not-inherit-completed-setup
-  (let ((darterfly/vfs:*root* nil)
-        (darterfly/vfs:*mounts* nil)
-        (prefs "Users/darterfly/Library/Preferences/desktop.sexp"))
+  ;; Exercise the current streaming installer against an isolated RAM filesystem.
+  (let ((darterfly/vfs:*root* nil) (darterfly/vfs::*cwd* nil)
+        (darterfly/vfs:*mounts* nil) (darterfly/vfs:*syncers* nil))
     (darterfly/vfs:vfs-mount (darterfly/vfs:make-ram-node :vdir #o755) "/")
-    (dolist (dir '("/src" "/src/Library" "/src/Library/Settings" "/src/Users" "/src/Users/darterfly"
-                   "/src/Users/darterfly/Library" "/src/Users/darterfly/Library/Preferences" "/dst"))
-      (darterfly/vfs:vfs-mkdir dir #o755))
-    (dolist (file (list "Library/Settings/setup-pending" prefs (concatenate 'string prefs ".new") "Users/darterfly/document"))
-      (put-file (concatenate 'string "/src/" file) "x"))
-    (darterfly/install::copy-system "/src" "/dst")
-    (flet ((there (rel) (and (darterfly/vfs::lookup-or-nil (concatenate 'string "/dst/" rel)) t)))
-      (is (not (there "Library/Settings/setup-pending")) "the setup marker is written by the installer, not copied")
-      (is (there "Library/Settings"))
-      (is (not (there prefs)) "the installing desktop's finished setup stays behind")
-      (is (not (there (concatenate 'string prefs ".new"))))
-      (is (there "Users/darterfly/document") "the user's own files come along"))))
+    (dolist (dir '("/live/Library/Settings" "/live/Users/darterfly/Library/Preferences" "/target"))
+      (darterfly/vfs:vfs-mkdirs dir))
+    (dolist (path '("Library/Settings/setup-pending" "Users/darterfly/Library/Preferences/desktop.sexp"
+                    "Users/darterfly/Library/Preferences/desktop.sexp.new" "Users/darterfly/document"))
+      (let ((fd (darterfly/vfs:vfs-open (concatenate 'string "/live/" path)
+                                      '(:access :wronly :creat t) #o644)))
+        (unwind-protect (darterfly/vfs:vfs-write fd #(1 2 3)) (darterfly/vfs:vfs-close fd))))
+    (is (= 3 (darterfly/install::copy-system "/live" "/target")))
+    (dolist (path '("Library/Settings/setup-pending" "Users/darterfly/Library/Preferences/desktop.sexp"
+                    "Users/darterfly/Library/Preferences/desktop.sexp.new"))
+      (signals darterfly/vfs:vfs-error (darterfly/vfs:vfs-stat (concatenate 'string "/target/" path))))
+    (is (equalp #(1 2 3) (darterfly/install::file-octets "/target/Users/darterfly/document")))
+    (is (= #o040755 (darterfly/vfs:vattr-mode (darterfly/vfs:vfs-stat "/target/Library/Settings"))))))
 
 (test journey-keyboard-actions
   (let ((page (make-instance 'darterfly/apps::journey-page)) (chosen nil))
@@ -74,3 +75,40 @@
     (darterfly/kit:key-down page (string #\Return) 0)
     (darterfly/kit:key-down page (string #\Escape) 0)
     (is (null chosen) "busy pages have no navigation actions")))
+
+(test disabled-buttons-reject-pointer-and-keyboard-actions
+  (let* ((calls 0)
+         (button (make-instance 'darterfly/kit:button :enabled nil
+                                :action (lambda (sender) (declare (ignore sender)) (incf calls)))))
+    (darterfly/kit:mouse-down button 4 4)
+    (darterfly/kit:key-down button (string #\Return) 28)
+    (darterfly/kit:key-down button " " 57)
+    (is (zerop calls))
+    (setf (darterfly/kit:button-enabled button) t)
+    (darterfly/kit:key-down button (string #\Return) 28)
+    (is (= 0 calls))
+    (darterfly/kit:key-up button (string #\Return) 28)
+    (is (= 1 calls)))
+  ;; Journey pages dispatch directly; they must honor the same disabled state.
+  (let* ((calls 0) (page (make-instance 'darterfly/apps::journey-page))
+         (button (darterfly/apps::journey-button page "Continue" (lambda () (incf calls)) 0 0)))
+    (setf (darterfly/kit:button-enabled button) nil)
+    (darterfly/kit:key-down page (string #\Return) 0)
+    (is (zerop calls))))
+
+(test harbor-controls-render-with-packaged-font
+  (let ((darterfly/text::*fonts-dir*
+          (namestring (asdf:system-relative-pathname :darterfly "assets/branding/fonts/"))))
+    (is (plusp (darterfly/text:string-width (darterfly/kit:ui-font) "Continue")))
+    (let ((faces nil))
+      (dolist (role '(:secondary :primary :caution :danger))
+        (let* ((button (make-instance 'darterfly/kit:button :frame #(0 0 120 26)
+                                     :title "Continue" :role role))
+               (bitmap (darterfly/text:make-bitmap 128 34)))
+          (darterfly/kit:draw button bitmap)
+          (let ((pixels (darterfly/text:bitmap-pixels bitmap)))
+            (is (zerop (aref pixels 3)) "rounded corners retain transparency")
+            (is (= 255 (aref pixels (+ 3 (* 4 (+ 60 (* 9 128)))))))
+            (push (subseq pixels (* 4 (+ 60 (* 9 128))) (+ 3 (* 4 (+ 60 (* 9 128))))) faces))))
+      (is (= 4 (length (remove-duplicates faces :test #'equalp)))
+          "primary, secondary, caution and destructive actions remain visually distinct"))))

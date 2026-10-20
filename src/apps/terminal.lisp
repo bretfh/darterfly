@@ -14,7 +14,7 @@
         rows))
 
 (defmethod kit:draw ((view terminal-view) bitmap)
-  (text:fill-bitmap bitmap 1.0 1.0 1.0 1.0)
+  (kit:fill-surface bitmap)
   (let* ((rows (floor (- (kit:view-height view) 8) +line-height+))
          (font (text:font +terminal-font+ +terminal-size+))
          (lines (visible-lines view rows)))
@@ -36,7 +36,9 @@
       (#\Backspace
        (when (plusp (length (input view)))
          (setf (input view) (subseq (input view) 0 (1- (length (input view)))))))
-      (t (setf (input view) (concatenate 'string (input view) characters))))
+      (t (when (and (>= (char-code char) 32) (/= (char-code char) 127)
+                    (not (<= #xF700 (char-code char) #xF8FF)))
+           (setf (input view) (concatenate 'string (input view) characters)))))
     (kit:needs-display view)
     t))
 

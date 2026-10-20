@@ -2,8 +2,8 @@
   (:use #:cl)
   (:export #:layer #:make-layer #:layer-id #:layer-position #:layer-bounds #:layer-frame
            #:layer-background-color #:layer-opacity #:layer-masks-to-bounds #:layer-sublayers
-           #:context #:context-create #:context-id #:context-layer #:commit
-           #:layer-contents #:image #:next-event #:context-events #:window-create #:transaction-commit #:main-display-bounds))
+           #:context #:context-destroy #:context-create #:context-id #:context-layer #:commit
+           #:layer-contents #:image #:next-event #:context-events #:window-create #:transaction-commit #:main-display-bounds #:activate-application))
 (in-package #:darterfly/layer)
 
 (defvar *next-layer-id* 0)
@@ -129,20 +129,70 @@
   (getf (request (list :display-bounds) :reply t) :bounds))
 
 (defparameter +window-levels+
-  '((:desktop . -2147483623) (:normal . 0) (:dock . 20) (:main-menu . 24) (:status . 25) (:pop-up-menu . 101)))
+  '((:desktop . -2147483623) (:normal . 0) (:dock . 20) (:menu-background . 23) (:main-menu . 24) (:status . 25) (:pop-up-menu . 101)))
 
-(defun window-create (context x y width height &key (level :normal) (order :above))
+(defun window-create (context x y width height &key (level :normal) (order :above) (min-width 280) (min-height 180))
   (if (darterfly/run:in-world-p)
       (getf (remote-request (list :create-window :context (context-id context) :x x :y y :width width :height height
-                                                 :level level :order order))
+                                                 :level level :order order :min-width min-width :min-height min-height))
             :window)
-      (local-window-create context x y width height level order)))
+      (local-window-create context x y width height level order min-width min-height)))
 
-(defun local-window-create (context x y width height level order)
-  (let ((window (getf (request (list :create-window :width width :height height) :reply t) :window)))
+(defun local-window-create (context x y width height level order &optional (min-width 280) (min-height 180))
+  (let ((window (getf (request (list :create-window :width width :height height :min-width min-width :min-height min-height) :reply t) :window)))
     (request (list :set-window-context window (context-id context)))
     (transaction-commit (list (list :shape window width height)
                               (list :level window (cdr (assoc level +window-levels+)))
                               (list :move window x y)
                               (list :order window order)))
     window))
+
+(defun activate-application (name)
+  (getf (request (list :activate-application name) :reply t) :activated))
+
+(defun context-destroy (context)
+  ;; Releasing the last client send right notifies WindowServer to retire its layers/windows.
+  (darterfly/mach:mach-port-deallocate darterfly/mach:*task* (context-port context))
+  (darterfly/mach:mach-port-mod-refs darterfly/mach:*task* (context-events context) :receive -1))
+
+(export '(window-list window-restore window-metadata window-thumbnail dock-layout))
+(defun window-list (&key (offset 0) (limit 128))
+  (request (list :window-list :offset offset :limit limit) :reply t))
+(defun window-restore (handle &key reduced-motion)
+  (getf (request (list :restore-window handle :reduced-motion reduced-motion) :reply t) :restored))
+(defun window-metadata (id title location &key private transient question)
+  (request (list :window-metadata id :title title :location location :private private :transient transient :question question)))
+(defun window-thumbnail (handle)
+  (getf (request (list :window-thumbnail handle) :reply t) :thumbnail))
+
+(defvar *dock-pinned-applications* '("Files" "Terminal" "Listener" "Generations"))
+(export '*dock-pinned-applications*)
+
+(defun dock-layout (windows width height)
+  "Shared logical geometry for shell targets and compositor travel. No pixel data."
+  (let* ((pinned *dock-pinned-applications*)
+         (apps (append pinned (remove-duplicates
+                               (loop for w in windows for app = (getf w :app)
+                                     unless (member app pinned :test #'equal) collect app) :test #'equal)))
+         (max-apps (max 4 (min 7 (floor (- (* width .78) 100) 68))))
+         (shown (subseq apps 0 (min max-apps (length apps))))
+         (hidden (sort (remove-if-not (lambda (w) (getf w :minimized)) (copy-list windows))
+                       #'< :key (lambda (w) (getf w :minimized-at 0))))
+         (slots (max 0 (min 3 (floor (- (* width .78) (+ 48 (* (length shown) 68) 76)) 90))))
+         (items nil) (x 24))
+    (dolist (app shown)
+      (push (list :kind :app :key app :label app :frame (list x 8 44 44)
+                  :count (count-if (lambda (w) (and (equal app (getf w :app)) (getf w :minimized))) windows)
+                  :running (some (lambda (w) (equal app (getf w :app))) windows)) items)
+      (incf x 68))
+    (when hidden
+      (incf x 12)
+      (dolist (w (subseq hidden 0 (min slots (length hidden))))
+        (push (list :kind :window :key (getf w :handle) :label (getf w :title)
+                    :app (getf w :app) :version (list (getf w :minimized-at) (getf w :content-revision)) :frame (list x 8 72 44)) items)
+        (incf x 90)))
+    (when (or (> (length hidden) slots) (> (length apps) (length shown)))
+      (push (list :kind :more :key :windows :label "Windows" :minimized-only (<= (length apps) (length shown)) :count (max 0 (- (length hidden) slots)) :frame (list x 8 56 44)) items)
+      (incf x 72))
+    (let ((w (+ x 0)))
+      (list :frame (list (floor (- width w) 2) (- height 94) w 78) :items (nreverse items)))))

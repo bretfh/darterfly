@@ -1,7 +1,7 @@
 (defpackage #:darterfly/io
   (:use #:cl)
   (:export #:framebuffer #:open-framebuffer #:framebuffer-width #:framebuffer-height
-           #:framebuffer-pixels #:flush #:fill-rect #:test-pattern
+           #:framebuffer-pixels #:capture-framebuffer #:flush #:fill-rect #:test-pattern
            #:read-events #:wait-for-events #:hid-event #:event-type #:event-code #:event-value #:blend-rect
            #:input-devices #:abs-range #:event-fd #:blit-image #:key-character #:shift-key-p #:control-key-p #:alt-key-p #:meta-key-p #:+key-esc+ #:shadow-under #:save-corners #:restore-corners #:*clip*))
 (in-package #:darterfly/io)
@@ -28,6 +28,21 @@
                                                       (cons (sb-sys:int-sap (darterfly/devices:ml-io-map-wcomb (+ base second) bytes)) second)))
                                   :pixels (make-array (* width height) :element-type '(unsigned-byte 32)
                                                                        :initial-element #xff000000)))))
+
+(defun capture-framebuffer (fb)
+  "Retain the firmware/kernel surface using its real row pitch and pixel depth."
+  (let* ((w (framebuffer-width fb)) (h (framebuffer-height fb))
+         (out (make-array (* w h) :element-type '(unsigned-byte 32)))
+         (source (sap fb)) (pitch (stride fb)) (bytes (truncate (depth fb) 8)))
+    (unless (member (depth fb) '(24 32)) (error "Unsupported framebuffer depth"))
+    (dotimes (y h)
+      (dotimes (x w)
+        (let ((at (+ (* y pitch) (* x bytes))))
+          (setf (aref out (+ x (* y w)))
+                (logior #xff000000 (sb-sys:sap-ref-8 source at)
+                        (ash (sb-sys:sap-ref-8 source (+ at 1)) 8)
+                        (ash (sb-sys:sap-ref-8 source (+ at 2)) 16))))))
+    out))
 
 (defun flush (fb &key (x 0) (y 0) (width (framebuffer-width fb)) (height (framebuffer-height fb)))
   (if (surfaces fb)
