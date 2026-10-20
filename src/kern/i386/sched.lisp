@@ -151,7 +151,9 @@
 
 (define-low dequeue ()
   (setf (ref selected-wakeup (cpu-number)) 0)
-  (when (and sleep-request (/= (cpu-number) 0)) (result 0))
+  ;; CPU 0 must reach its idle thread to enter S3, even under continuous load.
+  ;; Leaving it runnable can consume the RTC alarm before the machine sleeps.
+  (when sleep-request (result 0))
   (when (and wakeq-head (or (not runq-head) (wakeup-budget-available (cpu-number))))
     (let ((th wakeq-head))
       (setf wakeq-head (mem :u64 (+ th +t-runq-next+)))
@@ -584,7 +586,7 @@
   (when (logand (mem :u32 (+ (current-thread) +t-sched-flags+)) +terminate-requested+)
     (thread-terminate-self))
   (when (logand (mem :u64 (+ (current-world) +w-flags+)) +paused+) (park))
-  (when (and sleep-request (/= (cpu-number) 0)) (setf (mem :u32 (+ (cpu-data) +c-pending-ast+)) 1))
+  (when sleep-request (setf (mem :u32 (+ (cpu-data) +c-pending-ast+)) 1))
   (when (mem :u32 (+ (cpu-data) +c-pending-ast+))
     (setf (mem :u32 (+ (cpu-data) +c-pending-ast+)) 0)
     (thread-block)

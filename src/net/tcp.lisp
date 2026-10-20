@@ -245,7 +245,9 @@
 (defun receive-in-order (c seq data fin)
   (let ((behind (seq- (tcp-rcv-nxt c) seq)))
     (cond ((minusp behind)
-           (when (< (- behind) +window+)
+           ;; Window scaling applies to reassembly as well as the wire field.
+           ;; Otherwise one lost packet discards legal data beyond 64 KiB.
+           (when (< (- behind) (ash (advertised-window c +ack+) (tcp-rcv-scale c)))
              (pushnew (list seq data fin) (tcp-out-of-order c) :key #'first)))
           ((or (< behind (length data)) (and fin (= behind (length data))))
            (accept-data c (subseq data behind) fin)

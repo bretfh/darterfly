@@ -107,25 +107,34 @@
     (sb-thread:with-recursive-lock ((xhci-lock c))
       (nreverse (shiftf (ecm-frames e) nil)))))
 
+(define-condition ethernet-transmit-stalled (error) ()
+  (:report (lambda (c stream)
+             (declare (ignore c))
+             (write-string "usb ethernet: transmit queue stalled" stream))))
+
 (defmethod network-send ((e usb-cdc-ecm) frame)
   (let ((c (ecm-controller e))
         (n (max 60 (length frame))))
     (loop repeat 1000
-          while (>= (ecm-in-flight e) (1- +ecm-send-pages+))
-          do (process-events c)
+          do (sb-thread:with-recursive-lock ((xhci-lock c))
+               ;; Capacity check and submission share the lock: concurrent
+               ;; senders must not reserve the same remaining DMA capacity.
+               (when (< (ecm-in-flight e) (1- +ecm-send-pages+))
+                 (let ((page (aref (ecm-send-pages e) (ecm-send-next e)))
+                       (zlp (zerop (mod n (ecm-mps e)))))
+                   (setf (ecm-send-next e) (mod (1+ (ecm-send-next e)) +ecm-send-pages+))
+                   (copy-to-phys frame 0 page (length frame))
+                   (loop for at from (length frame) below n do (ml-phys-write-8 (+ page at) 0))
+                   (ring-push (ecm-out-ring e) page n (logior (ash 1 10) (if zlp 0 (ash 1 5))))
+                   (when zlp (ring-push (ecm-out-ring e) 0 0 (logior (ash 1 10) (ash 1 5))))
+                   (incf (ecm-in-flight e))
+                   (ring-doorbell c (ecm-slot e) (ecm-out-dci e)))
+                 (return-from network-send n)))
+             (process-events c)
              (when (>= (ecm-in-flight e) (1- +ecm-send-pages+))
                (wait-for-interrupt (list (xhci-vector c)) 0.002)))
-    (sb-thread:with-recursive-lock ((xhci-lock c))
-      (let ((page (aref (ecm-send-pages e) (ecm-send-next e)))
-            (zlp (zerop (mod n (ecm-mps e)))))
-        (setf (ecm-send-next e) (mod (1+ (ecm-send-next e)) +ecm-send-pages+))
-        (copy-to-phys frame 0 page (length frame))
-        (loop for at from (length frame) below n do (ml-phys-write-8 (+ page at) 0))
-        (ring-push (ecm-out-ring e) page n (logior (ash 1 10) (if zlp 0 (ash 1 5))))
-        (when zlp (ring-push (ecm-out-ring e) 0 0 (logior (ash 1 10) (ash 1 5))))
-        (incf (ecm-in-flight e))
-        (ring-doorbell c (ecm-slot e) (ecm-out-dci e))))
-    n))
+    ;; A timeout never transfers buffer ownership back from the controller.
+    (error 'ethernet-transmit-stalled)))
 
 (defmethod interrupt-vector ((e usb-cdc-ecm)) (xhci-vector (ecm-controller e)))
 

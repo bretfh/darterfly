@@ -7,6 +7,7 @@
    (msi-vector :initform nil :accessor card-vector)
    (msi-x-table :initform nil :accessor card-msi-x-table)
    (notes :initform nil :accessor card-log)
+   (history :initform nil :accessor card-history)
    (ctxt :accessor card-ctxt)
    (scratch :accessor card-scratch)
    (info :accessor card-info)
@@ -37,7 +38,15 @@
 (defconstant +cmd-slots+ 256)
 (defconstant +umac-prph+ #x300000)
 
-(defun note (w &rest items) (push items (card-log w)) items)
+(defun note (w &rest items)
+  (sb-thread:with-recursive-lock ((card-pump-lock w))
+    (push items (card-log w))
+    (when (member (first items) '(:lost :rejoin-failed :joined :reset))
+      ;; Preserve bounded transition evidence when bring-up clears verbose notes.
+      (setf (card-history w)
+            (cons (list :time (get-universal-time) :ticks (get-internal-real-time) :event items)
+                  (subseq (card-history w) 0 (min 63 (length (card-history w))))))))
+  items)
 
 (defun reg (w off) (devices:mmio-read (+ (card-regs w) off) 32))
 (defun (setf reg) (value w off) (devices:mmio-write (+ (card-regs w) off) 32 (ldb (byte 32 0) value)) value)
@@ -445,6 +454,7 @@
 
 (defun bring-up ()
   (let ((w (or *card* (setf *card* (make-card)))))
+    (note w :reset)
     (setf (card-log w) nil (card-rx-cur w) 0 (card-alive w) nil)
     (setf (card-notifications w) nil)
     (start-hardware w)

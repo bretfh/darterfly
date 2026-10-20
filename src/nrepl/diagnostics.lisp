@@ -64,6 +64,40 @@
   `(handler-case (progn ,@body)
      (error (e) (list :unavailable (short-name (princ-to-string e))))))
 
+(defun diagnostic-interface ()
+  (let* ((i darterfly/net:*interface*)
+         (device (and i (darterfly/net::interface-device i)))
+         (thread (and i (darterfly/net::interface-thread i))))
+    (when i
+      (list :device (and device (darterfly/devices:entry-name device))
+            :kind (and device (type-of device))
+            :ip (darterfly/net:address-string (darterfly/net::interface-ip i))
+            :gateway (darterfly/net:address-string (darterfly/net::interface-gateway i))
+            :input-thread (thread-name thread)
+            :input-alive (and thread (sb-thread:thread-alive-p thread))
+            :lock (lock-state (darterfly/net::interface-lock i))))))
+
+(defun diagnostic-usb ()
+  ;; Do not call ECM-STATUS here: it polls the controller while holding its
+  ;; mutex. Cached counters and slot ownership remain readable if it stalls.
+  (loop for c in (and darterfly/devices:*registry-root*
+                     (darterfly/devices:find-entries 'darterfly/devices::xhci-controller))
+        for i below 8
+        collect (list :name (darterfly/devices:entry-name c)
+                      :lock (lock-state (darterfly/devices::xhci-lock c))
+                      :ports (loop for port being the hash-keys of (darterfly/devices::xhci-port-slots c)
+                                   using (hash-value slot) for n below 32
+                                   collect (list :port port :slot slot))
+                      :ethernet
+                      (loop for e in (darterfly/devices:entry-children c)
+                            when (typep e 'darterfly/devices::usb-cdc-ecm)
+                            collect (list :slot (darterfly/devices::ecm-slot e)
+                                          :selected (and darterfly/net:*interface*
+                                                         (eq e (darterfly/net::interface-device darterfly/net:*interface*)))
+                                          :waiting (darterfly/devices::ecm-in-flight e)
+                                          :posted (hash-table-count (darterfly/devices::ecm-pending e))
+                                          :counts (copy-tree (darterfly/devices::ecm-counts e)))))))
+
 (defun diagnostic-snapshot ()
   ;; Cached state only. No ping, device register access or filesystem operation.
   ;; Fields are observations, not an atomic system-wide snapshot. Partial data
@@ -74,13 +108,19 @@
         :locks (diagnostic-part (diagnostic-locks))
         :threads (diagnostic-part (diagnostic-threads))
         :services (diagnostic-part (darterfly/init::diagnostic-jobs))
+        :suspend (diagnostic-part darterfly/power::*suspend-state*)
         :device-transition (diagnostic-part darterfly/devices::*device-transition*)
         :device-last-failure (diagnostic-part darterfly/devices::*device-last-failure*)
         :network (diagnostic-part (darterfly/wifi:network-status))
+        :interface (diagnostic-part (diagnostic-interface))
+        :usb (diagnostic-part (diagnostic-usb))
         :wifi-events (diagnostic-part
                       (loop for event in (and darterfly/wifi::*card*
                                                (darterfly/wifi::card-log darterfly/wifi::*card*))
                             for i below 12 collect event))
+        :wifi-history (diagnostic-part
+                        (and darterfly/wifi::*card*
+                             (darterfly/wifi::card-history darterfly/wifi::*card*)))
         :nvme (diagnostic-part (diagnostic-nvme))
         :kernel (diagnostic-part (darterfly/stats::kernel-times))
         :ring (diagnostic-part (diagnostic-ring))))

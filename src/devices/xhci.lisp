@@ -353,9 +353,11 @@
            (clrhash (xhci-results c))
            (clrhash (xhci-endpoints c))
            (clrhash (xhci-port-slots c))
-           (setf (xhci-changed-ports c) nil))
-      (sb-thread:release-mutex (xhci-lock c)))
-    (run-controller c)))
+           (setf (xhci-changed-ports c) nil)
+           ;; Keep the port watcher out until reset and enumeration finish.
+           ;; Otherwise both paths can address the same device in different slots.
+           (run-controller c))
+      (sb-thread:release-mutex (xhci-lock c)))))
 
 (defun attach-port (c port)
   (let ((before (copy-list (entry-children c))))
@@ -383,13 +385,16 @@
       (ml-phys-write-64 (+ (xhci-dcbaa c) (* 8 slot)) 0))))
 
 (defun port-changed (c port)
-  (let* ((at (portsc c port))
-         (value (xr32 at))
-         (connected (logbitp 0 value))
-         (attached (nth-value 1 (gethash port (xhci-attached c)))))
-    (xw32 at (logior (logand value #x0e00c3e0) (logand value #x00fe0000)))
-    (cond ((and connected (not attached)) (attach-port c port))
-          ((and (not connected) attached) (detach-port c port)))))
+  ;; A queued change can outlive suspend. Recheck attachment under the same
+  ;; lock as controller reset, and keep it through the whole port transition.
+  (sb-thread:with-recursive-lock ((xhci-lock c))
+    (let* ((at (portsc c port))
+           (value (xr32 at))
+           (connected (logbitp 0 value))
+           (attached (nth-value 1 (gethash port (xhci-attached c)))))
+      (xw32 at (logior (logand value #x0e00c3e0) (logand value #x00fe0000)))
+      (cond ((and connected (not attached)) (attach-port c port))
+            ((and (not connected) attached) (detach-port c port))))))
 
 (defun watch-ports (c)
   (loop

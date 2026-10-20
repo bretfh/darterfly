@@ -258,3 +258,95 @@
            (is (null (darterfly/wifi::block-ack-action l (subseq request 0 27)))))
       (sb-int:unencapsulate 'darterfly/wifi::command-ok 'capture-ba)
       (sb-int:unencapsulate 'darterfly/wifi::transmit 'capture-ba))))
+
+(test a-failed-rejoin-does-not-resurrect-the-old-link
+  (let* ((l (offline-link))
+         (d (make-instance 'darterfly/wifi::wireless-interface :link l))
+         (darterfly/net:*interface* (darterfly/net::make-interface :device d)))
+    (setf (darterfly/wifi::link-keyed l) t)
+    (sb-int:encapsulate 'darterfly/wifi::rejoin 'failed-rejoin
+      (lambda (f device) (declare (ignore f device)) nil))
+    (unwind-protect
+         (progn
+           (sb-thread:join-thread (darterfly/wifi::lost d :firmware-error))
+           (is (null (darterfly/wifi::wireless-up-p d)))
+           (is (null (getf (darterfly/wifi:network-status) :up)))
+           (is (null (darterfly/wifi::link-keyed l))))
+      (sb-int:unencapsulate 'darterfly/wifi::rejoin 'failed-rejoin))))
+
+(test queued-block-ack-work-cannot-touch-a-retired-link
+  (let* ((l (offline-link))
+         (d (make-instance 'darterfly/wifi::wireless-interface :link l))
+         (calls nil)
+         (request (darterfly/crypto:octets
+                   (darterfly/wifi::frame-header #xD0 0 (hex "10f60a82a3ca") (hex "04f021323f38") (hex "04f021323f38") 0)
+                   3 0 7 (darterfly/wifi::le-u16 (logior 2 (ash 5 2) (ash 64 6))) 0 0 0 0)))
+    (setf (darterfly/wifi::link-keyed l) t
+          (darterfly/wifi::link-block-acks l) '((5 . 3))
+          (darterfly/wifi::card-firmware (darterfly/wifi::link-card l))
+          (darterfly/wifi::make-firmware :commands '((5 #x16 2 1))))
+    (sb-int:encapsulate 'darterfly/wifi::rejoin 'retired-link
+      (lambda (f device) (declare (ignore f device)) nil))
+    (sb-int:encapsulate 'darterfly/wifi::command-ok 'retired-link
+      (lambda (&rest args) (declare (ignore args)) (push :command calls)
+        (list :payload (darterfly/crypto:octets (le32 3)))))
+    (sb-int:encapsulate 'darterfly/wifi::transmit 'retired-link
+      (lambda (&rest args) (declare (ignore args)) (push :transmit calls)))
+    (unwind-protect
+         (progn
+           ;; These callbacks were queued by the receive thread before loss,
+           ;; but only get to run after reset has retired their firmware state.
+           (sb-thread:join-thread (darterfly/wifi::lost d :woke))
+           (darterfly/wifi::answer-addba l request)
+           (darterfly/wifi::end-block-ack l
+             (darterfly/crypto:octets (subseq request 0 24) 3 2
+               (darterfly/wifi::le-u16 (logior (ash 5 12) (ash 1 11))) 0 0))
+           (is (null calls)))
+      (dolist (name '(darterfly/wifi::rejoin darterfly/wifi::command-ok darterfly/wifi::transmit))
+        (sb-int:unencapsulate name 'retired-link)))))
+
+(test old-receive-errors-do-not-retire-the-replacement-link
+  (let* ((old (offline-link)) (new (offline-link))
+         (d (make-instance 'darterfly/wifi::wireless-interface :link new)))
+    (setf (darterfly/wifi::link-keyed new) t)
+    (is (null (darterfly/wifi::lost d :firmware-error old)))
+    (is (darterfly/wifi::wireless-up-p d))))
+
+(test radio-transition-history-survives-reset-and-is-bounded
+  (let ((card (darterfly/wifi::link-card (offline-link))))
+    (dotimes (i 70) (darterfly/wifi::note card :lost i))
+    (setf (darterfly/wifi::card-log card) nil)
+    (darterfly/wifi::note card :reset)
+    (is (= 64 (length (darterfly/wifi::card-history card))))
+    (is (equal '(:reset) (getf (first (darterfly/wifi::card-history card)) :event)))
+    (is (equal '(:lost 69) (getf (second (darterfly/wifi::card-history card)) :event)))))
+
+(test waking-on-ethernet-invalidates-the-retained-radio-link
+  (let* ((l (offline-link))
+         (darterfly/wifi::*link* l)
+         (darterfly/net:*interface*
+           (darterfly/net::make-interface :device (make-instance 'darterfly/devices:ethernet-controller))))
+    (setf (darterfly/wifi::link-keyed l) t)
+    (darterfly/wifi::wifi-woke :woke nil)
+    (is (null (darterfly/wifi::link-keyed l)))))
+
+(test usb-notifications-do-not-read-a-suspended-filesystem
+  (let* ((darterfly/net:*interface* (darterfly/net::make-interface))
+         (device (make-instance 'darterfly/devices:ethernet-controller))
+         (reads 0))
+    ;; USB emits these notifications while holding controller/suspend locks.
+    ;; Filesystem access here can wait for a disk that this same thread must wake.
+    (sb-int:encapsulate 'probe-file 'suspended-fs
+      (lambda (&rest args) (declare (ignore args))
+        (incf reads) (error "filesystem is waiting for its suspended disk")))
+    (sb-int:encapsulate 'sb-thread:make-thread 'suspended-fs
+      (lambda (&rest args) (declare (ignore args)) :queued))
+    (unwind-protect
+         (dolist (event '(:added :removed))
+           (is (eq :returned
+                   (handler-case
+                       (progn (darterfly/wifi::wifi-device-changed event device) :returned)
+                     (error () :blocked))))
+           (is (zerop reads)))
+      (sb-int:unencapsulate 'probe-file 'suspended-fs)
+      (sb-int:unencapsulate 'sb-thread:make-thread 'suspended-fs))))

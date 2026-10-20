@@ -25,12 +25,20 @@
    (aid :initform nil :accessor link-aid)
    (supplicant :initform nil :accessor link-supplicant)
    (keyed :initform nil :accessor link-keyed)
+   (retired :initform nil :accessor link-retired)
    (want-ht :initarg :want-ht :initform nil :reader link-want-ht)
    (ht :initform nil :accessor link-ht)
    (signal :initform nil :accessor link-signal)
    (frames :initform nil :accessor link-frames)
    (block-acks :initform nil :accessor link-block-acks)
    (lock :initform (sb-thread:make-mutex :name "wifi link") :reader link-lock)))
+
+(defun retire-link (l)
+  ;; Drain in-flight link operations before resetting their firmware resources.
+  ;; Queued callbacks keep L, so retirement is permanent even after a new join.
+  (when l
+    (sb-thread:with-recursive-lock ((link-lock l))
+      (setf (link-retired l) t (link-keyed l) nil))))
 
 (defun mac-octets (text)
   (apply #'octets (mapcar (lambda (h) (parse-integer h :radix 16)) (uiop:split-string text :separator ":"))))
@@ -82,6 +90,7 @@
 
 (defun transmit (l frame &key (encrypt nil) (queue (link-mgmt l)))
   (sb-thread:with-recursive-lock ((link-lock l))
+    (when (link-retired l) (return-from transmit nil))
     (let* ((w (link-card l))
            (q queue)
            (hdrlen (header-length frame))
@@ -290,6 +299,7 @@
 
 (defun answer-addba (l f)
   (sb-thread:with-recursive-lock ((link-lock l))
+    (when (link-retired l) (return-from answer-addba nil))
     (let* ((token (aref f 26))
            (params (logior (aref f 27) (ash (aref f 28) 8)))
            (timeout (logior (aref f 29) (ash (aref f 30) 8)))
@@ -314,6 +324,7 @@
 
 (defun end-block-ack (l f)
   (sb-thread:with-recursive-lock ((link-lock l))
+    (when (link-retired l) (return-from end-block-ack nil))
     (let ((params (logior (aref f 26) (ash (aref f 27) 8))))
       ;; Only the peer's originator session corresponds to our receive BAID.
       (when (logbitp 11 params)
@@ -389,24 +400,29 @@
   (with-open-file (s *wifi-settings*)
     (values (read-line s) (read-line s))))
 
+(defvar *starting* (sb-thread:make-mutex :name "wifi start"))
+
 (defun rejoin (d)
   (loop for wait in '(0 2 5 10 30 30 60)
         for try from 0
         do (sleep wait)
            (handler-case
-               (multiple-value-bind (ssid pass) (wifi-settings)
-                 (setf *link* nil)
-                 (bring-up)
-                 (setf (wireless-link d) (join ssid pass :ht (and *ht* (zerop try))))
-                 (return t))
+               (sb-thread:with-mutex (*starting*)
+                 (multiple-value-bind (ssid pass) (wifi-settings)
+                   (retire-link *link*)
+                   (setf *link* nil)
+                   (bring-up)
+                   (setf (wireless-link d) (join ssid pass :ht (and *ht* (zerop try))))
+                   (return t)))
              (error (e) (note *card* :rejoin-failed (princ-to-string e))))
         finally (return nil)))
 
-(defun lost (d why)
-  (sb-thread:with-recursive-lock ((link-lock (wireless-link d)))
-    (unless (wireless-rejoining d)
+(defun lost (d why &optional (l (wireless-link d)))
+  (sb-thread:with-recursive-lock ((link-lock l))
+    (when (and (eq l (wireless-link d)) (not (wireless-rejoining d)))
       (setf (wireless-rejoining d) why)
-      (note (link-card (wireless-link d)) :lost why)
+      (retire-link l)
+      (note (link-card l) :lost why)
       (sb-thread:make-thread
        (lambda () (unwind-protect (rejoin d) (setf (wireless-rejoining d) nil)))
        :name "wifi rejoin"))))
@@ -425,6 +441,8 @@
          (frame (octets frame))
          (dst (subseq frame 0 6)) (src (subseq frame 6 12)))
     (sb-thread:with-recursive-lock ((link-lock l))
+      (unless (and (eq l (wireless-link d)) (wireless-up-p d))
+        (return-from devices:network-send 0))
       (let ((data (link-data l)))
         (if data
             (transmit l (octets (frame-header #x88 (logior 1 #x40) (link-bssid l) src dst (next-data-seq data))
@@ -448,6 +466,8 @@
   (unless (wireless-up-p d) (sleep 0.1) (return-from devices:network-receive nil))
   (let* ((l (wireless-link d)) (w (link-card l)) (out nil) (lost nil))
     (sb-thread:with-recursive-lock ((link-lock l))
+      (unless (and (eq l (wireless-link d)) (wireless-up-p d))
+        (return-from devices:network-receive nil))
       (multiple-value-bind (fh hw) (acknowledge-interrupts w)
         (when (or (logtest hw (logior (ash 1 3) (ash 1 5) (ash 1 25) (ash 1 29))) (logbitp 21 fh))
           (setf lost :firmware-error)))
@@ -474,13 +494,16 @@
                     (dolist (e events)
                       (when (eq (first e) :group) (install-key l (second e) (third e) t))))
                   (let ((e (ethernet-from f))) (when e (push e out)))))))))
-    (when lost (lost d lost))
+    (when lost (lost d lost l))
     (nreverse out)))
 
 (defvar *wifi-confirmed* nil)
 
 (defun use-wifi (ssid passphrase &key (fallback-seconds 120))
-  (let* ((l (or (and *link* (link-keyed *link*) *link*) (join ssid passphrase)))
+  (let* ((l (sb-thread:with-mutex (*starting*)
+              (or (and *link* (link-keyed *link*) *link*)
+                  (progn (retire-link *link*) (setf *link* nil)
+                         (bring-up) (join ssid passphrase)))))
          (d (make-instance 'wireless-interface :link l :mac (getf (card-nvm (link-card l)) :mac)))
          (old (darterfly/net::interface-device darterfly/net:*interface*)))
     (setf *wifi-confirmed* nil)
@@ -499,14 +522,13 @@
      :name "wifi switch")
     d))
 
-(defvar *starting* (sb-thread:make-mutex :name "wifi start"))
-
 (defun start-wifi ()
   (darterfly/net:start-network)
   (sb-thread:with-mutex (*starting*)
     (when (and (probe-file *wifi-settings*)
                (not (darterfly/net::interface-device darterfly/net:*interface*)))
       (multiple-value-bind (ssid pass) (wifi-settings)
+        (retire-link *link*)
         (setf *link* nil)
         (bring-up)
         (darterfly/net::interface-attach
@@ -516,7 +538,10 @@
   (and (typep device 'devices:ethernet-controller) (not (typep device 'wireless-interface))))
 
 (defun wifi-device-changed (event device)
-  (when (and (wired-p device) darterfly/net:*interface* (probe-file *wifi-settings*))
+  ;; USB can announce removal/reattachment while storage is suspended. Never
+  ;; touch the filesystem on that driver thread; START-WIFI checks settings in
+  ;; its worker after the notification has returned.
+  (when (and (wired-p device) darterfly/net:*interface*)
     (case event
       (:added
        (let ((current (darterfly/net::interface-device darterfly/net:*interface*)))
@@ -538,8 +563,11 @@
 
 (defun wifi-woke (event device)
   (declare (ignore device))
-  (let ((d (and (eq event :woke) darterfly/net:*interface* (darterfly/net::interface-device darterfly/net:*interface*))))
-    (when (typep d 'wireless-interface) (lost d :woke))))
+  (when (eq event :woke)
+    ;; Firmware state is lost even when Ethernet was selected during sleep.
+    (retire-link *link*)
+    (let ((d (and darterfly/net:*interface* (darterfly/net::interface-device darterfly/net:*interface*))))
+      (when (typep d 'wireless-interface) (lost d :woke)))))
 
 (pushnew 'wifi-woke devices:*device-hooks*)
 
