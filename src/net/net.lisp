@@ -98,6 +98,13 @@
   (let ((mask (logand #xffffffff (ash #xffffffff (- 32 (interface-prefix *interface*))))))
     (= (logand ip mask) (logand (interface-ip *interface*) mask))))
 
+(defvar *wait-for-neighbor* t)
+(define-condition neighbor-pending (net-error) ())
+
+(defun defer-neighbor (address)
+  (error 'neighbor-pending :errno :eagain
+         :message (format nil "neighbor discovery pending for ~a" (address-string address))))
+
 (defun resolve (ip)
   (when (= ip #xffffffff) (return-from resolve +broadcast+))
   (let ((hop (if (on-link-p ip) ip (interface-gateway *interface*)))
@@ -107,6 +114,7 @@
         (let ((mac (gethash hop (interface-arp if))))
           (when mac (return mac))))
       (send-frame +broadcast+ +ethertype-arp+ (arp-packet 1 (make-array 6 :element-type '(unsigned-byte 8) :initial-element 0) hop))
+      (unless *wait-for-neighbor* (defer-neighbor hop))
       (sb-thread:with-mutex ((interface-lock if))
         (unless (gethash hop (interface-arp if))
           (sb-thread:condition-wait (interface-changed if) (interface-lock if) :timeout 0.5))))))
@@ -228,11 +236,30 @@
               (t (sleep 0.002)))))))
 
 (defvar *configuration* nil)
+(defvar *configuration-lock* (sb-thread:make-mutex :name "network configuration"))
+(defvar *interface-epoch* 0)
+
+(defun configure-interface (device &key only-if-unconfigured)
+  ;; DHCP may outlast radio recovery. Share its ownership so recovery waits for
+  ;; the current attempt, then retries only if this attachment still needs it.
+  (sb-thread:with-recursive-lock (*configuration-lock*)
+    (let ((i *interface*))
+      (when (and i (eq device (interface-device i))
+                 (or (not only-if-unconfigured) (zerop (interface-ip i))))
+        (destructuring-bind (&key ip (prefix 24) gateway) *configuration*
+          (if ip
+              (sb-thread:with-mutex ((interface-lock i))
+                (when (eq device (interface-device i))
+                  (setf (interface-ip i) (ip-address ip) (interface-prefix i) prefix
+                        (interface-gateway i) (if gateway (ip-address gateway) 0))))
+              (handler-case (dhcp :device device)
+                (net-error (e) (format *error-output* "~&network: ~a~%" e)))))))))
 
 (defun interface-attach (device)
   (when (and *interface*
              (sb-thread:with-mutex ((interface-lock *interface*))
                (unless (interface-device *interface*)
+                 (incf *interface-epoch*)
                  (setf (interface-device *interface*) device
                        (interface-mac *interface*) (darterfly/devices:network-mac device)
                        (interface-ip6 *interface*) nil)
@@ -241,20 +268,17 @@
     (clrhash (interface-nd6 *interface*))
     (setf (interface-thread *interface*) (sb-thread:make-thread #'input-loop :name "net input" :arguments (list device)))
     (start-ip6)
-    (destructuring-bind (&key ip (prefix 24) gateway) *configuration*
-      (if ip
-          (setf (interface-ip *interface*) (ip-address ip) (interface-prefix *interface*) prefix
-                (interface-gateway *interface*) (if gateway (ip-address gateway) 0))
-          (handler-case (dhcp)
-            (net-error (e) (format *error-output* "~&network: ~a~%" e)))))
+    (configure-interface device)
     t))
 
 (defun interface-detach (device)
-  (when (and *interface* (eq device (interface-device *interface*)))
-    (setf (interface-device *interface*) nil
-          (interface-ip *interface*) 0
-          (interface-ip6 *interface*) nil)
-    t))
+  (let ((i *interface*))
+    (when i
+      (sb-thread:with-mutex ((interface-lock i))
+        (when (eq device (interface-device i))
+          (incf *interface-epoch*)
+          (setf (interface-device i) nil (interface-ip i) 0 (interface-ip6 i) nil)
+          t)))))
 
 (defun device-changed (event device)
   (when (typep device 'darterfly/devices:ethernet-controller)

@@ -14,6 +14,7 @@
     ("DARTERFLY/DEVICES" "*INTERRUPTS-LOCK*")
     ("DARTERFLY/NET" "*TCP-LOCK*")
     ("DARTERFLY/NET" "*START-LOCK*")
+    ("DARTERFLY/NET" "*CONFIGURATION-LOCK*")
     ("DARTERFLY/NREPL" "*SERVER-LOCK*")))
 
 (defstruct (stopped-thread (:conc-name stop-) (:constructor make-stop))

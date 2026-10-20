@@ -38,23 +38,37 @@
 
 (defun prefix-length (mask) (logcount mask))
 
-(defun dhcp (&key (tries 4) (timeout 2))
-  (let ((port (udp-bind 68))
-        (xid (random (ash 1 32) (make-random-state t))))
-    (unwind-protect
-         (dotimes (try tries (net-fail :etimedout "dhcp: no lease"))
-           (udp-send #xffffffff 68 67 (dhcp-message xid 1 nil))
-           (multiple-value-bind (offer options) (dhcp-reply port xid 2 timeout)
-             (when offer
-               (let ((server (gethash 54 options)))
-                 (udp-send #xffffffff 68 67 (dhcp-message xid 3 (list 50 (be offer 4) 54 server)))
-                 (multiple-value-bind (ip options) (dhcp-reply port xid 5 timeout)
-                   (when ip
-                     (let ((if *interface*))
-                       (setf (interface-ip if) ip
-                             (interface-prefix if) (prefix-length (u32be (gethash 1 options (be #xffffff00 4)) 0))
-                             (interface-gateway if) (let ((r (gethash 3 options))) (if r (u32be r 0) 0))
-                             (interface-dns if) (let ((d (gethash 6 options))) (when d (loop for at from 0 below (length d) by 4 collect (u32be d at))))
-                             (interface-lease if) (let ((l (gethash 51 options))) (when l (u32be l 0)))))
-                     (return ip)))))))
-      (udp-close port))))
+(defun dhcp (&key (tries 4) (timeout 2)
+                  (device (and *interface* (interface-device *interface*))))
+  (sb-thread:with-recursive-lock (*configuration-lock*)
+    (let ((interface *interface*) (epoch *interface-epoch*))
+      (flet ((ensure-current ()
+               (unless (and device (eq interface *interface*)
+                            (eq device (interface-device interface))
+                            (= epoch *interface-epoch*))
+                 (net-fail :enetdown "dhcp: interface attachment changed"))))
+        (ensure-current)
+        (let ((port (udp-bind 68))
+              (xid (random (ash 1 32) (make-random-state t))))
+          (unwind-protect
+               (dotimes (try tries (net-fail :etimedout "dhcp: no lease"))
+                 (ensure-current)
+                 (udp-send #xffffffff 68 67 (dhcp-message xid 1 nil))
+                 (multiple-value-bind (offer options) (dhcp-reply port xid 2 timeout)
+                   (ensure-current)
+                   (when offer
+                     (let ((server (gethash 54 options)))
+                       (udp-send #xffffffff 68 67 (dhcp-message xid 3 (list 50 (be offer 4) 54 server)))
+                       (multiple-value-bind (ip options) (dhcp-reply port xid 5 timeout)
+                         (when ip
+                           ;; Never publish a delayed lease into another selection,
+                           ;; including detach/reattach of the same device object.
+                           (sb-thread:with-mutex ((interface-lock interface))
+                             (ensure-current)
+                             (setf (interface-ip interface) ip
+                                   (interface-prefix interface) (prefix-length (u32be (gethash 1 options (be #xffffff00 4)) 0))
+                                   (interface-gateway interface) (let ((r (gethash 3 options))) (if r (u32be r 0) 0))
+                                   (interface-dns interface) (let ((d (gethash 6 options))) (when d (loop for at from 0 below (length d) by 4 collect (u32be d at))))
+                                   (interface-lease interface) (let ((l (gethash 51 options))) (when l (u32be l 0)))))
+                           (return ip)))))))
+            (let ((*interface* interface)) (udp-close port))))))))

@@ -73,6 +73,7 @@
             :kind (and device (type-of device))
             :ip (darterfly/net:address-string (darterfly/net::interface-ip i))
             :gateway (darterfly/net:address-string (darterfly/net::interface-gateway i))
+            :attachment darterfly/net::*interface-epoch*
             :input-thread (thread-name thread)
             :input-alive (and thread (sb-thread:thread-alive-p thread))
             :lock (lock-state (darterfly/net::interface-lock i))))))
