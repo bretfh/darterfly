@@ -6,8 +6,13 @@
 (load "/usr/lib/nyxt/nyxt-windows.lisp")
 (load "/usr/lib/nyxt/nyxt-renderer.lisp")
 (defpackage #:darterfly/nyxt-application
-  (:use #:cl) (:export #:run #:activate))
+  (:use #:cl) (:export #:run #:activate #:healthy-p))
 (in-package #:darterfly/nyxt-application)
+(defvar *progress-at* (get-internal-real-time))
+(defun progress () (setf *progress-at* (get-internal-real-time)))
+(defun healthy-p ()
+  (< (- (get-internal-real-time) *progress-at*)
+     (* 60 internal-time-units-per-second)))
 (defun activate (urls)
   (let ((window (and nyxt:*browser* (nyxt:current-window))))
     (when window
@@ -22,6 +27,7 @@
   (let ((urls (or (rest argv) '("about:blank"))))
     (unwind-protect
         (progn
+          (progress)
           (nyxt/renderer/wpe:launch urls)
           ;; Upstream startup continues asynchronously. Report readiness only
           ;; after a real view has reached the world's WindowServer client.
@@ -34,16 +40,24 @@
                           (plusp (nyxt/renderer/wpe::native-frame-count
                                    (nyxt:current-buffer))))
                   return t
-                do (sleep .05)
+                do (progress) (sleep .05)
                 finally (error "Nyxt did not present a window"))
           (format t "~&[NYXT APPLICATION READY]~%") (finish-output)
-          (loop until (and nyxt/renderer/wpe::*closing*
-                           (null nyxt/renderer/wpe::*engine-process*)
+          (loop with ping-at = 0
+                until (and nyxt/renderer/wpe::*closing*
+                           nyxt/renderer/wpe::*shutdown-complete*
                            (null nyxt:*browser*)
                            nyxt/renderer/wpe::*uninstalled*)
                 do (when nyxt/renderer/wpe::*failure*
                      (error "Nyxt renderer failed: ~a" nyxt/renderer/wpe::*failure*))
+                   (unless nyxt/renderer/wpe::*closing*
+                     (when (>= (get-internal-real-time) ping-at)
+                       (handler-case (nyxt/renderer/wpe::rpc 18 0)
+                         (error (e)
+                           (unless nyxt/renderer/wpe::*closing* (error e))))
+                       (setf ping-at (+ (get-internal-real-time)
+                                        (* 5 internal-time-units-per-second)))))
+                   (unless nyxt/renderer/wpe::*closing* (progress))
                    (sleep .1))
           0)
-      (unless nyxt/renderer/wpe::*closing*
-        (ignore-errors (nyxt:ffi-kill-browser nyxt:*browser*))))))
+      (ignore-errors (nyxt/renderer/wpe::shutdown-engine)))))

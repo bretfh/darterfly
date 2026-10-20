@@ -122,6 +122,21 @@ The Lisp request reader also binds *read-eval* to nil. Qualification tries
 the same registered callback from a trusted status panel and an HTTPS page.
 This check is a boundary regression, not a complete browser security audit.
 
+* Recovery ownership
+
+The Nyxt app job uses init's existing restart-on-crash policy: two automatic
+retries within ten minutes, then =:failed=. A manual launch resets the budget.
+Normal quit stays stopped. Recovery creates a fresh Lisp application world;
+its native descendants and WindowServer client are reclaimed by the existing
+OS services. It does not preserve unsaved tabs or forms.
+
+Engine loss, process-failure events and timed-out liveness/transport operations
+fail the session. Init also checks progress from outside the app, so a paused
+or stuck Lisp world cannot keep its own supervisor waiting indefinitely.
+Shutdown bounds its sends, exit polling and thread joins. See
+[[file:RECOVERY.org][the recovery design and actual-OS reproduction]] for policy, limits and the
+small WebKit NetworkProcess notification patch. Nyxt sources remain unchanged.
+
 * Historical source-build qualification
 
 The integration test boots the actual OS under normal init, loads Nyxt in
@@ -248,19 +263,20 @@ JS submissions are discarded. A page's asynchronous JavaScript error is
 reported without poisoning the global transport-failure flag. The browser
 checks explicitly exercise a late update after prompt deletion.
 
-Normal shutdown closes the display session and engine connection, waits
-for the engine and joins the reader threads. The renderer implements
-upstream Nyxt's uninstall interface; the app waits for that interface to
-be released before returning. General bounded crash recovery and
-concurrent event ownership remain open gates; normal quit is narrower.
+Normal shutdown closes the display session, cancels transport, polls for
+engine exit and joins reader threads with deadlines. World teardown owns
+remaining descriptors and callbacks. The renderer implements upstream
+Nyxt's uninstall interface; the app waits for that interface before returning.
+The recovery policy is described above; concurrent event ownership and
+queue bounds remain separate gates.
 
 * Remaining work toward everyday use
 
 See [[file:MERGE-READINESS.org][the source-reviewed integration plan and acceptance gates]].
 
-The next work is bounded restart/recovery, fresh-install qualification,
-then persistent WebKit sessions and browser-database locking. WPE's session
-is currently ephemeral. Nyxt's Lisp history writer executes, but durable
+The remaining work includes bounded event queues, fresh-install
+qualification, persistent WebKit sessions and browser-database locking.
+WPE's session is currently ephemeral. Nyxt's Lisp history writer executes, but durable
 browser state across reboots is not qualified by this test.
 
 Complete the renderer API for downloads, clipboard, pointer motion/wheel,

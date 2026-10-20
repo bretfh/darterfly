@@ -1,0 +1,18 @@
+--- a/Source/WebKit/UIProcess/Network/NetworkProcessProxy.cpp
++++ b/Source/WebKit/UIProcess/Network/NetworkProcessProxy.cpp
+@@ -484,8 +484,15 @@
+     sendWithAsyncReply(Messages::NetworkProcess::LastPageLoadNetworkActivityCompletionCodeForTesting(sessionID, pageID), WTF::move(completionHandler));
+ }
+ 
++// Darterfly's embedding owns the bounded restart policy. Keep other clients
++// unchanged; Nyxt supplies the strong definition in its engine adapter.
++extern "C" __attribute__((weak)) void darter_wpe_network_process_failed(unsigned) { }
++
+ void NetworkProcessProxy::networkProcessDidTerminate(ProcessTerminationReason reason)
+ {
++    if (reason != ProcessTerminationReason::RequestedByClient
++        && reason != ProcessTerminationReason::IdleExit)
++        darter_wpe_network_process_failed(static_cast<unsigned>(reason));
+     Ref protectedThis { *this };
+ 
+     if (RefPtr downloadProxyMap = m_downloadProxyMap.get())

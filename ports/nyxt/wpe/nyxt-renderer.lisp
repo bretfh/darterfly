@@ -16,6 +16,7 @@
 (defvar *engine* nil)
 (defvar *windows* nil)
 (defvar *engine-process* nil)
+(defvar *socket-path* nil)
 (defvar *next-id* 0)
 (defvar *serial* 0)
 (defvar *buffers* (make-hash-table))
@@ -28,6 +29,8 @@
 (defvar *event-count* 0)
 (defvar *engine-thread* nil)
 (defvar *input-thread* nil)
+(defvar *shutdown-complete* nil)
+(defvar *shutdown-lock* (sb-thread:make-mutex :name "Nyxt shutdown"))
 (defun window-call (op id &rest keys)
   (apply #'darterfly/nyxt-windows:dispatch *windows* op id keys))
 (defun app-thread (function name)
@@ -36,7 +39,9 @@
       (let ((darterfly/mach:*task* task) (darterfly/bsd:*proc* proc))
         (funcall function))) :name name)))
 (defun engine-send (op id &rest keys)
-  (apply #'darterfly/nyxt-wire:send-packet *engine* op id keys))
+  (handler-case
+      (apply #'darterfly/nyxt-wire:send-packet *engine* op id keys)
+    (error (e) (unless *closing* (setf *failure* e)) (error e))))
 (defun buffer-command (buffer op &rest keys)
   ;; Prompt producers can finish after the prompt was dismissed. Serialize
   ;; submission with deletion; an obsolete UI update has no remaining target.
@@ -44,22 +49,29 @@
     (when (and (native-id buffer) (not *closing*))
       (apply #'engine-send op (native-id buffer) keys))))
 (defun rpc (op id &rest keys)
-  (let ((seq (bt:with-lock-held (*reply-lock*) (incf *serial*))))
-    (apply #'engine-send op id :seq seq keys)
-    (loop repeat 3000 do
-      (when *failure* (error "WPE failed: ~a" *failure*))
-      (let ((answer (bt:with-lock-held (*reply-lock*)
-                      (prog1 (gethash seq *replies*) (remhash seq *replies*)))))
-        (when answer
-          (unless (= (car answer) 1000) (error "WPE: ~a" (cdr answer)))
-          (return-from rpc (cdr answer))))
-      (sleep .01))
-    (error "WPE operation ~d timed out" op)))
+  (let ((seq (bt:with-lock-held (*reply-lock*)
+               (setf (gethash (incf *serial*) *replies*) :pending) *serial*)))
+    (unwind-protect
+        (progn
+          (apply #'engine-send op id :seq seq keys)
+          (loop repeat 3000 do
+            (when (or *failure* *closing*)
+              (error "WPE stopped: ~a" *failure*))
+            (let ((answer (bt:with-lock-held (*reply-lock*)
+                            (gethash seq *replies*))))
+              (when (consp answer)
+                (unless (= (car answer) 1000) (error "WPE: ~a" (cdr answer)))
+                (return-from rpc (cdr answer))))
+            (sleep .01))
+          (setf *failure* (format nil "WPE operation ~d timed out" op))
+          (error "~a" *failure*))
+      (bt:with-lock-held (*reply-lock*) (remhash seq *replies*)))))
 (defun callback-thread (thunk)
   (bt:make-thread
     (lambda () (handler-case (funcall thunk)
-      (error (e) (format t "~&[NYXT WPE CALLBACK ERROR] ~a~%" e)
-                 (finish-output) (setf *failure* e)))) :name "Nyxt WPE callback"))
+      (error (e) (unless *closing*
+                   (format t "~&[NYXT WPE CALLBACK ERROR] ~a~%" e)
+                   (finish-output) (setf *failure* e))))) :name "Nyxt WPE callback"))
 (defun scheme-request (id seq uri)
   (handler-case
     (let* ((*read-eval* nil) (parsed (quri:uri uri))
@@ -90,8 +102,9 @@
             ((1000 1001)
              (if (plusp seq)
                  (bt:with-lock-held (*reply-lock*)
-                   (setf (gethash seq *replies*)
-                         (cons op (darterfly/nyxt-wire:text data))))
+                   (when (gethash seq *replies*)
+                     (setf (gethash seq *replies*)
+                           (cons op (darterfly/nyxt-wire:text data)))))
                  (when (and (= op 1001) buffer (native-id buffer) (not *closing*))
                    (format t "~&[NYXT ASYNC JAVASCRIPT ERROR] ~a~%"
                            (darterfly/nyxt-wire:text data)))))
@@ -122,6 +135,8 @@
             (1103 (when buffer (setf (native-url buffer) (darterfly/nyxt-wire:text data))))
             (1104 (let ((uri (darterfly/nyxt-wire:text data)))
                     (callback-thread (lambda () (scheme-request id seq uri)))))
+            (1106 (unless *closing*
+                    (setf *failure* (darterfly/nyxt-wire:text data))))
             (1105 (format t "~&[NYXT PAGE ERROR] ~a~%" (darterfly/nyxt-wire:text data))
                   (when (and buffer (web-buffer-p buffer))
                     (setf (nyxt::status buffer) :failed)))))))
@@ -129,13 +144,18 @@
                  (format t "~&[NYXT ENGINE CONNECTION ERROR] ~a~%" e)))))
 (declaim (ftype function input-loop))
 (defun start-engine ()
-  (setf *closing* nil *failure* nil)
+  (setf *closing* nil *failure* nil *shutdown-complete* nil)
   (setf *windows* (darterfly/nyxt-windows:make-session))
+  (setf *socket-path* (format nil "/tmp/nyxt-engine-~d.sock"
+                               (sb-thread:thread-os-tid sb-thread:*current-thread*)))
+  (with-open-file (log "/tmp/nyxt-engine.log" :direction :output
+                       :if-exists nil :if-does-not-exist :create)
+    (when log (finish-output log)))
   (setf *engine-process*
-    (uiop:launch-program '("/usr/bin/nyxt-wpe-engine" "/tmp/nyxt-engine.sock")
+    (uiop:launch-program (list "/usr/bin/nyxt-wpe-engine" *socket-path*)
       :output "/tmp/nyxt-engine.log" :error-output :output
-      :if-output-exists :supersede))
-  (setf *engine* (darterfly/nyxt-wire:connect-local "/tmp/nyxt-engine.sock"))
+      :if-output-exists :append))
+  (setf *engine* (darterfly/nyxt-wire:connect-local *socket-path*))
   (setf *engine-thread* (app-thread #'engine-loop "WPE events")
         *input-thread* (app-thread #'input-loop "Darterfly window input"))
   (maphash (lambda (name callbacks) (declare (ignore callbacks))
@@ -157,21 +177,58 @@
   (setf *uninstalled* t))
 (defmethod ffi-initialize ((browser wpe-browser) urls startup-timestamp)
   (start-engine) (call-next-method))
+(defun engine-exited-p (seconds)
+  (loop with until = (+ (get-internal-real-time)
+                        (* seconds internal-time-units-per-second))
+        unless (and *engine-process* (uiop:process-alive-p *engine-process*))
+          return t
+        when (>= (get-internal-real-time) until) return nil
+        do (sleep .05)))
+(defun shutdown-engine ()
+  ;; Also callable after partial startup. Init's health check is the outer
+  ;; bound if this world cannot complete cleanup itself.
+  (sb-thread:with-mutex (*shutdown-lock* :timeout 1)
+    (unless *shutdown-complete*
+      (setf *closing* t)
+      (when *engine*
+        (let ((darterfly/nyxt-wire:*io-timeout* 1))
+          (ignore-errors (engine-send 9 0))))
+      (unless (engine-exited-p 2)
+        (format t "~&[NYXT ENGINE FORCED STOP]~%")
+        (ignore-errors (uiop:terminate-process *engine-process* :urgent t)))
+      (when (and *engine-process* (engine-exited-p 2))
+        ;; WAIT-PROCESS is safe only after the nonblocking status says dead.
+        (format t "~&[NYXT ENGINE WAIT ~s]~%" (uiop:wait-process *engine-process*)))
+      (when *engine* (darterfly/nyxt-wire:cancel-connection *engine*))
+      (when *windows* (ignore-errors (window-call 109 0)))
+      (dolist (thread (list *engine-thread* *input-thread*))
+        (when (and thread (not (eq thread (bt:current-thread))))
+          (sb-thread:join-thread thread :timeout 2 :default nil)))
+      ;; All remaining callbacks belong to this app world. Its exit reclaims
+      ;; their descriptors and every native descendant via end-world-proc.
+      (when *socket-path* (ignore-errors (uiop:delete-file-if-exists *socket-path*)))
+      (setf *shutdown-complete* t)
+      (finish-output))))
+(defun drain-file-writers ()
+  ;; Upstream QUIT clears *BROWSER* immediately after FFI-KILL-BROWSER.
+  ;; NFiles history serialization still reads it from asynchronous workers.
+  ;; Join those existing workers while the browser remains valid; never
+  ;; replace the persistence implementation or pretend a stalled write passed.
+  (loop with until = (+ (get-internal-real-time)
+                        (* 5 internal-time-units-per-second))
+        for workers = (sera:synchronized (files::*cache*)
+                        (loop for entry being the hash-values of files::*cache*
+                              for worker = (sera:synchronized (entry)
+                                             (files::worker entry))
+                              when worker collect worker))
+        unless (some #'bt:thread-alive-p workers) return t
+        when (>= (get-internal-real-time) until)
+          do (error "Nyxt file writers did not finish before shutdown")
+        do (sleep .01)))
 (defmethod ffi-kill-browser ((browser wpe-browser))
-  (setf *closing* t)
-  (when *engine* (engine-send 9 0))
-  (when *windows* (window-call 109 0))
-  (when *engine-process*
-    (let ((status (uiop:wait-process *engine-process*)))
-      (format t "~&[NYXT ENGINE WAIT ~s]~%" status)
-      (assert (eql status 0))))
-  (dolist (thread (list *engine-thread* *input-thread*))
-    (when (and thread (not (eq thread (bt:current-thread))))
-      (sb-thread:join-thread thread :timeout 2 :default nil)))
-  (when *engine* (darterfly/nyxt-wire:close-connection *engine*))
-  (setf *engine* nil *windows* nil *engine-process* nil
-        *engine-thread* nil *input-thread* nil)
-  (clrhash *buffers*) (clrhash *native-windows*) (clrhash *replies*))
+  (handler-case
+      (progn (shutdown-engine) (drain-file-writers))
+    (error (e) (setf *failure* e) (error e))))
 (defmethod initialize-instance :after ((buffer wpe-buffer) &key &allow-other-keys)
   (ffi-buffer-initialize-foreign-object buffer))
 (defmethod ffi-buffer-initialize-foreign-object ((buffer wpe-buffer))
@@ -323,10 +380,25 @@
                  (format t "~&[NYXT INPUT ERROR] ~a~%" e)))))
 (setf nyxt::*renderer* (make-instance 'wpe-renderer))
 
+(defun worker-failed (condition previous-hook)
+  (declare (ignore previous-hook))
+  ;; Upstream startup and command workers use Bordeaux Threads. Report an
+  ;; unhandled worker failure to the app loop, then unwind only that worker;
+  ;; SBCL's noninteractive debugger otherwise tries to exit the whole runtime
+  ;; from inside an arbitrary startup thread.
+  (setf *failure* condition)
+  (format t "~&[NYXT WORKER FAILED] ~a~%" condition)
+  (finish-output)
+  (sb-thread:abort-thread))
+
 (export 'launch)
 (defun launch (urls &key (online-suggestions t))
   "Start upstream Nyxt's normal browser initialization with native WPE views."
   (when *engine* (error "The WPE renderer is already running"))
+  (setf bt:*default-special-bindings*
+    (acons 'sb-ext:*invoke-debugger-hook* '(function worker-failed)
+      (remove 'sb-ext:*invoke-debugger-hook* bt:*default-special-bindings*
+              :key #'car)))
   (nyxt::initialize-lparallel-kernel :worker-count 2)
   (unless (uiop:getenv "FONTCONFIG_FILE")
     (sb-posix:setenv "FONTCONFIG_FILE" "/etc/fonts/fonts.conf" 1))

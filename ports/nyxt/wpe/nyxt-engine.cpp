@@ -23,6 +23,7 @@ struct Header { uint32_t op,id,seq,a,b,n; };
 static constexpr unsigned limit=16*1024*1024;
 static int connection=-1;
 static bool running=true;
+static bool failed=false;
 static bool trace=false;
 // World RPC cancellation cannot undo an already consumed stream transfer.
 // Defer signals only during short nonblocking I/O, not while waiting for space.
@@ -33,12 +34,14 @@ static ssize_t wireIO(bool writing,void* data,size_t size) {
     auto n=writing?write(connection,data,size):read(connection,data,size);
     error=errno;pthread_sigmask(SIG_SETMASK,&previous,nullptr);errno=error;return n;
 }
-static void transfer(const void* data,size_t size) {
+static void transfer(const void* data,size_t size,gint64 deadline) {
     auto p=static_cast<const char*>(data);
-    while(size) { auto n=wireIO(true,const_cast<char*>(p),size>32768?32768:size);
+    while(size && running) {
+        if(g_get_monotonic_time()>=deadline){failed=true;running=false;return;}
+        auto n=wireIO(true,const_cast<char*>(p),size>32768?32768:size);
         if(n<0 && errno==EINTR)continue;
         if(n<0 && errno==EAGAIN){usleep(1000);continue;}
-        if(n<=0){running=false;return;} p+=n;size-=n; }
+        if(n<=0){failed=true;running=false;return;} p+=n;size-=n; }
 }
 static void send(unsigned op,unsigned id,unsigned seq=0,unsigned a=0,unsigned b=0,
                  const void* bytes=nullptr,size_t size=0) {
@@ -47,10 +50,20 @@ static void send(unsigned op,unsigned id,unsigned seq=0,unsigned a=0,unsigned b=
     sending=true;
     Header h{op,id,seq,a,b,static_cast<uint32_t>(size)};
     if(trace)fprintf(stderr,"NYXT send %u id=%u seq=%u bytes=%zu\n",op,id,seq,size);
-    transfer(&h,sizeof h);if(size)transfer(bytes,size);sending=false;
+    const auto deadline=g_get_monotonic_time()+10*G_USEC_PER_SEC;
+    transfer(&h,sizeof h,deadline);if(size)transfer(bytes,size,deadline);sending=false;
 }
 static void text(unsigned op,unsigned id,unsigned seq,const char* s) {
     if(!s)s="";send(op,id,seq,0,0,s,strlen(s));
+}
+static void processFailure(const char* what) {
+    if(!running)return;
+    fprintf(stderr,"NYXT ENGINE PROCESS FAILURE: %s\n",what);
+    text(1106,0,0,what);failed=true;running=false;
+}
+extern "C" void darter_wpe_network_process_failed(unsigned reason) {
+    fprintf(stderr,"NYXT NETWORK TERMINATION reason=%u\n",reason);
+    processFailure("Network process terminated");
 }
 typedef struct { WPEDisplay parent; } NyxtDisplay;
 typedef struct { WPEDisplayClass parent; } NyxtDisplayClass;
@@ -116,8 +129,9 @@ static Page* create(unsigned id,unsigned w,unsigned h,bool chrome) {
         if(!g_error_matches(e,WEBKIT_NETWORK_ERROR,WEBKIT_NETWORK_ERROR_CANCELLED))
             text(1105,static_cast<Page*>(d)->id,0,e->message);
         return FALSE;}),p);
-    g_signal_connect(web,"web-process-terminated",G_CALLBACK(+[](WebKitWebView*,WebKitWebProcessTerminationReason,gpointer d){
-        text(1105,static_cast<Page*>(d)->id,0,"Web process terminated");}),p);
+    g_signal_connect(web,"web-process-terminated",G_CALLBACK(+[](WebKitWebView*,WebKitWebProcessTerminationReason reason,gpointer){
+        if(reason!=WEBKIT_WEB_PROCESS_TERMINATED_BY_API)
+            processFailure("Web process terminated");}),p);
     return p;
 }
 static void command(Header h,char* data) {
@@ -125,6 +139,7 @@ static void command(Header h,char* data) {
     auto p=pages.count(h.id)?pages[h.id]:nullptr;
     if(h.op==1){if(trace)fprintf(stderr,"NYXT create view %u %ux%u\n",h.id,h.a,h.b);if(!create(h.id,h.a,h.b,h.n&&data[0]==1)){text(1001,h.id,h.seq,"Invalid view");return;}}
     else if(h.op==9){running=false;}
+    else if(h.op==18){ /* Application liveness probe; no page/URL required. */ }
     else if(h.op==11){
         // Match upstream Nyxt's WebKit scheme policy. Marking every scheme
         // local prevents the UI from fetching its own Lisp callback URLs.
@@ -230,5 +245,5 @@ int main(int argc,char**argv) {
         webkit_uri_scheme_request_finish_error(pair.second,e);g_error_free(e);g_object_unref(pair.second);}
     for(auto pair:pages)destroy(pair.second);
     g_object_unref(session);g_object_unref(context);g_object_unref(display);close(connection);
-    puts("NYXT ENGINE EXIT");return 0;
+    puts("NYXT ENGINE EXIT");return failed?1:0;
 }

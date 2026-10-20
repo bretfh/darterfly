@@ -5,10 +5,12 @@
     (error "Launch Nyxt through open-application in its own app world"))
   ;; Keep diagnostics in the installed OS, including initialization failures.
   (with-open-file (log "/tmp/nyxt-application.log" :direction :output
-                       :if-exists :supersede)
+                       :if-exists :append :if-does-not-exist :create)
     (let* ((*standard-output* log) (*error-output* log) (*trace-output* log)
            (*terminal-io* (make-two-way-stream (make-string-input-stream "") log))
            (*query-io* *terminal-io*) (*debug-io* *terminal-io*))
+      (format log "~&[NYXT APPLICATION START ~d]~%" (get-universal-time))
+      (finish-output log)
       (handler-case
           (progn
             (load "/usr/lib/nyxt/nyxt-application.lisp")

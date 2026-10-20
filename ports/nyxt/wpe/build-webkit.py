@@ -23,7 +23,7 @@ out = w/'webkit-target'
 run([sys.executable, r/'ports/nyxt/wpe/apply-patches.py', src,
      'jsc-darterfly-platform.patch', 'jsc-standalone-includes.patch',
      'skia-darterfly-baseline.patch', 'skia-darterfly-platform.patch',
-     'wpe-darterfly-services.patch', 'wpe-darterfly-static-engine.patch', 'wpe-optional-gstreamer.patch', 'wpe-darterfly-cpu-renderer.patch', 'wpe-optional-drm-snapshot.patch', 'xdgmime-private-prefix.patch', 'wpe-static-injected-bundle.patch'])
+     'wpe-darterfly-services.patch', 'wpe-darterfly-static-engine.patch', 'wpe-optional-gstreamer.patch', 'wpe-darterfly-cpu-renderer.patch', 'wpe-optional-drm-snapshot.patch', 'xdgmime-private-prefix.patch', 'wpe-static-injected-bundle.patch', 'wpe-darterfly-process-failure.patch'])
 # Use the existing C-loop interpreter and native POSIX process launcher.
 # The upstream headless platform exercises software buffers; a Darterfly
 # display implementation will consume those buffers through WPEPlatform.

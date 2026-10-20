@@ -98,33 +98,39 @@ Its [[file:qualification-logs/integrated-browser-host.log][regression transcript
 
 ** Application lifecycle
 
-nyxt-renderer.lisp launches fixed /tmp socket names and stores process,
-buffer, window and reply state in globals. Normal shutdown now closes the
-engine connection and display session, joins reader threads, clears tables
-and releases the installed renderer interface. The engine wait still lacks a deadline.
-A partial startup or engine failure can leave resources behind. Relaunch
-uses a fresh app world; repeated launch inside one world is not qualified.
+Nyxt now uses init's existing restart-on-crash policy with a three-exit
+budget per ten minutes. Normal quit does not restart. The app and engine
+have bounded liveness/transport/shutdown paths and kernel-TID-specific socket
+names. A failed session is replaced as a whole; native descendants and
+windows are reclaimed by the existing world ownership machinery. See
+[[file:RECOVERY.org][recovery design and qualification]] for the exact limits and test procedure.
 
-Use a session object with explicit starting/running/stopping/stopped states
-and owned processes, descriptors, threads and requests. Clean up partial
-startup with unwind-protect. Use unique owned endpoints, or passed descriptors
-where supported; do not unlink another running instance's endpoint. Stop
-intentionally without automatic relaunch. Unexpected crashes should use init's
-existing bounded recovery policy.
+Renderer state still resides in one application's globals, with no supported
+in-place restart of that heap. Persistent tabs, user-facing failure controls,
+long lifecycle stress and simultaneous-failure qualification remain work.
+
+The full single-guest recovery sequence now passes, including seven failure
+injections, retry exhaustion, manual retry and clean quit without restart.
+Repeated launches exposed kernel termination races, VM-map fragmentation
+and leaked joined-thread storage; the shared OS fixes have 133 actual-OS
+regression checks. The separate host checks pass 88 assertions. See
+[[file:recovery-evidence.json][the recorded recovery evidence]]. This is a recovery milestone, not the
+20-cycle/long-soak or fresh-install qualification.
 
 ** Event ordering and backpressure
 
-The native send path retries EAGAIN inside the GLib thread without a deadline.
-A stalled receiver can therefore stop all WebKit progress. The Lisp engine
-reader still presents full frames synchronously through the Layer service. RPC
-replies compete with pixels. callback-thread creates a fresh thread per
+The native send path now fails a blocked transfer after ten seconds, allowing
+session recovery. It still occupies the GLib thread during that interval.
+The Lisp engine reader still presents full frames synchronously through the
+Layer service. RPC replies compete with pixels. =callback-thread= creates a fresh thread per
 callback; independent load callbacks can finish out of order. Several global
 tables have multiple readers/writers with no explicit ownership rule.
 
 Keep the GLib thread nonblocking. Bound outbound queues and pending requests;
-coalesce obsolete frames per view while preserving control replies. Give Lisp
-events explicit ownership and ordered dispatch, with a bounded callback
-executor for work that can call synchronous engine RPC. Do not introduce a
+coalesce obsolete frames per view while preserving control replies. RPC
+entries now have scoped lifetimes and late replies are discarded; a hard
+limit on concurrent callers is still needed. Give Lisp events explicit
+ownership and ordered dispatch, with a bounded callback executor for work that can call synchronous engine RPC. Do not introduce a
 single callback thread that deadlocks waiting for a reply it must itself
 dispatch. Cancel requests on view/session destruction and ignore late replies
 safely.
@@ -220,11 +226,15 @@ errors no longer poison the global *failure* flag; view submission/deletion
 is serialized for late prompt updates. Engine loss should become an
 actionable browser state, not an unbounded wait.
 
-- [ ] Kill WebProcess, NetworkProcess and UI process separately; also close a
-  socket mid-header and mid-frame. The desktop remains responsive and recovery
-  is bounded.
-- [ ] Stop the Nyxt world during blocked I/O; verify children, windows and
-  pending requests are reclaimed through normal OS ownership.
+- [X] Kill WebProcess, NetworkProcess and UI process separately; check new
+  app worlds, old child/window cleanup, retry limits and working HTTPS/JS.
+- [X] Stop the Nyxt world, pause the UI with its socket open, and pause the
+  Lisp world. Verify bounded recovery/cleanup through normal OS ownership.
+- [X] Recover from an unhandled Bordeaux worker error; manual launch resets
+  the failure budget and clean quit stays stopped.
+- [ ] Close actual OS sockets mid-header and mid-frame. Host transport tests
+  cover partial packets and blocked writers; guest truncation injection is
+  still required.
 - [ ] Pause the frame consumer while the page animates. Queues remain within
   configured limits and resume without replaying a backlog of obsolete frames.
 - [ ] Stress navigation, buffer deletion and GC/signal interruption. No lost
@@ -328,7 +338,8 @@ facilities.
 
 * Immediate next change
 
-Normal-app lifecycle qualification is recorded. Next, bound transport and
-shutdown behavior under engine failure. Keep persistence, broader input
-and fresh-install reproducibility as explicit gates. Ordinary launch alone
-is not a claim that the browser is ready for daily use or final merge.
+Normal-app and bounded crash-recovery qualification are recorded. Next,
+make frame output nonblocking, coalesce obsolete frames and bound/serialize
+callback work without blocking RPC replies. Then qualify lifecycle stress
+and finish persistence, broader input and fresh-install reproducibility.
+The branch remains under qualification for daily use and final merge.

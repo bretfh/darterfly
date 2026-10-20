@@ -2,6 +2,7 @@
 (asdf:load-system :darterfly/test)
 (load (asdf:system-relative-pathname :darterfly "ports/nyxt/wpe/application-image.lisp"))
 (in-package #:darterfly/test)
+(declaim (ftype (function (t) t) nyxt-crash-checks))
 (defun nyxt-app-ask (console form &optional (timeout 90))
   (image:send console form)
   (let ((out (image:expect console (list (format nil "~%* ") "debugger invoked") :timeout timeout)))
@@ -72,6 +73,7 @@
             (format nil "(progn (assert (search ~s (uiop:read-file-string \"/etc/ssl/certs/ca-certificates.crt\"))) (format t \"~&[NYXT APP TEST TRUST STORE PASS]~%\"))"
               (uiop:read-file-string (merge-pathnames "ca.pem"
                 (uiop:ensure-directory-pathname (uiop:getenv "DARTER_HTTP_FIXTURE_DIR")))))))
+        (unless (uiop:getenv "DARTERFLY_NYXT_RECOVERY_ONLY")
         ;; The fifth installed Dock item is Nyxt: the actual desktop event
         ;; follows open-application -> init -> app world -> registered program.
         (image:pointer 776 744 t) (sleep .15) (image:pointer 776 744 nil)
@@ -141,6 +143,9 @@
               (assert (eql 0 (getf exit :exit))))
             (format t \"~&[NYXT APP QUIT PASS]~%\"))")
         (format t "~&[NYXT APP QUALIFICATION PASS]~%"))
+        (when (uiop:getenv "DARTERFLY_NYXT_RECOVERY")
+          (load (darterfly-file "ports/nyxt/wpe/nyxt-crash-checks.lisp"))
+          (nyxt-crash-checks c)))
       (ignore-errors
         (nyxt-app-ask c
           "(progn (write-string (or (ignore-errors (uiop:read-file-string \"/tmp/nyxt-application.log\")) \"\")) (finish-output))" 20))

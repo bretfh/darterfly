@@ -324,7 +324,7 @@
 
 (defun submit-job (message plist)
   (let ((old (find-job (key plist :label))))
-    (cond ((and old (member (state old) '(:starting :running :restarting :quarantined)))
+    (cond ((and old (member (state old) '(:starting :running :restarting :quarantined :unhealthy)))
            (fail-reply message :job-active))
           (t
            (let ((job (load-job plist)))

@@ -77,3 +77,15 @@
                (is (search "5 jobs, 1 services, 1 unavailable" log) "~a" log)))
         (bsd:kill init :sigkill)
         (bsd:wait4 init)))))
+
+(test init-does-not-replace-an-unhealthy-world
+  ;; Health failure is still an owned, active world until its watcher finishes
+  ;; teardown. A concurrent launch must not install a second restart policy.
+  (let* ((job (make-instance 'darterfly/init:job :label "unhealthy"
+                            :program nil :arguments nil
+                            :plist '(:label "unhealthy" :world t)))
+         (darterfly/init::*jobs* (list job)))
+    (setf (darterfly/init::state job) :unhealthy)
+    (darterfly/init::submit-job (mach:make-message)
+                                '(:label "unhealthy" :world t))
+    (is (eq job (first darterfly/init::*jobs*)))))

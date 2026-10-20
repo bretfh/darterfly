@@ -13,7 +13,7 @@
 (defun active-label-p (label)
   (find-if (lambda (job)
              (and (equal (getf job :label) label)
-                  (member (getf job :state) '(:starting :running :restarting :quarantined))))
+                  (member (getf job :state) '(:starting :running :restarting :quarantined :unhealthy))))
            (darterfly/init:jobs)))
 
 (defun fresh-label (name)
@@ -22,15 +22,38 @@
         :unless (active-label-p label)
           :return label))
 
+(defun nyxt-recovery-policy ()
+  ;; Supervise the application through init, which already owns the entire
+  ;; descendant process tree. A manual Dock launch creates a fresh budget.
+  (let ((world nil) (began 0))
+    (list :keep-alive :crashed :throttle 10 :most-exits 3 :window 600
+          :after-start (lambda (new-world)
+                         (setf world new-world began (get-universal-time)))
+          :check-every 5 :unhealthy-for 10
+          :healthy
+          (lambda ()
+            (and world
+              (let ((answer (string-trim '(#\Space #\Newline #\Return)
+                       (darterfly/run:world-eval world
+                         "(let* ((p (find-package :darterfly/nyxt-application))
+                                 (f (and p (find-symbol \"HEALTHY-P\" p))))
+                            (if (and f (fboundp f)) (funcall f) :loading))"
+                         :timeout 2))))
+                (or (equal answer "T")
+                    (and (equal answer ":LOADING")
+                         (< (- (get-universal-time) began) 240)))))))))
+
 (defun world-job (path &optional (argv (list path)))
-  (list :label (if (member (program-name path) *single-instance-apps* :test #'equal)
+  (append
+    (when (equal (program-name path) "Nyxt") (nyxt-recovery-policy))
+    (list :label (if (member (program-name path) *single-instance-apps* :test #'equal)
                    (program-name path) (fresh-label (program-name path)))
         :world (list :core "/System/Library/Kernels/darterfly.core"
                      :memory (or (cdr (assoc (program-name path) *app-memory-overrides*
                                               :test #'equal)) *app-memory*)
                      :evals (list (format nil "(progn (let ((status (nth-value 1 (darterfly/bsd:wait4 (darterfly/bsd:posix-spawn ~s (quote ~s) nil))))) (sb-ext:exit :code (if (and status (darterfly/bsd:wifexited status)) (darterfly/bsd:wexitstatus status) 1))))"
                                           path argv)))
-        :run-at-load t))
+        :run-at-load t)))
 
 (defun activate-application (name argv)
   (let ((world (darterfly/run:find-world name)))
