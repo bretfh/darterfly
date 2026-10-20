@@ -12,6 +12,8 @@
 (defun nyxt-app-await (console path marker &optional (seconds 180))
   ;; Poll from the host: a worker failure may print only to the serial console.
   ;; A long guest-side wait would then occupy the REPL and prevent diagnostics.
+  ;; Read only new bytes: repeatedly copying the entire cold-build log adds
+  ;; heavy filesystem traffic precisely while native profile startup runs.
   (loop with deadline = (+ (get-internal-real-time)
                           (* seconds internal-time-units-per-second))
         for remaining = (/ (- deadline (get-internal-real-time))
@@ -21,13 +23,28 @@
             (error "Nyxt app did not reach ~a within ~d seconds" marker seconds))
           (nyxt-app-ask console
           (format nil
-            "(let ((log (ignore-errors (uiop:read-file-string ~s))))
-               (when log
-                 (write-string log *standard-output*
-                   :start (min *nyxt-log-at* (length log)))
-                 (setf *nyxt-log-at* (length log)) (finish-output))
-               (when (and log (search ~s log)) :nyxt-await-ready))"
-            path marker)
+            "(progn
+               (defvar *nyxt-await-path* nil)
+               (defvar *nyxt-await-tail* \"\")
+               (unless (equal *nyxt-await-path* ~s)
+                 (setf *nyxt-await-path* ~s *nyxt-log-at* 0))
+               (when (zerop *nyxt-log-at*) (setf *nyxt-await-tail* \"\"))
+               (when (probe-file ~s)
+                 (with-open-file (s ~s)
+                   (when (> *nyxt-log-at* (file-length s))
+                     (setf *nyxt-log-at* 0 *nyxt-await-tail* \"\"))
+                   (file-position s *nyxt-log-at*)
+                   (let* ((chunk (make-string 65536))
+                          (n (read-sequence chunk s))
+                          (tail (concatenate 'string *nyxt-await-tail*
+                                             (subseq chunk 0 n))))
+                     (setf *nyxt-log-at* (file-position s)
+                           *nyxt-await-tail*
+                           (subseq tail (max 0 (- (length tail) 65536))))
+                     (write-string chunk *standard-output* :end n)
+                     (finish-output))))
+               (when (search ~s *nyxt-await-tail*) :nyxt-await-ready))"
+            path path path path marker)
           (max 1 (min 30 (ceiling remaining)))))
         do (when (some (lambda (failure) (search failure out))
                        '("[NYXT APPLICATION FAILED]" "[NYXT APP CHECK FAILED]"

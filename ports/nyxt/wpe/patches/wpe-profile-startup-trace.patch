@@ -1,0 +1,131 @@
+--- a/Source/WebKit/NetworkProcess/NetworkProcess.cpp
++++ b/Source/WebKit/NetworkProcess/NetworkProcess.cpp
+@@ -678,6 +678,7 @@
+ #endif
+ 
+     addStorageSession(sessionID, parameters);
++    if (getenv("DARTER_NYXT_TRACE")) fprintf(stderr,"WPE profile storage-session ready pid=%d\n",getpid());
+ 
+ #if ENABLE(DECLARATIVE_WEB_PUSH)
+     parameters.networkSessionParameters.webPushDaemonConnectionConfiguration.declarativeWebPushEnabled = parameters.networkSessionParameters.isDeclarativeWebPushEnabled;
+@@ -687,6 +688,7 @@
+         return NetworkSession::create(*this, parameters.networkSessionParameters);
+     }).iterator->value;
+ 
++    if (getenv("DARTER_NYXT_TRACE")) fprintf(stderr,"WPE profile network-session ready pid=%d\n",getpid());
+     if (m_isSuspended)
+         session->storageManager().suspend([] { });
+ }
+--- a/Source/WebKit/NetworkProcess/NetworkSession.cpp
++++ b/Source/WebKit/NetworkProcess/NetworkSession.cpp
+@@ -24,6 +24,9 @@
+  */
+ 
+ #include "config.h"
++#include <cstdio>
++#include <cstdlib>
++#include <unistd.h>
+ #include "NetworkSession.h"
+ 
+ #include "BackgroundFetchLoad.h"
+@@ -126,6 +129,7 @@
+ 
+ static Ref<NetworkStorageManager> createNetworkStorageManager(NetworkProcess& networkProcess, const NetworkSessionCreationParameters& parameters)
+ {
++    if (getenv("DARTER_NYXT_TRACE")) fprintf(stderr,"WPE profile storage-manager begin pid=%d\n",getpid());
+     SandboxExtension::consumePermanently(parameters.localStorageDirectoryExtensionHandle);
+     SandboxExtension::consumePermanently(parameters.indexedDBDirectoryExtensionHandle);
+     SandboxExtension::consumePermanently(parameters.cacheStorageDirectoryExtensionHandle);
+@@ -195,6 +199,7 @@
+ #endif
+     , m_dataStoreIdentifier(parameters.dataStoreIdentifier)
+ {
++    if (getenv("DARTER_NYXT_TRACE")) fprintf(stderr,"WPE profile session-base begin pid=%d\n",getpid());
+     if (!m_sessionID.isEphemeral()) {
+         String networkCacheDirectory = parameters.networkCacheDirectory;
+         if (!networkCacheDirectory.isNull()) {
+@@ -220,10 +225,12 @@
+         }
+     }
+ 
++    if (getenv("DARTER_NYXT_TRACE")) fprintf(stderr,"WPE profile cache ready pid=%d\n",getpid());
+     m_isStaleWhileRevalidateEnabled = parameters.staleWhileRevalidateEnabled;
+ 
+     setTrackingPreventionEnabled(parameters.resourceLoadStatisticsParameters.enabled);
+ 
++    if (getenv("DARTER_NYXT_TRACE")) fprintf(stderr,"WPE profile tracking ready pid=%d\n",getpid());
+     setShouldSendPrivateTokenIPCForTesting(parameters.shouldSendPrivateTokenIPCForTesting);
+ #if ENABLE(OPT_IN_PARTITIONED_COOKIES)
+     setOptInCookiePartitioningEnabled(parameters.isOptInCookiePartitioningEnabled);
+--- a/Source/WebKit/NetworkProcess/soup/NetworkSessionSoup.cpp
++++ b/Source/WebKit/NetworkProcess/soup/NetworkSessionSoup.cpp
+@@ -24,6 +24,9 @@
+  */
+ 
+ #include "config.h"
++#include <cstdio>
++#include <cstdlib>
++#include <unistd.h>
+ #include "NetworkSessionSoup.h"
+ 
+ #include "NetworkProcess.h"
+@@ -47,6 +50,7 @@
+     , m_networkSession(makeUnique<SoupNetworkSession>(m_sessionID))
+     , m_persistentCredentialStorageEnabled(parameters.persistentCredentialStorageEnabled)
+ {
++    if (getenv("DARTER_NYXT_TRACE")) fprintf(stderr,"WPE profile soup begin pid=%d\n",getpid());
+     CheckedPtr storageSession = networkStorageSession();
+     ASSERT(storageSession);
+ 
+@@ -62,6 +66,7 @@
+     else
+         m_networkSession->setCookieJar(storageSession->cookieStorage());
+ 
++    if (getenv("DARTER_NYXT_TRACE")) fprintf(stderr,"WPE profile cookies ready pid=%d\n",getpid());
+     if (!parameters.hstsStorageDirectory.isEmpty())
+         m_networkSession->setHSTSPersistentStorage(parameters.hstsStorageDirectory);
+ }
+--- a/Source/WebKit/NetworkProcess/cache/NetworkCache.cpp
++++ b/Source/WebKit/NetworkProcess/cache/NetworkCache.cpp
+@@ -24,6 +24,9 @@
+  */
+ 
+ #include "config.h"
++#include <cstdio>
++#include <cstdlib>
++#include <unistd.h>
+ #include "NetworkCache.h"
+ 
+ #include "AsyncRevalidation.h"
+@@ -89,7 +92,9 @@
+         return nullptr;
+ 
+     auto cacheModel = networkProcess.cacheModel();
++    if (getenv("DARTER_NYXT_TRACE")) fprintf(stderr,"WPE profile cache capacity begin pid=%d\n",getpid());
+     auto capacity = computeCapacity(cacheModel, cachePath);
++    if (getenv("DARTER_NYXT_TRACE")) fprintf(stderr,"WPE profile cache capacity ready pid=%d\n",getpid());
+ 
+     // Cache a small number of recently used memory mapped main resource blobs to speed up hot loads of
+     // recently visited websites.
+--- a/Source/WebKit/NetworkProcess/cache/NetworkCacheStorage.cpp
++++ b/Source/WebKit/NetworkProcess/cache/NetworkCacheStorage.cpp
+@@ -24,6 +24,9 @@
+  */
+ 
+ #include "config.h"
++#include <cstdio>
++#include <cstdlib>
++#include <unistd.h>
+ #include "NetworkCacheStorage.h"
+ 
+ #include "AuxiliaryProcess.h"
+@@ -355,7 +358,9 @@
+     if (!hasMarkedExcludedFromBackup)
+         FileSystem::setExcludedFromBackup(versionedDirectoryPath, true);
+ 
++    if (getenv("DARTER_NYXT_TRACE")) fprintf(stderr,"WPE profile cache salt begin pid=%d\n",getpid());
+     auto salt = FileSystem::readOrMakeSalt(makeSaltFilePath(cachePath));
++    if (getenv("DARTER_NYXT_TRACE")) fprintf(stderr,"WPE profile cache salt ready pid=%d\n",getpid());
+     if (!salt)
+         return nullptr;
+ 
