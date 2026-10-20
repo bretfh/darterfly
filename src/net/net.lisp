@@ -81,7 +81,9 @@
 (defgeneric if-output (device frame))
 
 (defmethod if-output ((device darterfly/devices:ethernet-controller) frame)
-  (darterfly/devices:network-send device frame))
+  (handler-case (darterfly/devices:network-send device frame)
+    (darterfly/devices::ethernet-transmit-stalled (e)
+      (net-fail :etimedout "~a" e))))
 
 (defun send-frame (dst type payload)
   (let ((device (interface-device *interface*)))

@@ -246,3 +246,23 @@
              :received (make-array (- darterfly/net::+rcvbuf+ 32) :element-type '(unsigned-byte 8)))))
     (darterfly/net::receive-in-order c 1033 #(1) nil)
     (is (null (darterfly/net::tcp-out-of-order c)) "buffered unread data reduces the acceptable gap")))
+
+(test a-usb-transmit-stall-does-not-terminate-delayed-acks
+  (let* ((e (make-instance 'darterfly/devices::usb-cdc-ecm))
+         (peer (darterfly/net:ip-address "10.0.2.2"))
+         (darterfly/net:*interface* (darterfly/net::make-interface
+                                    :device e :mac +peer-mac+ :ip (darterfly/net:ip-address "10.0.2.15")))
+         (c (darterfly/net::make-connection :local-port 5000 :remote-port 5001
+              :remote-ip peer :rcv-nxt 1001 :snd-nxt 2001 :ack-pending t))
+         (darterfly/net::*acks-due* (list c)))
+    (setf (gethash peer (darterfly/net::interface-arp darterfly/net:*interface*)) +peer-mac+)
+    (unwind-protect
+         (progn
+           (sb-int:encapsulate 'darterfly/devices:network-send 'queue-failure
+                              (lambda (&rest args) (declare (ignore args))
+                                (error 'darterfly/devices::ethernet-transmit-stalled)))
+           (is (eq :etimedout (handler-case (darterfly/net:if-output e #(1))
+                             (darterfly/net:net-error (e) (darterfly/net:net-errno e)))))
+           (finishes (darterfly/net::flush-acks))
+           (is (null darterfly/net::*acks-due*)))
+      (sb-int:unencapsulate 'darterfly/devices:network-send 'queue-failure))))

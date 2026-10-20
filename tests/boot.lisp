@@ -420,7 +420,7 @@
       (unwind-protect
            (progn
              (image:expect c "* " :timeout 90)
-             (is (search "\"10.0.2.15\"" (ask "(progn (darterfly/net:start-network) (darterfly/net:udp-echo 7) (darterfly/net:tcp-echo 7) (darterfly/net:address-string (darterfly/net::interface-ip darterfly/net:*interface*)))")))
+             (is (search "\"10.0.2.15\"" (ask "(progn (darterfly/net:start-network) (loop repeat 150 until (plusp (darterfly/net::interface-ip darterfly/net:*interface*)) do (sleep .1)) (darterfly/net:udp-echo 7) (darterfly/net:tcp-echo 7) (darterfly/net:address-string (darterfly/net::interface-ip darterfly/net:*interface*)))")))
              (is (search "(\"10.0.2.2\" (\"10.0.2.3\") 24)" (ask "(let ((i darterfly/net:*interface*)) (list (darterfly/net:address-string (darterfly/net::interface-gateway i)) (mapcar #'darterfly/net:address-string (darterfly/net::interface-dns i)) (darterfly/net::interface-prefix i)))"))
                  "dhcp gives the gateway, the name server and the mask")
              (when (ignore-errors (sb-bsd-sockets:get-host-by-name "example.com"))
@@ -3224,7 +3224,7 @@
                (is (or (search "0.0.0.0:4011" started)
                        (search (format nil "~a:4011" ip) started))))
              (is (search "=> 3" (client "test-key" "(+ 1 2)")) "the host evaluates a form on darterfly")
-             (is (search (format nil "=> ~s" ip) (client "test-key" "(darterfly/net:address-string (darterfly/net::interface-ip darterfly/net:*interface*))")) "in darterfly's own image")
+             (is (search (format nil "=> ~s" ip) (client "test-key" "(progn (loop repeat 150 until (plusp (darterfly/net::interface-ip darterfly/net:*interface*)) do (sleep .1)) (darterfly/net:address-string (darterfly/net::interface-ip darterfly/net:*interface*)))")) "in darterfly's own image")
              (is (not (search "=>" (client "wrong" "(+ 1 2)"))) "and a wrong key evaluates nothing")
              (is (search "NOSUCHPKG" (client "test-key" "nosuchpkg::x")) "a read error comes back instead of hanging")
              (when status

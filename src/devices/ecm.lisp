@@ -107,6 +107,11 @@
     (sb-thread:with-recursive-lock ((xhci-lock c))
       (nreverse (shiftf (ecm-frames e) nil)))))
 
+(define-condition ethernet-transmit-stalled (error) ()
+  (:report (lambda (c stream)
+             (declare (ignore c))
+             (write-string "usb ethernet: transmit queue stalled" stream))))
+
 (defmethod network-send ((e usb-cdc-ecm) frame)
   (let ((c (ecm-controller e))
         (n (max 60 (length frame))))
@@ -129,7 +134,7 @@
              (when (>= (ecm-in-flight e) (1- +ecm-send-pages+))
                (wait-for-interrupt (list (xhci-vector c)) 0.002)))
     ;; A timeout never transfers buffer ownership back from the controller.
-    (error "usb ethernet: transmit queue stalled")))
+    (error 'ethernet-transmit-stalled)))
 
 (defmethod interrupt-vector ((e usb-cdc-ecm)) (xhci-vector (ecm-controller e)))
 
