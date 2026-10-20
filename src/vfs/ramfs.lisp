@@ -197,6 +197,7 @@
 (defmethod vnop-read ((n dev-node) offset count)
   (declare (ignore offset))
   (ecase (node-device n)
+    (:audio (fail :enxio))
     (:null (make-array 0 :element-type '(unsigned-byte 8)))
     (:random
      (let ((buffer (make-array count :element-type '(unsigned-byte 8))))
@@ -214,6 +215,7 @@
 
 (defmethod vnop-write ((n dev-node) offset octets)
   (declare (ignore offset))
+  (when (eq (node-device n) :audio) (fail :enxio))
   (when (eq (node-device n) :console)
     (let ((buffer (coerce octets '(simple-array (unsigned-byte 8) (*)))))
       (sb-sys:with-pinned-objects (buffer) (console-io 4 1 (sb-sys:vector-sap buffer) (length buffer)))))

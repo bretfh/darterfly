@@ -20,6 +20,8 @@ static inline int __libsa_signbit(double x) {
   union { double d; unsigned long u; } v = {x};
   return (int)(v.u >> 63);
 }
+double nan(const char *);
+float nanf(const char *);
 #define M_PI 3.14159265358979323846
 double sin(double), cos(double), tan(double), asin(double), acos(double), atan(double), atan2(double, double);
 double sinh(double), cosh(double), tanh(double), asinh(double), acosh(double), atanh(double);

@@ -69,16 +69,27 @@
   ;; Only the short descriptor-table lock, never the filesystem lock.
   (vfs (vfs:vfs-close (vfs-fd file))))
 
+(defgeneric make-device-file (device fd flags)
+  (:method (device fd flags)
+    (declare (ignore device))
+    (make-instance 'vnode :fd fd :access (logand flags 3)
+                         :device t :flags (logand flags +o-nonblock+))))
+
 (defun install-vnode (fd flags)
-  (let ((installed nil))
+  (let ((installed nil) (file nil))
     (unwind-protect
          (let ((device (= (mode-type (vfs:vattr-mode (vfs-call (vfs:vfs-fstat fd)))) +s-ifchr+)))
            (when (or (proc-closing *proc*) (eq (proc-state *proc*) :zombie))
              (fail :eintr))
-           (prog1 (fd-alloc (make-instance 'vnode :fd fd :access (logand flags 3)
-                                                :device device :flags (logand flags +o-nonblock+)))
-             (setf installed t)))
-      (unless installed (vfs:vfs-close fd)))))
+           (setf file
+                 (let ((node (vfs:fd-vnode fd)))
+                   (if (and device (typep node 'vfs::dev-node))
+                       (make-device-file (vfs::node-device node) fd flags)
+                       (make-instance 'vnode :fd fd :access (logand flags 3)
+                         :device device :flags (logand flags +o-nonblock+)))))
+           (prog1 (fd-alloc file) (setf installed t)))
+      (unless installed
+        (if file (file-close file) (vfs:vfs-close fd))))))
 
 (defun absolute (name)
   (if (and (plusp (length name)) (char= (char name 0) #\/))

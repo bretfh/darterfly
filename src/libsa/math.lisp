@@ -11,6 +11,11 @@
 
 (defparameter +exp2+ '(#xD9 #xC0 #xD9 #xFC #xDC #xE9 #xD9 #xC9 #xD9 #xF0 #xD9 #xE8 #xDE #xC1 #xD9 #xFD #xDD #xD9))
 
+;; NaN payload interpretation is implementation-defined. Use the canonical
+;; quiet NaN, matching strtod's existing NAN representation.
+(define-low nan (tag) (declare (returns :f64)) +nan+)
+(define-low nanf (tag) (declare (returns :f32)) +nan+)
+
 (define-low nan-p (x) (not (f= x x)))
 (define-low infinite-p (x) (= (logand x (lognot +sign+)) +infinity+))
 (define-low negate (x) (logxor x +sign+))

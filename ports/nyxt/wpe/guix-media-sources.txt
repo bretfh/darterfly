@@ -1,0 +1,8 @@
+/gnu/store/82fdz9sxn4rvn9jdkgfp0nbcx2wdy8h0-gstreamer-1.28.1.tar.xz
+/gnu/store/7p9vs9ch0swxsmhs56midnrmxhm33scr-gst-plugins-base-1.28.1.tar.zst
+/gnu/store/af9kp3yh1mvccix0y1aa12w102a3cjfl-gst-plugins-good-1.28.1.tar.xz
+/gnu/store/wkfbsin3ky82di14n7pk5hl3l8c25dzs-gst-plugins-bad-1.28.1.tar.zst
+/gnu/store/58pqx4793jm37dm81qzhh718gzdgpcm7-libvpx-1.16.0-checkout
+/gnu/store/lphpga2vbrxw0akmb573qycrq7hscvzz-opus-1.6.1.tar.gz
+/gnu/store/pdbrp3f21w40f9dzr7l4xh77zvy00zcw-libogg-1.3.6.tar.xz
+/gnu/store/sygidwqjr9yiljl9nwfpzbagabkza0kn-libvorbis-1.3.7.tar.xz
