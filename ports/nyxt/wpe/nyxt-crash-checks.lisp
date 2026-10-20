@@ -67,7 +67,7 @@
                (format nil "(progn (assert (loop repeat 120 when (eq :failed (getf (darterfly/init:inspect-job \"Nyxt\") :state)) return t do (sleep 1))) (assert (loop repeat 100 when (ignore-errors (crash-cleaned) t) return t do (sleep .1))) (assert (null (darterfly/run:find-world \"Nyxt\"))) (assert (= 3 (length (getf (darterfly/init:inspect-job \"Nyxt\") :exits)))) (sleep 12) (assert (null (darterfly/run:find-world \"Nyxt\"))) (assert (zerop (hash-table-count darterfly/bsd::*native-processes*))) (format t ~s))"
                  (format nil "~%[NYXT RECOVERY ~a BUDGET PASS]~%" marker)) 150))
            (dock ()
-             (image:pointer 776 744 t) (sleep .15) (image:pointer 776 744 nil)))
+             (nyxt-app-dock c)))
     (dock) (ready "INITIAL")
     (nyxt-app-ask c "(crash-inject \"nyxt-wpe-engine\")")
     (ready "UI") (check 1 "UI")

@@ -1,0 +1,30 @@
+;;;; Harbor's world transport must stay within the kernel's reply limit.
+(require :asdf)
+(asdf:load-system :darterfly/test)
+(load "ports/nyxt/wpe/nyxt-wire.lisp")
+(load "ports/nyxt/wpe/nyxt-windows.lisp")
+(in-package #:darterfly/test)
+(assert (= 0 (darterfly/nyxt-windows::modifier-bits nil)))
+(assert (= 15 (darterfly/nyxt-windows::modifier-bits '(:control :shift :alt :meta))))
+(assert (= 5 (darterfly/nyxt-windows::modifier-bits '(:alt :control))))
+(let ((original (symbol-function 'darterfly/layer::local-request)))
+  (unwind-protect
+       (progn
+         (setf (symbol-function 'darterfly/layer::local-request)
+           (lambda (body &key reply)
+             (assert reply)
+             (assert (= 12 (getf (rest body) :offset)))
+             (let* ((limit (getf (rest body) :limit))
+                    (text (make-string 1024 :initial-element (code-char #x1f600))))
+               (assert (<= 1 limit 4))
+               (list :windows (loop repeat limit collect
+                        (list :handle '((1 2) 3 4) :app "Nyxt" :title text :location text))
+                     :next (+ 12 limit) :revision 7))))
+         (dolist (limit '(1 4 128 100000 nil))
+           (let* ((reply (darterfly/layer::serve-window-request nil
+                          (list :window-list :offset 12 :limit limit) nil))
+                  (bytes (darterfly/layer::encode reply)))
+             (assert (< (length bytes) 65536))
+             (assert (= (getf reply :next) (+ 12 (length (getf reply :windows))))))))
+    (setf (symbol-function 'darterfly/layer::local-request) original)))
+(format t "~&[NYXT HARBOR TRANSPORT PASS]~%")

@@ -21,7 +21,7 @@
       (clrhash (session-windows session))
       (clrhash (session-frames session))
       (setf (session-frame-bytes session) 0))))
-(defun dispatch (session op id &key (seq 0) (a 0) (b 0) (data #()))
+(defun dispatch (session op id &key (seq 0) (a 0) (b 0) (data #()) (title "") (location ""))
   (declare (ignore seq))
   (sb-thread:with-recursive-lock ((session-lock session))
     (when (session-closed session) (error "Nyxt display is closed"))
@@ -107,6 +107,18 @@
                  (remhash id (native-window-views window))
                  (layer:commit (native-window-context window))))) windows))
           (109 (close-session session))
+          (110
+           (let ((window (gethash id windows)))
+             (when window
+               (layer:window-metadata (native-window-id window)
+                 (subseq title 0 (min 1024 (length title)))
+                 (subseq location 0 (min 1024 (length location)))))))
+          (111
+           (assert (and (<= 64 a 2048) (<= 64 b 2048)))
+           (let ((window (gethash id windows)))
+             (when window
+               (setf (layer:layer-frame (native-window-root window)) (vector 0 0 a b))
+               (layer:commit (native-window-context window)))))
           (t (error "Unknown window operation ~d" op)))))))
 (defun modifier-bits (modifiers)
   (if (integerp modifiers) modifiers
@@ -124,6 +136,10 @@
       (let* ((id (car entry)) (window (cdr entry))
              (event (layer:next-event (native-window-context window) :timeout 1)))
         (case (getf event :type)
+          (:window-frame-changed
+           (destructuring-bind (x y width height) (getf event :frame)
+             (declare (ignore x y))
+             (return-from next-event (values 203 id 0 width height #()))))
           (:key-down
            (return-from next-event (values 201 id 0 (getf event :keycode)
              (char-code (or (getf event :character) #\Null))

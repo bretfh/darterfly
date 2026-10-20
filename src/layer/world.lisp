@@ -84,17 +84,19 @@
 (defclass world-client ()
   ((world :initarg :world :reader client-world)
    (bindings :initarg :bindings :reader client-bindings)
+   (task :initarg :task :reader client-task)
    (contexts :initform nil :accessor client-contexts)
    (lock :initform (sb-thread:make-mutex :name "world client") :reader client-lock)))
 
 (defvar *world-clients* (make-hash-table))
 (defvar *world-clients-lock* (sb-thread:make-mutex :name "world clients"))
 
-(defun world-client (world)
+(defun world-client (world proc)
   (sb-thread:with-mutex (*world-clients-lock*)
     (or (gethash world *world-clients*)
         (setf (gethash world *world-clients*)
-              (make-instance 'world-client :world world :bindings (darterfly/bsd::fresh-bindings))))))
+              (make-instance 'world-client :world world :task (darterfly/bsd:proc-task proc)
+                             :bindings (darterfly/bsd::fresh-bindings))))))
 
 (defun client-context (client id)
   (sb-thread:with-mutex ((client-lock client))
@@ -144,18 +146,26 @@
       (:transaction
        (local-request body)
        nil)
-      ((:display-bounds :activate-application :window-list :restore-window :window-thumbnail)
+      (:window-list
+       ;; Four bounded UTF-8 titles/locations fit the world's 64 KiB reply.
+       ;; Preserve WindowServer's revision and continuation offset.
+       (local-request (list :window-list :offset (getf args :offset 0)
+                            :limit (let ((limit (getf args :limit 4)))
+                                     (if (integerp limit) (max 1 (min 4 limit)) 4)))
+                      :reply t))
+      ((:display-bounds :activate-application :restore-window :window-thumbnail)
        (local-request body :reply t))
       (:window-metadata
        (local-request body)
        nil))))
 
 (defun serve-world-window-request (world proc request token)
-  (let ((client (world-client world)))
+  (let ((client (world-client world proc)))
     (darterfly/bsd::call-with-bindings
      (client-bindings client)
      (lambda ()
-       (let ((darterfly/bsd:*proc* proc))
+       (let ((darterfly/bsd:*proc* proc)
+             (darterfly/mach:*task* (client-task client)))
          (encode (serve-window-request client (decode request) token)))))))
 
 (defun forget-world-client (world)
@@ -163,8 +173,9 @@
                   (prog1 (gethash world *world-clients*)
                     (remhash world *world-clients*)))))
     (when client
-      (dolist (context (client-contexts client))
-        (ignore-errors (darterfly/mach:mach-port-deallocate darterfly/mach:*task* (context-port context)))
-        (ignore-errors (darterfly/mach:mach-port-mod-refs darterfly/mach:*task* (context-events context) :receive -1))))))
+      (let ((darterfly/mach:*task* (client-task client)))
+        (dolist (context (client-contexts client))
+          (ignore-errors (darterfly/mach:mach-port-deallocate darterfly/mach:*task* (context-port context)))
+          (ignore-errors (darterfly/mach:mach-port-mod-refs darterfly/mach:*task* (context-events context) :receive -1)))))))
 
 (darterfly/run:offer-service "windowserver" #'serve-world-window-request :gone #'forget-world-client)

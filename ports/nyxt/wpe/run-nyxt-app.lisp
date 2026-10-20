@@ -23,6 +23,28 @@
     (format nil "(nyxt-eval *nyxt-app* ~s :timeout ~d)"
       (format nil "(assert (loop repeat ~d when ~a return t do (sleep .1)))"
         (* seconds 10) predicate) (+ seconds 10)) (+ seconds 20)))
+(defun nyxt-app-dock (console)
+  ;; Read Harbor's current logical layout; exercise its real HID click path.
+  (let* ((out (nyxt-app-ask console
+           "(destructuring-bind (dx dy width height) (darterfly/layer:main-display-bounds)
+              (declare (ignore dx dy))
+              (let* ((layout (darterfly/layer:dock-layout
+                               (darterfly/kit::all-window-descriptions) width height))
+                     (item (find \"Nyxt\" (getf layout :items)
+                                 :key (lambda (i) (getf i :key)) :test #'equal))
+                     (outer (getf layout :frame)) (inner (getf item :frame)))
+                (assert item)
+                (format t \"~&[NYXT DOCK POINT] ~s~%\"
+                  (list (+ (first outer) (first inner) (floor (third inner) 2))
+                        (+ (second outer) (second inner) (floor (fourth inner) 2))))))"))
+         (marker "[NYXT DOCK POINT] ")
+         (at (search marker out :from-end t)))
+    (assert at)
+    (let* ((*read-eval* nil)
+           (point (read-from-string out nil nil :start (+ at (length marker)))))
+      (destructuring-bind (x y) point
+        (image:pointer x y t) (sleep .15) (image:pointer x y nil)))))
+
 (defun nyxt-app-shot (name)
   (image:screendump)
   (uiop:copy-file (darterfly-file "build/screen.ppm")
@@ -32,7 +54,9 @@
               (string-trim '(#\Newline #\Return #\Space)
                 (uiop:read-file-string (darterfly-file "build/wpe-assessment/render-build-root.txt")))))
        (dir (merge-pathnames "nyxt-build/" root))
-       (disk (merge-pathnames "nyxt-app.img" dir)))
+       (disk (if (uiop:getenv "DARTERFLY_NYXT_APP_DISK")
+                 (pathname (uiop:getenv "DARTERFLY_NYXT_APP_DISK"))
+                 (merge-pathnames "nyxt-app.img" dir))))
   (when (and (probe-file disk) (image::in-use-p disk)) (error "App disk is in use"))
   ;; Seed the qualified source closure once; never overwrite it on a retry.
   (unless (probe-file disk)
@@ -67,6 +91,7 @@
       (progn
         (image:expect c "init: pid 1" :timeout 180)
         (nyxt-app-ask c "(progn (sleep 8) (defparameter *nyxt-log-at* 0)
+          (setf darterfly/layer::*connection* (make-instance 'darterfly/layer::connection))
           (defun nyxt-eval (world form &key (timeout 30))
             (let ((reply (darterfly/run:world-eval world form :timeout timeout)))
               (format t \"~&[NYXT EVAL] ~a~%\" reply)
@@ -77,9 +102,9 @@
               (uiop:read-file-string (merge-pathnames "ca.pem"
                 (uiop:ensure-directory-pathname (uiop:getenv "DARTER_HTTP_FIXTURE_DIR")))))))
         (unless (uiop:getenv "DARTERFLY_NYXT_RECOVERY_ONLY")
-        ;; The fifth installed Dock item is Nyxt: the actual desktop event
+        ;; Launch through the installed Nyxt Dock item: the actual desktop event
         ;; follows open-application -> init -> app world -> registered program.
-        (image:pointer 776 744 t) (sleep .15) (image:pointer 776 744 nil)
+        (nyxt-app-dock c)
         (nyxt-app-await c "/tmp/nyxt-application.log" "[NYXT APPLICATION READY]" 240)
         (nyxt-app-ask c
           "(progn (defparameter *nyxt-app* (darterfly/run:find-world \"Nyxt\"))
@@ -89,7 +114,7 @@
             (assert (not (probe-file \"/tmp/nyxt-windows.sock\")))
             (format t \"~&[NYXT NORMAL APP WORLD PASS]~%\"))")
         (nyxt-app-shot "blank")
-        (image:pointer 776 744 t) (sleep .15) (image:pointer 776 744 nil)
+        (nyxt-app-dock c)
         (nyxt-app-ask c "(progn (sleep 1) (assert (eq *nyxt-app* (darterfly/run:find-world \"Nyxt\"))) (assert (null (darterfly/run:find-world \"Nyxt 2\"))) (format t \"~&[NYXT APP SINGLE INSTANCE PASS]~%\"))")
         ;; Navigation is real HID through Nyxt's own prompt, not a test-only
         ;; startup URL or a synthetic DOM event.
@@ -120,6 +145,34 @@
         (nyxt-app-await c "/tmp/nyxt-app-checks.log" "[NYXT BROWSER SCREENSHOT READY]")
         (nyxt-app-shot "page")
         (nyxt-app-await c "/tmp/nyxt-app-checks.log" "[NYXT BROWSER QUALIFICATION PASS]")
+        ;; Harbor discovers the real browser window and receives its title.
+        (nyxt-app-ask c
+          "(progn
+             (defparameter *nyxt-harbor-window*
+               (find \"Nyxt\" (darterfly/kit::all-window-descriptions)
+                 :key (lambda (w) (getf w :app)) :test #'equal))
+             (assert *nyxt-harbor-window*)
+             (assert (not (equal \"Untitled window\" (getf *nyxt-harbor-window* :title))))
+             (nyxt-eval *nyxt-app*
+               \"(assert (find \\\"Nyxt\\\" (darterfly/kit::all-window-descriptions) :key (lambda (w) (getf w :app)) :test #'equal))\")
+             (format t \"~&[NYXT HARBOR DISCOVERY PASS]~%\"))")
+        ;; Resize through WindowServer's actual pointer edge drag.
+        (image:pointer 718 558 t) (sleep .15)
+        (image:pointer 798 598 t) (sleep .15) (image:pointer 798 598 nil)
+        (nyxt-app-until c "(let ((w (nyxt:current-window))) (and (= 720 (nyxt/renderer/wpe::native-width w)) (= 520 (nyxt/renderer/wpe::native-height w))))")
+        (nyxt-app-ask c
+          "(progn
+             (darterfly/windowserver::apply-transaction
+               (list (list :minimize (second (getf *nyxt-harbor-window* :handle)) t)))
+             (assert (getf (find \"Nyxt\" (darterfly/kit::all-window-descriptions)
+               :key (lambda (w) (getf w :app)) :test #'equal) :minimized)))")
+        (nyxt-app-dock c)
+        (nyxt-app-ask c
+          "(progn (sleep 1)
+             (let ((w (find \"Nyxt\" (darterfly/kit::all-window-descriptions)
+                        :key (lambda (w) (getf w :app)) :test #'equal)))
+               (assert w) (assert (not (getf w :minimized))) (assert (getf w :active)))
+             (format t \"~&[NYXT HARBOR RESIZE RESTORE PASS]~%\"))")
         (when (uiop:getenv "DARTERFLY_NYXT_DISPATCH")
           (nyxt-app-ask c
             "(unwind-protect (nyxt-eval *nyxt-app* \"(with-open-file (s \\\"/tmp/nyxt-dispatch-checks.log\\\" :direction :output :if-exists :supersede) (let ((*standard-output* s) (*error-output* s)) (load \\\"/Users/darterfly/nyxt-dispatch-checks.lisp\\\")))\" :timeout 180) (write-string (uiop:read-file-string \"/tmp/nyxt-dispatch-checks.log\")) (finish-output))" 200)
@@ -135,7 +188,7 @@
             (format t \"~&[NYXT APP CLEANUP PASS]~%\"))")
         ;; Relaunch via the same Dock, then quit through upstream Nyxt's C-q.
         (nyxt-app-ask c "(progn (setf *nyxt-log-at* 0) (uiop:delete-file-if-exists \"/tmp/nyxt-application.log\"))")
-        (image:pointer 776 744 t) (sleep .15) (image:pointer 776 744 nil)
+        (nyxt-app-dock c)
         (nyxt-app-await c "/tmp/nyxt-application.log" "[NYXT APPLICATION READY]" 240)
         (nyxt-app-ask c
           "(progn (setf *nyxt-app* (darterfly/run:find-world \"Nyxt\")) (assert *nyxt-app*)

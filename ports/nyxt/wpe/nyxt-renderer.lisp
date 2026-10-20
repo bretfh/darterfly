@@ -373,7 +373,10 @@
   (window-call 105 (native-id window))
   (remhash (native-id window) *native-windows*))
 (defmethod ffi-window-title ((window wpe-window)) (nyxt::titler window))
-(defmethod (setf ffi-window-title) (title (window wpe-window)) title)
+(defmethod (setf ffi-window-title) (title (window wpe-window))
+  (when (native-id window)
+    (window-call 110 (native-id window) :title title))
+  title)
 (defmethod (setf ffi-height) (value (buffer wpe-buffer))
   (setf (native-height buffer) (max 0 (min 400 value)))
   (when (window buffer) (layout (window buffer))) value)
@@ -399,6 +402,12 @@
           (when buffer
             (incf *event-count*)
             (case op
+              (203
+               (when (and (<= 64 a 2048) (<= 64 b 2048)
+                          (or (/= a (native-width window)) (/= b (native-height window))))
+                 (setf (native-width window) a (native-height window) b)
+                 (window-call 111 id :a a :b b)
+                 (layout window)))
               (201
                (let* ((mods (if (= (length data) 4) (darterfly/nyxt-wire:u32 data 0) 0))
                       (name (key-name a b mods))

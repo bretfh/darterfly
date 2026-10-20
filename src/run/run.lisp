@@ -421,7 +421,7 @@
         (unwind-start ticket base size id)))))
 
 (defun launch-world (id inward port base size disk timeout &key name core argv cwd memory ticket)
-  (let* ((proc (and disk (darterfly/bsd:make-world-proc (or cwd "/"))))
+  (let* ((proc (and disk (darterfly/bsd:make-world-proc (or cwd "/") (or name "world"))))
          (world (make-world :id id :inward inward :name (or name (format nil "world ~d" id)) :core core
                             :command argv :cwd cwd :disk disk :base base :memory memory)))
     (sb-thread:with-mutex (*worlds-lock*)

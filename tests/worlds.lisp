@@ -50,3 +50,23 @@
                       darterfly/image::settle-health darterfly/image::results-dir))
         (sb-int:unencapsulate name 'lost-reply))
       (uiop:delete-directory-tree dir :validate t :if-does-not-exist :ignore))))
+
+(test worlds-have-distinct-window-owner-identities
+  (let* ((parent mach:*task*)
+         (port (mach:mach-port-allocate parent :receive))
+         (a (bsd:make-world-proc "/" "Nyxt"))
+         (b (bsd:make-world-proc "/" "Editor")))
+    (unwind-protect
+         (progn
+           (is (not (eq parent (bsd:proc-task a))))
+           (is (not (eq (bsd:proc-task a) (bsd:proc-task b))))
+           (is (= (bsd:proc-pid a) (bsd:task-pid (bsd:proc-task a))))
+           (is (= (bsd:proc-pid b) (bsd:task-pid (bsd:proc-task b))))
+           (is (equal "Nyxt" (bsd::proc-comm a)))
+           (bsd:end-world-proc a)
+           (is (null (bsd:task-pid (bsd:proc-task a))))
+           (is (= (bsd:proc-pid b) (bsd:task-pid (bsd:proc-task b))))
+           (is (equal '(:receive) (mach:mach-port-type parent port))))
+      (bsd:end-world-proc a)
+      (bsd:end-world-proc b)
+      (mach:mach-port-mod-refs parent port :receive -1))))

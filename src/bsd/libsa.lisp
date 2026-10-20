@@ -436,11 +436,11 @@
 
 (defvar *libsa-entry* nil)
 
-(defun make-world-proc (cwd)
+(defun make-world-proc (cwd &optional (name "world"))
   (with-bsd
     (let ((proc (make-instance 'proc :pid (next-pid) :parent *proc0*
-                                    :task darterfly/mach:*task*)))
-      (setf (proc-cwd proc) cwd (proc-comm proc) "world"
+                                    :task (darterfly/mach:task-create darterfly/mach:*task* name))))
+      (setf (proc-cwd proc) cwd (proc-comm proc) name
             (proc-world-owner proc) proc
             (gethash (proc-pid proc) *procs*) proc)
       (dotimes (fd 3)
@@ -471,6 +471,7 @@
         (remhash (proc-pid child) *procs*)))
     (loop for fd below (length (proc-fds proc))
           when (aref (proc-fds proc) fd) do (release-fd proc fd))
+    (darterfly/mach:task-terminate (proc-task proc))
     (remhash (proc-pid proc) *procs*)))
 
 (defun request-u64 (v at) (loop :for i :below 8 :sum (ash (aref v (+ at i)) (* 8 i))))
