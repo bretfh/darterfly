@@ -53,6 +53,10 @@
 (define-low pthread_equal (a b) (= a b))
 
 (define-low _pthread_start (self)
+  ;; The scheduler may run us before pthread_create returns in the parent.
+  ;; Publish our identity before application code (or SBCL's GC registration)
+  ;; can use pthread_kill or mutex ownership through pthread_self.
+  (setf (mem :u64 (+ self +t-tid+)) (__syscall 372 0 0 0 0 0 0))
   (pthread_exit (call-pointer (mem :u64 (+ self +t-start+)) (mem :u64 (+ self +t-arg+)))))
 
 (define-low release-pthread (th)

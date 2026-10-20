@@ -87,7 +87,7 @@
 #-darterfly
 (defparameter *kernel-definition-directories*
   (mapcar #'source '("src/kern/" "src/bsd/dev/" "src/bsd/kern/" "src/platform/"
-                     "src/asm/" "src/low/" "src/link/" "src/boot/" "src/cc/" "src/install/")))
+                     "src/libsa/" "src/asm/" "src/low/" "src/link/" "src/boot/" "src/cc/" "src/install/")))
 
 #-darterfly
 (defun kernel-definition-sources ()
