@@ -142,6 +142,9 @@
     (thread-wakeup (address sleep-done) 1)))
 
 (define-low request-sleep (control event (type :u32) facs (check :u32))
+  ;; APs restarted after a refused request have not lost their TSC. Only an
+  ;; actual S3 resume may compute and apply a new correction to all CPUs.
+  (setf tsc-delta 0)
   (setf sleep-check check)
   (setf sleep-control control)
   (setf sleep-event event)

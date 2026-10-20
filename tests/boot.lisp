@@ -3307,7 +3307,12 @@
                       (is (eql 0 (image::read-answer
                                   (image::device-eval "127.0.0.1" "(darterfly/devices:machdep 66 0 0)"
                                                       :nrepl-port port)))
-                          "a refused sleep returns zero and does not advance the wake count"))
+                          "a refused sleep returns zero and does not advance the wake count")
+                      (let ((clocks (image::device-eval "127.0.0.1"
+                                      "(let* ((hz (darterfly/stats::tsc-hz)) (ticks (loop for cpu below 4 collect (loop repeat 8 for v = (darterfly/devices:machdep 65 cpu #x10) when (< v #xffffffffffffffff) return v)))) (list :clocks (and (every #'integerp ticks) (< (- (apply #'max ticks) (apply #'min ticks)) (/ hz 2))) :ticks ticks))"
+                                      :nrepl-port port)))
+                        (is (search ":CLOCKS T" clocks)
+                            "refused S3 must not reapply the previous wake correction to AP clocks: ~a" clocks)))
                     (let* ((out (make-string-output-stream))
                            (ok (let ((*standard-output* out)) (image:hw "127.0.0.1" :label label :wake-after 5 :settle 60 :nrepl-port port)))
                            (text (get-output-stream-string out)))
