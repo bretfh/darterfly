@@ -43,10 +43,69 @@
 (define-global irq-counts :u64 :count 256)
 (define-global runq-head :u64)
 (define-global runq-tail :u64)
+(define-global wakeq-head :u64)
+(define-global wakeq-tail :u64)
+;; Per CPU: refill half a scheduler period of preferential wakeup service each
+;; tick. Charge overruns too, so CPU-bound wakeups cannot evade the budget at a
+;; tick boundary. Both queues are FIFO; ordinary work runs when credit is spent.
+(define-global wakeup-window :u64 :count 32)
+(define-global wakeup-used :u64 :count 32)
+(define-global wakeup-accounted :u64 :count 32)
+(define-global active-wakeup :u32 :count 32)
+(define-global selected-wakeup :u32 :count 32)
 (define-global next-thread-id :u64)
 (define-global |real_ncpus| :u32 :extern t)
 
 (define-low rdtsc () (rdtsc))
+
+(define-global scheduling-trace :u32)
+(define-global scheduling-preempt :u32)
+(define-global scheduling-collisions :u64)
+;; Bounded per-thread counters: id, wake-to-run samples, total TSC ticks, max, pending timestamp.
+(define-global scheduling-times :u64 :count 1280)
+
+(define-low scheduling-control (action value)
+  (cond ((= action 0) #x53434801)
+        ((= action 1)
+         (unless (privileged) (result 0))
+         (rep-stosb (address scheduling-times) 0 10240)
+         (setf scheduling-collisions 0)
+         (setf scheduling-trace (if value 1 0))
+         1)
+        ((= action 2)
+         (unless (the :u32 (user-ok value 10240 1)) (result 0))
+         (rep-movsb value (address scheduling-times) 10240)
+         1)
+        ((= action 3)
+         (unless (privileged) (result 0))
+         (setf scheduling-preempt (if value 1 0))
+         1)
+        ((= action 4) scheduling-preempt)
+        ((= action 5) scheduling-collisions)
+        (t 0)))
+
+(define-low note-awakened (th)
+  (when scheduling-trace
+    (let* ((id (mem :u64 (+ th +t-thread-id+))) (slot (* 5 (logand id 255))))
+      (unless (= (ref scheduling-times slot) id)
+        (when (ref scheduling-times slot) (incf scheduling-collisions))
+        (setf (ref scheduling-times slot) id)
+        (setf (ref scheduling-times (+ slot 1)) 0)
+        (setf (ref scheduling-times (+ slot 2)) 0)
+        (setf (ref scheduling-times (+ slot 3)) 0))
+      (setf (ref scheduling-times (+ slot 4)) (rdtsc)))))
+
+(define-low note-scheduled (th)
+  (when scheduling-trace
+    (let* ((id (mem :u64 (+ th +t-thread-id+))) (slot (* 5 (logand id 255)))
+           (since (ref scheduling-times (+ slot 4))))
+      (when (and since (= (ref scheduling-times slot) id))
+        (setf (ref scheduling-times (+ slot 4)) 0)
+        (let ((elapsed (- (rdtsc) since)))
+          (setf (ref scheduling-times (+ slot 1)) (+ (ref scheduling-times (+ slot 1)) 1))
+          (setf (ref scheduling-times (+ slot 2)) (+ (ref scheduling-times (+ slot 2)) elapsed))
+          (when (> elapsed (ref scheduling-times (+ slot 3)))
+            (setf (ref scheduling-times (+ slot 3)) elapsed)))))))
 
 (define-low current-thread () (mem :u64 (+ (cpu-data) +c-active-thread+)))
 
@@ -66,8 +125,39 @@
       (setf runq-head th))
   (setf runq-tail th))
 
+(define-low enqueue-wakeup (th)
+  (setf (mem :u64 (+ th +t-runq-next+)) 0)
+  (if wakeq-tail
+      (setf (mem :u64 (+ wakeq-tail +t-runq-next+)) th)
+      (setf wakeq-head th))
+  (setf wakeq-tail th))
+
+(define-low account-wakeup-time (i now)
+  (let ((period (tick-tsc)) (last (ref wakeup-accounted i)) (used (ref wakeup-used i)))
+    (when (and last (ref active-wakeup i)) (setf used (+ used (- now last))))
+    (setf (ref wakeup-accounted i) now)
+    (unless period (result 0))
+    (let ((periods (truncate (- now (ref wakeup-window i)) period)))
+      (when periods
+        (let ((refill (* periods (truncate period 2))))
+          (setf used (if (> used refill) (- used refill) 0)))
+        (setf (ref wakeup-window i) (+ (ref wakeup-window i) (* periods period)))))
+    ;; Do not retain unbounded debt from work that ran with no competitors.
+    (setf (ref wakeup-used i) (if (> used period) period used))))
+
+(define-low wakeup-budget-available (i)
+  (account-wakeup-time i (rdtsc))
+  (< (ref wakeup-used i) (truncate (tick-tsc) 2)))
+
 (define-low dequeue ()
+  (setf (ref selected-wakeup (cpu-number)) 0)
   (when (and sleep-request (/= (cpu-number) 0)) (result 0))
+  (when (and wakeq-head (or (not runq-head) (wakeup-budget-available (cpu-number))))
+    (let ((th wakeq-head))
+      (setf wakeq-head (mem :u64 (+ th +t-runq-next+)))
+      (unless wakeq-head (setf wakeq-tail 0))
+      (setf (ref selected-wakeup (cpu-number)) 1)
+      (result th)))
   (let ((th runq-head))
     (when th
       (setf runq-head (mem :u64 (+ th +t-runq-next+)))
@@ -124,6 +214,7 @@
     th))
 
 (define-low thread-bootstrap (kstack-top)
+  (setf scheduling-preempt 1)
   (let ((th (thread-alloc)))
     (setf (mem :u64 (+ th +t-kstack-top+)) kstack-top)
     (setf (mem :u32 (+ th +t-state+)) +th-run+)
@@ -285,17 +376,44 @@
   (setf (mem :u32 (+ (cpu-datap i) +c-idle+)) 0)
   (i386-signal-cpu i))
 
+(define-low request-wakeup-preemption ()
+  ;; A busy machine has no idle CPU to kick. Ask the longest-running remote
+  ;; CPU with wakeup budget to reschedule now, not on the next 100 Hz tick.
+  ;; Keep the waking CPU running so it can release its locks and block again.
+  ;; Coalesce AST requests. Exhausted budgets defer to the regular timer tick.
+  (when (or (not scheduling-preempt) sleep-request) (result 0))
+  (let ((i 0) (chosen -1) (oldest (rdtsc)) (me (cpu-number)))
+    (while (< i |real_ncpus|)
+      (let ((cdp (cpu-datap i)) (since (ref cpu-stats (* 4 i))))
+        (when (and (/= i me) (mem :u32 (+ cdp +c-running+))
+                   (not (mem :u32 (+ cdp +c-pending-ast+)))
+                   since (<= since oldest) (wakeup-budget-available i))
+          (setf oldest since)
+          (setf chosen i)))
+      (incf i))
+    (when (/= chosen -1)
+      (setf (mem :u32 (+ (cpu-datap chosen) +c-pending-ast+)) 1)
+      (i386-signal-cpu chosen))))
+
+(define-low preempt-interrupted-cpu ()
+  ;; On UP there is no remote CPU to kick. Preempt on an interrupt return, not
+  ;; a wake syscall: the signalling thread may still hold the waiter's mutex.
+  (when (and scheduling-preempt (= |real_ncpus| 1) wakeq-head
+             (not sleep-request) (wakeup-budget-available (cpu-number)))
+    (setf (mem :u32 (+ (cpu-data) +c-pending-ast+)) 1)))
+
 (define-low thread-setrun (th)
   (when (= (mem :u32 (+ th +t-state+)) +th-run+) (result 0))
   (setf (mem :u32 (+ th +t-state+)) +th-run+)
+  (note-awakened th)
   (setf (mem :u64 (+ th +t-wakeups+)) (+ (mem :u64 (+ th +t-wakeups+)) 1))
-  (enqueue th)
+  (if scheduling-preempt (enqueue-wakeup th) (enqueue th))
   (let ((cpu (idle-cpu-of-kind +performance-cpu+)))
     (unless cpu (setf cpu (idle-cpu-of-kind +efficient-cpu+)))
-    (when cpu (wake-cpu (- cpu 1)))))
+    (if cpu (wake-cpu (- cpu 1)) (request-wakeup-preemption))))
 
 (define-low leave-for-performance-cpu ()
-  (unless (and runq-head (= (ref cpu-kinds (cpu-number)) +efficient-cpu+)) (result 0))
+  (unless (and (or runq-head wakeq-head) (= (ref cpu-kinds (cpu-number)) +efficient-cpu+)) (result 0))
   (let ((cpu (idle-cpu-of-kind +performance-cpu+)))
     (when cpu (wake-cpu (- cpu 1)))
     cpu))
@@ -303,6 +421,7 @@
 (define-low charge (old)
   (let* ((c (* 4 (cpu-number))) (now (rdtsc)) (since (ref cpu-stats c)))
     (when since
+      (account-wakeup-time (cpu-number) now)
       (setf (mem :u64 (+ old +t-cpu+)) (+ (mem :u64 (+ old +t-cpu+)) (- now since)))
       (when (= old (mem :u64 (+ (cpu-data) +c-idle-thread+)))
         (setf (ref cpu-stats (+ c 1)) (+ (ref cpu-stats (+ c 1)) (- now since)))))
@@ -352,8 +471,14 @@
 
 (define-low switch-to (next)
   (let ((old (current-thread)))
-    (when (= next old) (result 0))
+    (when (= next old)
+      (when (/= (ref active-wakeup (cpu-number)) (ref selected-wakeup (cpu-number)))
+        (charge old)
+        (setf (ref active-wakeup (cpu-number)) (ref selected-wakeup (cpu-number))))
+      (result 0))
     (charge old)
+    (setf (ref active-wakeup (cpu-number)) (ref selected-wakeup (cpu-number)))
+    (note-scheduled next)
     (fxsave (+ old +t-fpu+))
     (fxrstor (+ next +t-fpu+))
     (setf (mem :u64 (+ (cpu-data) +c-active-thread+)) next)
@@ -369,7 +494,7 @@
     (when (= (mem :u32 (+ self +t-state+)) +th-run+) (enqueue self))
     (let ((next (dequeue)))
       (unless next (setf next (mem :u64 (+ (cpu-data) +c-idle-thread+))))
-      (unless (= next self) (switch-to next)))))
+      (switch-to next))))
 
 (define-low thread-wait (event deadline)
   (let ((self (current-thread)))
@@ -438,7 +563,7 @@
                    (>= now (mem :u64 (+ th +t-wait-deadline+))))
           (thread-wakeup-thread th +thread-timed-out+))
         (setf th (mem :u64 (+ th +t-all-next+))))))
-  (when runq-head (setf (mem :u32 (+ (cpu-data) +c-pending-ast+)) 1)))
+  (when (or runq-head wakeq-head) (setf (mem :u32 (+ (cpu-data) +c-pending-ast+)) 1)))
 
 (define-low terminating ()
   (logand (mem :u32 (+ (current-thread) +t-sched-flags+)) +terminate-requested+))

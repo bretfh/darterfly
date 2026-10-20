@@ -1,6 +1,6 @@
 (defpackage #:darterfly/bench
   (:use #:cl)
-  (:export #:run #:*benchmarks*))
+  (:export #:run #:*benchmarks* #:completion-under-load))
 (in-package #:darterfly/bench)
 
 (defvar *benchmarks* nil)
@@ -26,6 +26,52 @@
   (let ((s 0))
     (declare (fixnum s))
     (dotimes (i n s) (setf s (logand (+ s (* i i)) #xffffff)))))
+
+(defun completion-under-load (&key (workers 4) (rounds 200) (seconds 30))
+  "Measure semaphore completion latency under bounded CPU load. Return worker progress."
+  (check-type workers (integer 1 64))
+  (check-type rounds (integer 1 100000))
+  (check-type seconds (real (0) 300))
+  (let ((stop nil) (threads nil) (server nil) (start (now-us))
+        (gate (sb-thread:make-semaphore)) (request (sb-thread:make-semaphore))
+        (reply (sb-thread:make-semaphore))
+        (counts (make-array workers :initial-element 0)))
+    (unwind-protect
+         (progn
+           (dotimes (i workers)
+             (let ((i i))
+               (push (sb-thread:make-thread
+                      (lambda ()
+                        (sb-thread:wait-on-semaphore gate)
+                        (loop until (or stop (> (- (now-us) start) (* seconds 1000000)))
+                              do (fixnum-loop 1000000) (incf (aref counts i))))
+                      :name "completion CPU load") threads)))
+           (setf server (sb-thread:make-thread
+                         (lambda ()
+                           (loop repeat rounds
+                                 do (unless (sb-thread:wait-on-semaphore request :timeout seconds)
+                                      (return))
+                                    (when stop (return))
+                                    (sb-thread:signal-semaphore reply)))
+                         :name "completion responder"))
+           (sb-thread:signal-semaphore gate workers)
+           (sleep .1)
+           (let ((before (copy-seq counts)) (samples nil) (t0 (now-us)))
+             (dotimes (i rounds)
+               (let ((t1 (now-us)))
+                 (sb-thread:signal-semaphore request)
+                 (unless (sb-thread:wait-on-semaphore reply :timeout seconds)
+                   (error "Completion timed out"))
+                 (push (- (now-us) t1) samples)))
+             (list :workers workers :rounds rounds :elapsed-us (- (now-us) t0)
+                   :max-us (reduce #'max samples) :mean-us (/ (reduce #'+ samples) rounds)
+                   :load-exhausted (> (- (now-us) start) (* seconds 1000000))
+                   :cpu-batches (map 'list #'- counts before))))
+      (setf stop t)
+      (sb-thread:signal-semaphore gate workers)
+      (sb-thread:signal-semaphore request)
+      (dolist (th (if server (cons server threads) threads))
+        (sb-thread:join-thread th :timeout (+ seconds 1))))))
 
 (defun fib (n)
   (let ((a 0) (b 1))

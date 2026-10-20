@@ -192,6 +192,29 @@
                          (ask "(let ((ts (loop repeat 3 collect (sb-thread:make-thread (lambda () (let ((n 0)) (dotimes (i 300) (incf n (length (make-array 100000)))) n)))))) (mapcar #'sb-thread:join-thread ts))"))))
         (image:finish c 5)))))
 
+(test completions-remain-responsive-under-cpu-load
+  ;; Exercise both UP and oversubscribed SMP. Compare policies in the same VM
+  ;; rather than asserting a host-dependent disk throughput threshold.
+  (dolist (cpus '(1 4))
+    (let ((c (image:bare-console :boot-args (format nil "cpus=~d" cpus))))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 90)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 60)
+               (is (search "T" (ask "(= 1 (devices:machdep 88 4))")))
+               (is (search "T" (ask "(= #x53434801 (devices:machdep 88 0))")))
+               (ask (format nil "(defparameter *load-workers* ~d)" (* 2 cpus)))
+               (ask "(defparameter *old-completion* (unwind-protect (progn (devices:machdep 88 3 0) (darterfly/bench:completion-under-load :workers *load-workers*)) (devices:machdep 88 3 1)))")
+               (ask "(darterfly/stats:trace-scheduling t)")
+               (ask "(defparameter *new-completion* (darterfly/bench:completion-under-load :workers *load-workers* :rounds 5000))")
+               (ask "(list *old-completion* *new-completion*)")
+               (is (search "T" (ask "(< (getf *new-completion* :mean-us) (* .5 (getf *old-completion* :mean-us)))")))
+               (is (search "T" (ask "(and (not (getf *new-completion* :load-exhausted)) (every #'plusp (getf *new-completion* :cpu-batches)))")))
+               (is (search "T" (ask "(let ((s (darterfly/stats:scheduling))) (and (getf s :preemption) (getf s :threads) (zerop (getf s :collisions))))")))
+               (ask "(darterfly/stats:trace-scheduling nil)")
+               (is (search "T" (ask "(null (getf (darterfly/stats:scheduling) :threads))"))))
+          (image:finish c 5))))))
+
 (test smp-on-darterfly
   (let ((c (image:bare-console :boot-args "cpus=1 halt" :root nil)))
     (unwind-protect (is (image:expect c "mp: 1 cpu"))
