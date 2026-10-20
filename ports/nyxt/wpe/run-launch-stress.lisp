@@ -12,12 +12,13 @@
   (assert (image::nyxt-package-root))
   (assert (not (image::in-use-p disk)))
   (image::update-root disk)
-  (image::update-root disk
-    (list (list :file "usr/lib/nyxt/nyxt-application.lisp"
-      (concatenate '(vector (unsigned-byte 8))
-        (image::text "(sb-posix:setenv \"DARTER_NYXT_TRACE\" \"1\" 1)")
-        (image::octets (merge-pathnames "usr/lib/nyxt/nyxt-application.lisp"
-                         (image::nyxt-package-root)))))))
+  (when (uiop:getenv "DARTER_NYXT_TRACE")
+    (image::update-root disk
+      (list (list :file "usr/lib/nyxt/nyxt-application.lisp"
+        (concatenate '(vector (unsigned-byte 8))
+          (image::text "(sb-posix:setenv \"DARTER_NYXT_TRACE\" \"1\" 1)")
+          (image::octets (merge-pathnames "usr/lib/nyxt/nyxt-application.lisp"
+                           (image::nyxt-package-root))))))))
   (let* ((image::*console-log-directory*
            (image::build-path (format nil "wpe-assessment/launch-stress-~d/"
                                       (get-universal-time))))
