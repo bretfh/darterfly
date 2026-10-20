@@ -28,15 +28,27 @@
   (let* ((out (nyxt-app-ask console
            "(destructuring-bind (dx dy width height) (darterfly/layer:main-display-bounds)
               (declare (ignore dx dy))
-              (let* ((layout (darterfly/layer:dock-layout
-                               (darterfly/kit::all-window-descriptions) width height))
-                     (item (find \"Nyxt\" (getf layout :items)
-                                 :key (lambda (i) (getf i :key)) :test #'equal))
-                     (outer (getf layout :frame)) (inner (getf item :frame)))
-                (assert item)
-                (format t \"~&[NYXT DOCK POINT] ~s~%\"
-                  (list (+ (first outer) (first inner) (floor (third inner) 2))
-                        (+ (second outer) (second inner) (floor (fourth inner) 2))))))"))
+              (loop repeat 50
+                for layout = (darterfly/layer:dock-layout
+                               (darterfly/kit::all-window-descriptions) width height)
+                for dock = (find-if (lambda (w)
+                  (let ((p (darterfly/bsd:pfind (darterfly/windowserver::owner w))))
+                    (and p (equal \"Dock\" (darterfly/bsd::proc-comm p)))))
+                  darterfly/windowserver::*windows*)
+                when (and dock (equal (getf layout :frame)
+                  (list (darterfly/windowserver::window-x dock)
+                        (darterfly/windowserver::window-y dock)
+                        (darterfly/windowserver::window-width dock)
+                        (darterfly/windowserver::window-height dock))))
+                return (let* ((item (find \"Nyxt\" (getf layout :items)
+                                      :key (lambda (i) (getf i :key)) :test #'equal))
+                              (outer (getf layout :frame)) (inner (getf item :frame)))
+                         (assert item) (sleep .1)
+                         (format t \"~&[NYXT DOCK POINT] ~s~%\"
+                           (list (+ (first outer) (first inner) (floor (third inner) 2))
+                                 (+ (second outer) (second inner) (floor (fourth inner) 2)))))
+                do (sleep .1)
+                finally (error \"Dock layout did not settle\")))"))
          (marker "[NYXT DOCK POINT] ")
          (at (search marker out :from-end t)))
     (assert at)
