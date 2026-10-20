@@ -22,15 +22,15 @@
 (test native-pcm-bounds-wraps-mixes-and-closes
   (with-pcm-test
     (let* ((fd (open-test-pcm)) (duplicate (bsd:dup fd))
-           (bytes (make-array 8192 :element-type '(unsigned-byte 8)
+           (bytes (make-array 4096 :element-type '(unsigned-byte 8)
                                    :initial-element 10)))
-      (is (= 8192 (bsd:write fd bytes)))
+      (is (= 4096 (bsd:write fd bytes)))
       (is (eq :eagain (local-errno (lambda () (bsd:write fd #(0 0 0 0))))))
       (is (equal '(0) (bsd::poll-fds (list (list fd 4)) 0)))
-      (is (equalp (subseq bytes 0 4096) (darterfly/audio::mix-period)))
+      (is (equalp (subseq bytes 0 2048) (darterfly/audio::mix-period)))
       (is (equal '(4) (bsd::poll-fds (list (list fd 4)) 0)))
-      (is (= 4096 (bsd:write fd (make-array 4096 :initial-element 20))))
-      (is (equalp (subseq bytes 0 4096) (darterfly/audio::mix-period)))
+      (is (= 2048 (bsd:write fd (make-array 2048 :initial-element 20))))
+      (is (equalp (subseq bytes 0 2048) (darterfly/audio::mix-period)))
       (is (every (lambda (b) (= b 20)) (darterfly/audio::mix-period)))
       (is (eq :einval (local-errno (lambda () (bsd:write fd #(1 2 3))))))
       (bsd:close fd)
@@ -57,7 +57,7 @@
     (let ((fd (open-test-pcm)) (writer nil))
       (unwind-protect
            (progn
-             (bsd:write fd (make-array 8192 :initial-element 0))
+             (bsd:write fd (make-array 4096 :initial-element 0))
              (bsd:fcntl fd 4 0)
              (setf writer (io-worker (lambda ()
                                       (local-errno (lambda () (bsd:write fd #(0 0 0 0)))))))
@@ -81,7 +81,7 @@
              (let ((status (bsd:read fd 8)))
                (is (= 8 (length status)))
                (is (= 1024 (apfs::u32 status 0)))
-               (is (= 5120 (apfs::u32 status 4))))
+               (is (= 2560 (apfs::u32 status 4))))
              ;; Removing data from the queue does not make it played: the
              ;; mixer still owns the in-flight period until hardware submit.
              (darterfly/audio::mix-period)

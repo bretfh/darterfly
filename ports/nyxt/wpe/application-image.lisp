@@ -3,6 +3,10 @@
 (in-package #:darterfly/image)
 (defun nyxt-application-entries (root)
   (let ((root (uiop:ensure-directory-pathname root)))
+    (uiop:run-program
+      (list "rsvg-convert" "-w" "128" "-h" "128"
+            "-o" (namestring (build-path "nyxt-icon.png"))
+            (namestring (asset "apps/nyxt.svg"))))
     (dolist (name '("nyxt-engine" "WPEWebProcess" "WPENetworkProcess"))
       (darterfly/cc:link-native-program
         (merge-pathnames (concatenate 'string "engine/" name) root)
@@ -20,7 +24,13 @@
       (loop for object in support collect
         (list :file (format nil "usr/lib/nyxt/tcc-support/~a" (file-namestring object))
                     (octets object)))
-      (list (list :file "System/Applications/Nyxt.app/Contents/Programs/Nyxt"
+      (list (list :file "System/Applications/Nyxt.app/Contents/Resources/icon.png"
+                  (octets (build-path "nyxt-icon.png")))
+            (list :file "System/Applications/Nyxt.app/Contents/Resources/LICENSE"
+                  (octets (asset "apps/NYXT-ASSET-LICENSE")))
+            (list :file "System/Applications/Nyxt.app/Contents/Resources/artwork.org"
+                  (octets (asset "apps/nyxt.org")))
+            (list :file "System/Applications/Nyxt.app/Contents/Programs/Nyxt"
                   (text (format nil "#!darterfly Nyxt~%")) #o755)
             (list :file "usr/lib/nyxt/tls-source-id"
                   (sb-ext:string-to-octets

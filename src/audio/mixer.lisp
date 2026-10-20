@@ -1,13 +1,13 @@
 (in-package #:darterfly/audio)
 
-(defconstant +mix-frames+ 1024)
+(defconstant +mix-frames+ 512)
 
 (defstruct source data (at 0))
 
 (defvar *mixer-lock* (sb-thread:make-mutex :name "audio mixer"))
 (defvar *mixer-wake* (sb-thread:make-waitqueue :name "audio mixer"))
 (defvar *sources* nil)
-(defconstant +pcm-capacity+ 8192)
+(defconstant +pcm-capacity+ 4096)
 (defstruct pcm-stream
   (data (make-array +pcm-capacity+ :element-type '(unsigned-byte 8)))
   (read-at 0) (write-at 0) (count 0) (in-flight 0)

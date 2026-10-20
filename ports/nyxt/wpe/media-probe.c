@@ -32,7 +32,7 @@ static int pcm_latency(void) {
     close(fd);
     printf("PCM LATENCY budget=%u peak=%u drain_us=%lld\n",
            budget,peak,(long long)elapsed);
-    return budget==5120 && peak<=budget && !u32(status) && elapsed<250000;
+    return budget==2560 && peak<=budget && !u32(status) && elapsed<250000;
 }
 static unsigned frames;
 static guint64 checksum;

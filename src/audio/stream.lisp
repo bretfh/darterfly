@@ -1,10 +1,10 @@
 (in-package #:darterfly/audio)
 
-(defconstant +period-bytes+ 4096)
-(defconstant +periods+ 16)
+(defconstant +period-bytes+ 2048)
+(defconstant +periods+ 32)
 (defconstant +ring-bytes+ (* +period-bytes+ +periods+))
 ;; Keep the DMA ring large enough to observe delayed position updates, but
-;; apply backpressure after two periods (43 ms), not a nearly full ring.
+;; apply backpressure after two periods (21 ms), not a nearly full ring.
 (defconstant +output-buffer-bytes+ (* 2 +period-bytes+))
 
 (defclass hda-output ()

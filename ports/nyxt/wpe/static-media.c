@@ -52,7 +52,7 @@ static gboolean audio_prepare(GstAudioSink *sink, GstAudioRingBufferSpec *spec) 
     guint max_frames = status[4] | (status[5]<<8) | (status[6]<<16) |
                        ((guint)status[7]<<24);
     if (!max_frames || max_frames > 48000) return FALSE;
-    spec->segsize = 4096;
+    spec->segsize = 2048;
     spec->segtotal = (max_frames * 4 + spec->segsize - 1) / spec->segsize + 2;
     return TRUE;
 }

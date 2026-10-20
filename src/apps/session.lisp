@@ -123,6 +123,13 @@
 (defun icon-path (name) (format nil "~a~a.png" +icons+ name))
 
 (defun icon-layer (name color size)
+  ;; Application bundles supply their own full-size artwork. Theme glyphs
+  ;; retain the existing inset tile treatment.
+  (when (and name (uiop:absolute-pathname-p name))
+    (let ((pixels (ignore-errors (darterfly/imageio:icon name size))))
+      (when pixels
+        (return-from icon-layer
+          (layer:make-layer :contents (layer:image size size pixels))))))
   (let ((tile (text:make-bitmap size size))
         (inset (round size 4))
         (glyph (ignore-errors (darterfly/imageio:icon (icon-path name) (- size (* 2 (round size 4)))))))
@@ -143,7 +150,7 @@
     (append *dock-items*
       (when (ignore-errors (bsd:stat nyxt))
         (list (list "Nyxt" nyxt #(0.88 0.40 0.12)
-                    "actions/system-run-symbolic"))))))
+                    "/System/Applications/Nyxt.app/Contents/Resources/icon.png"))))))
 
 (defclass dock-view (kit:view)
   ((layout :initform nil :accessor dock-geometry)
@@ -160,7 +167,7 @@
                (declare (ignore h)) (and (<= ix x (+ ix w)) (<= iy y 72))))
            (getf (dock-geometry view) :items)))
 (defun dock-item-icon (app)
-  (or (fourth (assoc app *dock-items* :test #'equal))
+  (or (fourth (assoc app (available-dock-items) :test #'equal))
       (if (equal app "Editor") "legacy/accessories-text-editor-symbolic" "actions/system-run-symbolic")))
 (defmethod kit:draw ((view dock-view) bitmap)
   (kit::rounded-gradient bitmap 0 0 (kit:view-width view) 78 12 (kit::rgb8 224 222 218) (kit::rgb8 206 203 199))
@@ -170,7 +177,7 @@
         (text:fill-round-rect bitmap (- x 4) 4 (+ w 8) 68 5 .76 .73 .68 .65))
       (case (getf item :kind)
         (:app
-         (let* ((app (getf item :key)) (entry (assoc app *dock-items* :test #'equal))
+         (let* ((app (getf item :key)) (entry (assoc app (available-dock-items) :test #'equal))
                 (icon (icon-layer (dock-item-icon app) (or (third entry) #(.32 .38 .45 1.0)) 44))
                 (pixels (getf (layer:layer-contents icon) :pixels)))
            (kit:draw-rgba bitmap pixels 44 44 x y)

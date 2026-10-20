@@ -1,5 +1,5 @@
 (in-package #:darterfly/test)
-(declaim (ftype (function (t) t) nyxt-crash-checks))
+(declaim (ftype (function (t) t) nyxt-crash-checks nyxt-youtube-stress))
 (defvar *nyxt-ask-sequence* 0)
 (defun nyxt-app-ask (console form &optional (timeout 90))
   (let ((marker (format nil "[NYXT ASK ~d COMPLETE]" (incf *nyxt-ask-sequence*))))
@@ -22,13 +22,23 @@
       (error "Nyxt app did not reach ~a: ~a" marker out))))
 (defun nyxt-app-until (console predicate &optional (seconds 60))
   ;; Keep the world's control dispatcher available to init's health probes.
-  (loop repeat (* seconds 5)
-        for out = (nyxt-app-ask console
-                    (format nil "(nyxt-eval *nyxt-app* ~s :timeout 10)"
-                      (format nil "(when ~a :nyxt-condition-satisfied)" predicate)) 20)
-        when (search ":NYXT-CONDITION-SATISFIED" out) return t
-        do (sleep .2)
-        finally (error "Nyxt condition timed out: ~a" predicate)))
+  (let ((deadline (+ (get-internal-real-time)
+                     (* seconds internal-time-units-per-second))))
+    (loop
+      for remaining = (/ (- deadline (get-internal-real-time))
+                         internal-time-units-per-second)
+      for timeout = (max 1 (min 10 (ceiling remaining)))
+      for out = (progn
+                  (when (<= remaining 0)
+                    (error "Nyxt condition timed out after ~d seconds: ~a"
+                           seconds predicate))
+                  (nyxt-app-ask console
+                  (format nil "(nyxt-eval *nyxt-app* ~s :timeout ~d)"
+                    (format nil "(when ~a :nyxt-condition-satisfied)" predicate)
+                    timeout)
+                  (+ timeout 5)))
+      when (search ":NYXT-CONDITION-SATISFIED" out) return t
+      do (sleep (min .2 remaining)))))
 (defun nyxt-app-dock (console)
   ;; Read Harbor's current logical layout; exercise its real HID click path.
   (let* ((out (nyxt-app-ask console

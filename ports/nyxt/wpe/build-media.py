@@ -68,9 +68,13 @@ if __name__ == '__main__':
             cmake(name, ['OPUS_BUILD_TESTING=OFF', 'OPUS_BUILD_PROGRAMS=OFF',
                          'OPUS_INSTALL_PKG_CONFIG_MODULE=ON', 'OPUS_STACK_PROTECTOR=OFF'])
         elif name == 'libvpx':
-            out = w/(name+'-target')
+            # The kernel preserves x87/SSE with FXSAVE. Use upstream SSE
+            # dispatch, but never select AVX registers without XSAVE support.
+            out = w/(name+'-x86-target')
             out.mkdir(exist_ok=True)
-            run([source(name)/'configure', '--target=generic-gnu',
+            run([source(name)/'configure', '--target=x86_64-linux-gcc',
+                 '--as=nasm', '--enable-runtime-cpu-detect',
+                 '--disable-avx', '--disable-avx2', '--disable-avx512',
                  '--prefix='+str(p), '--disable-examples', '--disable-tools',
                  '--disable-docs', '--disable-unit-tests', '--disable-shared',
                  '--enable-static', '--disable-vp8-encoder', '--disable-vp9-encoder'], cwd=out)

@@ -1,0 +1,13 @@
+--- a/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp
+@@ -4123,6 +4123,10 @@
+             isDuplicateSample = buffer == previousBuffer;
+         }
+         m_sample = WTF::move(sample);
++        // The software sink does not visit pushTextureToCompositor(), but
++        // requestVideoFrameCallback needs the same distinct-sample counter.
++        if (!m_canRenderingBeAccelerated && !isDuplicateSample)
++            ++m_sampleCount;
+     }
+ 
+     if (shouldTriggerResize) {
