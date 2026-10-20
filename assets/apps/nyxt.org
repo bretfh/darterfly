@@ -1,0 +1,6 @@
+#+title: Nyxt app artwork
+
+nyxt.svg is the unchanged Nyxt browser glyph from assets/glyphs/nyxt.svg
+in the upstream Nyxt source, https://github.com/atlas-engineer/nyxt.
+Attribution: the Nyxt authors. Licensed CC BY-SA 3.0; see
+NYXT-ASSET-LICENSE. The PNG is rendered from that glyph at package build.
