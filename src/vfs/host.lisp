@@ -1,7 +1,8 @@
 (in-package #:darterfly/vfs)
 
 (defclass host-node (vnode)
-  ((path :initarg :path :reader host-path)))
+  ((path :initarg :path :reader host-path)
+   (device :initarg :device :initform nil :reader host-device)))
 
 (defun host-errno (code)
   (or (loop :for (name . nil) :in +errno+
@@ -25,7 +26,7 @@
   (let ((path (child-path dir name)))
     (handler-case (let ((stat (sb-posix:lstat path)))
                     (make-instance 'host-node :path path :type (host-type (sb-posix:stat-mode stat))
-                                              :id (sb-posix:stat-ino stat)))
+                                              :id (sb-posix:stat-ino stat) :device (sb-posix:stat-dev stat)))
       (sb-posix:syscall-error (e)
         (if (= (sb-posix:syscall-errno e) sb-posix:enoent) nil (fail (host-errno (sb-posix:syscall-errno e))))))))
 

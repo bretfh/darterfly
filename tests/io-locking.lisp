@@ -205,6 +205,43 @@
         (dolist (thread (list locker opener probe))
           (when thread (sb-thread:join-thread thread :timeout 6 :default nil)))))))
 
+(defclass gated-lock-node (gated-io-node) ())
+
+(defmethod darterfly/vfs:vnop-getattr ((node gated-lock-node))
+  (sb-thread:signal-semaphore (io-entered node))
+  (unless (sb-thread:wait-on-semaphore (io-release node) :timeout 5)
+    (error "test lock metadata gate timed out"))
+  (darterfly/vfs:make-vattr :mode #o100644 :size 64))
+
+(test stalled-record-lock-metadata-allows-inspection-and-close
+  (with-io-process
+    (let* ((node (make-instance 'gated-lock-node :type :vreg))
+           (fd (install-io-node node))
+           (worker (io-worker
+                    (lambda () (local-errno
+                                (lambda () (bsd::record-lock fd 6 1 2 0 1))))))
+           (probe nil) (replacement nil) (done (sb-thread:make-semaphore)))
+      (unwind-protect
+           (progn
+             (is (sb-thread:wait-on-semaphore (io-entered node) :timeout 2))
+             (setf probe
+                   (io-worker
+                    (lambda ()
+                      (bsd:procs)
+                      (bsd:close fd)
+                      (bsd::with-bsd
+                        (setf replacement
+                              (bsd::fd-alloc (make-instance 'bsd::file))))
+                      (sb-thread:signal-semaphore done))))
+             (is (sb-thread:wait-on-semaphore done :timeout .3))
+             (is (eql fd replacement)))
+        (sb-thread:signal-semaphore (io-release node))
+        (is (eq :ebadf (sb-thread:join-thread worker :timeout 6)))
+        (when probe (sb-thread:join-thread probe :timeout 6))
+        (when replacement (bsd:close replacement)))
+      (is (null (gethash node bsd::*record-locks*)))
+      (is (zerop (hash-table-count darterfly/vfs::*files*))))))
+
 (in-suite guest)
 
 (defun inspection-rpc (port code &key (op "eval") (journal "skip"))
