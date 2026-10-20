@@ -162,7 +162,7 @@ def inside(args):
     write_json(bundle / 'image-identity.json',
                {key: manifest[key] for key in ('revision', 'dirty', 'source_date_epoch', 'source_sha256', 'pinned_guix')} |
                {'guix_profile': str(profile), 'channels_sha256': sha256(bundle / 'channels.scm')})
-    sbcl = ['sbcl', '--no-sysinit', '--no-userinit', '--non-interactive', '--eval', '(require :asdf)']
+    sbcl = ['sbcl', '--dynamic-space-size', '8192', '--no-sysinit', '--no-userinit', '--non-interactive', '--eval', '(require :asdf)']
     stages = []
     def stage(name, command):
         env['DARTERFLY_RELEASE_STAGE'] = name

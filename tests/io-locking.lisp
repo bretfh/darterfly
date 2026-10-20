@@ -262,7 +262,7 @@
         (if stream (close stream) (sb-bsd-sockets:socket-close socket))))))
 
 (test inspection-and-recovery-work-while-storage-is-stalled
-  (let* ((port (free-udp-port))
+  (let* ((port (free-tcp-port))
          (c (image:bare-console :boot-args "init nrepl-key=inspection-test"
                                 :forwards (list (list :tcp port 4011))))
          (normal nil) (answer nil))

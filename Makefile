@@ -12,7 +12,7 @@ check:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --load bench/check.lisp'
 
 test:
-	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:test-system :darterfly)"'
+	$(GUIX) sh -c '$(ENV) $(IMAGE_SBCL) --non-interactive --eval "(asdf:test-system :darterfly)"'
 
 bare:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/image)" --eval "(darterfly/image:bare-boot)"'

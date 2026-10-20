@@ -295,7 +295,10 @@
         (when dead (sb-thread:condition-broadcast *tcp-changed*)))))
 
 (defun ensure-tcp-timer ()
-  (unless *tcp-timer* (setf *tcp-timer* (sb-thread:make-thread #'tcp-timer :name "tcp timer"))))
+  (sb-thread:with-recursive-lock (*tcp-lock*)
+    (unless (and *tcp-timer* (sb-thread:thread-alive-p *tcp-timer*))
+      (sb-sys:without-interrupts
+        (setf *tcp-timer* (sb-thread:make-thread #'tcp-timer :name "tcp timer"))))))
 
 (defun tcp-wait (predicate timeout)
   (let ((deadline (and timeout (+ (get-internal-real-time) (* timeout internal-time-units-per-second)))))
@@ -391,4 +394,5 @@
 (defun forget-interface ()
   (clrhash *connections*)
   (clrhash *listeners*)
-  (setf *interface* nil *tcp-timer* nil *acks-due* nil))
+  (setf *interface* nil *tcp-timer* nil *acks-due* nil
+        *start-lock* (sb-thread:make-mutex :name "network start")))

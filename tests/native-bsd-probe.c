@@ -231,7 +231,10 @@ static void *sleeping_worker(void *unused) {
     for (;;) usleep(1000);
     return 0;
 }
-static void *short_worker(void *unused) { return unused; }
+static void *short_worker(void *unused) {
+    /* The child may run before pthread_create has returned in its parent. */
+    return pthread_kill(pthread_self(), 0) ? (void *)-1 : unused;
+}
 static int thread_reuse(void) {
     pthread_t th;
     void *result, *stack;

@@ -192,6 +192,29 @@
                          (ask "(let ((ts (loop repeat 3 collect (sb-thread:make-thread (lambda () (let ((n 0)) (dotimes (i 300) (incf n (length (make-array 100000)))) n)))))) (mapcar #'sb-thread:join-thread ts))"))))
         (image:finish c 5)))))
 
+(test completions-remain-responsive-under-cpu-load
+  ;; Exercise both UP and oversubscribed SMP. Compare policies in the same VM
+  ;; rather than asserting a host-dependent disk throughput threshold.
+  (dolist (cpus '(1 4))
+    (let ((c (image:bare-console :boot-args (format nil "cpus=~d" cpus))))
+      (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 90)))
+        (unwind-protect
+             (progn
+               (image:expect c "* " :timeout 60)
+               (is (search "T" (ask "(= 1 (devices:machdep 88 4))")))
+               (is (search "T" (ask "(= #x53434801 (devices:machdep 88 0))")))
+               (ask (format nil "(defparameter *load-workers* ~d)" (* 2 cpus)))
+               (ask "(defparameter *old-completion* (unwind-protect (progn (devices:machdep 88 3 0) (darterfly/bench:completion-under-load :workers *load-workers*)) (devices:machdep 88 3 1)))")
+               (ask "(darterfly/stats:trace-scheduling t)")
+               (ask "(defparameter *new-completion* (darterfly/bench:completion-under-load :workers *load-workers* :rounds 5000))")
+               (ask "(list *old-completion* *new-completion*)")
+               (is (search "T" (ask "(< (getf *new-completion* :mean-us) (* .5 (getf *old-completion* :mean-us)))")))
+               (is (search "T" (ask "(and (not (getf *new-completion* :load-exhausted)) (every #'plusp (getf *new-completion* :cpu-batches)))")))
+               (is (search "T" (ask "(let ((s (darterfly/stats:scheduling))) (and (getf s :preemption) (getf s :threads) (zerop (getf s :collisions))))")))
+               (ask "(darterfly/stats:trace-scheduling nil)")
+               (is (search "T" (ask "(null (getf (darterfly/stats:scheduling) :threads))"))))
+          (image:finish c 5))))))
+
 (test smp-on-darterfly
   (let ((c (image:bare-console :boot-args "cpus=1 halt" :root nil)))
     (unwind-protect (is (image:expect c "mp: 1 cpu"))
@@ -376,6 +399,12 @@
                            (nth-value 1 (sb-bsd-sockets:socket-name s)))
       (sb-bsd-sockets:socket-close s))))
 
+(defun free-tcp-port ()
+  (let ((s (make-instance 'sb-bsd-sockets:inet-socket :type :stream :protocol :tcp)))
+    (unwind-protect (progn (sb-bsd-sockets:socket-bind s #(0 0 0 0) 0)
+                           (nth-value 1 (sb-bsd-sockets:socket-name s)))
+      (sb-bsd-sockets:socket-close s))))
+
 (defun host-listener ()
   (let ((server (make-instance 'sb-bsd-sockets:inet-socket :type :stream :protocol :tcp)))
     (setf (sb-bsd-sockets:sockopt-reuse-address server) t)
@@ -385,7 +414,7 @@
 
 (test network-on-darterfly
   (let* ((udp (free-udp-port))
-         (tcp (free-udp-port))
+         (tcp (free-tcp-port))
          (c (image:bare-console :forwards (list (list :udp udp 7) (list :tcp tcp 7)))))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
       (unwind-protect
@@ -485,7 +514,7 @@
         (image:finish c 5)))))
 
 (test sockets-on-darterfly
-  (let* ((tcp (free-udp-port))
+  (let* ((tcp (free-tcp-port))
          (c (image:bare-console :forwards (list (list :tcp tcp 8)))))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
       (unwind-protect
@@ -782,7 +811,7 @@
 
 (test what-was-running-keeps-running
   (let ((esp (merge-pathnames "esp-running-world.img" (darterfly-file "build/")))
-        (port (free-udp-port))
+        (port (free-tcp-port))
         (image:*screen-size* '(1280 800)))
     (uiop:delete-file-if-exists esp)
     (flet ((beating (ask) (search "T" (funcall ask "(let ((a cl-user::*beat*)) (sleep 2.5) (and (find \"beat\" (sb-thread:list-all-threads) :key #'sb-thread:thread-name :test #'equal) (/= a cl-user::*beat*) t))"))))
@@ -2829,27 +2858,33 @@
 (test darterfly-saves-itself-and-boots-the-save
   (let ((esp (merge-pathnames "esp-save.img" (darterfly-file "build/"))))
     (uiop:delete-file-if-exists esp)
-    (let ((c (image:bare-console :esp esp)))
+    (let ((c (image:bare-console :esp esp :boot-args "nrepl-key=startup-test")))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
         (unwind-protect
              (progn
                (image:expect c "* " :timeout 60)
                (ask "(defvar cl-user::*made-in-darterfly* :made-in-darterfly)")
+               ;; Both boot and this retained activity start nREPL after restore.
+               (ask "(darterfly/nrepl:start :key \"startup-test\")")
                (image:send c "(darterfly/install:save)")
                (is (image:expect c "restart: core " :timeout 300) "the save restarts the runtime on it")
                (image:expect c "* " :timeout 120)
                (is (search ":MADE-IN-DARTERFLY" (ask "cl-user::*made-in-darterfly*")) "the restarted image is the saved one")
+               (is (search "(1 1)" (ask "(progn (sleep 1) (loop for name in '(\"nrepl listener\" \"tcp timer\") collect (count name (sb-thread:list-all-threads) :key #'sb-thread:thread-name :test #'equal)))"))
+                   "boot and retained activities share one listener and timer")
                (is (search "\"gen-2\"" (ask "(darterfly/install:install \"/System/Library/Kernels/kernel\" \"/System/Library/Kernels/darterfly.core\")")))
                (image:send c "(sb-ext:exit)")
                (image:expect c "exit(0)" :timeout 60))
           (image:finish c 5))))
-    (let ((c (image:bare-console :esp esp)))
+    (let ((c (image:bare-console :esp esp :boot-args "nrepl-key=startup-test")))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 600)))
         (unwind-protect
              (progn
                (is (image:expect c "boot.efi: generation gen-2"))
                (image:expect c "* " :timeout 60)
-               (is (search ":MADE-IN-DARTERFLY" (ask "cl-user::*made-in-darterfly*")) "gen-2 is the image darterfly saved"))
+               (is (search ":MADE-IN-DARTERFLY" (ask "cl-user::*made-in-darterfly*")) "gen-2 is the image darterfly saved")
+               (is (search "(1 1)" (ask "(progn (sleep 1) (loop for name in '(\"nrepl listener\" \"tcp timer\") collect (count name (sb-thread:list-all-threads) :key #'sb-thread:thread-name :test #'equal)))"))
+                   "boot and retained activities share one listener and timer"))
           (image:finish c 5))))))
 
 (defun listener-line (file prefix)
@@ -3170,7 +3205,7 @@
           (image:finish c 5))))))
 
 (defun nrepl-check (&key (ip "10.0.2.15") status)
-  (let* ((port (free-udp-port))
+  (let* ((port (free-tcp-port))
          (c (image:bare-console :forwards (list (list :tcp port 4011)))))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60))
            (client (key code)
@@ -3255,7 +3290,7 @@
       (image:finish c 5))))
 
 (test the-hardware-check-runs-across-a-sleep
-  (let* ((port (free-udp-port))
+  (let* ((port (free-tcp-port))
          (image:*extra-qemu* (list "-global" "ICH9-LPC.disable_s3=0"))
          (image::*expected* '(:log :network :disk))
          (label "vm-check")
@@ -3285,7 +3320,7 @@
       (image:finish c 5))))
 
 (test the-network-world-sleeps-and-wakes
-  (let* ((port (free-udp-port))
+  (let* ((port (free-tcp-port))
          (image:*extra-qemu* (list "-global" "ICH9-LPC.disable_s3=0"))
          (image::*expected* '(:log :network :disk))
          (label "vm-world-check")
@@ -3330,7 +3365,7 @@
 (test usb-ethernet-plugged-in-later
   (let* ((image:*input-devices* '("qemu-xhci,id=xhci" "virtio-keyboard-pci" "virtio-tablet-pci"))
          (image:*network-device* nil)
-         (port (free-udp-port))
+         (port (free-tcp-port))
          (c (image:bare-console :forwards (list (list :tcp port 4011)))))
     (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60))
            (plug () (image:qmp "device_add" (darterfly/qmp:dict "driver" "usb-net" "netdev" "net0" "bus" "xhci.0" "id" "dongle")))
@@ -3354,7 +3389,7 @@
 (test usb-ethernet-on-a-controller-with-only-msi
   (let ((image:*input-devices* '("qemu-xhci,id=xhci,msi=on,msix=off" "virtio-keyboard-pci" "virtio-tablet-pci"))
         (image:*network-device* "usb-net,netdev=net0,bus=xhci.0")
-        (port (free-udp-port)))
+        (port (free-tcp-port)))
     (let ((c (image:bare-console :forwards (list (list :tcp port 4011)))))
       (flet ((ask (form) (image:send c form) (image:expect c (format nil "~%* ") :timeout 60)))
         (unwind-protect
@@ -3369,7 +3404,7 @@
 (defvar *stick-netdev* "user,id=net0")
 
 (defun stick-machine (&rest devices)
-  (image:console :args (append (list "qemu-system-x86_64" "-enable-kvm" "-cpu" "host" "-m" "4096" "-smp" "4" "-machine" "q35"
+  (image:console :args (append (list "qemu-system-x86_64" "-enable-kvm" "-cpu" "host" "-m" (if (image::nyxt-package-root) "8192" "4096") "-smp" "4" "-machine" "q35"
                                      "-drive" (format nil "if=pflash,format=raw,readonly=on,file=~a" (darterfly/image::firmware "ovmf_code_x64.bin"))
                                      "-drive" (format nil "if=pflash,format=raw,snapshot=on,file=~a" (darterfly/image::firmware "ovmf_vars_x64.bin"))
                                      "-device" "qemu-xhci,id=xhci"
@@ -3522,7 +3557,7 @@
 (test deploy-updates-an-installed-system
   (let* ((stick (image:usb-image))
          (disk (merge-pathnames "deploy-nvme.img" (darterfly-file "build/")))
-         (port (free-udp-port)))
+         (port (free-tcp-port)))
     (with-open-file (s disk :direction :output :element-type '(unsigned-byte 8) :if-exists :supersede)
       (file-position s (1- (* 4096 1048576)))
       (write-byte 0 s))

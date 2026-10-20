@@ -11,6 +11,7 @@
   (lock (sb-thread:make-mutex :name "net")) (changed (sb-thread:make-waitqueue)) (id 0) thread)
 
 (defvar *interface* nil)
+(defvar *start-lock* (sb-thread:make-mutex :name "network start"))
 
 (define-condition net-error (error)
   ((errno :initarg :errno :reader net-errno)
@@ -265,8 +266,12 @@
   (declare (ignore ip prefix gateway))
   (when *interface* (return-from start-network *interface*))
   (darterfly/devices:start-devices)
-  (setf *configuration* configuration
-        *interface* (make-interface))
+  ;; Device discovery may run callbacks; do not hold the publication lock there
+  ;; or across DHCP. Recheck after discovery so concurrent starters share state.
+  (sb-thread:with-mutex (*start-lock*)
+    (unless *interface*
+      (setf *configuration* configuration
+            *interface* (make-interface))))
   (let ((device (first (darterfly/devices:find-entries 'darterfly/devices:ethernet-controller))))
     (when device (interface-attach device)))
   *interface*)

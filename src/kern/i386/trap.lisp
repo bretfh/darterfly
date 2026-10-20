@@ -107,6 +107,7 @@ Fault CR2: 0x%016lx, Error code: 0x%016lx, Fault CPU: 0x0
                  (or user (/= (current-thread) (mem :u64 (+ (cpu-data) +c-idle-thread+)))))
         (bsd-proftick))
       (when user
+        (preempt-interrupted-cpu)
         (sched-ast)
         (bsd-ast regs))
       (result 0))

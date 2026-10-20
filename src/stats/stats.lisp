@@ -1,6 +1,6 @@
 (defpackage #:darterfly/stats
   (:use #:cl)
-  (:export #:note #:series #:snapshot #:sample #:top #:print-sample))
+  (:export #:note #:series #:snapshot #:sample #:top #:print-sample #:trace-scheduling #:scheduling))
 (in-package #:darterfly/stats)
 
 (defconstant +series-length+ 512)
@@ -63,6 +63,36 @@
 (defun kernel-thread-id (thread)
   (let ((os (sb-thread::thread-os-thread thread)))
     (and os (plusp os) (sb-sys:sap-ref-64 (sb-sys:int-sap os) 8))))
+
+(defun scheduling-supported-p ()
+  (= #x53434801 (darterfly/devices:machdep 88 0)))
+(defun trace-scheduling (enabled)
+  "Reset bounded wake-to-run counters and enable or disable collection. Requires physical-memory authority."
+  (unless (and (scheduling-supported-p)
+               (= 1 (darterfly/devices:machdep 88 1 (if enabled 1 0))))
+    (error "Kernel scheduling trace unavailable or not permitted"))
+  enabled)
+(defun scheduling ()
+  "Snapshot kernel wake-to-run delays. Collection is opt-in; times are microseconds."
+  (unless (scheduling-supported-p) (return-from scheduling (list :unavailable t)))
+  (let ((buffer (make-array 10240 :element-type '(unsigned-byte 8)))
+        (names (make-hash-table)) (scale (/ 1000000d0 (tsc-hz))))
+    (dolist (thread (sb-thread:list-all-threads))
+      (let ((id (ignore-errors (kernel-thread-id thread))))
+        (when id (setf (gethash id names) (sb-thread:thread-name thread)))))
+    (unless (= 1 (sb-sys:with-pinned-objects (buffer)
+                   (darterfly/devices:machdep 88 2 (sb-sys:sap-int (sb-sys:vector-sap buffer)))))
+      (error "Cannot read scheduling counters"))
+    (list :preemption (not (zerop (darterfly/devices:machdep 88 4)))
+          :collisions (darterfly/devices:machdep 88 5)
+          :threads
+          (loop for i below 256 for at = (* i 5)
+                for id = (sb-kernel:%vector-raw-bits buffer at)
+                for count = (sb-kernel:%vector-raw-bits buffer (+ at 1))
+                when (plusp count)
+                  collect (list :id id :name (gethash id names) :count count
+                                :total-us (* scale (sb-kernel:%vector-raw-bits buffer (+ at 2)))
+                                :max-us (* scale (sb-kernel:%vector-raw-bits buffer (+ at 3))))))))
 
 (defun named-thread-times (times)
   (loop for thread in (sb-thread:list-all-threads)
