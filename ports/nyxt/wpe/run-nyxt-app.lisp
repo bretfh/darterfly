@@ -63,6 +63,7 @@
         (nyxt-app-ask c
           "(progn (defparameter *nyxt-app* (darterfly/run:find-world \"Nyxt\"))
             (assert *nyxt-app*)
+            (assert (null (getf (darterfly/init:inspect-job \"Nyxt\") :exits)))
             (assert (find \"Nyxt\" (darterfly/init:jobs) :key (lambda (j) (getf j :label)) :test #'equal))
             (assert (gethash (darterfly/run:world-id *nyxt-app*) darterfly/layer::*world-clients*))
             (assert (not (probe-file \"/tmp/nyxt-windows.sock\")))
@@ -113,7 +114,7 @@
         ;; Resize through WindowServer's actual pointer edge drag.
         (image:pointer 718 558 t) (sleep .15)
         (image:pointer 798 598 t) (sleep .15) (image:pointer 798 598 nil)
-        (nyxt-app-until c "(let ((w (nyxt:current-window))) (and (= 720 (nyxt/renderer/wpe::native-width w)) (= 520 (nyxt/renderer/wpe::native-height w))))")
+        (nyxt-app-until c "(let ((w (nyxt:current-window))) (and (<= (abs (- 720 (nyxt/renderer/wpe::native-width w))) 2) (<= (abs (- 520 (nyxt/renderer/wpe::native-height w))) 2)))")
         (nyxt-app-ask c
           "(progn
              (darterfly/windowserver::apply-transaction

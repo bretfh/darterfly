@@ -10,17 +10,31 @@
       (when (search "debugger invoked" out) (error "Guest: ~a" out))
       (concatenate 'string out (image:expect console (format nil "~%* ") :timeout 15)))))
 (defun nyxt-app-await (console path marker &optional (seconds 180))
-  (image:send console
-    (format nil
-      "(loop repeat ~d for log = (ignore-errors (uiop:read-file-string ~s)) do (when log (write-string log *standard-output* :start (min *nyxt-log-at* (length log))) (setf *nyxt-log-at* (length log)) (finish-output)) when (and log (or (search ~s log) (search \"[NYXT APPLICATION FAILED]\" log) (search \"[NYXT APP CHECK FAILED]\" log) (search \"[NYXT WORKER FAILED]\" log))) return t do (sleep .2) finally (format t \"~%[NYXT APP TIMEOUT]~%\"))"
-      (* seconds 5) path marker))
-  (let ((out (image:expect console (list marker "[NYXT APPLICATION FAILED]"
-                                        "[NYXT APP CHECK FAILED]" "[NYXT WORKER FAILED]"
-                                        "[NYXT APP TIMEOUT]"
-                                        "debugger invoked") :timeout (+ seconds 10))))
-    (image:expect console (format nil "~%* ") :timeout 15)
-    (unless (search marker out)
-      (error "Nyxt app did not reach ~a: ~a" marker out))))
+  ;; Poll from the host: a worker failure may print only to the serial console.
+  ;; A long guest-side wait would then occupy the REPL and prevent diagnostics.
+  (loop with deadline = (+ (get-internal-real-time)
+                          (* seconds internal-time-units-per-second))
+        for remaining = (/ (- deadline (get-internal-real-time))
+                           internal-time-units-per-second)
+        for out = (progn
+          (unless (plusp remaining)
+            (error "Nyxt app did not reach ~a within ~d seconds" marker seconds))
+          (nyxt-app-ask console
+          (format nil
+            "(let ((log (ignore-errors (uiop:read-file-string ~s))))
+               (when log
+                 (write-string log *standard-output*
+                   :start (min *nyxt-log-at* (length log)))
+                 (setf *nyxt-log-at* (length log)) (finish-output))
+               (when (and log (search ~s log)) :nyxt-await-ready))"
+            path marker)
+          (max 1 (min 30 (ceiling remaining)))))
+        do (when (some (lambda (failure) (search failure out))
+                       '("[NYXT APPLICATION FAILED]" "[NYXT APP CHECK FAILED]"
+                         "[NYXT WORKER FAILED]"))
+             (error "Nyxt failed before ~a: ~a" marker out))
+        when (search ":NYXT-AWAIT-READY" out) return t
+        do (sleep (min .2 remaining))))
 (defun nyxt-app-until (console predicate &optional (seconds 60))
   ;; Keep the world's control dispatcher available to init's health probes.
   (let ((deadline (+ (get-internal-real-time)

@@ -90,7 +90,7 @@
           (nyxt-app-ask c "(progn (dolist (parent '(\"/Users/darterfly/.local/share/nyxt/\" \"/Users/darterfly/.cache/nyxt/\")) (let ((old (merge-pathnames \"wpe/\" parent))) (when (probe-file old) (rename-file old (merge-pathnames (format nil \"wpe-test-backup-~d/\" (get-universal-time)) parent))))) :fresh-web-profile)"))
         (nyxt-app-dock c)
         (nyxt-app-await c "/tmp/nyxt-application.log" "[NYXT APPLICATION READY]" 600)
-        (nyxt-app-ask c "(defparameter *nyxt-app* (darterfly/run:find-world \"Nyxt\"))")
+        (nyxt-app-ask c "(progn (defparameter *nyxt-app* (darterfly/run:find-world \"Nyxt\")) (assert (null (getf (darterfly/init:inspect-job \"Nyxt\") :exits)) () \"Unexpected restart during normal browser launch\"))")
         (labels ((evaluate (form)
                    (nyxt-app-ask c (format nil "(nyxt-eval *nyxt-app* ~s)" form) 45))
                  (js (script)
@@ -216,11 +216,11 @@
         (format t "~&[MEDIA DIAGNOSTICS COMPLETE]~%"))
       (ignore-errors
         (nyxt-app-ask c
-          (format nil "(when (darterfly/run:find-world \"Nyxt\") (nyxt-eval *nyxt-app* ~s))"
+          (format nil "(ignore-errors (when (and (boundp '*nyxt-app*) *nyxt-app* (eq *nyxt-app* (darterfly/run:find-world \"Nyxt\"))) (nyxt-eval *nyxt-app* ~s :timeout 5)))"
             (format nil "(nyxt:ffi-buffer-evaluate-javascript (nyxt:current-buffer) ~s)"
               "JSON.stringify({title:document.title,ready:document.readyState,frames:[...document.querySelectorAll('iframe')].map(f=>({src:f.src,ready:f.contentDocument?.readyState})),events:window.events,started:window.started,playError:window.playError,mseError:window.mseError,webAudioError:window.webAudioError,video:window.v&&{ready:v.readyState,network:v.networkState,time:v.currentTime,duration:v.duration,error:v.error&&{code:v.error.code,message:v.error.message},width:v.videoWidth,height:v.videoHeight},text:document.body.innerText.slice(0,1500)})")) 30))
       (ignore-errors
-        (nyxt-app-ask c "(progn (dolist (p '(\"/tmp/nyxt-engine.log\" \"/tmp/nyxt-application.log\")) (format t \"~&LOG ~a~%\" p) (when (probe-file p) (write-string (uiop:read-file-string p)))) (finish-output))" 30))
+        (nyxt-app-ask c "(progn (dolist (p '(\"/tmp/nyxt-engine.log\" \"/tmp/nyxt-application.log\")) (format t \"~&LOG ~a~%\" p) (let ((log (ignore-errors (uiop:read-file-string p)))) (when log (write-string log *standard-output* :start (max 0 (- (length log) 65536)))))) (finish-output))" 30))
       (with-open-file (s (image::build-path "wpe-assessment/nyxt-media-guest.log")
                         :direction :output :if-exists :supersede)
         (write-string (image:transcript c) s))
