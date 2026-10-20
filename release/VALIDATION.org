@@ -78,3 +78,15 @@ their source snapshots differed in tooling, so this is not a same-input full-ima
 reproducibility proof. Disk/core images differed. The manifest deliberately leaves
 bit_identical_image_verified false. Remove nondeterminism and perform a controlled
 same-source double build before changing that claim.
+
+* Recovery follow-up, 2026-10-20
+The historical results above are retained. The corrected full recovery suite now
+passes 56/56 checks. REL-001 was reproduced and fixed with aggressive heap/tag
+verification, without weakening its corruption/refusal test. Reinstall also
+passes with the watchdog enabled; the historical REL-002 reset did not reproduce
+at facd54d or in this follow-up, so no unproved causal explanation is claimed.
+
+See [[file:../RECOVERY-STATUS.org][the foundation recovery report]] for the exact scope, native-build investigation,
+physical deployment evidence and remaining qualification work. Passing recovery
+is not a claim that the complete release gate or bit-identical disk/core-image
+qualification has been completed.
