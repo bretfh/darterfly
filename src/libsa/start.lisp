@@ -9,10 +9,14 @@
          (size (logand (+ (- (absolute "__tbss_end") start) align -1) (lognot (- align 1))))
          (block (aligned_alloc align (+ size 64)))
          (tp (+ block size)))
+    (unless block (result 0))
     (memset block 0 (+ size 64))
     (memcpy block start data)
     (setf (mem :u64 tp) tp)
     (setf (mem :u64 (+ tp 8)) self)
+    ;; The static TLS template can be over-aligned. Retain its allocation
+    ;; owner rather than guessing at the base when a different thread joins.
+    (setf (mem :u64 (+ tp 56)) block)
     tp))
 
 (define-global env-storage :u64 :count 65)

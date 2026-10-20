@@ -232,6 +232,29 @@ static void *sleeping_worker(void *unused) {
     return 0;
 }
 static void *short_worker(void *unused) { return unused; }
+static int thread_reuse(void) {
+    pthread_t th;
+    void *result, *stack;
+    pthread_attr_t attr;
+    int i;
+    /* More creations than the VM map capacity; each owned stack must leave. */
+    for (i = 0; i < 2048; ++i) {
+        CHECK(!pthread_create(&th, 0, short_worker, (void *)37), 235);
+        CHECK(!pthread_join(th, &result) && result == (void *)37, 236);
+    }
+    stack = mmap(0, 65536, PROT_READ | PROT_WRITE,
+                 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    CHECK(stack != MAP_FAILED && !pthread_attr_init(&attr), 237);
+    CHECK(!pthread_attr_setstack(&attr, stack, 65536), 238);
+    for (i = 0; i < 32; ++i) {
+        CHECK(!pthread_create(&th, &attr, short_worker, (void *)41), 239);
+        CHECK(!pthread_join(th, &result) && result == (void *)41, 240);
+        *(volatile unsigned char *)stack = 93; /* Borrowed, still ours. */
+    }
+    CHECK(!pthread_attr_destroy(&attr) && !munmap(stack, 65536), 241);
+    return 0;
+}
+
 static int stop_threads(int churn) {
     pthread_t a, b;
     CHECK(!pthread_create(&a, 0, sleeping_worker, 0), 220);
@@ -252,6 +275,7 @@ int main(int argc, char **argv, char **envp) {
     CHECK(argc >= 2 && envp == environ, 90);
     if (eq(argv[1], "stop-threads")) return stop_threads(0);
     if (eq(argv[1], "churn-threads")) return stop_threads(1);
+    if (eq(argv[1], "thread-reuse")) return thread_reuse();
     if (eq(argv[1], "map-churn")) return map_churn();
     if (eq(argv[1], "runtime")) return runtime_check();
     if (eq(argv[1], "children")) return child_driver(argv[0]);

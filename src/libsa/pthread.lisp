@@ -18,9 +18,10 @@
 (defconstant +t-detached+ 60)
 (defconstant +t-specific+ 64)
 (defconstant +t-name+ 1088)
-(defconstant +thread-size+ 1120)
+(defconstant +t-owned-stack+ 1120)
+(defconstant +thread-size+ 1128)
 
-(define-global main-thread :u8 :count 1120)
+(define-global main-thread :u8 :count 1128)
 (define-global next-key :u32)
 (define-global destructors :u64 :count 128)
 
@@ -52,6 +53,15 @@
 (define-low _pthread_start (self)
   (pthread_exit (call-pointer (mem :u64 (+ self +t-start+)) (mem :u64 (+ self +t-arg+)))))
 
+(define-low release-pthread (th)
+  ;; The kernel publishes done only on its non-returning exit path. A joiner
+  ;; may then reclaim libsa storage; stacks supplied by SBCL remain its own.
+  (when (mem :u64 (+ th +t-owned-stack+))
+    (munmap (mem :u64 (+ th +t-stack+)) (mem :u64 (+ th +t-stacksize+))))
+  (let ((tp (mem :u64 (+ th +t-tp+))))
+    (when tp (free (mem :u64 (+ tp 56)))))
+  (free th))
+
 (define-low pthread_create (out attr start arg)
   (let ((th (calloc 1 +thread-size+)))
     (when (= th 0) (result +eagain+))
@@ -66,12 +76,16 @@
           (setf (mem :u64 (+ th +t-stack+)) (anonymous (mem :u64 (+ th +t-stacksize+))))
           (when (= (mem :u64 (+ th +t-stack+)) (lognot 0))
             (free th)
-            (result +eagain+))))
+            (result +eagain+))
+          (setf (mem :u64 (+ th +t-owned-stack+)) 1)))
     (setf (mem :u64 (+ th +t-tp+)) (__libsa_tls_new th))
+    (unless (mem :u64 (+ th +t-tp+))
+      (release-pthread th)
+      (result +eagain+))
     (let* ((top (- (logand (+ (mem :u64 (+ th +t-stack+)) (mem :u64 (+ th +t-stacksize+))) (lognot 15)) 8))
            (tid (__syscall 360 (code-address _pthread_start) th top (mem :u64 (+ th +t-tp+)) 0 0)))
       (when (signed< tid 0)
-        (free th)
+        (release-pthread th)
         (result +eagain+))
       (setf (mem :u64 (+ th +t-tid+)) tid)
       (setf (mem :u64 out) th)
@@ -107,6 +121,7 @@
   (while (= (mem :u32 (+ th +t-done+)) 0)
     (ulock-wait (+ th +t-done+) 0 0))
   (when value (setf (mem :u64 value) (mem :u64 (+ th +t-retval+))))
+  (unless (= th (address main-thread)) (release-pthread th))
   0)
 
 (define-low pthread_detach (th) (setf (mem :u32 (+ th +t-detached+)) 1) 0)

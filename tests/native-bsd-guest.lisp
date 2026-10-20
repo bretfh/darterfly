@@ -161,6 +161,7 @@
          (bsd-check "KILL-LOOP" (= 9 (bsd-wait pid))))
     (ignore-errors (darterfly/bsd:kill pid :sigkill))))
 
+(bsd-check "PTHREAD-RECLAIM" (= 0 (bsd-wait (bsd-start "thread-reuse"))))
 (bsd-check "MAP-COALESCE-EXHAUSTION" (= 0 (bsd-wait (bsd-start "map-churn"))))
 
 ;; Killing a paused multi-threaded world used to return from sched-ast to
