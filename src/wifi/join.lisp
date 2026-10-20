@@ -524,6 +524,22 @@
     (nreverse out)))
 
 (defvar *wifi-confirmed* nil)
+(defvar *wifi-trial* nil)
+
+(defun wifi-fallback (trial old)
+  ;; USB resume replaces registry objects. A retained object is not a live
+  ;; adapter, even if its old slot number happens to be reused by the controller.
+  ;; Resolve its identity before giving up the current working control path.
+  (when (and (eq trial *wifi-trial*) (not *wifi-confirmed*)
+             (eq (car trial) (darterfly/net::interface-device darterfly/net:*interface*)))
+    (let* ((devices (devices:find-entries 'devices:ethernet-controller))
+           (replacement (or (find old devices)
+                            (and old
+                                 (find (devices:network-mac old) devices
+                                       :key #'devices:network-mac :test #'equalp)))))
+      (when replacement
+        (darterfly/net::interface-detach (car trial))
+        (darterfly/net::interface-attach replacement)))))
 
 (defun use-wifi (ssid passphrase &key (fallback-seconds 120))
   (let* ((l (sb-thread:with-mutex (*starting*)
@@ -531,20 +547,20 @@
                   (progn (retire-link *link*) (setf *link* nil)
                          (bring-up) (join ssid passphrase)))))
          (d (make-instance 'wireless-interface :link l :mac (getf (card-nvm (link-card l)) :mac)))
-         (old (darterfly/net::interface-device darterfly/net:*interface*)))
-    (setf *wifi-confirmed* nil)
+         (old (darterfly/net::interface-device darterfly/net:*interface*))
+         (trial (list d)))
+    (setf *wifi-confirmed* nil *wifi-trial* trial)
     (sb-thread:make-thread
      (lambda ()
        (sleep fallback-seconds)
-       (unless *wifi-confirmed*
-         (darterfly/net::interface-detach d)
-         (when old (darterfly/net::interface-attach old))))
+       (wifi-fallback trial old))
      :name "wifi fallback")
     (sb-thread:make-thread
      (lambda ()
        (sleep 2)
-       (when old (darterfly/net::interface-detach old))
-       (darterfly/net::interface-attach d))
+       (when (eq trial *wifi-trial*)
+         (when old (darterfly/net::interface-detach old))
+         (darterfly/net::interface-attach d)))
      :name "wifi switch")
     d))
 

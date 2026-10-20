@@ -432,3 +432,40 @@
            (is (= 255 (darterfly/wifi::wifi-tx-pending state)))
            (is (= 1 (darterfly/wifi::wifi-tx-state-backpressure state))))
       (sb-int:unencapsulate 'darterfly/wifi::pump 'saturated-ring))))
+
+(test wifi-fallback-resolves-reenumerated-adapter
+  (let* ((old (make-instance 'darterfly/devices:ethernet-controller))
+         (replacement (make-instance 'darterfly/devices:ethernet-controller))
+         (wifi (make-instance 'darterfly/wifi::wireless-interface :link (offline-link)))
+         (trial (list wifi))
+         (darterfly/wifi::*wifi-trial* trial)
+         (darterfly/wifi::*wifi-confirmed* nil)
+         (darterfly/net:*interface* (darterfly/net::make-interface :device wifi))
+         (registered (list replacement)) (attached nil))
+    (sb-int:encapsulate 'darterfly/devices:find-entries 'fallback-test
+      (lambda (&rest args) (declare (ignore args)) registered))
+    (sb-int:encapsulate 'darterfly/devices:network-mac 'fallback-test
+      (lambda (&rest args) (declare (ignore args)) #(0 64 76 105 35 134)))
+    (sb-int:encapsulate 'darterfly/net::interface-attach 'fallback-test
+      (lambda (f device) (declare (ignore f)) (push device attached)))
+    (unwind-protect
+         (progn
+           (darterfly/wifi::wifi-fallback trial old)
+           (is (equal (list replacement) attached))
+           (is (null (darterfly/net::interface-device darterfly/net:*interface*)))
+           ;; No replacement: preserve Wi-Fi, instead of installing dead USB.
+           (setf attached nil registered nil
+                 (darterfly/net::interface-device darterfly/net:*interface*) wifi)
+           (darterfly/wifi::wifi-fallback trial old)
+           (is (null attached))
+           (is (eq wifi (darterfly/net::interface-device darterfly/net:*interface*)))
+           ;; An older timer cannot undo a later choice, even of the same radio.
+           (setf registered (list replacement) darterfly/wifi::*wifi-trial* (list wifi))
+           (darterfly/wifi::wifi-fallback trial old)
+           (is (null attached))
+           (setf darterfly/wifi::*wifi-trial* trial darterfly/wifi::*wifi-confirmed* t)
+           (darterfly/wifi::wifi-fallback trial old)
+           (is (null attached)))
+      (dolist (name '(darterfly/devices:find-entries darterfly/devices:network-mac
+                      darterfly/net::interface-attach))
+        (sb-int:unencapsulate name 'fallback-test)))))
