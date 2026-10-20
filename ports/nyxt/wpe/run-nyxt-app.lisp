@@ -12,9 +12,10 @@
                  (pathname (uiop:getenv "DARTERFLY_NYXT_APP_DISK"))
                  (merge-pathnames "nyxt-app.img" dir))))
   (when (and (probe-file disk) (image::in-use-p disk)) (error "App disk is in use"))
-  ;; Seed the qualified source closure once; never overwrite it on a retry.
+  ;; Use normal root assembly; the current browser closure exceeds the old
+  ;; 1 GiB development seed. Existing disposable disks remain reusable.
   (unless (probe-file disk)
-    (uiop:copy-file (merge-pathnames "nyxt-browser.img" dir) disk))
+    (image::root-disk disk (* 4096 1048576)))
   (let ((entries
           (append (image::root-entries) (image::nyxt-application-entries root)
             (list (list :file "Users/darterfly/nyxt-browser-checks.lisp"
@@ -66,7 +67,7 @@
         ;; Launch through the installed Nyxt Dock item: the actual desktop event
         ;; follows open-application -> init -> app world -> registered program.
         (nyxt-app-dock c)
-        (nyxt-app-await c "/tmp/nyxt-application.log" "[NYXT APPLICATION READY]" 240)
+        (nyxt-app-await c "/tmp/nyxt-application.log" "[NYXT APPLICATION READY]" 600)
         (nyxt-app-ask c
           "(progn (defparameter *nyxt-app* (darterfly/run:find-world \"Nyxt\"))
             (assert *nyxt-app*)

@@ -84,7 +84,10 @@
          (equal *next-url* (native-url *test-buffer*)))))
 ;; A completed background suggestion must not resurrect a dismissed prompt
 ;; or send NIL as its native object ID.
-(assert (null (native-id *test-prompt*)))
+;; Upstream removes the active prompt before calling ffi-buffer-delete.
+;; Navigation completion on another thread is not a destruction barrier.
+(await-check "PROMPT DESTROYED"
+  (lambda () (null (native-id *test-prompt*))))
 (nyxt:ffi-buffer-evaluate-javascript-async *test-prompt*
   "throw new Error('obsolete prompt update must not execute')")
 (assert (equal 42 (nyxt:ffi-buffer-evaluate-javascript *test-buffer* "6*7")))
