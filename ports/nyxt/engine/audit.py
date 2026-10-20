@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Record the pinned binary boundary and observed host syscalls, not an SBOM.
 
-The Guix dependency closure is already exported in ports/nyxt/sbom/.
+The Guix dependency closure is already exported in ~/org/darterfly/ports/nyxt/sbom/.
 A successful local fixture is a lower bound on the OS interface required.
 """
 import argparse

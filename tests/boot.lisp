@@ -2698,7 +2698,7 @@
                  (if (= (length h) (length g)) (count nil (map 'list #'= h g)) :length))))
         ;; UIOP code generation depends on SBCL's compiler/heap state. A host
         ;; compile preceded by a list allocation reproduces the entire guest
-        ;; FASL, including its 16-byte size difference. See RECOVERY-STATUS.org.
+        ;; FASL, including its 16-byte size difference. See ~/org/darterfly/RECOVERY-STATUS.org.
         ;; Keep exact comparisons for the other contribs, and exercise the
         ;; SEXP converters at the first differing type checks below.
         (dolist (name (remove "uiop" fasls :test #'equal))

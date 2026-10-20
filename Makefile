@@ -43,7 +43,7 @@ hw:
 bench:
 	$(GUIX) sh -c '$(ENV) $(SBCL) --non-interactive --eval "(asdf:load-system :darterfly/image)" --eval "(darterfly/image:bench $(if $(HOST),:host \"$(HOST)\") $(if $(LABEL),:label \"$(LABEL)\"))"'
 
-# Release builds use fresh source trees and private caches; see release/README.org.
+# Release builds use fresh source trees and private caches; see ~/org/darterfly/release/README.org.
 # Add RELEASE_FLAGS=--allow-dirty to capture uncommitted development work.
 .PHONY: baseline release test-host test-guest test-recovery test-release-tools
 RELEASE_FLAGS ?=
