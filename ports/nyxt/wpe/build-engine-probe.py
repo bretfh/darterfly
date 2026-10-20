@@ -6,6 +6,7 @@ recorded RAM scratch, and never execute a target binary on the build host.
 """
 from pathlib import Path
 import importlib.util
+import os
 import re
 import shlex
 import sys
@@ -32,6 +33,30 @@ def compile_cxx(source,object,edge,extra=()):
          '-fdata-sections','-include',src/'WebKit/config.h',
          *compile_flags(edge),*extra,source,'-o',object])
 
+bundle_edge='WebKitWebProcess.dir/WebProcess/InjectedBundle/glib/InjectedBundleGlib.cpp.o'
+# Upstream STATIC targets expose some OBJECT sublibraries only through their
+# link interface. Gather every current object edge, not old files on disk.
+targets={'LowLevelInterpreterLib','WTF','bmalloc','JavaScriptCore','JavaScriptCore_c','WebCore','WebCore_c',
+         'WebKit','WebKitUIProcess','WebKitWebProcess','WebKitNetworkProcess',
+         'WebKitShared','WebKitGPUProcess','WPEPlatform','WPEPlatformHeadless'}
+objects=[]
+for line in lines:
+    if not line.startswith('build '):continue
+    edge=line.split(': ',1)[0][6:]
+    match=re.search(r'/CMakeFiles/([^/]+)\.dir/',edge)
+    if edge.endswith('.o') and match and (match[1] in targets or
+       match[1].startswith(('WebCore','JavaScriptCore','WebKit'))):
+        if not edge.endswith(bundle_edge):objects.append(out/edge)
+if '--compile-only' not in sys.argv:
+    # Existence is not freshness: UI, network and web-process objects share
+    # generated IPC definitions. Never combine a newly compiled adapter with
+    # stale engine objects after a source or configuration change.
+    run([profile/'ninja', '-C', out,
+         '-j'+str(int(os.environ.get('DARTER_WPE_JOBS', '16'))),
+         *[path.relative_to(out) for path in objects],
+         'lib/libSkia.a', 'lib/libPAL.a', 'lib/libxdgmime.a'])
+    lines=(out/'build.ninja').read_text().splitlines()
+
 compile_cxx(r/('ports/nyxt/wpe/nyxt-engine.cpp' if '--nyxt' in sys.argv else 'ports/nyxt/wpe/engine-probe.cpp'),work/('nyxt-engine.o' if '--nyxt' in sys.argv else 'engine-probe.o'),
             'WebKitUIProcess.dir/UIProcess/API/glib/WebKitWebView.cpp.o')
 for name,edge,extra in [
@@ -40,7 +65,6 @@ for name,edge,extra in [
     compile_cxx(r/'ports/nyxt/wpe/engine-entry.cpp',work/(name+'.o'),edge,extra)
 # Recompile the platform bundle adapter explicitly alongside the harness.
 # This also avoids relying on a cached object from before the static patch.
-bundle_edge='WebKitWebProcess.dir/WebProcess/InjectedBundle/glib/InjectedBundleGlib.cpp.o'
 compile_cxx(src/'WebKit/WebProcess/InjectedBundle/glib/InjectedBundleGlib.cpp',
             work/'InjectedBundleGlib.o',bundle_edge)
 run([r/'ports/nyxt/wpe/target-cc.py','-c','-Os','-ffunction-sections',
@@ -57,22 +81,6 @@ if media:
 if '--compile-only' in sys.argv:
     raise SystemExit(0)
 
-# Upstream STATIC targets expose some OBJECT sublibraries only through their
-# link interface. Gather every current object edge, not old files on disk.
-targets={'LowLevelInterpreterLib','WTF','bmalloc','JavaScriptCore','JavaScriptCore_c','WebCore','WebCore_c',
-         'WebKit','WebKitUIProcess','WebKitWebProcess','WebKitNetworkProcess',
-         'WebKitShared','WebKitGPUProcess','WPEPlatform','WPEPlatformHeadless'}
-objects=[]
-for line in lines:
-    if not line.startswith('build '):continue
-    edge=line.split(': ',1)[0][6:]
-    match=re.search(r'/CMakeFiles/([^/]+)\.dir/',edge)
-    if edge.endswith('.o') and match and (match[1] in targets or
-       match[1].startswith(('WebCore','JavaScriptCore','WebKit'))):
-        if not edge.endswith(bundle_edge):objects.append(out/edge)
-missing=[str(path) for path in objects if not path.is_file()]
-if missing:
-    raise SystemExit(f'{len(missing)} engine objects are not built; run build-webkit.py WebKit. First: {missing[0]}')
 objects += [work/'InjectedBundleGlib.o']
 response=work/'engine-objects.rsp'
 response.write_text('\n'.join('"'+str(path)+'"' for path in objects)+'\n')
