@@ -96,6 +96,7 @@
     (if c (cdr c) default)))
 
 (defvar *host* "127.0.0.1")
+(defvar *journal* "record")
 
 (defun connect (port)
   (handler-case
@@ -146,6 +147,7 @@
       (let ((out (%get m "out")) (err (%get m "err"))
             (value (%get m "value")) (ns (%get m "ns"))
             (status (%get m "status")))
+        (when (%get m "journal") (format *error-output* "~&journal: ~a~%" (%get m "journal")))
         (when out (write-string out) (finish-output))
         (when err (write-string err *error-output*) (finish-output *error-output*))
         (when value
@@ -161,13 +163,13 @@
               :do (write-line line s)))))
 
 (defun exit-for-status (status)
-  (sb-ext:exit :code (if (member (first status) '("eval-error" "interrupted") :test #'equal) 1 0)))
+  (sb-ext:exit :code (if (equal status '("done")) 0 1)))
 
 (defun cmd-eval (port force-new positional)
   (let* ((stream (connect port))
          (session (ensure-session stream port force-new))
          (code (read-code positional)))
-    (send stream (%msg "op" "eval" "session" session "code" code))
+    (send stream (%msg "op" "eval" "session" session "code" code "journal" *journal*))
     (exit-for-status (drain-eval stream))))
 
 (defun cmd-interrupt (port)
@@ -190,6 +192,7 @@
                 (cond ((string= a "--port") (setf port (parse-integer (pop argv))))
                       ((string= a "--host") (setf *host* (pop argv)))
                       ((string= a "--key") (setf *key* (pop argv)))
+                      ((string= a "--no-journal") (setf *journal* "skip"))
                       ((string= a "--new") (setf force-new t))
                       (t (setf positional a)))))
     (unless *key*
@@ -199,8 +202,12 @@
     (cond
       ((equal cmd "eval") (cmd-eval port force-new positional))
       ((equal cmd "interrupt") (cmd-interrupt port))
+      ((equal cmd "diagnostics")
+       (let ((stream (connect port)))
+         (send stream (%msg "op" "diagnostics"))
+         (exit-for-status (drain-eval stream))))
       (t
-       (format *error-output* "~&usage: nrepl.lisp eval|interrupt [--host H] [--port N] [--key K] [--new] [CODE]~%")
+       (format *error-output* "~&usage: nrepl.lisp eval|interrupt|diagnostics [--host H] [--port N] [--key K] [--new] [--no-journal] [CODE]~%")
        (sb-ext:exit :code 2)))))
 
 (main)

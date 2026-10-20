@@ -33,7 +33,8 @@
   (loop :for o :across (sb-ext:string-to-octets (string char) :external-format :utf-8)
         :do (vector-push-extend o (out stream)))
   (setf (column stream) (if (char= char #\Newline) 0 (1+ (column stream))))
-  (when (char= char #\Newline) (sb-gray:stream-finish-output stream))
+  (when (or (char= char #\Newline) (>= (length (out stream)) 4096))
+    (sb-gray:stream-finish-output stream))
   char)
 
 (defmethod sb-gray:stream-line-column ((stream fd-stream))

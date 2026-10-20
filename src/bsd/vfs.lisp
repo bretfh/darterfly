@@ -24,6 +24,26 @@
   `(handler-case (progn (ensure-root) ,@body)
      (vfs:vfs-error (e) (fail (vfs:vfs-errno e)))))
 
+(defmacro vfs-call ((function &rest arguments))
+  ;; Evaluate descriptor/path arguments while BSD still protects them. VFS owns
+  ;; filesystem serialization and shared offsets; BSD must not wait on it.
+  (let ((values (loop for argument in arguments collect (gensym "ARG"))))
+    `(let ,(mapcar #'list values arguments)
+       (call-without-bsd (lambda () (vfs (,function ,@values)))))))
+
+(defun locked-vnode-operation (function &rest arguments)
+  ;; Raw VNOPs do not acquire the VFS lock themselves.
+  (vfs::with-vfs (apply function arguments)))
+
+(defmacro with-vnode-file ((name expression) &body body)
+  `(with-bsd
+     (let ((,name ,expression))
+       (unless (typep ,name 'vnode) (fail :espipe))
+       (sb-sys:without-interrupts
+         (incf (file-refs ,name))
+         (unwind-protect (sb-sys:with-local-interrupts ,@body)
+           (when (zerop (decf (file-refs ,name))) (file-close ,name)))))))
+
 (defun vfs-flags (flags)
   (list :access (ecase (logand flags 3) (0 :rdonly) (1 :wronly) (2 :rdwr))
         :creat (logtest flags +o-creat+) :excl (logtest flags +o-excl+) :trunc (logtest flags +o-trunc+)
@@ -37,17 +57,27 @@
    (device :initarg :device :initform nil :reader device-p)))
 
 (defmethod file-read ((file vnode) count)
-  (if (device-p file)
-      (progn (sb-thread:release-mutex *bsd*)
-             (unwind-protect (vfs (vfs:vfs-read (vfs-fd file) count))
-               (sb-thread:grab-mutex *bsd*)))
-      (vfs (vfs:vfs-read (vfs-fd file) count))))
+  (with-vnode-file (held file)
+    (vfs-call (vfs:vfs-read (vfs-fd held) count))))
 
 (defmethod file-write ((file vnode) octets)
-  (vfs (vfs:vfs-write (vfs-fd file) octets)))
+  (with-vnode-file (held file)
+    (vfs-call (vfs:vfs-write (vfs-fd held) octets))))
 
 (defmethod file-close ((file vnode))
+  ;; Only the short descriptor-table lock, never the filesystem lock.
   (vfs (vfs:vfs-close (vfs-fd file))))
+
+(defun install-vnode (fd flags)
+  (let ((installed nil))
+    (unwind-protect
+         (let ((device (= (mode-type (vfs:vattr-mode (vfs-call (vfs:vfs-fstat fd)))) +s-ifchr+)))
+           (when (or (proc-closing *proc*) (eq (proc-state *proc*) :zombie))
+             (fail :eintr))
+           (prog1 (fd-alloc (make-instance 'vnode :fd fd :access (logand flags 3)
+                                                :device device :flags (logand flags +o-nonblock+)))
+             (setf installed t)))
+      (unless installed (vfs:vfs-close fd)))))
 
 (defun absolute (name)
   (if (and (plusp (length name)) (char= (char name 0) #\/))
@@ -68,24 +98,20 @@
 (defun open (name flags &optional (mode #o644))
   (syscall
     (when (zerop (length name)) (fail :enoent))
-    (let ((fd (vfs (vfs:vfs-open (path name) (vfs-flags flags) mode))))
-      (fd-alloc (make-instance 'vnode :fd fd :access (logand flags 3)
-                                      :device (= (mode-type (vfs:vattr-mode (vfs (vfs:vfs-fstat fd)))) +s-ifchr+)
-                                      :flags (logand flags +o-nonblock+))))))
+    (install-vnode (vfs-call (vfs:vfs-open (path name) (vfs-flags flags) mode)) flags)))
 
 (defun lseek (fd offset whence)
   (syscall
-    (let ((file (fd-file fd)))
-      (unless (typep file 'vnode) (fail :espipe))
-      (vfs (vfs:vfs-lseek (vfs-fd file) offset (ecase whence (:set 0) (:cur 1) (:end 2)))))))
+    (with-vnode-file (file (fd-file fd))
+      (vfs-call (vfs:vfs-lseek (vfs-fd file) offset (ecase whence (:set 0) (:cur 1) (:end 2)))))))
 
 (defun stat-plist (attr id)
   (list :mode (vfs:vattr-mode attr) :size (vfs:vattr-size attr) :nlink (vfs:vattr-nlink attr)
         :ino id :mtime (floor (vfs:vattr-mtime attr) 1000000000)))
 
 (defun stat-path (name follow)
-  (vfs (let ((v (vfs:namei (path name) :follow follow)))
-         (stat-plist (vfs:vnop-getattr v) (vfs:vnode-id v)))))
+  (let ((v (vfs-call (vfs:namei (path name) :follow follow))))
+    (stat-plist (vfs-call (locked-vnode-operation #'vfs:vnop-getattr v)) (vfs:vnode-id v))))
 
 (defun stat (name) (syscall (stat-path name t)))
 (defun lstat (name) (syscall (stat-path name nil)))
@@ -94,45 +120,47 @@
   (syscall
     (let ((file (fd-file fd)))
       (if (typep file 'vnode)
-          (vfs (let ((v (vfs:fd-vnode (vfs-fd file)))) (stat-plist (vfs:vnop-getattr v) (vfs:vnode-id v))))
+          (with-vnode-file (held file)
+            (let ((v (vfs-call (vfs:fd-vnode (vfs-fd held)))))
+              (stat-plist (vfs-call (locked-vnode-operation #'vfs:vnop-getattr v)) (vfs:vnode-id v))))
           (list :mode (if (typep file 'socket) #o140000 +s-ififo+) :size 0 :nlink 1 :ino 0 :mtime 0)))))
 
 (defun mkdir (name &optional (mode #o755))
-  (syscall (vfs (vfs:vfs-mkdir (path name) mode)) 0))
+  (syscall (vfs-call (vfs:vfs-mkdir (path name) mode)) 0))
 
 (defun rmdir (name)
-  (syscall (vfs (vfs:vfs-remove (path name) t)) 0))
+  (syscall (vfs-call (vfs:vfs-remove (path name) t)) 0))
 
 (defun unlink (name)
   (syscall
-    (handler-case (vfs (vfs:vfs-remove (path name) nil))
+    (handler-case (vfs-call (vfs:vfs-remove (path name) nil))
       (errno (e) (fail (if (eq (errno-name e) :eisdir) :eperm (errno-name e)))))
     0))
 
 (defun rename (from to)
-  (syscall (vfs (vfs:vfs-rename (path from) (path to))) 0))
+  (syscall (vfs-call (vfs:vfs-rename (path from) (path to))) 0))
 
 (defun symlink (target name)
-  (syscall (vfs (vfs:vfs-symlink target (path name))) 0))
+  (syscall (vfs-call (vfs:vfs-symlink target (path name))) 0))
 
 (defun directory-vnode (name)
-  (vfs (let ((v (vfs:namei (path name))))
-         (unless (eq (vfs:vnode-type v) :vdir) (fail :enotdir))
-         v)))
+  (let ((v (vfs-call (vfs:namei (path name)))))
+    (unless (eq (vfs:vnode-type v) :vdir) (fail :enotdir))
+    v))
 
 (defun readdir (name)
-  (syscall (mapcar #'car (vfs (vfs:vnop-readdir (directory-vnode name))))))
+  (syscall (mapcar #'car (vfs-call (locked-vnode-operation #'vfs:vnop-readdir (directory-vnode name))))))
 
 (defun chdir (name)
   (syscall
     (directory-vnode name)
-    (setf (proc-cwd *proc*) (unroot (vfs (vfs:vfs-realpath (path name)))))
+    (setf (proc-cwd *proc*) (unroot (vfs-call (vfs:vfs-realpath (path name)))))
     0))
 
 (defun chroot (name)
   (syscall
     (directory-vnode name)
-    (setf (proc-root *proc*) (vfs (vfs:vfs-realpath (path name)))
+    (setf (proc-root *proc*) (vfs-call (vfs:vfs-realpath (path name)))
           (proc-cwd *proc*) "/")
     0))
 

@@ -174,10 +174,12 @@
   (let ((s (get-output-stream-string text)))
     (when (plusp (length s)) (funcall emit "out" s))))
 
-(defun %eval-code (session code emit)
+(defun %eval-code (session code emit &optional (journal t))
   (let ((*package* (session-package session))
         (eof (list nil)))
-    (darterfly/journal:note-form code :origin :nrepl)
+    (if journal
+        (darterfly/journal:note-form code :origin :nrepl)
+        (funcall emit "journal" "skipped"))
     (with-input-from-string (in code)
       (loop
         (let ((text (make-string-output-stream)))
@@ -203,15 +205,15 @@
               (funcall emit "err" (format nil "~a~%" c))
               (return-from %eval-code '("eval-error" "done")))))))))
 
-(defun %eval-body (session sess-id code emit)
+(defun %eval-body (session sess-id code emit &optional (journal t))
   (sb-thread:with-mutex ((session-lock session))
     (%register-running sess-id sb-thread:*current-thread*)
     (unwind-protect
          (funcall emit "status" (%eval-code session code
-                                            (lambda (&rest kvs) (apply emit kvs))))
+                                            (lambda (&rest kvs) (apply emit kvs)) journal))
       (%unregister-running sess-id))))
 
-(defun %spawn-eval (session sess-id code emit)
+(defun %spawn-eval (session sess-id code emit &optional (journal t))
   (sb-thread:make-thread
    (lambda ()
      (catch '%abandon-eval
@@ -219,7 +221,7 @@
                (lambda (condition hook)
                  (declare (ignore hook))
                  (throw '%abandon-eval condition))))
-         (handler-case (%eval-body session sess-id code emit)
+         (handler-case (%eval-body session sess-id code emit journal)
            (error (e) (format *error-output* "~&nrepl eval: ~a~%" e))))))
    :name "nrepl eval"))
 
@@ -246,7 +248,7 @@
          (emit "status" (list "done")))
         ((equal op "describe")
          (emit "ops" (%msg "clone" (%msg) "eval" (%msg) "describe" (%msg)
-                            "close" (%msg) "interrupt" (%msg))
+                            "close" (%msg) "interrupt" (%msg) "diagnostics" (%msg))
                "versions" (%msg "darterfly-nrepl" (%msg "major" 0 "minor" 1))
                "status" (list "done")))
         ((equal op "interrupt")
@@ -257,9 +259,12 @@
                   thread (lambda () (error 'nrepl-interrupted)))
                  (emit "status" (list "done")))
                (emit "status" (list "session-idle" "done")))))
+        ((equal op "diagnostics")
+         (emit "value" (diagnostic-text) "status" (list "done")))
         ((equal op "eval")
          (let ((session (or (and sess-id (%session sess-id)) (make-session))))
-           (%spawn-eval session sess-id (%get msg "code" "") #'emit)))
+           (%spawn-eval session sess-id (%get msg "code" "") #'emit
+                        (not (equal (%get msg "journal") "skip")))))
         (t (emit "status" (list "unknown-op" "done"))))
       t)))
 

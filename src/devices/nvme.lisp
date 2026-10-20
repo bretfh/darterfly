@@ -10,6 +10,10 @@
    (msi-x :initform nil :accessor nvme-msi-x)
    (admin :accessor nvme-admin)
    (io :accessor nvme-io)
+   ;; Observations live on the updatable device object, not the queue struct.
+   (command-queue :initform nil :accessor nvme-command-queue)
+   (command-started :initform nil :accessor nvme-command-started)
+   (command-opcode :initform nil :accessor nvme-command-opcode)
    (block-count :initform 0 :accessor block-count)
    (lba-size :initform 512 :accessor nvme-lba-size)
    (data :accessor nvme-data)
@@ -51,6 +55,9 @@
     (ml-phys-write-32 (+ slot 48) cdw12)
     (setf (nvme-queue-tail q) (mod (1+ (nvme-queue-tail q)) +nvme-queue-size+))
     (sb-thread:barrier (:write))
+    (setf (nvme-command-queue n) (nvme-queue-id q)
+          (nvme-command-opcode n) opcode
+          (nvme-command-started n) (get-internal-real-time))
     (nvme-write-32 n (+ #x1000 (* 2 (nvme-queue-id q) (nvme-stride n))) (nvme-queue-tail q))
     (let ((entry (+ (nvme-queue-cq q) (* 16 (nvme-queue-head q)))))
       (loop :until (= (ldb (byte 1 16) (ml-phys-read-32 (+ entry 12))) (nvme-queue-phase q))
@@ -64,6 +71,7 @@
         (when (zerop (nvme-queue-head q))
           (setf (nvme-queue-phase q) (- 1 (nvme-queue-phase q))))
         (nvme-write-32 n (+ #x1000 (* (1+ (* 2 (nvme-queue-id q))) (nvme-stride n))) (nvme-queue-head q))
+        (setf (nvme-command-started n) nil)
         (unless (zerop status)
           (error "nvme: command ~x failed with status ~x" opcode status))
         result))))
@@ -100,6 +108,8 @@
         t))))
 
 (defun enable-controller (n)
+  (setf (nvme-command-started n) nil (nvme-command-queue n) nil
+        (nvme-command-opcode n) nil)
   (nvme-write-32 n #x14 0)
   (nvme-wait-ready n nil)
   (when (nvme-msi-x n) (set-msi-x-vector (nvme-msi-x n) 0 (nvme-vector n)))
