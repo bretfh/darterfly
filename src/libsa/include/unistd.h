@@ -20,6 +20,7 @@ extern "C" {
 #define _POSIX_ARG_MAX 4096
 #define _SC_PAGESIZE 30
 #define _SC_PAGE_SIZE _SC_PAGESIZE
+#define _SC_NPROCESSORS_CONF 83
 #define _SC_NPROCESSORS_ONLN 84
 /* Currently unsupported: sysconf returns -1/EINVAL, never a guessed size. */
 #define _SC_PHYS_PAGES 85

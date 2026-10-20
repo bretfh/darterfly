@@ -121,6 +121,17 @@ static Page* create(unsigned id,unsigned w,unsigned h,bool chrome) {
         auto p=static_cast<Page*>(d);auto uri=webkit_web_view_get_uri(v);
         if(trace)fprintf(stderr,"NYXT load %u event=%d uri=%s\n",p->id,e,uri?uri:"");
         send(1101,p->id,0,e,0,uri,uri?strlen(uri):0);}),p);
+    if(trace)g_signal_connect(web,"resource-load-started",G_CALLBACK(+[](
+        WebKitWebView*,WebKitWebResource* r,WebKitURIRequest* request,gpointer){
+        fprintf(stderr,"NYXT resource start %p %.240s\n",r,webkit_uri_request_get_uri(request));
+        g_signal_connect(r,"finished",G_CALLBACK(+[](WebKitWebResource* r,gpointer){
+            fprintf(stderr,"NYXT resource finish %p %.240s\n",r,webkit_web_resource_get_uri(r));
+        }),nullptr);
+        g_signal_connect(r,"failed",G_CALLBACK(+[](WebKitWebResource* r,GError* e,gpointer){
+            fprintf(stderr,"NYXT resource failed %p %.240s: %s\n",r,
+                webkit_web_resource_get_uri(r),e->message);
+        }),nullptr);
+    }),nullptr);
     g_signal_connect(web,"notify::title",G_CALLBACK(+[](GObject*v,GParamSpec*,gpointer d){
         text(1102,static_cast<Page*>(d)->id,0,webkit_web_view_get_title(WEBKIT_WEB_VIEW(v)));}),p);
     g_signal_connect(web,"notify::uri",G_CALLBACK(+[](GObject*v,GParamSpec*,gpointer d){

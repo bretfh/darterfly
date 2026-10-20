@@ -15,6 +15,14 @@ extern "C" {
 #define isnan(x) ((x) != (x))
 #define isinf(x) ((x) == __builtin_huge_val() || (x) == -__builtin_huge_val())
 #define isfinite(x) (!isnan(x) && !isinf(x))
+static inline int __libsa_fpclassify(long double x, long double min) {
+  if (x != x) return FP_NAN;
+  if (x == HUGE_VALL || x == -HUGE_VALL) return FP_INFINITE;
+  if (x == 0) return FP_ZERO;
+  return (x < 0 ? -x : x) < min ? FP_SUBNORMAL : FP_NORMAL;
+}
+#define fpclassify(x) __libsa_fpclassify((x), sizeof(x) == sizeof(float) ? \
+    0x1p-126L : sizeof(x) == sizeof(double) ? 0x1p-1022L : 0x1p-16382L)
 #define signbit(x) __libsa_signbit((double)(x))
 static inline int __libsa_signbit(double x) {
   union { double d; unsigned long u; } v = {x};
@@ -47,7 +55,7 @@ float tanhf(float), sinf(float), cosf(float), tanf(float), atanf(float), hypotf(
 float expf(float), exp2f(float), logf(float), remainderf(float, float);
 float atan2f(float, float);
 long double atan2l(long double, long double), hypotl(long double, long double);
-float nextafterf(float, float), roundf(float);
+float nextafterf(float, float), roundf(float), rintf(float);
 long lroundf(float);
 float sqrtf(float), fabsf(float), floorf(float), ceilf(float), truncf(float);
 long double truncl(long double);

@@ -3,7 +3,7 @@
 #include <math.h>
 #include <fenv.h>
 #include <float.h>
-extern float darter_nextafterf(float,float), darter_roundf(float);
+extern float darter_nextafterf(float,float), darter_roundf(float), darter_rintf(float);
 extern long darter_lroundf(float), darter_lrintf(float);
 extern long long darter_llroundf(float);
 extern float darter_fminf(float,float), darter_fmaxf(float,float);
@@ -30,6 +30,8 @@ static int check(float x,float y) {
     if(!(a==0 && b==0) && !same(a,b)) { printf("min/max %08x %08x got=%08x want=%08x\n",bits(x),bits(y),bits(a),bits(b)); return 0; }
     a=darter_roundf(x);b=roundf(x);
     if(!same(a,b)) { printf("round %08x got=%08x want=%08x\n",bits(x),bits(a),bits(b));return 0; }
+    a=darter_rintf(x);b=rintf(x);
+    if(!same(a,b)) { printf("rintf %a got=%a want=%a\n",x,a,b);return 0; }
     if(isfinite(x) && fabsf(x)<0x1p62f && darter_lroundf(x)!=lroundf(x)) return 0;
     if(isfinite(x) && fabsf(x)<0x1p62f &&
        (darter_lrintf(x)!=lrintf(x) || darter_llroundf(x)!=llroundf(x))) return 0;

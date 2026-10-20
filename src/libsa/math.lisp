@@ -273,6 +273,7 @@
 (define-low asinf ((x :f32)) (declare (returns :f32)) (asin x))
 (define-low log10f ((x :f32)) (declare (returns :f32)) (log10 x))
 (define-low cbrtf ((x :f32)) (declare (returns :f32)) (cbrt x))
+(define-low rintf ((x :f32)) (declare (returns :f32)) (rint x))
 (define-low lrintf ((x :f32)) (float-truncate (x87 (x) #(#xD9 #xFC))))
 (define-low llroundf ((x :f32)) (float-truncate (roundf x)))
 

@@ -3,6 +3,9 @@
 (defconstant +period-bytes+ 4096)
 (defconstant +periods+ 16)
 (defconstant +ring-bytes+ (* +period-bytes+ +periods+))
+;; Keep the DMA ring large enough to observe delayed position updates, but
+;; apply backpressure after two periods (43 ms), not a nearly full ring.
+(defconstant +output-buffer-bytes+ (* 2 +period-bytes+))
 
 (defclass hda-output ()
   ((controller :initarg :controller :reader output-controller)
@@ -87,7 +90,11 @@
 
 (defun update-played (o)
   (let* ((c (output-controller o)) (sd (descriptor o)) (lpib (reg c (+ sd 4) 32)))
-    (incf (output-played o) (mod (- lpib (output-last-lpib o)) +ring-bytes+))
+    ;; Retire consumed samples before DMA wraps. An idle or starved producer
+    ;; must leave silence behind, not replay an old ring of sound.
+    (let ((consumed (mod (- lpib (output-last-lpib o)) +ring-bytes+)))
+      (ring-zero o (output-last-lpib o) consumed)
+      (incf (output-played o) consumed))
     (setf (output-last-lpib o) lpib)
     (setf (reg c (+ sd 3) 8) #x1C)))
 
@@ -102,7 +109,7 @@
       (update-played o)
       (when (< (output-written o) (output-played o))
         (setf (output-written o) (+ (output-played o) +period-bytes+)))
-      (when (<= (+ (- (output-written o) (output-played o)) n) (- +ring-bytes+ +period-bytes+)) (return))
+      (when (<= (+ (- (output-written o) (output-played o)) n) +output-buffer-bytes+) (return))
       (sb-thread:release-mutex (hda-lock c))
       (unwind-protect
            (if (hda-vector c) (devices:wait-for-interrupt (list (hda-vector c)) 0.05) (sleep 0.005))

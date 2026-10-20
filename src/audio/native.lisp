@@ -66,7 +66,7 @@
             (incf bytes (max 0 (- end (output-played o))))))))
     (when (>= count 8)
       ;; Include one mixer period between the per-open queue and HDA ring.
-      (let ((budget (floor (+ +pcm-capacity+ +ring-bytes+
+      (let ((budget (floor (+ +pcm-capacity+ +output-buffer-bytes+
                              (* 4 +mix-frames+)) 4)))
         (dotimes (i 4)
           (setf (aref result (+ 4 i)) (ldb (byte 8 (* i 8)) budget)))))
