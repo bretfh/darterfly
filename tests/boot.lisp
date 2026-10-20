@@ -3638,6 +3638,11 @@
       (unwind-protect
           (progn
             (is (image:expect c "init: pid 1" :timeout 120))
+            ;; init output can precede or follow the first console prompt.
+            ;; Synchronize on our own response before pairing commands/replies.
+            (image:send c "(format t \"~&[PORT RACE READY]~%\")")
+            (image:expect c "[PORT RACE READY]" :timeout 30)
+            (image:expect c (format nil "~%* ") :timeout 30)
              (ask "(defparameter *program* (let ((v (make-array 2052 :element-type '(unsigned-byte 8) :initial-element #x90))) (replace v #(184 41 0 0 0 191 1 0 0 0 72 190 0 8 0 64 0 0 0 0 186 4 0 0 0 73 186 0 9 0 64 0 0 0 0 65 184 16 0 0 0 205 130 184 41 0 0 0 191 1 0 0 0 72 190 0 9 0 64 0 0 0 0 186 4 0 0 0 73 186 0 10 0 64 0 0 0 0 65 184 16 0 0 0 205 130 184 1 0 0 0 49 255 205 128 235)) (replace v (sb-ext:string-to-octets \"ping\") :start1 #x800)))")
             (ask "(defparameter *port* (darterfly/worlds:make-port))")
             ;; A supervisor wakeup can interrupt receive during driver startup.
