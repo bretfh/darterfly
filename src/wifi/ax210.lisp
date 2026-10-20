@@ -5,6 +5,7 @@
    (regs :initarg :regs :accessor card-regs)
    (firmware :initarg :firmware :accessor card-firmware)
    (msi-vector :initform nil :accessor card-vector)
+   (msi-x-table :initform nil :accessor card-msi-x-table)
    (notes :initform nil :accessor card-log)
    (ctxt :accessor card-ctxt)
    (scratch :accessor card-scratch)
@@ -112,7 +113,7 @@
       (unless (and table (plusp entries)) (error "the AX210 offers no MSI-X"))
       (let ((vector (or (devices:allocate-vector) (error "no interrupt vector left for the AX210"))))
         (devices:set-msi-x-vector table 0 vector)
-        (setf (card-vector w) vector)))
+        (setf (card-vector w) vector (card-msi-x-table w) table)))
     (setf (card-ctxt w) (dma-pages 1)
           (card-scratch w) (dma-pages 1)
           (card-info w) (dma-pages 1)
@@ -160,6 +161,12 @@
 (defparameter +ivar-causes+ '(#x0 #x1 #x3 #x5 #x10 #x11 #x12 #x15 #x16 #x17 #x18 #x29 #x2a #x2b #x2d #x2e))
 
 (defun configure-msix (w)
+  ;; S3 leaves the PCI MSI-X entry masked even though the vector survives.
+  ;; Reuse its mapping and vector; polling must not hide a lost interrupt.
+  (unless (card-msi-x-table w)
+    (setf (card-msi-x-table w) (devices:enable-msi-x (card-pci w))))
+  (unless (card-msi-x-table w) (error "the AX210 lost its MSI-X table"))
+  (devices:set-msi-x-vector (card-msi-x-table w) 0 (card-vector w))
   (with-nic (w) (setf (prph w (+ #xA05C00 +umac-prph+)) (ash 1 25)))
   (setf (reg w #x2804) #xFFFFFFFF (reg w #x280C) #xFFFFFFFF)
   (flet ((ivar (off) (devices:mmio-write (+ (card-regs w) off) 8 #x80)))

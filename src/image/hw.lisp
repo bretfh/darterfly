@@ -54,18 +54,21 @@
 (defun hw (host &key label (sleep t) (wake-after 20) (settle 180) (nrepl-port 4011))
   (let* ((label (format nil "hw-~a" (or label host)))
          (before (health-on-device host nrepl-port))
+         (suspend-error nil)
          (slept (and sleep
-                     (device-eval host (format nil "(darterfly/power:suspend :wake-after ~d)" wake-after) :timeout (+ wake-after 120) :nrepl-port nrepl-port)))
+                     (handler-case
+                         (device-eval host (format nil "(darterfly/power:suspend :wake-after ~d)" wake-after) :timeout (+ wake-after 120) :nrepl-port nrepl-port)
+                       (error (e) (setf suspend-error (princ-to-string e)) nil))))
          (after nil) (answered nil) (healthy nil)
          (failures nil)
          (record nil))
     (when sleep
       (multiple-value-setq (after answered healthy) (settle-health host nrepl-port settle)))
     (setf failures (append (mapcar (lambda (f) (cons :before f)) (health-failures before))
-                           (and sleep (not (suspend-succeeded-p slept)) (list (list :suspend :failed slept)))
+                           (and sleep (not (suspend-succeeded-p slept)) (list (list :suspend :failed (or suspend-error slept))))
                            (and sleep (mapcar (lambda (f) (cons :after f)) (health-failures after before))))
           record (list :label label :date (timestamp) :before before :slept slept :after after
-                       :answered-after answered :healthy-after healthy :failures failures))
+                       :suspend-error suspend-error :answered-after answered :healthy-after healthy :failures failures))
     (let ((dir (results-dir label)))
       (ensure-directories-exist dir)
       (with-open-file (s (merge-pathnames (format nil "~a.sexp" (getf record :date)) dir) :direction :output)
@@ -75,8 +78,8 @@
             for later = (rest (assoc name after))
             do (format t "~12a ~8a ~8a ~s~%" (string-downcase name) (string-downcase status)
                        (if later (string-downcase (first later)) "") (or (rest later) detail)))
-      (when slept
-        (format t "suspend: ~a~%" (string-trim '(#\Newline #\Space) slept))
+      (when sleep
+        (format t "suspend: ~a~%" (string-trim '(#\Newline #\Space) (or suspend-error slept "no reply")))
         (format t "answered ~:[never~;~:*~d s~] after suspend reply, healthy ~:[never~;~:*~d s~] after reply~%" answered healthy))
       (if failures
           (format t "~&FAILED~%~{  ~s~%~}" failures)

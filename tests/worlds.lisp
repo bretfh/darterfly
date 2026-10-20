@@ -26,3 +26,27 @@
   (is (darterfly/image::suspend-succeeded-p "=> 11"))
   (dolist (reply '(nil "no answer" "=> NIL" "=> 0" "=> -1" "=> :failed"))
     (is (not (darterfly/image::suspend-succeeded-p reply)))))
+
+(test a-lost-suspend-reply-still-records-the-machine-health
+  (let ((darterfly/image::*expected* '(:log))
+        (dir (merge-pathnames "lost-suspend-reply/" (scratch)))
+        (settled nil))
+    (sb-int:encapsulate 'darterfly/image::health-on-device 'lost-reply
+      (lambda (&rest args) (declare (ignore args)) '((:log :ok))))
+    (sb-int:encapsulate 'darterfly/image::device-eval 'lost-reply
+      (lambda (&rest args) (declare (ignore args)) (error "transport failed after partial output => 1")))
+    (sb-int:encapsulate 'darterfly/image::settle-health 'lost-reply
+      (lambda (&rest args) (declare (ignore args)) (setf settled t) (values '((:log :ok)) 1 11)))
+    (sb-int:encapsulate 'darterfly/image::results-dir 'lost-reply
+      (lambda (&rest args) (declare (ignore args)) dir))
+    (unwind-protect
+         (let ((*standard-output* (make-string-output-stream)))
+           (is (null (darterfly/image:hw "unused" :label "transport-loss")))
+           (is (eq t settled) "a failed suspend RPC must still inspect the recovered machine")
+           (let ((record (with-open-file (s (first (directory (merge-pathnames "*.sexp" dir)))) (read s))))
+             (is (equal '((:log :ok)) (getf record :after)))
+             (is (search "transport failed" (getf record :suspend-error)))))
+      (dolist (name '(darterfly/image::health-on-device darterfly/image::device-eval
+                      darterfly/image::settle-health darterfly/image::results-dir))
+        (sb-int:unencapsulate name 'lost-reply))
+      (uiop:delete-directory-tree dir :validate t :if-does-not-exist :ignore))))
