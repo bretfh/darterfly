@@ -148,6 +148,31 @@
 (defmethod vfs:vnop-symlink ((dir apfs-wvnode) name target)
   (with-commit (w dir) (wvnode w (wcreate w (vfs:vnode-id dir) name :symlink :mode #o755 :target target))))
 
+(defun adopt-open-files ()
+  "Rebuild accounting at a quiesced upgrade boundary, before file operations resume.
+Count descriptions once per inode and descriptors once per description. Calling
+this during a close in progress is invalid: its descriptor has already detached."
+  (vfs::with-vfs
+    (sb-thread:with-mutex (vfs::*files-lock*)
+      (let ((descriptions (make-hash-table :test 'eq))
+            (volumes (make-hash-table :test 'eq)))
+        (maphash (lambda (fd file)
+                   (declare (ignore fd))
+                   (incf (gethash file descriptions 0))) vfs::*files*)
+        (maphash (lambda (file count)
+                   (declare (ignore count))
+                   (let ((node (vfs::file-vnode file)))
+                     (when (typep node 'apfs-wvnode)
+                       (let* ((volume (vnode-mount node))
+                              (opens (or (gethash volume volumes)
+                                         (setf (gethash volume volumes) (make-hash-table)))))
+                         (incf (gethash (vfs:vnode-id node) opens 0)))))) descriptions)
+        ;; Publish only after the complete inventory has been constructed.
+        (maphash (lambda (file count) (setf (vfs::file-refs file) count)) descriptions)
+        (maphash (lambda (volume opens) (setf (gethash volume *open-inodes*) opens)) volumes)
+        (setf vfs::*file-lifetime-version* 2)
+        (list :descriptions (hash-table-count descriptions) :volumes (hash-table-count volumes))))))
+
 (defmethod vfs:vnop-open ((n apfs-wvnode))
   (incf (gethash (vfs:vnode-id n) (wvolume-opens (vnode-mount n)) 0)))
 

@@ -1,6 +1,15 @@
 (in-package #:darterfly/apfs)
 
-(defstruct (wvolume (:constructor %make-wvolume)) nx records extents children pending-free (by-id (make-hash-table)) (opens (make-hash-table)))
+(defstruct (wvolume (:constructor %make-wvolume)) nx records extents children pending-free (by-id (make-hash-table)))
+
+;; Mount identity is retained across live updates. Descriptor lifetimes are
+;; transient bookkeeping, not a reason to resize every retained volume object.
+;; Values contain inode numbers only, so they do not keep weak keys alive.
+(defvar *open-inodes* (make-hash-table :test 'eq :weakness :key :synchronized t))
+
+(defun wvolume-opens (volume)
+  (or (gethash volume *open-inodes*)
+      (setf (gethash volume *open-inodes*) (make-hash-table))))
 
 (defun key-id (key) (logand (u64 key 0) #x0fffffffffffffff))
 

@@ -142,6 +142,9 @@
 (defstruct file vnode (offset 0) flags (refs 1) stack listing)
 
 (defvar *files* (make-hash-table))
+;; Version 2 counts every descriptor reference and retains open APFS inodes.
+;; A retained version-1 world must adopt descriptions at save quiescence.
+(defvar *file-lifetime-version* 2)
 ;; Descriptor-table operations never wait for filesystem I/O. Lock order is
 ;; VFS -> files; no files-lock owner may acquire VFS.
 (defvar *files-lock* (sb-thread:make-mutex :name "vfs descriptors"))
